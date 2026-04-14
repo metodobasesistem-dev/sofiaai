@@ -100,6 +100,35 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState<any[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [timeLeft, setTimeLeft] = useState({ days: 10, hours: 0, mins: 0, secs: 0 });
+
+  // Trial Timer Logic
+  useEffect(() => {
+    if (!user?.created_at) return;
+
+    const calculateTime = () => {
+      const signupDate = new Date(user.created_at);
+      const trialEndDate = new Date(signupDate.getTime() + 10 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const diff = trialEndDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setTimeLeft({ days: 0, hours: 0, mins: 0, secs: 0 });
+        return;
+      }
+
+      setTimeLeft({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        mins: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        secs: Math.floor((diff % (1000 * 60)) / 1000)
+      });
+    };
+
+    calculateTime();
+    const timer = setInterval(calculateTime, 1000);
+    return () => clearInterval(timer);
+  }, [user?.created_at]);
 
   // Real-time listener for WhatsApp status
   useEffect(() => {
@@ -369,10 +398,10 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
             </p>
             <div className="flex gap-4">
               {[
-                { val: '6', label: 'dias' },
-                { val: '20', label: 'horas' },
-                { val: '49', label: 'min' },
-                { val: '51', label: 'seg' }
+                { val: String(timeLeft.days), label: 'dias' },
+                { val: String(timeLeft.hours).padStart(2, '0'), label: 'horas' },
+                { val: String(timeLeft.mins).padStart(2, '0'), label: 'min' },
+                { val: String(timeLeft.secs).padStart(2, '0'), label: 'seg' }
               ].map((t, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <div className="w-14 h-14 bg-white rounded-lg border border-[#d1eeee] flex items-center justify-center text-xl font-black text-[#1a4d4d] shadow-sm">
@@ -405,7 +434,10 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               <LayoutGrid size={18} />
               Escolher Plano
             </button>
-            <button className="w-full py-3 bg-white border border-[#2d7a7a] text-[#2d7a7a] hover:bg-[#f0f9f9] rounded-lg font-bold flex items-center justify-center gap-2 transition-all">
+            <button 
+              onClick={() => window.open('https://wa.me/5532984963439?text=Olá! Vim pelo sistema e gostaria de falar com um consultor.', '_blank')}
+              className="w-full py-3 bg-white border border-[#2d7a7a] text-[#2d7a7a] hover:bg-[#f0f9f9] rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
+            >
               <MessageCircle size={18} />
               Chamar consultor
             </button>
