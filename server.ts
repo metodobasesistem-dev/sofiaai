@@ -114,13 +114,26 @@ async function startServer() {
     res.status(404).json({ error: 'API route not found' });
   });
 
-  // 5. Vite Middleware (Development only)
-  if (process.env.NODE_ENV !== 'production') {
+  // 5. Frontend Serving
+  if (process.env.NODE_ENV === 'production') {
+    const distPath = path.join(__dirname, 'dist');
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+      console.log('[Server] Production mode: Serving static files from /dist');
+    } else {
+      console.warn('[Server] WARNING: /dist folder not found. Did you run "npm run build"?');
+    }
+  } else {
+    // Vite Middleware (Development only)
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
+    console.log('[Server] Development mode: Vite middleware active');
   }
 
   // Graceful Shutdown
