@@ -1,0 +1,644 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Search, 
+  Paperclip, 
+  Send, 
+  User, 
+  Bot, 
+  MoreVertical, 
+  Phone, 
+  Video,
+  CheckCheck,
+  Loader2,
+  MessageCircle,
+  Filter,
+  Users,
+  Trash2,
+  Trash
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+
+import { sendMessage } from '../services/whatsappService';
+import { listQuickReplies, type QuickReply } from '../services/supabaseService';
+
+interface Thread {
+  id: string;
+  name: string;
+  lastMessage: string;
+  time: string;
+  status: 'ia' | 'human';
+  unreadCount?: number;
+  remoteJid: string;
+  updatedAt: any;
+  agent_name?: string;
+  funilStatus?: 'Lead' | 'Qualificado' | 'Cliente';
+}
+
+interface Message {
+  id: string;
+  text: string;
+  sender: 'lead' | 'ia' | 'outbound';
+  time: string;
+  timestamp: any;
+}
+
+const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void }> = ({ thread, active, onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`p-4 flex items-start gap-4 cursor-pointer transition-all duration-300 border-b border-slate-100 last:border-0 relative group
+      ${active ? 'bg-white shadow-md z-10' : 'hover:bg-slate-50 border-l-4 border-l-transparent'}`}
+  >
+    {active && (
+      <motion.div 
+        layoutId="activeContact"
+        className="absolute inset-y-0 left-0 w-1.5 bg-blue-600 rounded-r-lg"
+      />
+    )}
+    <div className="w-13 h-13 rounded-2xl bg-slate-200 shrink-0 flex items-center justify-center text-slate-500 overflow-hidden relative border border-slate-50 group-hover:scale-105 transition-transform">
+      {thread.status === 'ia' && (
+        <div className="absolute top-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full z-10 animate-pulse" />
+      )}
+      <User size={24} />
+    </div>
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center justify-between mb-1">
+        <h4 className={`text-sm font-black truncate tracking-tight ${active ? 'text-blue-600' : 'text-slate-900 group-hover:text-blue-500 transition-colors'}`}>{thread.name}</h4>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{thread.time}</span>
+          <button 
+            onClick={(e) => { e.stopPropagation(); (window as any).handleDeleteThread(thread); }}
+            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+            title="Excluir conversa"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-slate-500 truncate mb-2 leading-relaxed">{thread.lastMessage}</p>
+      <div className="flex items-center justify-between">
+        <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border
+          ${thread.status === 'ia' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
+          {thread.status === 'ia' ? (thread.agent_name || 'Robô IA') : 'Aguardando'}
+        </span>
+        {thread.unreadCount && thread.unreadCount > 0 && (
+          <span className="bg-blue-600 text-white text-[10px] font-black w-5 h-5 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
+            {thread.unreadCount}
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const ChatBubble: React.FC<{ message: Message }> = ({ message }) => (
+  <div className={`flex flex-col mb-4 ${message.sender !== 'lead' ? 'items-end' : 'items-start'}`}>
+    <div className={`max-w-[75%] p-4 rounded-3xl text-[13px] leading-relaxed shadow-sm relative font-medium
+      ${message.sender !== 'lead' 
+        ? 'bg-blue-600 text-white rounded-tr-none' 
+        : 'bg-white text-slate-800 border border-slate-100 shadow-sm rounded-tl-none'}`}>
+      {message.text}
+      <div className={`flex items-center gap-1 mt-2 text-[10px] font-bold opacity-70 ${message.sender !== 'lead' ? 'text-blue-100' : 'text-slate-400'}`}>
+        {message.time}
+        {message.sender !== 'lead' && <CheckCheck size={12} />}
+      </div>
+    </div>
+    {message.sender === 'ia' && (
+      <div className="flex items-center gap-1 mt-1 mr-1">
+        <Bot size={12} className="text-blue-600" />
+        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">Robô IA</span>
+      </div>
+    )}
+  </div>
+);
+
+export default function Inbox({ user, role }: { user: SupabaseUser | null, role: string | null }) {
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [loadingThreads, setLoadingThreads] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'Todos' | 'Lead' | 'Qualificado' | 'Cliente'>('Todos');
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [isCleaning, setIsCleaning] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle JID from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jid = params.get('jid');
+    if (jid && threads.length > 0) {
+      const thread = threads.find(t => t.remoteJid === jid);
+      if (thread) {
+        setSelectedThreadId(thread.id);
+      }
+    }
+  }, [threads]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Listen to threads
+  useEffect(() => {
+    let channel: any;
+
+    const setupThreads = async () => {
+      const timeoutId = setTimeout(() => {
+        setLoadingThreads(false);
+        console.warn('[Inbox] Safety timeout: 5s reached');
+      }, 5000);
+
+      const userId = user?.id;
+      if (!userId) {
+        clearTimeout(timeoutId);
+        return;
+      }
+      
+      // Initial Fetch: Threads + Contacts using the fixed UUID
+      const { data: contactsData } = await supabase.from('contacts').select('telefone, status_funil').eq('user_id', userId);
+      const { data, error } = await supabase.from('threads').select('*').eq('user_id', userId);
+
+      if (data) {
+        const formatted = data.map(d => {
+          const phoneNumber = d.remote_jid.split('@')[0];
+          const contact = contactsData?.find(c => {
+            const contactPhone = c.telefone?.replace(/\D/g, '');
+            if (!contactPhone) return false;
+            
+            // Clean numbers (remove country code 55)
+            const p1 = phoneNumber.replace(/^55/, '');
+            const p2 = contactPhone.replace(/^55/, '');
+            
+            // Exact match
+            if (p1 === p2) return true;
+            
+            // Match last 8 digits (core number in Brazil)
+            if (p1.length >= 8 && p2.length >= 8) {
+              return p1.slice(-8) === p2.slice(-8);
+            }
+            
+            return false;
+          });
+          
+          return {
+            id: d.id,
+            name: d.contact_name || 'Lead WhatsApp',
+            lastMessage: d.last_message || '',
+            time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+            status: d.status as any,
+            unreadCount: d.unread_count || 0,
+            remoteJid: d.remote_jid,
+            updatedAt: d.updated_at,
+            agent_name: d.agent_name || 'Robô IA',
+            funilStatus: contact?.status_funil || 'Lead'
+          };
+        });
+        const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        setThreads(sorted);
+        setLoadingThreads(false);
+
+        // Auto-select jid if present in URL
+        const params = new URLSearchParams(window.location.search);
+        const jid = params.get('jid');
+        if (jid) {
+          const match = sorted.find(t => t.remoteJid.includes(jid));
+          if (match) setSelectedThreadId(match.id);
+        }
+      } else {
+        setLoadingThreads(false);
+      }
+
+      // Realtime listener — apenas re-busca dados, NÃO registra novo canal
+      channel = supabase
+        .channel(`threads-${userId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'threads', filter: `user_id=eq.${userId}` },
+          async () => {
+            // Re-fetch incremental: busca apenas as threads, sem re-registrar canal
+            const { data: freshData } = await supabase
+              .from('threads')
+              .select('*')
+              .eq('user_id', userId)
+              .order('updated_at', { ascending: false });
+            
+            if (freshData) {
+              const { data: freshContacts } = await supabase
+                .from('contacts')
+                .select('telefone, status_funil')
+                .eq('user_id', userId);
+              
+              const formatted = freshData.map(d => {
+                const phoneNumber = d.remote_jid.split('@')[0];
+                const contact = freshContacts?.find(c => {
+                  const contactPhone = c.telefone?.replace(/\D/g, '');
+                  if (!contactPhone) return false;
+                  const p1 = phoneNumber.replace(/^55/, '');
+                  const p2 = contactPhone.replace(/^55/, '');
+                  if (p1 === p2) return true;
+                  if (p1.length >= 8 && p2.length >= 8) return p1.slice(-8) === p2.slice(-8);
+                  return false;
+                });
+                return {
+                  id: d.id,
+                  name: d.contact_name || 'Lead WhatsApp',
+                  lastMessage: d.last_message || '',
+                  time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                  status: d.status as any,
+                  unreadCount: d.unread_count || 0,
+                  remoteJid: d.remote_jid,
+                  updatedAt: d.updated_at,
+                  agent_name: d.agent_name || 'Robô IA',
+                  funilStatus: contact?.status_funil || 'Lead'
+                };
+              });
+              const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+              setThreads(sorted);
+            }
+          }
+        )
+        .subscribe();
+      
+      clearTimeout(timeoutId);
+    };
+
+    setupThreads();
+
+    // Fetch Quick Replies
+    const fetchQuickReplies = async () => {
+      const qrs = await listQuickReplies();
+      setQuickReplies(qrs);
+    };
+    fetchQuickReplies();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Listen to messages
+  useEffect(() => {
+    if (!selectedThreadId) {
+      setMessages([]);
+      return;
+    }
+
+    let channel: any;
+
+    const setupMessages = async () => {
+      setLoadingMessages(true);
+
+      // Initial Fetch
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('thread_id', selectedThreadId)
+        .order('created_at', { ascending: true });
+
+      if (data) {
+        const formatted = data.map(d => ({
+          id: d.id,
+          text: d.text || '',
+          sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
+          time: new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: d.created_at
+        }));
+        setMessages(formatted as any);
+      }
+      setLoadingMessages(false);
+
+      // Realtime listener
+      channel = supabase
+        .channel(`messages-${selectedThreadId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
+          (payload) => {
+            const d = payload.new;
+            const newMessage = {
+              id: d.id,
+              text: d.text || '',
+              sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
+              time: new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              timestamp: d.created_at
+            };
+            setMessages(prev => [...prev, newMessage as any]);
+          }
+        )
+        .subscribe();
+
+      // Reset unread count
+      await supabase
+        .from('threads')
+        .update({ unread_count: 0 })
+        .eq('id', selectedThreadId);
+    };
+
+    setupMessages();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [selectedThreadId]);
+
+
+  const activeThread = threads.find(t => t.id === selectedThreadId);
+
+  const toggleThreadStatus = async () => {
+    if (!selectedThreadId || !activeThread) return;
+    try {
+      const newStatus = activeThread.status === 'ia' ? 'human' : 'ia';
+      const { error } = await supabase
+        .from('threads')
+        .update({ status: newStatus })
+        .eq('id', selectedThreadId);
+      
+      if (error) throw error;
+      toast.success(`Modo de atendimento alterado para ${newStatus === 'ia' ? 'IA' : 'Humano'}`);
+    } catch (err) {
+      toast.error('Erro ao alterar modo de atendimento');
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedThreadId || !activeThread) return;
+
+    const userId = user?.id;
+    if (!userId) return;
+
+    const text = messageText;
+    setMessageText('');
+
+    try {
+      // Send via WhatsApp Service
+      await sendMessage(activeThread.remoteJid, text);
+      
+      // Update thread status to 'human' when user sends a message
+      await supabase
+        .from('threads')
+        .update({ 
+          status: 'human',
+          last_message: text,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedThreadId);
+      
+      console.log('Message sent successfully');
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm('🚨 TEM CERTEZA? Isso vai apagar todas as mensagens e contatos do seu painel permanentemente.')) return;
+    
+    setIsCleaning(true);
+    try {
+      const userId = user?.id;
+      if (!userId) return;
+
+      // 1. Delete Messages
+      await supabase.from('messages').delete().eq('user_id', userId);
+      // 2. Delete Threads
+      await supabase.from('threads').delete().eq('user_id', userId);
+      // 3. Delete Contacts
+      await supabase.from('contacts').delete().eq('user_id', userId);
+
+      toast.success('Caixa de entrada limpa com sucesso!');
+      setThreads([]);
+      setSelectedThreadId(null);
+    } catch (err) {
+      toast.error('Erro ao limpar caixa de entrada');
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+
+  const handleDeleteThread = async (thread: Thread) => {
+    if (!window.confirm(`Excluir conversa com ${thread.name}?`)) return;
+
+    try {
+      // 1. Delete Messages first
+      await supabase.from('messages').delete().eq('thread_id', thread.id);
+      // 2. Delete Thread
+      await supabase.from('threads').delete().eq('id', thread.id);
+      
+      // 3. Optional: Delete Contact if it's not linked to other threads (Simplified: delete always as requested)
+      const phoneNumber = thread.remoteJid.split('@')[0];
+      await supabase.from('contacts').delete().ilike('telefone', `%${phoneNumber.slice(-8)}%`);
+
+      toast.success('Conversa excluída');
+      if (selectedThreadId === thread.id) setSelectedThreadId(null);
+      setThreads(prev => prev.filter(t => t.id !== thread.id));
+    } catch (err) {
+      toast.error('Erro ao excluir conversa');
+    }
+  };
+
+  // Expose to ContactItem
+  useEffect(() => {
+    (window as any).handleDeleteThread = handleDeleteThread;
+  }, [threads, selectedThreadId]);
+
+  const filteredThreads = threads.filter(t => {
+    const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.remoteJid.includes(searchTerm);
+    const matchesFilter = filterStatus === 'Todos' || t.funilStatus === filterStatus;
+    return matchesSearch && matchesFilter;
+  });
+
+  return (
+    <div className="h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden">
+      {/* Left Column: Contact List */}
+      <div className="w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex flex-col bg-gray-50/30">
+        <div className="p-4 border-b border-slate-100 bg-white space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Conversas</h2>
+            <button 
+              onClick={handleClearAll}
+              disabled={isCleaning || threads.length === 0}
+              className="text-[10px] font-bold text-red-500 hover:text-red-700 disabled:opacity-30 disabled:grayscale transition-all flex items-center gap-1"
+            >
+              {isCleaning ? <Loader2 size={12} className="animate-spin" /> : <Trash size={12} />}
+              Limpar Tudo
+            </button>
+          </div>
+
+          <div className="relative group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
+            <input 
+              type="text" 
+              placeholder="Pesquisar leads..." 
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-transparent rounded-xl text-xs font-semibold placeholder-slate-400 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-400 transition-all outline-none"
+            />
+          </div>
+
+          {/* Funnel Filters */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+            {(['Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilterStatus(f)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all border
+                  ${filterStatus === f 
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-200' 
+                    : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-600'}`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          {loadingThreads ? (
+            <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+              <Loader2 size={24} className="animate-spin mb-2" />
+              <p className="text-xs">Carregando conversas...</p>
+            </div>
+          ) : filteredThreads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 text-gray-400 p-4 text-center">
+              <p className="text-xs">Nenhuma conversa nesta categoria.</p>
+            </div>
+          ) : (
+            filteredThreads.map(thread => (
+              <ContactItem 
+                key={thread.id} 
+                thread={thread} 
+                active={selectedThreadId === thread.id}
+                onClick={() => setSelectedThreadId(thread.id)}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Right Column: Chat Area */}
+      <div className="hidden md:flex flex-1 flex-col bg-white">
+        {selectedThreadId && activeThread ? (
+          <>
+            {/* Chat Header */}
+            <div className="h-16 px-6 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <User size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{activeThread.name}</h3>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span className="text-[10px] text-gray-500 font-medium">Online</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={toggleThreadStatus}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors border
+                    ${activeThread.status === 'ia' 
+                      ? 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100' 
+                      : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
+                >
+                  {activeThread.status === 'ia' ? 'Assumir Atendimento' : 'Ativar Robô IA'}
+                </button>
+                <div className="flex items-center gap-2 text-gray-400">
+                  <button className="p-2 hover:bg-gray-50 rounded-lg"><Phone size={18} /></button>
+                  <button className="p-2 hover:bg-gray-50 rounded-lg"><Video size={18} /></button>
+                  <button className="p-2 hover:bg-gray-50 rounded-lg"><MoreVertical size={18} /></button>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-6 bg-[#f8f9fa] space-y-2">
+              {loadingMessages ? (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <Loader2 size={24} className="animate-spin" />
+                </div>
+              ) : (
+                <>
+                  {messages.map(msg => (
+                    <ChatBubble key={msg.id} message={msg} />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
+            </div>
+
+            {/* Quick Replies chips */}
+            {quickReplies.length > 0 && (
+              <div className="px-4 py-2 bg-white border-t border-gray-100 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+                <span className="text-[10px] font-bold text-gray-400 uppercase mr-2 shrink-0">Atalhos:</span>
+                {quickReplies.map(reply => (
+                  <button
+                    key={reply.id}
+                    onClick={() => setMessageText(reply.content)}
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full text-[11px] font-bold transition-all whitespace-nowrap border border-blue-100 shadow-sm"
+                  >
+                    {reply.title}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Typing Bar Premium */}
+            <div className="p-6 border-t border-slate-100 bg-white shrink-0">
+              <form 
+                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                className="flex items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-500/5 transition-all"
+              >
+                <button type="button" className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all mb-0.5">
+                  <Paperclip size={20} />
+                </button>
+                <textarea 
+                  rows={1}
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Escreva sua mensagem..." 
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-1 resize-none max-h-32 min-h-[40px] leading-relaxed placeholder-slate-400 font-medium"
+                />
+                <button 
+                  type="submit"
+                  className={`p-3 rounded-xl transition-all duration-300 ${messageText.trim() ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95' : 'text-slate-300'}`}
+                  disabled={!messageText.trim()}
+                >
+                  <Send size={20} />
+                </button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
+            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+              <MessageCircle size={40} className="text-gray-200" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Sua Caixa de Entrada</h3>
+            <p className="max-w-xs text-sm">Selecione uma conversa ao lado para visualizar as mensagens e interagir com seus leads.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile Placeholder for Chat (when on mobile) */}
+      <div className="md:hidden flex-1 flex items-center justify-center p-8 text-center text-gray-400">
+        <p className="text-sm">Selecione uma conversa para visualizar no desktop ou use a versão mobile otimizada.</p>
+      </div>
+    </div>
+  );
+}

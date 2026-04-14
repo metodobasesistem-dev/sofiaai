@@ -1,0 +1,27 @@
+﻿[dotenv@17.3.1] injecting env (12) from .env.local -- tip: ÔÜí´©Å secrets for agents: https://dotenvx.com/as2
+ALL PROFILES: [
+  {
+    "id": "6524ad04-45bc-4fde-8e38-49e8cd1c40cf",
+    "email": "ieqmur@gmail.com",
+    "name": "Natan de Souza",
+    "photo_url": "https://lh3.googleusercontent.com/a/ACg8ocLXK2TN-cO9ClO1cj_aDPSk6mIIdemmDXFMXsaj2v0aLTbPKh4D=s96-c",
+    "role": "client",
+    "whatsapp_status": "connected",
+    "whatsapp_instance_id": "6524ad04-45bc-4fde-8e38-49e8cd1c40cf",
+    "created_at": "2026-04-12T13:09:07.61603+00:00",
+    "updated_at": "2026-04-13T03:30:12.358+00:00",
+    "nome_completo": null,
+    "nome_empresa": null,
+    "whatsapp_organizacao": null,
+    "descricao_empresa": null,
+    "produtos_servicos": null,
+    "faq": null,
+    "links_importantes": null,
+    "plano": "Starter",
+    "google_calendar_active": false,
+    "google_calendar_email": null,
+    "selected_calendar_id": "deede276576a05ca080119ea15b125ddb9799821acc74877aa70b433b74a9c0b@group.calendar.google.com",
+    "google_refresh_token": "1//06msnUmaaPj0MCgYIARAAGAYSNwF-L9Ir4txu_UTL7hKRP2RWBZ_m_f19K9XUzWHoec38fs39NcCttwWkvKuu0UYHCsgkL2o_98c",
+    "notification_phone": null
+  }
+]

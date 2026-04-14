@@ -1,0 +1,711 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Search, 
+  Download, 
+  User,
+  Phone,
+  Calendar,
+  Filter,
+  Plus,
+  Loader2,
+  X,
+  UserPlus,
+  MessageSquare,
+  ChevronRight,
+  Clock,
+  Hash,
+  Zap,
+  CheckCircle2,
+  Star,
+  ArrowUpRight,
+  RefreshCw,
+  Trash2
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  listContacts, 
+  createContact, 
+  listContactAppointments,
+  updateContactFunilStatus,
+  deleteContact,
+  type Contact,
+  type Appointment
+} from '../services/supabaseService';
+import { syncContacts } from '../services/whatsappService';
+import { toast } from 'sonner';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+const formatPhone = (phone: string) => {
+  const p = phone.replace(/\D/g, '');
+  if (p.length === 13) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9)}`;
+  if (p.length === 12) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,8)}-${p.slice(8)}`;
+  if (p.length === 11) return `(${p.slice(0,2)}) ${p.slice(2,7)}-${p.slice(7)}`;
+  return phone;
+};
+
+const formatDate = (date: any): string => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatRelative = (date: any): string => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Agora mesmo';
+  if (mins < 60) return `${mins}min atrás`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h atrás`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'Ontem';
+  if (days < 7) return `${days}d atrás`;
+  return formatDate(date);
+};
+
+const getInitials = (name: string) => {
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const AVATAR_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500',
+];
+const getAvatarColor = (id: string) => AVATAR_COLORS[(id.charCodeAt(0) + id.charCodeAt(1)) % AVATAR_COLORS.length];
+
+// ── Status Badge ────────────────────────────────────────────────────────────────
+
+const FUNIL_STYLES: Record<Contact['status_funil'], { label: string; className: string; icon: React.ReactNode }> = {
+  Lead:       { label: 'Lead',       className: 'bg-blue-50 text-blue-700 border-blue-200',     icon: <Zap size={10} /> },
+  Qualificado:{ label: 'Qualificado',className: 'bg-green-50 text-green-700 border-green-200',   icon: <CheckCircle2 size={10} /> },
+  Cliente:    { label: 'Cliente',    className: 'bg-amber-50 text-amber-700 border-amber-200',   icon: <Star size={10} /> },
+};
+
+const StatusBadge = ({ status, onClick }: { status: Contact['status_funil']; onClick?: (e: React.MouseEvent) => void }) => {
+  const s = FUNIL_STYLES[status] || FUNIL_STYLES['Lead'];
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wide transition-all hover:opacity-80 ${s.className}`}
+    >
+      {s.icon} {s.label}
+    </button>
+  );
+};
+
+// ── Side Panel ────────────────────────────────────────────────────────────────
+
+interface SidePanelProps {
+  contact: Contact;
+  onClose: () => void;
+  onTabChange?: (tab: string) => void;
+  onStatusChange: (contactId: string, status: Contact['status_funil']) => void;
+}
+
+const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelProps) => {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loadingAppts, setLoadingAppts] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  useEffect(() => {
+    if (!contact.telefone) return;
+    setLoadingAppts(true);
+    listContactAppointments(contact.telefone)
+      .then(setAppointments)
+      .catch(console.error)
+      .finally(() => setLoadingAppts(false));
+  }, [contact.telefone]);
+
+  const handleUpdateStatus = async (newStatus: Contact['status_funil']) => {
+    if (!contact.id || updatingStatus || contact.status_funil === newStatus) return;
+    setUpdatingStatus(true);
+    try {
+      await updateContactFunilStatus(contact.id, newStatus);
+      onStatusChange(contact.id, newStatus);
+      toast.success(`Status atualizado para ${newStatus}`);
+    } catch (err) {
+      toast.error('Erro ao atualizar status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const openInbox = () => {
+    const jid = `${contact.telefone.replace(/\D/g, '')}@c.us`;
+    const url = new URL(window.location.href);
+    url.searchParams.set('jid', jid);
+    window.history.pushState({}, '', url);
+    if (onTabChange) onTabChange('inbox');
+  };
+
+  const color = getAvatarColor(contact.id || contact.telefone);
+
+  return (
+    <motion.div
+      initial={{ x: '100%', opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: '100%', opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      className="fixed right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl z-40 flex flex-col border-l border-gray-100"
+    >
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100 flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          <div className={`w-14 h-14 rounded-2xl ${color} text-white flex items-center justify-center text-xl font-black shadow-lg`}>
+            {getInitials(contact.nome)}
+          </div>
+          <div>
+            <h3 className="text-lg font-black text-gray-900 leading-tight">{contact.nome}</h3>
+            <p className="text-sm text-gray-500">{formatPhone(contact.telefone)}</p>
+              <StatusBadge 
+                status={contact.status_funil} 
+                onClick={() => {
+                  const order: Contact['status_funil'][] = ['Lead', 'Qualificado', 'Cliente'];
+                  const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
+                  handleUpdateStatus(next);
+                }} 
+              />
+          </div>
+        </div>
+        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-0 border-b border-gray-100">
+        {[
+          { label: 'Mensagens', value: contact.totalMensagens ?? 0, icon: <MessageSquare size={14} /> },
+          { label: 'Agendamentos', value: appointments.length, icon: <Calendar size={14} /> },
+          { label: 'Desde', value: formatDate(contact.primeiroContato || contact.data_criacao), icon: <Clock size={12} /> },
+        ].map((stat, i) => (
+          <div key={i} className="flex flex-col items-center py-4 border-r last:border-r-0 border-gray-100">
+            <span className="text-gray-400 mb-1">{stat.icon}</span>
+            <span className="text-base font-black text-gray-900">{stat.value}</span>
+            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">{stat.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Info */}
+      <div className="p-6 space-y-4 flex-1 overflow-y-auto">
+
+        {/* Last message */}
+        {contact.ultimaMensagem && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Última mensagem</p>
+            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <p className="text-sm text-gray-700 line-clamp-3">{contact.ultimaMensagem}</p>
+              <p className="text-[10px] text-gray-400 mt-1">{formatRelative(contact.ultimaInteracao)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Details */}
+        <div>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Informações</p>
+          <div className="space-y-2">
+            {[
+              { icon: <Phone size={13} />, label: 'WhatsApp', value: formatPhone(contact.telefone) },
+              { icon: <Clock size={13} />, label: 'Última interação', value: formatRelative(contact.ultimaInteracao) },
+              { icon: <Calendar size={13} />, label: 'Primeiro contato', value: formatDate(contact.primeiroContato || contact.data_criacao) },
+              { icon: <Hash size={13} />, label: 'Origem', value: contact.source === 'whatsapp' ? 'WhatsApp' : 'Manual' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <span className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="text-gray-400">{item.icon}</span>
+                  {item.label}
+                </span>
+                <span className="text-xs font-semibold text-gray-900">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Appointments */}
+        <div>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Agendamentos</p>
+          {loadingAppts ? (
+            <div className="flex items-center gap-2 text-gray-400 text-xs py-2">
+              <Loader2 size={12} className="animate-spin" /> Carregando...
+            </div>
+          ) : appointments.length === 0 ? (
+            <p className="text-xs text-gray-400 py-2">Nenhum agendamento encontrado.</p>
+          ) : (
+            <div className="space-y-2">
+              {appointments.map((appt) => (
+                <div key={appt.id} className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                  <p className="text-xs font-bold text-blue-800">{appt.date} às {appt.time}</p>
+                  <p className="text-xs text-blue-600">{appt.summary || appt.niche || 'Consulta'}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Manual Status Change */}
+        <div className="pt-2">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Mudar Status (Funil)</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(['Lead', 'Qualificado', 'Cliente'] as const).map((status) => {
+              const isActive = contact.status_funil === status;
+              const s = FUNIL_STYLES[status];
+              return (
+                <button
+                  key={status}
+                  onClick={() => handleUpdateStatus(status)}
+                  disabled={updatingStatus}
+                  className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border text-[10px] font-bold transition-all relative
+                    ${isActive 
+                      ? `${s.className} ring-2 ring-offset-1 ring-current` 
+                      : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {s.icon}
+                  {s.label}
+                  {isActive && <div className="absolute -top-1 -right-1 w-3 h-3 bg-current rounded-full border-2 border-white" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 border-t border-gray-100 flex gap-3">
+        <button
+          onClick={openInbox}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200"
+        >
+          <MessageSquare size={16} /> Abrir Chat
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+export default function Contacts({ onTabChange, user, role }: { onTabChange?: (tab: string) => void, user: SupabaseUser | null, role: string | null }) {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [filterStatus, setFilterStatus] = useState<Contact['status_funil'] | 'Todos'>('Todos');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [formData, setFormData] = useState({ nome: '', telefone: '' });
+
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      const loadingToast = toast.loading('Sincronizando contatos da caixa de entrada...');
+      const result = await syncContacts();
+      toast.dismiss(loadingToast);
+      console.log(`[Contacts] Sync result:`, result);
+      toast.success(`${result.synced} contatos sincronizados com sucesso!`);
+      // Forced delay to allow Firestore to propagate
+      setTimeout(() => fetchContacts(), 500);
+    } catch (error: any) {
+      toast.error('Erro ao sincronizar: ' + (error.message || 'Erro desconhecido'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+  
+  const handleDeleteContact = async (e: React.MouseEvent, contact: Contact) => {
+    e.stopPropagation();
+    if (!contact.id) return;
+
+    const confirmed = window.confirm(`Tem certeza que deseja excluir o contato "${contact.nome}"? Esta ação também removerá a conversa da caixa de entrada.`);
+    
+    if (confirmed) {
+      try {
+        await deleteContact(contact.id);
+        setContacts(prev => prev.filter(c => c.id !== contact.id));
+        toast.success('Contato excluído com sucesso');
+      } catch (error) {
+        toast.error('Erro ao excluir contato');
+      }
+    }
+  };
+
+  const fetchContacts = async () => {
+    const timeoutId = setTimeout(() => {
+      setIsLoading(false);
+      console.warn('[Contacts] Safety timeout triggered after 5s');
+    }, 5000);
+
+    try {
+      setIsLoading(true);
+      console.log('[Contacts] Fetching contacts for UID:', user?.id);
+      const data = await listContacts();
+      console.log(`[Contacts] Received ${data.length} contacts.`);
+      
+      const sorted = data.sort((a, b) => {
+        const aTime = new Date(a.ultimaInteracao || a.data_criacao || 0).getTime();
+        const bTime = new Date(b.ultimaInteracao || b.data_criacao || 0).getTime();
+        return bTime - aTime;
+      });
+      setContacts(sorted);
+    } catch (error) {
+      console.error('[Contacts] Failed to fetch contacts:', error);
+      toast.error('Erro ao carregar lista de contatos');
+    } finally {
+      clearTimeout(timeoutId);
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    if (user?.id) fetchContacts(); 
+  }, [user?.id]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.nome || !formData.telefone) return;
+    try {
+      setIsSaving(true);
+      await createContact({ nome: formData.nome, telefone: formData.telefone, status_funil: 'Lead' });
+      setIsModalOpen(false);
+      setFormData({ nome: '', telefone: '' });
+      await fetchContacts();
+    } catch (error) {
+      console.error('Failed to create contact:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleStatusChange = (contactId: string, newStatus: Contact['status_funil']) => {
+    setContacts(prev => prev.map(c => c.id === contactId ? { ...c, status_funil: newStatus } : c));
+    if (selectedContact?.id === contactId) {
+      setSelectedContact(prev => prev ? { ...prev, status_funil: newStatus } : prev);
+    }
+  };
+
+  const filteredContacts = useMemo(() => 
+    contacts.filter(c => {
+      const matchSearch = c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          c.telefone.includes(searchTerm);
+      const matchStatus = filterStatus === 'Todos' || c.status_funil === filterStatus;
+      return matchSearch && matchStatus;
+    }), [contacts, searchTerm, filterStatus]);
+
+  const stats = useMemo(() => ({
+    total: contacts.length,
+    leads: contacts.filter(c => c.status_funil === 'Lead').length,
+    qualificados: contacts.filter(c => c.status_funil === 'Qualificado').length,
+    clientes: contacts.filter(c => c.status_funil === 'Cliente').length,
+  }), [contacts]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Contatos (CRM)</h1>
+          <p className="text-gray-500 text-sm">Gerencie seus leads e o histórico de atendimento via WhatsApp.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchContacts}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+            title="Atualizar lista"
+          >
+            <RefreshCw size={18} />
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
+          >
+            <Plus size={18} /> Novo Contato
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+            <Download size={18} className="text-gray-400" /> Exportar CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      {!isLoading && contacts.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+        >
+          {[
+            { label: 'Total', value: stats.total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', status: 'Todos' },
+            { label: 'Leads', value: stats.leads, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100', status: 'Lead' },
+            { label: 'Qualificados', value: stats.qualificados, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-100', status: 'Qualificado' },
+            { label: 'Clientes', value: stats.clientes, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-100', status: 'Cliente' },
+          ].map((s, i) => (
+            <button
+              key={i}
+              onClick={() => setFilterStatus(s.status as any)}
+              className={`${s.bg} border ${s.border} rounded-xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-blue-400' : ''}`}
+            >
+              <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">{s.label}</p>
+            </button>
+          ))}
+        </motion.div>
+      )}
+
+      {/* Search & Filter */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 items-center">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="Buscar por nome ou número..." 
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-gray-400" />
+          {(['Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilterStatus(f as any)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStatus === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+        className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+      >
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <Loader2 size={40} className="animate-spin mb-4 text-blue-500" />
+            <p className="font-medium">Carregando contatos...</p>
+          </div>
+        ) : filteredContacts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
+              <MessageSquare size={32} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">
+              {contacts.length === 0 ? 'Nenhum contato encontrado' : 'Sem resultados para os filtros'}
+            </h3>
+            <p className="text-gray-500 text-sm max-w-xs">
+              {contacts.length === 0 
+                ? 'Os contatos aparecerão automaticamente quando alguém enviar uma mensagem pelo WhatsApp.'
+                : 'Tente buscar por outro nome ou número.'}
+            </p>
+            {contacts.length === 0 && (
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="mt-6 flex items-center gap-2 px-4 py-2 text-blue-600 font-semibold text-sm hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                <Plus size={18} /> Adicionar primeiro contato
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contato</th>
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Número</th>
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Última mensagem</th>
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Interação</th>
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredContacts.map((contact) => {
+                  const color = getAvatarColor(contact.id || contact.telefone);
+                  return (
+                    <tr 
+                      key={contact.id} 
+                      onClick={() => setSelectedContact(contact)}
+                      className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl ${color} text-white flex items-center justify-center text-sm font-black flex-shrink-0`}>
+                            {getInitials(contact.nome)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-900">{contact.nome}</p>
+                            {contact.totalMensagens !== undefined && (
+                              <p className="text-[10px] text-gray-400">{contact.totalMensagens} msgs • {contact.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 hidden md:table-cell">
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                          <Phone size={12} className="text-gray-400" />
+                          {formatPhone(contact.telefone)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 hidden lg:table-cell max-w-[220px]">
+                        <p className="text-xs text-gray-500 truncate">{contact.ultimaMensagem || '—'}</p>
+                      </td>
+                      <td className="px-5 py-4 hidden sm:table-cell">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <Clock size={12} className="text-gray-400" />
+                          {formatRelative(contact.ultimaInteracao || contact.data_criacao)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge 
+                          status={contact.status_funil} 
+                          onClick={async (e: any) => {
+                            e.stopPropagation();
+                            if (!contact.id) return;
+                            const order: Contact['status_funil'][] = ['Lead', 'Qualificado', 'Cliente'];
+                            const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
+                            try {
+                              await updateContactFunilStatus(contact.id, next);
+                              handleStatusChange(contact.id, next);
+                              toast.success(`Status atualizado para ${next}`);
+                            } catch (err) {
+                              toast.error('Erro ao atualizar status');
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button 
+                            onClick={(e) => handleDeleteContact(e, contact)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            title="Excluir Lead"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            title="Ver detalhes"
+                          >
+                            <ChevronRight size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer count */}
+        {!isLoading && filteredContacts.length > 0 && (
+          <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-xs text-gray-400">
+              Mostrando <span className="font-bold text-gray-600">{filteredContacts.length}</span> de <span className="font-bold text-gray-600">{contacts.length}</span> contatos
+            </p>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Side Panel Overlay */}
+      <AnimatePresence>
+        {selectedContact && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSelectedContact(null)}
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30"
+            />
+            <SidePanel 
+              contact={selectedContact} 
+              onClose={() => setSelectedContact(null)} 
+              onTabChange={onTabChange}
+              onStatusChange={handleStatusChange}
+            />
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* New Contact Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative z-10"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-200">
+                    <UserPlus size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Novo Contato</h3>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleSave} className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Nome Completo</label>
+                    <input 
+                      type="text" required placeholder="Ex: João Silva"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                      value={formData.nome}
+                      onChange={e => setFormData({...formData, nome: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">WhatsApp (com DDD)</label>
+                    <input 
+                      type="tel" required placeholder="Ex: 11 99999-9999"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                      value={formData.telefone}
+                      onChange={e => setFormData({...formData, telefone: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    type="button" onClick={() => setIsModalOpen(false)}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" disabled={isSaving}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {isSaving ? <><Loader2 size={18} className="animate-spin" /> Salvando...</> : 'Salvar Contato'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

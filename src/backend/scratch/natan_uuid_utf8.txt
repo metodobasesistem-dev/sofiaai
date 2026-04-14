@@ -1,0 +1,2 @@
+﻿[dotenv@17.3.1] injecting env (12) from .env.local -- tip: ÔÜÖ´©Å  write to custom object with { processEnv: myObject }
+NATAN PROFILES: []

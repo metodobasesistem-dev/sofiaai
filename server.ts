@@ -1,0 +1,145 @@
+import express from 'express';
+// Global error handlers to prevent process crashes from background dependencies
+process.on('uncaughtException', (err) => {
+  console.error('[Server] CRITICAL: Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
+import dotenv from 'dotenv';
+
+if (fs.existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local' });
+} else {
+  dotenv.config();
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Import services and routes statically to avoid loading hangs/circularity issues
+import { supabase } from './src/backend/lib/supabaseClient.js';
+import { redisService } from './src/backend/services/redisService.js';
+import sessionRoutes from './src/backend/routes/sessionRoutes.js';
+import messageRoutes from './src/backend/routes/messageRoutes.js';
+import contactRoutes from './src/backend/routes/contactRoutes.js';
+import { sessionController } from './src/backend/controllers/sessionController.js';
+import { whatsappService } from './src/backend/services/whatsappService.js';
+import { agentService } from './src/backend/services/agentService.js';
+import { notificationService } from './src/backend/services/notificationService.js';
+
+if (fs.existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local' });
+} else {
+  dotenv.config();
+}
+
+async function startServer() {
+  console.log('[Server] Starting server version 3.0 (Supabase)...');
+  const app = express();
+  const PORT = 3000;
+
+  // 0. Listen Early
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] Listening on port ${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[Server] FATAL: Port ${PORT} is already in use. Please close other terminals or processes.`);
+      process.exit(1);
+    }
+  });
+
+  // 1. Middleware
+  app.use(express.json());
+
+  // 2. Health Checks
+  app.get('/api/health-check', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), db: 'supabase' });
+  });
+
+  // 3. Register Routes
+  try {
+    console.log('[Server] Registering API Routes...');
+    
+    // Session creation (Direct Controller call)
+    app.post('/api/sessions/create', async (req, res) => {
+      try {
+        await sessionController.createSession(req, res);
+      } catch (err: any) {
+        console.error('[Server] Error in direct session create:', err);
+        res.status(500).json({ error: err.message || 'Internal Server Error' });
+      }
+    });
+
+    app.use('/api/sessions', sessionRoutes);
+    app.use('/api/messages', messageRoutes);
+    app.use('/api/contacts', contactRoutes);
+    
+    console.log('[Server] All API Routes Registered');
+
+  } catch (err: any) {
+    console.error('[Server] Error during route registration:', err);
+  }
+
+  // 4. Initialize Core Services (Background)
+  try {
+    console.log('[Server] Initializing WhatsApp Service...');
+    setTimeout(() => {
+      whatsappService.initializeAllSessions().catch(err => {
+        console.error('[Server] WhatsApp init background error:', err);
+      });
+    }, 2000);
+
+    console.log('[Server] Checking AI Services...');
+    if (process.env.OPENAI_API_KEY) {
+      console.log('[Server] OpenAI API Key detected');
+    }
+
+    console.log('[Server] Starting Notification Background Jobs...');
+    notificationService.startBackgroundJobs().catch(err => {
+      console.error('[Server] Notification service start error:', err);
+    });
+  } catch (err) {
+    console.error('[Server] Error during background initialization:', err);
+  }
+
+  // Catch-all for undefined API routes
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API route not found' });
+  });
+
+  // 5. Vite Middleware (Development only)
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  }
+
+  // Graceful Shutdown
+  const shutdown = async (signal: string) => {
+    console.log(`[Server] Received ${signal}. Starting graceful shutdown...`);
+    try {
+      await whatsappService.destroyAll();
+    } catch (err) {
+      console.error('[Server] Error during WhatsApp shutdown:', err);
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+startServer().catch(err => {
+  console.error('[Server] FATAL ERROR during startServer:', err);
+  process.exit(1);
+});

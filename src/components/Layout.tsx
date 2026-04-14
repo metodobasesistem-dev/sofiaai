@@ -1,0 +1,583 @@
+import React, { useState } from 'react';
+import { 
+  LayoutDashboard, 
+  Inbox, 
+  Users, 
+  Bot, 
+  Calendar, 
+  Layers, 
+  Settings, 
+  ChevronLeft, 
+  ChevronRight, 
+  Search, 
+  Bell, 
+  User as UserIcon,
+  Menu,
+  X,
+  ChevronDown,
+  Clock,
+  LogOut,
+  Sparkles,
+  CreditCard,
+  MessageSquare,
+  ChevronUp,
+  Star,
+  BarChart3,
+  Activity,
+  Shield
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
+import { useRef, useEffect } from 'react';
+import { User } from '@supabase/supabase-js';
+
+interface SidebarItemProps {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  collapsed: boolean;
+  onClick?: () => void;
+  hasSubmenu?: boolean;
+  isSubmenuOpen?: boolean;
+}
+
+const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSubmenuOpen }: SidebarItemProps) => {
+  return (
+    <div 
+      onClick={onClick}
+      className={`flex items-center p-2.5 rounded-xl cursor-pointer transition-all duration-300 group relative
+        ${active 
+          ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group-active:scale-95'
+        }`}
+    >
+      {active && (
+        <motion.div 
+          layoutId="activeTab"
+          className="absolute inset-y-2 -left-1 w-1 bg-white rounded-r-full"
+        />
+      )}
+      <div className={`${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>
+        {icon}
+      </div>
+      {!collapsed && (
+        <div className="ml-3 flex-1 flex items-center justify-between overflow-hidden">
+          <motion.span 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="font-medium whitespace-nowrap"
+          >
+            {label}
+          </motion.span>
+          {hasSubmenu && (
+            <ChevronDown 
+              size={16} 
+              className={`transition-transform duration-200 ${isSubmenuOpen ? 'rotate-180' : ''}`} 
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function Layout({ 
+  children, 
+  activeTab, 
+  onTabChange, 
+  user,
+  role 
+}: { 
+  children: React.ReactNode, 
+  activeTab: string, 
+  onTabChange: (tab: string, subTab?: string) => void,
+  user: User | null,
+  role: string | null
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [agendasOpen, setAgendasOpen] = useState(true);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/).filter(p => p.toLowerCase() !== 'de' && p.toLowerCase() !== 'da' && p.toLowerCase() !== 'do' && p.toLowerCase() !== 'dos');
+    if (parts.length === 0) return name[0].toUpperCase();
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const menuItems = [
+    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    { id: 'admin', icon: <Shield size={20} />, label: 'Painel Admin', adminOnly: true },
+    { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', adminOnly: true },
+    { id: 'health', icon: <Activity size={20} />, label: 'Monitor', adminOnly: true },
+    { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
+    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
+    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+    { id: 'clients', icon: <Star size={20} />, label: 'Clientes', adminOnly: true },
+    { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
+    { 
+      id: 'agendas', 
+      icon: <Calendar size={20} />, 
+      label: 'Agendas',
+      subItems: [
+        { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
+        { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
+      ]
+    },
+    { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
+    { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
+  ].filter(item => !item.adminOnly || role === 'admin');
+
+  const handleTabClick = (id: string, hasSubmenu?: boolean) => {
+    if (hasSubmenu) {
+      if (id === 'agendas') setAgendasOpen(!agendasOpen);
+      return;
+    }
+    onTabChange(id);
+    setMobileMenuOpen(false);
+  };
+
+  const isTabActive = (id: string, subItems?: any[]) => {
+    if (activeTab === id) return true;
+    if (subItems) {
+      return subItems.some(sub => sub.id === activeTab);
+    }
+    return false;
+  };
+
+  return (
+    <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden">
+      {/* Sidebar Desktop */}
+      <motion.aside 
+        initial={false}
+        animate={{ width: collapsed ? '80px' : '260px' }}
+        className="hidden md:flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-in-out relative z-30"
+      >
+        <div className="p-6 flex items-center justify-between">
+          {!collapsed && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 font-bold text-xl text-blue-600 cursor-pointer"
+              onClick={() => handleTabClick('dashboard')}
+            >
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                <Bot size={20} />
+              </div>
+              <span>WppAI</span>
+            </motion.div>
+          )}
+          {collapsed && (
+            <div 
+              className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer"
+              onClick={() => handleTabClick('dashboard')}
+            >
+              <Bot size={20} />
+            </div>
+          )}
+        </div>
+
+        <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto custom-scrollbar">
+          {menuItems.map((item) => (
+            <div key={item.id}>
+              <SidebarItem 
+                icon={item.icon} 
+                label={item.label} 
+                active={isTabActive(item.id, item.subItems)} 
+                collapsed={collapsed}
+                onClick={() => handleTabClick(item.id, !!item.subItems)}
+                hasSubmenu={!!item.subItems}
+                isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+              />
+              
+              {item.subItems && !collapsed && (item.id === 'agendas' ? agendasOpen : false) && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="ml-9 mt-1 space-y-1"
+                >
+                  {item.subItems.map((sub) => (
+                    <div
+                      key={sub.id}
+                      onClick={() => handleTabClick(sub.id)}
+                      className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
+                        ${activeTab === sub.id 
+                          ? 'text-blue-600 font-bold bg-blue-50/50' 
+                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                        }`}
+                    >
+                      <span className="mr-2 opacity-70">{sub.icon}</span>
+                      {sub.label}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </div>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-gray-100 space-y-2">
+          {/* Profile Section with Dropdown */}
+          <div className="relative" ref={profileRef}>
+            <div 
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className={`flex items-center p-2 rounded-xl cursor-pointer transition-all hover:bg-gray-50 group
+                ${isProfileOpen ? 'bg-gray-50' : ''}`}
+            >
+              <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
+                {user?.user_metadata?.avatar_url ? (
+                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
+                ) : (
+                  getInitials(user?.user_metadata?.full_name || user?.email)
+                )}
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
+              </div>
+              {!collapsed && (
+                <div className="ml-3 flex-1 min-w-0 flex items-center justify-between">
+                  <div className="truncate">
+                    <p className="text-sm font-bold text-gray-900 truncate">
+                      {user?.user_metadata?.full_name || 'Usuário'}
+                    </p>
+                    <p className="text-[10px] text-gray-400 truncate">
+                      {user?.email}
+                    </p>
+                  </div>
+                  <div className="text-gray-400 group-hover:text-gray-600 transition-colors">
+                    {isProfileOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {isProfileOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className={`absolute bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50
+                    ${collapsed ? 'left-0 w-64' : 'left-0 right-0 w-64'}`}
+                >
+                  {/* Header */}
+                  <div className="p-4 border-b border-gray-50 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">
+                      {getInitials(user?.user_metadata?.full_name || user?.email)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">
+                        {user?.user_metadata?.full_name || 'Usuário'}
+                      </p>
+                      <p className="text-[11px] text-gray-400 truncate">
+                        {user?.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Menu Items */}
+                  <div className="p-2">
+                    <button 
+                      onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                    >
+                      <Sparkles size={18} className="text-gray-400" />
+                      Upgrade to Pro
+                    </button>
+                    <div className="h-px bg-gray-50 my-1 mx-2" />
+                    <button 
+                      onClick={() => { onTabChange('settings', 'account'); setIsProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                    >
+                      <UserIcon size={18} className="text-gray-400" />
+                      Minha Conta
+                    </button>
+                    <button 
+                      onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                    >
+                      <CreditCard size={18} className="text-gray-400" />
+                      Assinatura
+                    </button>
+                    <button 
+                      onClick={() => { onTabChange('settings', 'channels'); setIsProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                    >
+                      <MessageSquare size={18} className="text-gray-400" />
+                      Canais
+                    </button>
+                    <div className="h-px bg-gray-50 my-1 mx-2" />
+                    <button 
+                      type="button"
+                      onClick={async () => { 
+                         setIsProfileOpen(false); 
+                         console.log('[Layout] Logging out safely...');
+                         try {
+                           // 1. Limpa o localStorage do Supabase manualmente para garantir
+                           Object.keys(localStorage).forEach(key => {
+                             if (key.includes('supabase.auth.token') || key.includes('-auth-token')) {
+                               localStorage.removeItem(key);
+                             }
+                           });
+                           
+                           // 2. Chama o signOut (com timeout de segurança)
+                           await Promise.race([
+                             supabase.auth.signOut(),
+                             new Promise((_, reject) => setTimeout(() => reject(new Error('SignOut Timeout')), 2000))
+                           ]);
+                         } catch (e) {
+                           console.warn('[Logout] Fallback triggered', e);
+                         } finally {
+                           // 3. Força o recarregamento para a tela de login
+                           window.location.href = '/'; 
+                         }
+                      }}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer group"
+                    >
+                      <LogOut size={18} className="text-gray-400 group-hover:text-red-600" />
+                      Log out
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <button 
+            onClick={() => setCollapsed(!collapsed)}
+            className="w-full flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            title={collapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {collapsed ? <ChevronRight size={20} /> : <div className="flex items-center gap-2"><ChevronLeft size={20} /> <span className="text-sm font-medium">Recolher menu</span></div>}
+          </button>
+        </div>
+      </motion.aside>
+
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+            />
+            <motion.aside 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-64 bg-white z-50 md:hidden flex flex-col shadow-2xl"
+            >
+              <div className="p-6 flex items-center justify-between border-bottom border-gray-100">
+                <div className="flex items-center gap-2 font-bold text-xl text-blue-600">
+                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                    <Bot size={20} />
+                  </div>
+                  <span>WppAI</span>
+                </div>
+                <button onClick={() => setMobileMenuOpen(false)} className="text-gray-400 hover:text-gray-900">
+                  <X size={24} />
+                </button>
+              </div>
+              <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
+                {menuItems.map((item) => (
+                  <div key={item.id}>
+                    <SidebarItem 
+                      icon={item.icon} 
+                      label={item.label} 
+                      active={isTabActive(item.id, item.subItems)} 
+                      collapsed={false}
+                      onClick={() => handleTabClick(item.id, !!item.subItems)}
+                      hasSubmenu={!!item.subItems}
+                      isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                    />
+                    {item.subItems && (item.id === 'agendas' ? agendasOpen : false) && (
+                      <div className="ml-9 mt-1 space-y-1">
+                        {item.subItems.map((sub) => (
+                          <div
+                            key={sub.id}
+                            onClick={() => handleTabClick(sub.id)}
+                            className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
+                              ${activeTab === sub.id 
+                                ? 'text-blue-600 font-semibold' 
+                                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                              }`}
+                          >
+                            <span className="mr-2 opacity-70">{sub.icon}</span>
+                            {sub.label}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </nav>
+
+              <div className="p-4 border-t border-gray-100">
+                <div className="relative" ref={profileRef}>
+                  <div 
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    className={`flex items-center p-2 rounded-xl cursor-pointer transition-all hover:bg-gray-50 group
+                      ${isProfileOpen ? 'bg-gray-50' : ''}`}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
+                      {user?.user_metadata?.avatar_url ? (
+                        <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
+                      ) : (
+                        getInitials(user?.user_metadata?.full_name || user?.email)
+                      )}
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
+                    </div>
+                    <div className="ml-3 flex-1 min-w-0 flex items-center justify-between">
+                      <div className="truncate">
+                        <p className="text-sm font-bold text-gray-900 truncate">
+                          {user?.user_metadata?.full_name || 'Usuário'}
+                        </p>
+                        <p className="text-[10px] text-gray-400 truncate">
+                          {user?.email}
+                        </p>
+                      </div>
+                      <div className="text-gray-400 group-hover:text-gray-600 transition-colors">
+                        {isProfileOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dropdown Menu Mobile */}
+                  <AnimatePresence>
+                    {isProfileOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50"
+                      >
+                        <div className="p-4 border-b border-gray-50 flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">
+                            {getInitials(user?.user_metadata?.full_name || user?.email)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-gray-900 truncate">
+                              {user?.user_metadata?.full_name || 'Usuário'}
+                            </p>
+                            <p className="text-[11px] text-gray-400 truncate">
+                              {user?.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-2">
+                          <button 
+                            onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                          >
+                            <Sparkles size={18} className="text-gray-400" />
+                            Upgrade to Pro
+                          </button>
+                          <div className="h-px bg-gray-50 my-1 mx-2" />
+                          <button 
+                            onClick={() => { onTabChange('settings', 'account'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                          >
+                            <UserIcon size={18} className="text-gray-400" />
+                            Minha Conta
+                          </button>
+                          <button 
+                            onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                          >
+                            <CreditCard size={18} className="text-gray-400" />
+                            Assinatura
+                          </button>
+                          <button 
+                            onClick={() => { onTabChange('settings', 'channels'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                          >
+                            <MessageSquare size={18} className="text-gray-400" />
+                            Canais
+                          </button>
+                          <div className="h-px bg-gray-50 my-1 mx-2" />
+                          <button 
+                            onClick={() => supabase.auth.signOut()}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all"
+                          >
+                            <LogOut size={18} className="text-gray-400 group-hover:text-red-600" />
+                            Log out
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 md:px-10 sticky top-0 z-20">
+          <div className="flex items-center gap-4 flex-1">
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+            >
+              <Menu size={20} />
+            </button>
+            
+            <div className="relative max-w-sm w-full hidden sm:block">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search size={16} />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Pesquisar..." 
+                className="block w-full pl-10 pr-4 py-2.5 border border-slate-100 rounded-xl bg-slate-50 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:bg-white focus:border-blue-400 transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 md:gap-6">
+            <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+              <Bell size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+            
+            <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
+            
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-transparent transition-all overflow-hidden">
+              {user?.user_metadata?.avatar_url ? (
+                <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon size={20} />
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
