@@ -9,7 +9,17 @@ if (!process.env.SUPABASE_URL) {
 }
 
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
+
 // Global error handlers to prevent process crashes from background dependencies
+process.on('uncaughtException', (err) => {
+  console.error('[Server] CRITICAL: Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
