@@ -211,7 +211,7 @@ export default function App() {
       case 'integrations':
         return <Integrations user={user} role={role} />;
       case 'settings':
-        return <Settings />;
+        return <Settings initialSubTab={settingsSubTab} />;
       default:
         return (
           <div className="h-[60vh] flex flex-col items-center justify-center text-gray-400">
