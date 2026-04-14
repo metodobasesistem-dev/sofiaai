@@ -138,8 +138,7 @@ class WhatsAppService {
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
           executablePath: 
             process.env.PUPPETEER_EXECUTABLE_PATH || 
-            process.env.WHATSAPP_EXECUTABLE_PATH || 
-            undefined
+            process.env.WHATSAPP_EXECUTABLE_PATH
         }
       });
 
