@@ -139,10 +139,7 @@ class WhatsAppService {
           executablePath: 
             process.env.PUPPETEER_EXECUTABLE_PATH || 
             process.env.WHATSAPP_EXECUTABLE_PATH || 
-            '/usr/bin/google-chrome-stable' || 
-            '/usr/bin/chromium' || 
-            'google-chrome-stable' ||
-            'chromium'
+            undefined
         }
       });
 
