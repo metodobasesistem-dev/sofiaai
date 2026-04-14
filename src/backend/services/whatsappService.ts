@@ -87,8 +87,9 @@ class WhatsAppService {
 
     // Fix: If we are already initializing this user, return the existing promise
     if (this.initializing.has(userId)) {
-      console.log(`[WhatsAppService] Session for ${userId} is already initializing. Returning promise.`);
-      return this.initializing.get(userId)!;
+      console.warn(`[WhatsAppService] Session for ${userId} is already initializing. Attempting to force reset to avoid hang.`);
+      this.initializing.delete(userId);
+      await this.destroySession(userId);
     }
 
     // Fix: If session exists, check its REAL state
@@ -135,7 +136,15 @@ class WhatsAppService {
         }),
         puppeteer: {
           headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process'
+          ],
           executablePath: 
             process.env.PUPPETEER_EXECUTABLE_PATH || 
             process.env.WHATSAPP_EXECUTABLE_PATH
