@@ -1,5 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs", "chromium", "nss", "nspr", "atk", "at-spi2-atk", "cups", "libdrm", "libxkbcommon", "libXcomposite", "libXdamage", "libXrandr", "gbm", "alsa-lib", "pango", "cairo"]
+nixPkgs = ["nodejs", "google-chrome", "nss", "nspr", "atk", "at-spi2-atk", "cups", "libdrm", "libxkbcommon", "libXcomposite", "libXdamage", "libXrandr", "gbm", "alsa-lib", "pango", "cairo"]
+
+[variables]
+NIXPKGS_ALLOW_UNFREE = "1"
 
 [phases.build]
 cmds = ["npm install", "npm run build"]

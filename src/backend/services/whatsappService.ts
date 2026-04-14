@@ -136,7 +136,13 @@ class WhatsAppService {
         puppeteer: {
           headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
-          executablePath: process.env.WHATSAPP_EXECUTABLE_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium'
+          executablePath: 
+            process.env.PUPPETEER_EXECUTABLE_PATH || 
+            process.env.WHATSAPP_EXECUTABLE_PATH || 
+            '/usr/bin/google-chrome-stable' || 
+            '/usr/bin/chromium' || 
+            'google-chrome-stable' ||
+            'chromium'
         }
       });
 
