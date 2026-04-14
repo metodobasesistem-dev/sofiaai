@@ -1,7 +1,13 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+import fs from 'fs';
+
+if (fs.existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local' });
+} else {
+  dotenv.config();
+}
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = parseInt(process.env.REDIS_PORT || '6379');

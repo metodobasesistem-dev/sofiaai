@@ -41,7 +41,7 @@ if (fs.existsSync('.env.local')) {
 async function startServer() {
   console.log('[Server] Starting server version 3.0 (Supabase)...');
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   // 0. Listen Early
   const server = app.listen(PORT, '0.0.0.0', () => {
