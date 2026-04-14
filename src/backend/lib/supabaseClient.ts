@@ -2,10 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
-if (fs.existsSync('.env.local')) {
-  dotenv.config({ path: '.env.local' });
-} else {
-  dotenv.config();
+// Use environment variables from system first, then fallback to .env files
+if (!process.env.SUPABASE_URL) {
+  if (fs.existsSync('.env.local')) {
+    dotenv.config({ path: '.env.local' });
+  } else {
+    dotenv.config();
+  }
 }
 
 const supabaseUrl = process.env.SUPABASE_URL || '';

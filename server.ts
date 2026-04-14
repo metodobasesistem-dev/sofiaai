@@ -12,10 +12,12 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 
-if (fs.existsSync('.env.local')) {
-  dotenv.config({ path: '.env.local' });
-} else {
-  dotenv.config();
+if (!process.env.SUPABASE_URL) {
+  if (fs.existsSync('.env.local')) {
+    dotenv.config({ path: '.env.local' });
+  } else {
+    dotenv.config();
+  }
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,12 +33,6 @@ import { sessionController } from './src/backend/controllers/sessionController.j
 import { whatsappService } from './src/backend/services/whatsappService.js';
 import { agentService } from './src/backend/services/agentService.js';
 import { notificationService } from './src/backend/services/notificationService.js';
-
-if (fs.existsSync('.env.local')) {
-  dotenv.config({ path: '.env.local' });
-} else {
-  dotenv.config();
-}
 
 async function startServer() {
   console.log('[Server] Starting server version 3.0 (Supabase)...');
