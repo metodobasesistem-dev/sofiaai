@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs", "chromium"]
+nixPkgs = ["nodejs", "chromium", "nss", "nspr", "atk", "at-spi2-atk", "cups", "libdrm", "libxkbcommon", "libXcomposite", "libXdamage", "libXrandr", "gbm", "alsa-lib", "pango", "cairo"]
 
 [phases.build]
 cmds = ["npm install", "npm run build"]
