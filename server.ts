@@ -1,17 +1,5 @@
-import express from 'express';
-// Global error handlers to prevent process crashes from background dependencies
-process.on('uncaughtException', (err) => {
-  console.error('[Server] CRITICAL: Uncaught Exception:', err);
-});
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
-});
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-
+import fs from 'fs';
 if (!process.env.SUPABASE_URL) {
   if (fs.existsSync('.env.local')) {
     dotenv.config({ path: '.env.local' });
@@ -19,6 +7,9 @@ if (!process.env.SUPABASE_URL) {
     dotenv.config();
   }
 }
+
+import express from 'express';
+// Global error handlers to prevent process crashes from background dependencies
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
