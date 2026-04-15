@@ -71,6 +71,35 @@ async function startServer() {
     });
   });
 
+  // Diagnostic route to troubleshoot production issues
+  app.get('/api/diag/system', async (req, res) => {
+    const mask = (str?: string) => str ? `${str.substring(0, 5)}...${str.substring(str.length - 4)}` : 'MISSING';
+    
+    const diag = {
+      timestamp: new Date().toISOString(),
+      node_env: process.env.NODE_ENV,
+      port: process.env.PORT,
+      supabase: {
+        url: mask(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+        anon_key: mask(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY),
+        service_role: mask(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY),
+      },
+      headers: {
+        host: req.headers.host,
+        userAgent: req.headers['user-agent']?.substring(0, 20)
+      }
+    };
+
+    try {
+      const { data, error } = await supabase.from('profiles').select('count').limit(1).single();
+      (diag as any).db_connection = error ? `Error: ${error.message}` : 'OK';
+    } catch (e: any) {
+      (diag as any).db_connection = `Exception: ${e.message}`;
+    }
+
+    res.json(diag);
+  });
+
   // 3. Register Routes
   try {
     console.log('[Server] Registering API Routes...');
@@ -129,6 +158,8 @@ async function startServer() {
   // 5. Frontend Serving
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(__dirname, 'dist');
+    console.log(`[Server] Searching for static files in: ${distPath}`);
+    
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
       app.get('*', (req, res) => {
@@ -136,7 +167,13 @@ async function startServer() {
       });
       console.log('[Server] Production mode: Serving static files from /dist');
     } else {
-      console.warn('[Server] WARNING: /dist folder not found. Did you run "npm run build"?');
+      console.error(`[Server] ❌ FATAL ERROR: /dist folder not found at ${distPath}`);
+      console.log('[Server] Current directory content:', fs.readdirSync(__dirname));
+      
+      // Fallback for debugging: show a simple message instead of 404
+      app.get('/', (req, res) => {
+        res.status(500).send(`Server is running, but /dist folder is missing at ${distPath}. Build might have failed.`);
+      });
     }
   } else {
     // Vite Middleware (Development only)

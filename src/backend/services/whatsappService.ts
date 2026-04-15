@@ -178,10 +178,19 @@ class WhatsAppService {
             '--safebrowsing-disable-auto-update',
             '--js-flags=--max_old_space_size=512'
           ],
-          executablePath:
-            process.env.PUPPETEER_EXECUTABLE_PATH ||
-            process.env.WHATSAPP_EXECUTABLE_PATH ||
-            '/usr/bin/google-chrome-stable' // Fallback para Railway
+          executablePath: (() => {
+            const paths = [
+              process.env.PUPPETEER_EXECUTABLE_PATH,
+              process.env.WHATSAPP_EXECUTABLE_PATH,
+              '/usr/bin/chromium',
+              '/usr/bin/chromium-browser',
+              '/usr/bin/google-chrome-stable'
+            ];
+            for (const p of paths) {
+              if (p && fs.existsSync(p)) return p;
+            }
+            return undefined; // Let Puppeteer try its default
+          })()
         }
       });
 

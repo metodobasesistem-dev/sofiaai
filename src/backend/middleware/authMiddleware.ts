@@ -5,14 +5,36 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import fs from 'fs';
 
-// Use anon key for JWT verification (validates user tokens)
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+// Force load env to avoid race conditions in ESM imports
+if (!process.env.SUPABASE_URL) {
+  if (fs.existsSync('.env.local')) {
+    dotenv.config({ path: '.env.local' });
+  } else {
+    dotenv.config();
+  }
+}
 
-const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { autoRefreshToken: false, persistSession: false }
-});
+// Lazy-initialized auth client to ensure environment variables are ready
+let authClient: any = null;
+
+function getAuthClient() {
+  if (authClient) return authClient;
+  
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('[AuthMiddleware] WARNING: Missing Supabase credentials for token validation.');
+  }
+
+  authClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+  return authClient;
+}
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -28,6 +50,8 @@ export async function requireAuth(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  const client = getAuthClient();
+  
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -36,9 +60,10 @@ export async function requireAuth(
     }
 
     const token = authHeader.slice(7);
-    const { data: { user }, error } = await authClient.auth.getUser(token);
+    const { data: { user }, error } = await client.auth.getUser(token);
 
     if (error || !user) {
+      console.error(`[AuthMiddleware] Validation failed: ${error?.message || 'User not found'}`);
       res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
@@ -47,7 +72,7 @@ export async function requireAuth(
     req.userEmail = user.email;
     next();
   } catch (err: any) {
-    console.error('[AuthMiddleware] Error:', err.message);
+    console.error('[AuthMiddleware] Internal Exception:', err.message);
     res.status(500).json({ error: 'Auth verification failed' });
   }
 }

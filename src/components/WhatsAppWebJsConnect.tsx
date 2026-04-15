@@ -132,27 +132,38 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     subscribeRealtime(uid);
 
     // Check current status (read-only)
-    (async () => {
+    const fetchCurrentStatus = async () => {
       try {
         const res = await fetch(`/api/sessions/restore/${uid}`);
         if (!res.ok) return;
         const data = await res.json();
-        console.log('[WhatsAppConnect] Initial restore result:', data.status);
+        console.log(`[WhatsAppConnect] 🔄 Status sync: ${data.status}`, data);
 
         if (data.status === 'connected') {
           updateStatus('connected', null);
+          stopPolling();
         } else if (data.status === 'connecting') {
           updateStatus('connecting', null);
-          startQrPolling(uid); // Backend is initializing — poll until connected
+          startQrPolling(uid);
+        } else if (data.status === 'disconnected') {
+           // If we were connected but now backend says disconnected, update
+           if (statusRef.current === 'connected') {
+             updateStatus('disconnected', null);
+           }
         }
-        // 'disconnected' → keep as default
       } catch (err) {
-        console.error('[WhatsAppConnect] Restore error:', err);
+        console.error('[WhatsAppConnect] Status sync error:', err);
       }
-    })();
+    };
+
+    fetchCurrentStatus();
+
+    // SAFETY NET: Polling the brokered API every 5s to stay in sync with actual backend state
+    const safetyPoll = setInterval(fetchCurrentStatus, 5000);
 
     return () => {
       stopPolling();
+      clearInterval(safetyPoll);
       if (realtimeRef.current) {
         supabase.removeChannel(realtimeRef.current);
         realtimeRef.current = null;

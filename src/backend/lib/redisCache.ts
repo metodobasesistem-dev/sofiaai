@@ -19,7 +19,7 @@ export const cacheKey = {
   profile:  (userId: string) => `cache:profile:${userId}`,
   agents:   (userId: string) => `cache:agents:${userId}`,
   contacts: (userId: string) => `cache:contacts:${userId}`,
-  waSession:(clientId: string) => `wa:session:${clientId}`,
+  waSession:(userId: string) => `wa:session:${userId}`,
 };
 
 /**

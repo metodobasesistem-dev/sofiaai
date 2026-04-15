@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install system dependencies for Chromium
+# Install system dependencies for Chromium & Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-liberation \
@@ -23,33 +23,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables for Puppeteer to use the system-installed Chromium
+# Puppeteer environment variables
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_ENV=production
+ENV PORT=3000
 
 WORKDIR /app
 
-# Stage dependencies
+# Install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Pass environment variables to the build stage
+# Pass environment variables to the build stage (Vite requires these)
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_GOOGLE_CLIENT_ID
 ARG VITE_GOOGLE_CLIENT_SECRET
-
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ENV VITE_GOOGLE_CLIENT_SECRET=$VITE_GOOGLE_CLIENT_SECRET
 
-# Copy source and build (Vite build)
+# Copy source
 COPY . .
+
+# Build frontend (Vite)
 RUN npm run build
 
-# Expose the port Railway uses (default is 3000)
+# Expose port
 EXPOSE 3000
 
-# Start the server
+# Start command
 CMD ["npm", "run", "start"]
