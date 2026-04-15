@@ -161,13 +161,17 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
         // Fetch each part independently so they render as they finish
         const isAdmin = role === 'admin';
 
-        // 1. Profile (Fastest usually)
+        // 1. Profile (Greetings)
         getUserProfile(userId).then(p => {
           setProfile(p || null);
-          // AÇÃO: Garantir que o whatsappStatus seja inicializado mesmo se for 'null' no banco
-          if (p && !whatsappStatus) {
-            setWhatsappStatus({ status: (p.whatsapp_status || 'disconnected') as any });
-          }
+        });
+
+        // 2. Real-time WhatsApp Status (Brokered API)
+        // AÇÃO: Perguntar ao backend o estado real, ignorando dados possivelmente sujos do banco
+        getWhatsAppStatus().then(statusData => {
+          setWhatsappStatus(statusData as any);
+        }).catch(err => {
+          console.warn('[Dashboard] Could not fetch initial WhatsApp status:', err);
         });
 
         // 2. Stats + Activities + Appointments em paralelo (aguarda todos juntos)
@@ -293,8 +297,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
       {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado */}
       <AnimatePresence>
-        {((whatsappStatus && whatsappStatus.status !== 'connected') || 
-          (!whatsappStatus && profile && profile.whatsapp_status !== 'connected')) && (
+        {(whatsappStatus && whatsappStatus.status !== 'connected' && !profile?.role?.includes('admin')) && (
           <motion.div 
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
