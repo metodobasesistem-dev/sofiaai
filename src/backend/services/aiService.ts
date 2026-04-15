@@ -160,14 +160,18 @@ export async function generateAIResponse(
 
     console.log(`[AIService] ✅ Sucesso Gemini (${promptTokens + completionTokens} tokens)`);
 
-    return {
-      text: text,
-      usage: {
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-        cost_brl: costUsd * exchangeRate
-      }
-    };
+      return {
+        text: text,
+        usage: {
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          cost_brl: costUsd * exchangeRate
+        }
+      };
+    } catch (error) {
+      console.error('[AIService] ❌ Erro na chamada Gemini:', error);
+      throw error;
+    }
   }
 
   return { text: null };
