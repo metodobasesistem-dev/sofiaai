@@ -215,9 +215,9 @@ export const listAgents = async (): Promise<Agent[]> => {
 
   const timeoutFallback = new Promise<Agent[]>(resolve =>
     setTimeout(() => {
-      console.warn('[listAgents] Timeout 5s');
+      console.warn('[listAgents] Timeout 10s');
       resolve([]);
-    }, 5000)
+    }, 10000)
   );
 
   try {
@@ -234,17 +234,19 @@ export const listAgents = async (): Promise<Agent[]> => {
 };
 
 /**
- * Cria agente via RPC ancorada por email (resiliente a OAuth user_id mismatch)
+ * Cria agente via INSERT direto na tabela agents
  */
 export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
-    console.log('[createAgent] Criando via create_my_agent() para:', user.email);
+    console.log('[createAgent] Inserindo direto na tabela agents para:', user.id);
 
-    const { data, error } = await supabase.rpc('create_my_agent', {
-      p_data: {
+    const { data, error } = await supabase
+      .from('agents')
+      .insert({
+        user_id: user.id,
         nome: agentData.nome,
         nicho: agentData.nicho || '',
         prompt_base: agentData.prompt_base || '',
@@ -262,15 +264,16 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
         follow_ups: agentData.followUps || [],
         reminders: agentData.reminders || [],
         appointment_duration: agentData.appointmentDuration || 30
-      }
-    });
+      })
+      .select()
+      .single();
 
     if (error) {
-      console.error('[createAgent] Erro no RPC:', error.message);
+      console.error('[createAgent] Erro no INSERT:', error.message, error.code);
       throw new Error(error.message);
     }
 
-    console.log('[createAgent] Agente criado com sucesso, id:', data?.id);
+    console.log('[createAgent] ✅ Agente criado com sucesso, id:', data?.id);
     return data;
   } catch (err: any) {
     console.error('[createAgent] Falha:', err.message);
@@ -279,18 +282,18 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
 };
 
 /**
- * Atualiza agente via RPC ancorada por email (resiliente a OAuth user_id mismatch)
+ * Atualiza agente via UPDATE direto na tabela agents
  */
 export const updateAgent = async (agentId: string, agentData: Partial<Agent>) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não autenticado');
 
-    console.log('[updateAgent] Atualizando via update_my_agent() id:', agentId);
+    console.log('[updateAgent] Atualizando agente id:', agentId);
 
-    const { error } = await supabase.rpc('update_my_agent', {
-      p_agent_id: agentId,
-      p_data: {
+    const { error } = await supabase
+      .from('agents')
+      .update({
         nome: agentData.nome,
         nicho: agentData.nicho,
         prompt_base: agentData.prompt_base,
@@ -307,16 +310,18 @@ export const updateAgent = async (agentId: string, agentData: Partial<Agent>) =>
         appointment_duration: agentData.appointmentDuration,
         knowledge_base: agentData.knowledgeBase,
         follow_ups: agentData.followUps,
-        reminders: agentData.reminders
-      }
-    });
+        reminders: agentData.reminders,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', agentId)
+      .eq('user_id', user.id); // Security: only update own agents
 
     if (error) {
-      console.error('[updateAgent] Erro no RPC:', error.message);
+      console.error('[updateAgent] Erro no UPDATE:', error.message, error.code);
       throw new Error(error.message);
     }
 
-    console.log('[updateAgent] Agente atualizado com sucesso.');
+    console.log('[updateAgent] ✅ Agente atualizado com sucesso.');
   } catch (err: any) {
     console.error('[updateAgent] Falha:', err.message);
     throw err;
@@ -331,24 +336,28 @@ export const toggleAgentStatus = async (agentId: string, currentStatus: boolean)
 
   // Se ativando, desativa todos os outros agentes do usuário primeiro
   if (newStatus) {
-    const { data: myAgents } = await supabase.rpc('get_my_agents');
-    if (myAgents) {
-      for (const agent of myAgents) {
-        if (agent.id !== agentId && agent.status_ativo) {
-          await supabase.rpc('update_my_agent', {
-            p_agent_id: agent.id,
-            p_data: { status_ativo: false }
-          });
-        }
-      }
+    const { data: myAgents } = await supabase
+      .from('agents')
+      .select('id, status_ativo')
+      .eq('user_id', user.id)
+      .neq('id', agentId)
+      .eq('status_ativo', true);
+
+    if (myAgents && myAgents.length > 0) {
+      await supabase
+        .from('agents')
+        .update({ status_ativo: false })
+        .eq('user_id', user.id)
+        .neq('id', agentId);
     }
   }
 
-  // Atualiza o status do agente alvo via RPC (email-anchored)
-  const { error } = await supabase.rpc('update_my_agent', {
-    p_agent_id: agentId,
-    p_data: { status_ativo: newStatus }
-  });
+  // Atualiza o status do agente alvo via UPDATE direto
+  const { error } = await supabase
+    .from('agents')
+    .update({ status_ativo: newStatus })
+    .eq('id', agentId)
+    .eq('user_id', user.id);
 
   if (error) {
     console.error('[toggleAgentStatus] Erro:', error.message);
