@@ -168,11 +168,21 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
         // 2. Real-time WhatsApp Status (Brokered API)
         // AÇÃO: Perguntar ao backend o estado real, ignorando dados possivelmente sujos do banco
-        getWhatsAppStatus().then(statusData => {
-          setWhatsappStatus(statusData as any);
-        }).catch(err => {
-          console.warn('[Dashboard] Could not fetch initial WhatsApp status:', err);
-        });
+        const fetchWhatsAppStatus = async () => {
+          try {
+            const statusData = await getWhatsAppStatus();
+            console.log(`[Dashboard] 📱 WhatsApp status sync: ${statusData.status}`, statusData);
+            setWhatsappStatus(statusData as any);
+          } catch (err) {
+            console.warn('[Dashboard] Could not fetch WhatsApp status:', err);
+          }
+        };
+
+        // Initial fetch
+        fetchWhatsAppStatus();
+
+        // SEGURANÇA: Polling a cada 5 segundos para garantir que o front acompanhe o backend
+        const statusPollInterval = setInterval(fetchWhatsAppStatus, 5000);
 
         // 2. Stats + Activities + Appointments em paralelo (aguarda todos juntos)
         const statsPromise = isAdmin ? getGlobalDashboardStats() : getDashboardStats(userId);
@@ -217,6 +227,8 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
     return () => {
       if (unsubscribe) unsubscribe();
+      // @ts-ignore
+      if (typeof statusPollInterval !== 'undefined') clearInterval(statusPollInterval);
     };
   }, [user?.id, role]);
 
@@ -306,17 +318,23 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           >
             <div className="bg-green-50 border border-green-200 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-5">
-                <div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-green-200">
-                  <MessageCircle size={32} fill="currentColor" />
+                <div className={`w-14 h-14 ${whatsappStatus?.status === 'connecting' ? 'bg-blue-500' : 'bg-green-500'} rounded-full flex items-center justify-center text-white shadow-lg ${whatsappStatus?.status === 'connecting' ? 'shadow-blue-200' : 'shadow-green-200'} transition-colors`}>
+                  {whatsappStatus?.status === 'connecting' ? <Loader2 size={32} className="animate-spin" /> : <MessageCircle size={32} fill="currentColor" />}
                 </div>
                 <div className="space-y-1">
-                  <h2 className="text-xl font-black text-green-900">Ative sua assistente no WhatsApp</h2>
-                  <p className="text-sm text-green-700 opacity-80">Conecte seu WhatsApp e deixe a IA cuidar do atendimento e dos agendamentos.</p>
+                  <h2 className={`text-xl font-black ${whatsappStatus?.status === 'connecting' ? 'text-blue-900' : 'text-green-900'}`}>
+                    {whatsappStatus?.status === 'connecting' ? 'Restaurando conexão...' : 'Ative sua assistente no WhatsApp'}
+                  </h2>
+                  <p className={`text-sm ${whatsappStatus?.status === 'connecting' ? 'text-blue-700' : 'text-green-700'} opacity-80`}>
+                    {whatsappStatus?.status === 'connecting' 
+                      ? 'Estamos acordando sua IA para retomar o atendimento. Isso leva alguns segundos.' 
+                      : 'Conecte seu WhatsApp e deixe a IA cuidar do atendimento e dos agendamentos.'}
+                  </p>
                   <div className="flex gap-2 mt-2">
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded border border-green-200 flex items-center gap-1">
-                      <Zap size={10} /> Ativação instantânea
+                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-blue-200' : 'border-green-200'} flex items-center gap-1`}>
+                      <Zap size={10} /> {whatsappStatus?.status === 'connecting' ? 'Recuperação automática' : 'Ativação instantânea'}
                     </span>
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded border border-green-200 flex items-center gap-1">
+                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-blue-200' : 'border-green-200'} flex items-center gap-1`}>
                       <Clock size={10} /> Atendimento 24h
                     </span>
                   </div>
@@ -324,11 +342,14 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               </div>
               <button 
                 onClick={handleConnect}
-                disabled={isConnecting}
-                className="whitespace-nowrap px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 bg-green-600 hover:bg-green-700 text-white shadow-green-200"
+                disabled={isConnecting || whatsappStatus?.status === 'connecting'}
+                className={`whitespace-nowrap px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 
+                  ${whatsappStatus?.status === 'connecting' 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200' 
+                    : 'bg-green-600 hover:bg-green-700 text-white shadow-green-200'}`}
               >
-                {isConnecting ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
-                Conectar WhatsApp
+                { (isConnecting || whatsappStatus?.status === 'connecting') ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
+                {whatsappStatus?.status === 'connecting' ? 'Aguarde...' : 'Conectar WhatsApp'}
               </button>
             </div>
           </motion.div>

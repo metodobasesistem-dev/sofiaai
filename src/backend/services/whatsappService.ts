@@ -423,6 +423,12 @@ class WhatsAppService {
 
     // AÇÃO 2: Se não existe em memória, tenta restaurar do Redis se houver backup
     if (!session) {
+      // Se já estamos tentando inicializar esta sessão, não dispare outra restauração
+      if (this.initializing.has(userId)) {
+        console.log(`[WhatsAppService] Session ${userId} is already being initialized/restored. Returning 'connecting'.`);
+        return 'connecting';
+      }
+      
       console.log(`[WhatsAppService] No memory session for ${userId}. Checking Redis for restoration...`);
       return this.restoreSessionIfExists(userId);
     }
