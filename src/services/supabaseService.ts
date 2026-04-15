@@ -185,53 +185,52 @@ const mapAgents = (data: any[]): Agent[] =>
   }));
 
 export const listAgents = async (): Promise<Agent[]> => {
-  const fetchDirect = async (): Promise<Agent[]> => {
-    // getSession() lê do localStorage — instantâneo após F5, sem rede
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) {
-      console.warn('[listAgents] Sem sessão disponível');
-      return [];
-    }
+  // 1. Get session (non-blocking, reads from localStorage)
+  const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+  const user = session?.user;
 
-    console.log('[listAgents] Buscando para user_id:', user.id, '/', user.email);
+  if (!user) {
+    console.warn('[listAgents] Sem sessão disponível');
+    return [];
+  }
 
-    const { data, error } = await supabase
+  // 2. Serve cache immediately while we fetch fresh data
+  const cachedResult = user.email ? getCachedAgents(user.email) : [];
+  console.log('[listAgents] Cache:', cachedResult.length, '| Buscando user_id:', user.id);
+
+  // 3. Fetch fresh data with a 10s timeout
+  try {
+    const fetchPromise = supabase
       .from('agents')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Supabase timeout after 10s')), 10000)
+    );
+
+    const result = await Promise.race([fetchPromise, timeoutPromise]) as any;
+    const { data, error } = result;
+
     if (error) {
-      console.error('[listAgents] Erro SELECT:', error.message);
-      throw error;
+      console.error('[listAgents] Erro SELECT:', error.message, '| code:', error.code);
+      if (error.code === '42501' || error.message?.includes('permission')) {
+        console.error('[listAgents] ❌ RLS BLOQUEANDO — adicione policy SELECT na tabela agents!');
+      }
+      return cachedResult; // Return cache on error
     }
 
     const agents = mapAgents(data || []);
-    console.log('[listAgents] Encontrados:', agents.length, 'agentes');
-    if (user.email && agents.length > 0) setCachedAgents(user.email, agents);
+    console.log('[listAgents] ✅ Encontrados:', agents.length, 'agentes');
+    if (user.email) setCachedAgents(user.email, agents);
     return agents;
-  };
-
-  const timeoutFallback = new Promise<Agent[]>(resolve =>
-    setTimeout(() => {
-      console.warn('[listAgents] Timeout 10s');
-      resolve([]);
-    }, 10000)
-  );
-
-  try {
-    return await Promise.race([fetchDirect(), timeoutFallback]);
   } catch (err: any) {
-    console.error('[listAgents] falha:', err.message);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const email = session?.user?.email;
-      if (email) return getCachedAgents(email);
-    } catch {}
-    return [];
+    console.error('[listAgents] Falha ou timeout:', err.message);
+    return cachedResult; // Always return cache on failure
   }
 };
+
 
 /**
  * Cria agente via INSERT direto na tabela agents

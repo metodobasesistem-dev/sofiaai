@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Loader2, CheckCircle2, XCircle, RefreshCw, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,76 +10,108 @@ const WhatsAppIcon = () => (
   </svg>
 );
 
+/**
+ * WhatsApp Connection status values:
+ *  - 'disconnected': No session, show "Gerar QR Code" button
+ *  - 'connecting': Session initializing or waiting for QR scan, show spinner + QR if available
+ *  - 'waiting': QR shown, poll until 'connected'
+ *  - 'connected': Authenticated, show "Desconectar" button
+ */
+type Status = 'disconnected' | 'connecting' | 'waiting' | 'connected';
+
 export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any }) {
-  const [session, setSession] = useState<any>(null);
+  const [status, setStatus] = useState<Status>('disconnected');
+  const [qr, setQr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(propUser);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (propUser) setUser(propUser);
   }, [propUser]);
 
+  // Clear any running poll
+  const clearPoll = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  // Poll backend status every 3s until connected or disconnected
+  const startPolling = (userId: string) => {
+    clearPoll();
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/sessions/restore/${userId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === 'connected') {
+          setStatus('connected');
+          setQr(null);
+          clearPoll();
+          toast.success('WhatsApp Conectado com Sucesso!');
+        } else if (data.status === 'disconnected') {
+          // Only reset to disconnected if we were in 'connecting' state
+          // (not 'waiting' - means QR is shown but not yet scanned)
+          setStatus(prev => {
+            if (prev === 'waiting') return prev; // keep QR visible
+            return 'disconnected';
+          });
+        }
+        // 'connecting' → keep current state (Chrome still loading)
+      } catch (err) {
+        console.error('[WhatsAppConnect] Poll error:', err);
+      }
+    }, 3000);
+  };
+
   // On mount: call /restore — read-only, never destroys anything
   useEffect(() => {
     if (!user?.id) return;
-    let cancelled = false;
 
     const restoreSession = async () => {
       try {
         const res = await fetch(`/api/sessions/restore/${user.id}`);
-        if (!res.ok || cancelled) return;
+        if (!res.ok) return;
         const data = await res.json();
-        // Only update if we're not already waiting for a QR scan
-        setSession((prev: any) => {
-          if (prev?.status === 'waiting') return prev;
-          return { ...prev, status: data.status };
-        });
+
+        console.log('[WhatsAppConnect] Restore result:', data.status);
+
+        if (data.status === 'connected') {
+          setStatus('connected');
+          setQr(null);
+        } else if (data.status === 'connecting') {
+          // Chrome is loading or QR not yet generated — show spinner and poll
+          setStatus('connecting');
+          startPolling(user.id);
+        }
+        // 'disconnected' → leave as default (show button)
       } catch (err) {
         console.error('[WhatsAppConnect] Error restoring session:', err);
       }
     };
 
     restoreSession();
-    return () => { cancelled = true; };
+
+    return () => clearPoll();
   }, [user?.id]);
 
-  // Poll status while waiting for QR scan
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-    if (user?.id && session?.status === 'waiting') {
-      pollInterval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/sessions/status/${user.id}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === 'connected') {
-              setSession((prev: any) => ({ ...prev, status: 'connected', qr: null }));
-              toast.success('WhatsApp Conectado com Sucesso!');
-            }
-          }
-        } catch (err) {
-          console.error('Error polling status:', err);
-        }
-      }, 3000);
-    }
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [user?.id, session?.status]);
-
-  const handleAction = async () => {
+  const handleConnect = async () => {
     if (!user) return;
 
     // Disconnect
-    if (session?.status === 'connected') {
+    if (status === 'connected') {
       try {
         setLoading(true);
         const { disconnectWhatsApp } = await import('../services/whatsappService');
         await disconnectWhatsApp();
-        setSession({ ...session, status: 'disconnected', qr: null });
+        setStatus('disconnected');
+        setQr(null);
+        clearPoll();
         toast.success('WhatsApp desconectado com sucesso!');
       } catch (error: any) {
-        console.error('Error disconnecting:', error);
         toast.error(error.message || 'Erro ao desconectar');
       } finally {
         setLoading(false);
@@ -87,8 +119,9 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
       return;
     }
 
-    // Connect — only called when NOT already connected
+    // Connect — only called when truly disconnected
     setLoading(true);
+    setStatus('connecting');
     try {
       console.log('[WhatsAppConnect] Calling /api/sessions/create...');
       const response = await fetch('/api/sessions/create', {
@@ -101,60 +134,77 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
 
       if (!response.ok) {
         const text = await response.text();
-        console.error('[WhatsAppConnect] Error response text:', text);
-        try {
-          const error = JSON.parse(text);
-          throw new Error(error.error || 'Falha ao iniciar sessão');
-        } catch (e) {
-          throw new Error(`Erro do servidor: ${text.substring(0, 100)}`);
-        }
+        let errorMsg = `Erro do servidor: ${text.substring(0, 100)}`;
+        try { errorMsg = JSON.parse(text).error || errorMsg; } catch {}
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
       console.log('[WhatsAppConnect] Success response:', data);
 
       if (data.qr) {
-        setSession({ ...(session || {}), qr: data.qr, status: 'waiting' });
+        setQr(data.qr);
+        setStatus('waiting');
         toast.info('QR Code gerado! Escaneie no seu WhatsApp.');
+        startPolling(user.id); // Poll until scanned
       } else if (data.status === 'connected') {
-        setSession({ ...(session || {}), status: 'connected', qr: null });
-        toast.success('Sessão Restaurada! Seu WhatsApp já estava conectado.');
+        setStatus('connected');
+        setQr(null);
+        toast.success('Sessão restaurada! WhatsApp já estava conectado.');
       } else if (data.status === 'connecting') {
-        setSession({ ...(session || {}), status: 'waiting' });
-        toast.info('Restaurando conexão existente...');
-      } else {
-        toast.info(data.message || 'Iniciando conexão...');
+        setStatus('connecting');
+        toast.info('Restaurando conexão...');
+        startPolling(user.id);
       }
     } catch (error: any) {
-      console.error('Error connecting:', error);
+      console.error('[WhatsAppConnect] Error connecting:', error);
+      setStatus('disconnected');
       toast.error(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const testTop = async () => {
-    try {
-      const response = await fetch('/api/test-top');
-      const text = await response.text();
-      toast.success(`Top API: ${text}`);
-    } catch (err) {
-      toast.error(`Erro Top API: ${err instanceof Error ? err.message : String(err)}`);
+  // Status badge
+  const renderBadge = () => {
+    if (status === 'connected') {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+          <CheckCircle2 size={12} /> Conectado
+        </span>
+      );
     }
+    if (status === 'waiting') {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full border border-yellow-100">
+          <RefreshCw size={12} className="animate-spin" /> Aguardando QR
+        </span>
+      );
+    }
+    if (status === 'connecting' || loading) {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+          <Loader2 size={12} className="animate-spin" /> Conectando
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-2 py-1 rounded-full border border-red-100">
+        <XCircle size={12} /> Desconectado
+      </span>
+    );
   };
 
-  const testApi = async () => {
-    try {
-      const response = await fetch('/api/health-check');
-      const data = await response.json();
-      toast.success(`API Conectada: ${data.timestamp}`);
-    } catch (err) {
-      toast.error(`Erro ao conectar na API: ${err instanceof Error ? err.message : String(err)}`);
-    }
+  // Button label
+  const renderButton = () => {
+    if (loading) return <Loader2 size={16} className="animate-spin" />;
+    if (status === 'connected') return <>Desconectar</>;
+    if (status === 'connecting') return <><Loader2 size={16} className="animate-spin" /> Iniciando...</>;
+    return <><QrCode size={16} /> Gerar QR Code</>;
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-6 flex flex-col h-full"
@@ -163,24 +213,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
         <div className="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shadow-sm">
           <WhatsAppIcon />
         </div>
-        
-        {session?.status === 'connected' ? (
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100">
-            <CheckCircle2 size={12} /> Conectado
-          </span>
-        ) : session?.status === 'waiting' ? (
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full border border-yellow-100">
-            <RefreshCw size={12} className="animate-spin" /> Aguardando QR
-          </span>
-        ) : loading ? (
-           <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
-            <Loader2 size={12} className="animate-spin" /> Conectando
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-2 py-1 rounded-full border border-red-100">
-            <XCircle size={12} /> Desconectado
-          </span>
-        )}
+        {renderBadge()}
       </div>
 
       <div className="flex-1">
@@ -189,43 +222,44 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
           Conecte seu número de WhatsApp para que seus agentes de IA possam responder seus clientes automaticamente.
         </p>
 
-        {session?.qr && session.status === 'waiting' && (
-          <motion.div 
+        {/* QR Code — only show when waiting for scan */}
+        {qr && status === 'waiting' && (
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200"
           >
             <div className="bg-white p-2 rounded-xl shadow-sm mb-2">
-              <img src={session.qr} alt="WhatsApp QR Code" className="w-48 h-48" />
+              <img src={qr} alt="WhatsApp QR Code" className="w-48 h-48" />
             </div>
             <p className="text-xs text-gray-400 text-center mt-2 px-2">
               Abra o WhatsApp no seu celular, vá em Aparelhos Conectados e escaneie o código.
             </p>
           </motion.div>
         )}
+
+        {/* Spinner while connecting */}
+        {status === 'connecting' && !qr && (
+          <div className="flex flex-col items-center justify-center p-8 text-gray-400">
+            <Loader2 size={32} className="animate-spin mb-3 text-blue-500" />
+            <p className="text-sm font-medium">Iniciando WhatsApp Web...</p>
+            <p className="text-xs mt-1 text-gray-300">Isso pode levar até 30 segundos</p>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 pt-6 border-t border-gray-50 flex items-center justify-between gap-4">
         <button
-          onClick={handleAction}
-          disabled={loading}
+          id="whatsapp-action-btn"
+          onClick={handleConnect}
+          disabled={loading || status === 'connecting'}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-70 ${
-            session?.status === 'connected'
+            status === 'connected'
               ? 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
               : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200'
           }`}
         >
-          {loading ? (
-             <Loader2 size={16} className="animate-spin" />
-          ) : session?.status === 'connected' ? (
-            <>
-              Desconectar
-            </>
-          ) : (
-            <>
-              <QrCode size={16} /> Gerar QR Code
-            </>
-          )}
+          {renderButton()}
         </button>
       </div>
     </motion.div>

@@ -45,23 +45,27 @@ class WhatsAppService {
     }
   }
 
-  private async updateProfileStatus(userId: string, data: any) {
+  private async updateProfileStatus(userId: string, data: { status: string; qr?: string }) {
     try {
-      console.log(`[WhatsAppService] Updating Supabase profile for user ${userId}:`, JSON.stringify(data));
-      
+      // Map internal status to Supabase column value
+      let dbStatus: string;
+      if (data.status === 'connected') dbStatus = 'connected';
+      else if (data.status === 'connecting') dbStatus = 'connecting';
+      else dbStatus = 'disconnected';
+
+      console.log(`[WhatsAppService] Updating Supabase profile for user ${userId}:`, JSON.stringify({ status: dbStatus }));
+
       const { error } = await supabase
         .from('profiles')
         .update({
-          whatsapp_status: data.status === 'connected' ? 'connected' : 'disconnected',
-          whatsapp_instance_id: userId, // Using userId as instance ID for now
+          whatsapp_status: dbStatus,
+          whatsapp_instance_id: userId,
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
 
       if (error) {
-        console.error(`[WhatsAppService] Error updating profile:`, error);
-        // Fallback: If profile doesn't exist, we might need to handle it, 
-        // but normally the user should have a profile after signing up.
+        console.error(`[WhatsAppService] Error updating profile:`, error.message);
       }
     } catch (error) {
       console.error(`[WhatsAppService] Exception updating Supabase:`, error);
@@ -389,15 +393,35 @@ class WhatsAppService {
     }
   }
 
-  async getSessionStatus(userId: string) {
+  async getSessionStatus(userId: string): Promise<string> {
     const session = this.sessions.get(userId);
+
+    // No session in memory at all
     if (!session) return 'disconnected';
+
+    // Session exists but hasn't authenticated yet (still showing QR or initializing)
+    // In this case, getState() may throw or return null — we return 'connecting'
+    // so the frontend doesn't reset the UI and trigger a new /create call.
     try {
       const state = await session.client.getState();
-      const status = state === 'CONNECTED' ? 'connected' : 'disconnected';
-      await this.updateProfileStatus(userId, { status });
-      return status;
+
+      if (state === 'CONNECTED') {
+        await this.updateProfileStatus(userId, { status: 'connected' });
+        return 'connected';
+      }
+
+      if (state === 'OPENING' || state === null || state === undefined) {
+        // Still initializing or waiting for QR — report as connecting
+        return 'connecting';
+      }
+
+      // Any other state (CONFLICT, UNLAUNCHED, etc.) = disconnected
+      await this.updateProfileStatus(userId, { status: 'disconnected' });
+      return 'disconnected';
     } catch {
+      // getState() throws when Chrome crashed or session is truly gone
+      // If we have a QR stored in memory, we're still in the connecting phase
+      if (session.qr) return 'connecting';
       return 'disconnected';
     }
   }
