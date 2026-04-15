@@ -185,49 +185,32 @@ const mapAgents = (data: any[]): Agent[] =>
   }));
 
 export const listAgents = async (): Promise<Agent[]> => {
-  // 1. Get session (non-blocking, reads from localStorage)
   const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
   const user = session?.user;
+  const token = session?.access_token;
 
-  if (!user) {
+  if (!user || !token) {
     console.warn('[listAgents] Sem sessão disponível');
     return [];
   }
 
-  // 2. Serve cache immediately while we fetch fresh data
+  // Serve cache immediately while we fetch
   const cachedResult = user.email ? getCachedAgents(user.email) : [];
-  console.log('[listAgents] Cache:', cachedResult.length, '| Buscando user_id:', user.id);
 
-  // 3. Fetch fresh data with a 10s timeout
   try {
-    const fetchPromise = supabase
-      .from('agents')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    const res = await fetch('/api/v2/agents', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const result = await res.json();
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Supabase timeout after 10s')), 10000)
-    );
+    if (!result.success) throw new Error(result.error);
 
-    const result = await Promise.race([fetchPromise, timeoutPromise]) as any;
-    const { data, error } = result;
-
-    if (error) {
-      console.error('[listAgents] Erro SELECT:', error.message, '| code:', error.code);
-      if (error.code === '42501' || error.message?.includes('permission')) {
-        console.error('[listAgents] ❌ RLS BLOQUEANDO — adicione policy SELECT na tabela agents!');
-      }
-      return cachedResult; // Return cache on error
-    }
-
-    const agents = mapAgents(data || []);
-    console.log('[listAgents] ✅ Encontrados:', agents.length, 'agentes');
+    const agents = mapAgents(result.data || []);
     if (user.email) setCachedAgents(user.email, agents);
     return agents;
   } catch (err: any) {
-    console.error('[listAgents] Falha ou timeout:', err.message);
-    return cachedResult; // Always return cache on failure
+    console.error('[listAgents] API error:', err.message);
+    return cachedResult;
   }
 };
 
@@ -236,180 +219,124 @@ export const listAgents = async (): Promise<Agent[]> => {
  * Cria agente via INSERT direto na tabela agents
  */
 export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Usuário não autenticado');
 
-    console.log('[createAgent] Inserindo direto na tabela agents para:', user.id);
+  const res = await fetch('/api/v2/agents', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      nome: agentData.nome,
+      nicho: agentData.nicho || '',
+      prompt_base: agentData.prompt_base || '',
+      status_ativo: agentData.status_ativo ?? true,
+      company_name: agentData.companyName || '',
+      company_address: agentData.companyAddress || '',
+      professional_name: agentData.professionalName || '',
+      company_description: agentData.companyDescription || '',
+      company_products: agentData.companyProducts || '',
+      company_faq: agentData.companyFAQ || '',
+      company_links: agentData.companyLinks || '',
+      voice_mode: agentData.voice_mode || 'disabled',
+      voice_id: agentData.voice_id || 'alloy',
+      knowledge_base: agentData.knowledgeBase || [],
+      follow_ups: agentData.followUps || [],
+      reminders: agentData.reminders || [],
+      appointment_duration: agentData.appointmentDuration || 30
+    })
+  });
 
-    const { data, error } = await supabase
-      .from('agents')
-      .insert({
-        user_id: user.id,
-        nome: agentData.nome,
-        nicho: agentData.nicho || '',
-        prompt_base: agentData.prompt_base || '',
-        status_ativo: agentData.status_ativo ?? true,
-        company_name: agentData.companyName || '',
-        company_address: agentData.companyAddress || '',
-        professional_name: agentData.professionalName || '',
-        company_description: agentData.companyDescription || '',
-        company_products: agentData.companyProducts || '',
-        company_faq: agentData.companyFAQ || '',
-        company_links: agentData.companyLinks || '',
-        voice_mode: agentData.voice_mode || 'disabled',
-        voice_id: agentData.voice_id || 'alloy',
-        knowledge_base: agentData.knowledgeBase || [],
-        follow_ups: agentData.followUps || [],
-        reminders: agentData.reminders || [],
-        appointment_duration: agentData.appointmentDuration || 30
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[createAgent] Erro no INSERT:', error.message, error.code);
-      throw new Error(error.message);
-    }
-
-    console.log('[createAgent] ✅ Agente criado com sucesso, id:', data?.id);
-    return data;
-  } catch (err: any) {
-    console.error('[createAgent] Falha:', err.message);
-    throw err;
-  }
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
 };
 
 /**
  * Atualiza agente via UPDATE direto na tabela agents
  */
 export const updateAgent = async (agentId: string, agentData: Partial<Agent>) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Usuário não autenticado');
 
-    console.log('[updateAgent] Atualizando agente id:', agentId);
+  const res = await fetch(`/api/v2/agents/${agentId}`, {
+    method: 'PUT',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      nome: agentData.nome,
+      nicho: agentData.nicho,
+      prompt_base: agentData.prompt_base,
+      status_ativo: agentData.status_ativo,
+      company_name: agentData.companyName,
+      company_address: agentData.companyAddress,
+      professional_name: agentData.professionalName,
+      company_description: agentData.companyDescription,
+      company_products: agentData.companyProducts,
+      company_faq: agentData.companyFAQ,
+      company_links: agentData.companyLinks,
+      voice_mode: agentData.voice_mode,
+      voice_id: agentData.voice_id,
+      appointment_duration: agentData.appointmentDuration,
+      knowledge_base: agentData.knowledgeBase,
+      follow_ups: agentData.followUps,
+      reminders: agentData.reminders
+    })
+  });
 
-    const { error } = await supabase
-      .from('agents')
-      .update({
-        nome: agentData.nome,
-        nicho: agentData.nicho,
-        prompt_base: agentData.prompt_base,
-        status_ativo: agentData.status_ativo,
-        company_name: agentData.companyName,
-        company_address: agentData.companyAddress,
-        professional_name: agentData.professionalName,
-        company_description: agentData.companyDescription,
-        company_products: agentData.companyProducts,
-        company_faq: agentData.companyFAQ,
-        company_links: agentData.companyLinks,
-        voice_mode: agentData.voice_mode,
-        voice_id: agentData.voice_id,
-        appointment_duration: agentData.appointmentDuration,
-        knowledge_base: agentData.knowledgeBase,
-        follow_ups: agentData.followUps,
-        reminders: agentData.reminders,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', agentId)
-      .eq('user_id', user.id); // Security: only update own agents
-
-    if (error) {
-      console.error('[updateAgent] Erro no UPDATE:', error.message, error.code);
-      throw new Error(error.message);
-    }
-
-    console.log('[updateAgent] ✅ Agente atualizado com sucesso.');
-  } catch (err: any) {
-    console.error('[updateAgent] Falha:', err.message);
-    throw err;
-  }
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
 };
 
 export const toggleAgentStatus = async (agentId: string, currentStatus: boolean) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
 
-  const newStatus = !currentStatus;
+  const res = await fetch(`/api/v2/agents/${agentId}/toggle`, {
+    method: 'PATCH',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({ status_ativo: !currentStatus })
+  });
 
-  // Se ativando, desativa todos os outros agentes do usuário primeiro
-  if (newStatus) {
-    const { data: myAgents } = await supabase
-      .from('agents')
-      .select('id, status_ativo')
-      .eq('user_id', user.id)
-      .neq('id', agentId)
-      .eq('status_ativo', true);
-
-    if (myAgents && myAgents.length > 0) {
-      await supabase
-        .from('agents')
-        .update({ status_ativo: false })
-        .eq('user_id', user.id)
-        .neq('id', agentId);
-    }
-  }
-
-  // Atualiza o status do agente alvo via UPDATE direto
-  const { error } = await supabase
-    .from('agents')
-    .update({ status_ativo: newStatus })
-    .eq('id', agentId)
-    .eq('user_id', user.id);
-
-  if (error) {
-    console.error('[toggleAgentStatus] Erro:', error.message);
-    throw error;
-  }
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
 };
 
 export const deleteAgent = async (agentId: string) => {
-  // Timeout de segurança: nunca travar por mais de 5s
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Tempo esgotado. Verifique sua conexão.')), 5000)
-  );
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
 
-  const deletePromise = supabase
-    .from('agents')
-    .delete()
-    .eq('id', agentId);
+  const res = await fetch(`/api/v2/agents/${agentId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
 
-  const result = await Promise.race([deletePromise, timeoutPromise]);
-  const { error } = result as any;
-
-  if (error) {
-    console.error('[deleteAgent] Erro:', error.message);
-    throw new Error(error.message);
-  }
-
-  console.log('[deleteAgent] Agente excluído:', agentId);
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
 };
 
 /**
  * Contacts
  */
 export const listContacts = async (): Promise<Contact[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return [];
 
-  // Admin Bypass via role
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-  const isAdmin = profile?.role === 'admin';
+  const res = await fetch('/api/v2/contacts', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
 
-  let query = supabase.from('contacts').select('*');
+  if (!result.success) throw new Error(result.error);
   
-  if (!isAdmin) {
-    query = query.eq('user_id', user.id);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('[SupabaseService] listContacts error:', error);
-    throw error;
-  }
-  return (data || []).map(c => ({
+  return (result.data || []).map((c: any) => ({
     id: c.id,
     userId: c.user_id,
     nome: c.nome,
@@ -564,30 +491,16 @@ export const deleteContact = async (contactId: string) => {
  */
 export const getUserProfile = async (passedUserId?: string): Promise<UserProfile | null> => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
 
-    // Admin mestre: retorna perfil direto sem consultar banco
-    if (user.email === 'ieqmur@gmail.com') {
-      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || 'Admin';
-      return {
-        id: user.id,
-        email: user.email,
-        nome_completo: fullName,
-        name: fullName,
-        role: 'admin',
-        whatsapp_status: 'connected'
-      };
-    }
+    const res = await fetch('/api/v2/profile', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` }
+    });
+    const result = await res.json();
 
-    // Para clientes: busca por email (resiliente a user_id mismatch pós-OAuth)
-    const { data, error } = await supabase.rpc('get_my_profile');
-
-    if (error) {
-      console.error('[getUserProfile] Erro no RPC:', error.message);
-    }
-
-    const profile = Array.isArray(data) ? data[0] : data;
+    if (!result.success) throw new Error(result.error);
+    const profile = result.data;
 
     if (profile) {
       const finalFullName = profile.nome_completo || profile.full_name || '';
@@ -609,49 +522,28 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
       };
     }
 
-    // Fallback se perfil ainda não existe no banco
-    const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || '';
-    return {
-      id: user.id,
-      email: user.email || '',
-      nome_completo: fallbackName,
-      name: fallbackName,
-      role: 'client',
-      whatsapp_status: 'disconnected',
-      google_calendar_active: false
-    };
+    return null;
   } catch (err) {
-    console.error('[getUserProfile] Erro:', err);
+    console.error('[getUserProfile] API Erro:', err);
     return null;
   }
 };
 
-export const updateUserProfile = async (profileData: Partial<UserProfile> & { google_refresh_token?: string, google_calendar_active?: boolean, google_calendar_email?: string | null }) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+export const updateUserProfile = async (profileData: Partial<UserProfile>) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
 
-  // Remover campos que não existem na tabela
-  const { ...cleanData } = profileData;
-  delete (cleanData as any).id;
-  delete (cleanData as any).created_at;
-  delete (cleanData as any).whatsapp_instance_id;
+  const res = await fetch('/api/v2/profile', {
+    method: 'PATCH',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify(profileData)
+  });
 
-  console.log('[updateUserProfile] Salvando:', Object.keys(cleanData));
-
-  // Buscar o profile id real pelo email (resiliente a user_id mismatch pós-OAuth)
-  const { data: profileData2 } = await supabase.rpc('get_my_profile');
-  const realProfile = Array.isArray(profileData2) ? profileData2[0] : profileData2;
-  const profileId = realProfile?.id || user.id;
-
-  const { error } = await supabase
-    .from('profiles')
-    .update(cleanData)
-    .eq('id', profileId);
-
-  if (error) {
-    console.error('[updateUserProfile] Erro:', error.message);
-    throw error;
-  }
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
 };
 
 /**

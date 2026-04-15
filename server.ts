@@ -29,11 +29,16 @@ import { supabase } from './src/backend/lib/supabaseClient.js';
 import { redisService } from './src/backend/services/redisService.js';
 import sessionRoutes from './src/backend/routes/sessionRoutes.js';
 import messageRoutes from './src/backend/routes/messageRoutes.js';
-import contactRoutes from './src/backend/routes/contactRoutes.js';
 import { sessionController } from './src/backend/controllers/sessionController.js';
 import { whatsappService } from './src/backend/services/whatsappService.js';
 import { agentService } from './src/backend/services/agentService.js';
 import { notificationService } from './src/backend/services/notificationService.js';
+
+// V2 Professional API Routes
+import agentApiRoutes from './src/backend/routes/agentApiRoutes.js';
+import contactApiRoutes from './src/backend/routes/contactApiRoutes.js';
+import profileApiRoutes from './src/backend/routes/profileApiRoutes.js';
+import { rPing } from './src/backend/lib/redisClient.js';
 
 async function startServer() {
   console.log('[Server] Starting server version 3.0 (Supabase)...');
@@ -56,8 +61,14 @@ async function startServer() {
   app.use(express.json());
 
   // 2. Health Checks
-  app.get('/api/health-check', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), db: 'supabase' });
+  app.get('/api/health-check', async (req, res) => {
+    const redisOk = await rPing();
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(), 
+      db: 'supabase',
+      redis: redisOk ? 'ok' : 'failed'
+    });
   });
 
   // 3. Register Routes
@@ -76,9 +87,13 @@ async function startServer() {
 
     app.use('/api/sessions', sessionRoutes);
     app.use('/api/messages', messageRoutes);
-    app.use('/api/contacts', contactRoutes);
+
+    // V2 Layered Architecture
+    app.use('/api/v2/agents', agentApiRoutes);
+    app.use('/api/v2/contacts', contactApiRoutes);
+    app.use('/api/v2/profile', profileApiRoutes);
     
-    console.log('[Server] All API Routes Registered');
+    console.log('[Server] All API Routes Registered (v1 & v2)');
 
   } catch (err: any) {
     console.error('[Server] Error during route registration:', err);

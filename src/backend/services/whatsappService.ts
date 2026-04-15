@@ -2,7 +2,7 @@ import qrcode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
 import { supabase } from '../lib/supabaseClient.js';
-import { SupabaseRemoteAuthStore } from '../lib/supabaseRemoteAuthStore.js';
+import { RedisRemoteAuthStore } from '../lib/redisRemoteAuthStore.js';
 import { agentService } from './agentService.js';
 import { transcribeAudio } from './aiService.js';
 
@@ -148,14 +148,14 @@ class WhatsAppService {
         }
       }
 
-      const store = new SupabaseRemoteAuthStore(sessionsDataPath);
+      const store = new RedisRemoteAuthStore(sessionsDataPath);
 
       const client = new this.Client({
         authStrategy: new this.RemoteAuth({
           clientId: clientId,
           dataPath: sessionsDataPath,
           store: store,
-          backupSyncIntervalMs: 60000, // Sync to Supabase every 60s (not 5min)
+          backupSyncIntervalMs: 60000, // Sync to Redis every 60s
         }),
         puppeteer: {
           headless: true,
@@ -175,13 +175,35 @@ class WhatsAppService {
             '--mute-audio',
             '--safebrowsing-disable-auto-update',
             '--js-flags=--max_old_space_size=512'
-            // NOTE: --single-process and --no-zygote removed — they cause guaranteed crashes on Linux
           ],
           executablePath:
             process.env.PUPPETEER_EXECUTABLE_PATH ||
             process.env.WHATSAPP_EXECUTABLE_PATH
         }
       });
+
+      // --- Heartbeat & Auto-Reconnect Logic ---
+      const heartbeatInterval = setInterval(async () => {
+        const currentSess = this.sessions.get(userId);
+        if (!currentSess || !currentSess.client) {
+          clearInterval(heartbeatInterval);
+          return;
+        }
+
+        try {
+          const state = await currentSess.client.getState().catch(() => null);
+          console.log(`[WhatsAppService] Heartbeat for ${userId}: ${state}`);
+
+          if (state === 'CONFLICT' || state === 'UNLAUNCHED') {
+            console.warn(`[WhatsAppService] Critical state "${state}" for ${userId}. Attempting auto-reconnect...`);
+            await this.createSession(userId).catch(() => {});
+          } else if (state === 'CONNECTED') {
+            await this.updateProfileStatus(userId, { status: 'connected' });
+          }
+        } catch (e) {
+          console.error(`[WhatsAppService] Heartbeat error for ${userId}:`, e);
+        }
+      }, 30000); // Check every 30s
 
       client.on('qr', async (qr) => {
         try {
@@ -216,7 +238,7 @@ class WhatsAppService {
 
       // RemoteAuth backup confirmation
       client.on('remote_session_saved', () => {
-        console.log(`[WhatsAppService] ✅ Session backup saved to Supabase Storage for ${userId}`);
+        console.log(`[WhatsAppService] ✅ Session backup saved to Redis for ${userId}`);
       });
       client.on('message', async (msg) => {
         if (msg.from.includes('@g.us') || msg.from === 'status@broadcast') return;
@@ -440,10 +462,10 @@ class WhatsAppService {
       this.sessions.delete(userId);
       this.initializing.delete(userId);
 
-      // Delete session from Supabase Storage and clean up local temp files
+      // Delete session from Redis and clean up local temp files
       const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
       const sessionsDataPath = path.join(process.cwd(), 'sessions');
-      const store = new SupabaseRemoteAuthStore(sessionsDataPath);
+      const store = new RedisRemoteAuthStore(sessionsDataPath);
 
       try {
         await store.delete({ session: clientId });
