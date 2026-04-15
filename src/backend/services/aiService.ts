@@ -19,30 +19,27 @@ const PRICING = {
   'gemini-1.5-flash': { in: 0.000075, out: 0.0003 }
 } as any;
 
-let openai: OpenAI | null = null;
-let currentOpenAIKey: string | null = null;
-let genAI: GoogleGenerativeAI | null = null;
-let currentGeminiKey: string | null = null;
-
 async function getAISettings() {
   try {
-    const { data: settings } = await supabase.from('global_settings').select('*').limit(1).maybeSingle();
-    return settings || {
-      openai_api_key: process.env.OPENAI_API_KEY,
-      gemini_api_key: process.env.GEMINI_API_KEY,
-      default_ai_model: 'gpt-4o',
-      llm_provider: 'openai',
-      usd_brl_rate: 5.30
-    };
-  } catch (err) {
-    return {
-      openai_api_key: process.env.OPENAI_API_KEY,
-      gemini_api_key: process.env.GEMINI_API_KEY,
-      default_ai_model: 'gpt-4o',
-      llm_provider: 'openai',
-      usd_brl_rate: 5.30
-    };
-  }
+    const { data: settings } = await supabase.from('global_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    
+    if (settings) {
+      console.log(`[AIService] ⚙️ Configurações lidas do Banco (Provider: ${settings.llm_provider})`);
+      return settings;
+    }
+  } catch (err) {}
+
+  console.log('[AIService] ⚠️ Banco indísponível ou vazio, usando .env');
+  return {
+    openai_api_key: process.env.OPENAI_API_KEY,
+    gemini_api_key: process.env.GEMINI_API_KEY,
+    default_ai_model: 'gpt-4o',
+    llm_provider: 'openai',
+    usd_brl_rate: 5.30
+  };
 }
 
 /**
@@ -63,18 +60,19 @@ export async function generateAIResponse(
   const model = settings.default_ai_model || 'gpt-4o';
   const exchangeRate = settings.usd_brl_rate || 5.30;
 
-  // --- OpenAI Client Refresh ---
+  console.log(`[AIService] 🤖 Gerando resposta... [Provider: ${provider}] [Model: ${model}]`);
+
+  // --- OpenAI ---
   if (provider === 'openai') {
     const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
-    if (key !== currentOpenAIKey) {
-      console.log('[AIService] 🔄 Refrescando cliente OpenAI com nova chave...');
-      openai = key ? new OpenAI({ apiKey: key }) : null;
-      currentOpenAIKey = key;
+    if (!key) {
+      console.error('[AIService] ❌ ERRO: Chave OpenAI não encontrada no Banco nem no .env');
+      throw new Error('OpenAI key missing');
     }
     
-    if (!openai) throw new Error('OpenAI key missing');
+    const client = new OpenAI({ apiKey: key });
 
-    const completion = await openai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: model,
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature: 0.7,
@@ -90,6 +88,8 @@ export async function generateAIResponse(
     const pricing = PRICING[model] || PRICING['gpt-4o'];
     const costUsd = ((usage?.prompt_tokens || 0) / 1000 * pricing.in) + ((usage?.completion_tokens || 0) / 1000 * pricing.out);
     
+    console.log(`[AIService] ✅ Sucesso OpenAI (${usage?.total_tokens} tokens)`);
+
     return {
       text: choice.message.content,
       toolCalls: choice.message.tool_calls,
@@ -101,24 +101,24 @@ export async function generateAIResponse(
     };
   } 
   
-  // --- Gemini Client Refresh ---
+  // --- Gemini ---
   else if (provider === 'gemini') {
     const key = settings.gemini_api_key || process.env.GEMINI_API_KEY;
-    if (key !== currentGeminiKey) {
-      console.log('[AIService] 🔄 Refrescando cliente Gemini com nova chave...');
-      genAI = key ? new GoogleGenerativeAI(key) : null;
-      currentGeminiKey = key;
+    if (!key) {
+      console.error('[AIService] ❌ ERRO: Chave Gemini não encontrada no Banco nem no .env');
+      throw new Error('Gemini key missing');
     }
 
-    if (!genAI) throw new Error('Gemini key missing');
-
-    const geminiModel = genAI.getGenerativeModel({ model: model });
+    const client = new GoogleGenerativeAI(key);
+    const geminiModel = client.getGenerativeModel({ model: model });
     
     // Convert OpenAI message format to Gemini
     const contents = messages.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }));
+
+    console.log(`[AIService] 🚀 Chamando Google Gemini...`);
 
     const result = await geminiModel.generateContent({
       contents: contents,
@@ -135,6 +135,8 @@ export async function generateAIResponse(
 
     const pricing = PRICING[model] || PRICING['gemini-1.5-flash'];
     const costUsd = (promptTokens / 1000 * pricing.in) + (completionTokens / 1000 * pricing.out);
+
+    console.log(`[AIService] ✅ Sucesso Gemini (${promptTokens + completionTokens} tokens)`);
 
     return {
       text: text,

@@ -124,7 +124,8 @@ export class AgentService {
       let finalUsage = null;
 
       while (true) {
-        const response = await generateAIResponse(fullPrompt, currentMessages, tools);
+      console.log(`[AgentService] 🤖 Chamando IA para thread: ${threadId}`);
+      const response = await generateAIResponse(fullPrompt, currentMessages, tools);
         if (!response.text && (!response.toolCalls || response.toolCalls.length === 0)) {
           console.warn('[AgentService] AI returned absolutely nothing. Breaking loop.');
           break;

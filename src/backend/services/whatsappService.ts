@@ -378,7 +378,7 @@ class WhatsAppService {
             try { await chat.sendSeen(); } catch (e) {}
           }
 
-          console.log(`[WhatsAppService] Triggering AgentService.processIncoming for ${msg.from}`);
+          console.log(`[WhatsAppService] 🚀 DISPARANDO AGENTE para ${msg.from}...`);
           const aiResponse = await agentService.processIncoming(userId, {
             from: msg.from,
             body: body, 
