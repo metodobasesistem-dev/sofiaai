@@ -320,9 +320,17 @@ class WhatsAppService {
         }
       });
 
-      client.on('disconnected', async () => {
+      client.on('disconnected', async (reason) => {
+        console.log(`[WhatsAppService] ⚠️ Client DISCONNECTED for ${userId}. Reason: ${reason}`);
+        
+        // Anti-flicker: if we were JUST initializing, ignore quick disconnections 
+        // that often happen when puppeteer restarts for the first time
+        if (this.initializing.has(userId)) {
+          console.warn(`[WhatsAppService] Ignoring disconnection event during initialization for ${userId}`);
+          return;
+        }
+
         this.sessions.delete(userId);
-        this.initializing.delete(userId);
         await this.updateProfileStatus(userId, { status: 'disconnected' });
       });
 
@@ -348,9 +356,10 @@ class WhatsAppService {
         if (!resolved) {
           resolved = true;
           this.initializing.delete(userId);
+          console.error(`[WhatsAppService] ❌ TIMEOUT: QR failed to generate within 120s for ${userId}`);
           reject(new Error('Timeout waiting for QR code'));
         }
-      }, 60000);
+      }, 120000); // 120s
     });
 
     this.initializing.set(userId, initPromise);

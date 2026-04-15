@@ -124,12 +124,15 @@ export class AgentService {
       let finalUsage = null;
 
       while (true) {
-      console.log(`[AgentService] 🤖 Chamando IA para thread: ${threadId}`);
-      const response = await generateAIResponse(fullPrompt, currentMessages, tools);
-        if (!response.text && (!response.toolCalls || response.toolCalls.length === 0)) {
-          console.warn('[AgentService] AI returned absolutely nothing. Breaking loop.');
+        console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId})`);
+        const response = await generateAIResponse(fullPrompt, currentMessages, tools);
+        
+        if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
+          console.warn(`[AgentService] ⚠️ Resposta da IA vazia na thread: ${threadId}. Encerrando loop.`);
           break;
         }
+
+        console.log(`[AgentService] ✨ IA respondeu! (Thread: ${threadId})`);
 
         if (response.usage) {
           finalUsage = response.usage;

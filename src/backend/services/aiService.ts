@@ -20,19 +20,25 @@ const PRICING = {
 } as any;
 
 async function getAISettings() {
+  const mask = (key?: string) => key ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : 'MISSING';
+
   try {
-    const { data: settings } = await supabase.from('global_settings')
+    const { data: settings, error } = await supabase.from('global_settings')
       .select('*')
       .limit(1)
       .maybeSingle();
     
-    if (settings) {
-      console.log(`[AIService] ⚙️ Configurações lidas do Banco (Provider: ${settings.llm_provider})`);
+    if (error) {
+      console.warn(`[AIService] ⚠️ Erro ao consultar Banco (Tabela pode não existir): ${error.message}`);
+    } else if (settings) {
+      console.log(`[AIService] ⚙️ Configurações detectadas no Banco. Provider: ${settings.llm_provider}`);
       return settings;
     }
-  } catch (err) {}
+  } catch (err: any) {
+    console.warn(`[AIService] ⚠️ Falha crítica na conexão com Banco: ${err.message}`);
+  }
 
-  console.log('[AIService] ⚠️ Banco indísponível ou vazio, usando .env');
+  console.log('[AIService] ℹ️ Usando configurações de fallback (.env)');
   return {
     openai_api_key: process.env.OPENAI_API_KEY,
     gemini_api_key: process.env.GEMINI_API_KEY,
@@ -64,69 +70,85 @@ export async function generateAIResponse(
 
   // --- OpenAI ---
   if (provider === 'openai') {
-    const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
+    const key = (settings.openai_api_key && settings.openai_api_key.trim() !== '') 
+      ? settings.openai_api_key 
+      : process.env.OPENAI_API_KEY;
+
     if (!key) {
-      console.error('[AIService] ❌ ERRO: Chave OpenAI não encontrada no Banco nem no .env');
+      console.error('[AIService] ❌ ERRO: Chave OpenAI não encontrada (Banco/Env vazios)');
       throw new Error('OpenAI key missing');
     }
     
-    const client = new OpenAI({ apiKey: key });
+    const maskedKey = `${key.substring(0, 7)}...${key.substring(key.length - 4)}`;
+    console.log(`[AIService] 🔑 Utilizando chave OpenAI: ${maskedKey}`);
 
-    const completion = await client.chat.completions.create({
-      model: model,
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      temperature: 0.7,
-      max_tokens: 1000,
-      tools: tools?.length ? tools : undefined,
-      tool_choice: tools?.length ? toolChoice : undefined,
-    });
+    try {
+      const client = new OpenAI({ apiKey: key });
+      const completion = await client.chat.completions.create({
+        model: model,
+        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        temperature: 0.7,
+        max_tokens: 1000,
+        tools: tools?.length ? tools : undefined,
+        tool_choice: tools?.length ? toolChoice : undefined,
+      });
 
-    const choice = completion.choices[0];
-    const usage = completion.usage;
-    
-    // Calculate cost in BRL
-    const pricing = PRICING[model] || PRICING['gpt-4o'];
-    const costUsd = ((usage?.prompt_tokens || 0) / 1000 * pricing.in) + ((usage?.completion_tokens || 0) / 1000 * pricing.out);
-    
-    console.log(`[AIService] ✅ Sucesso OpenAI (${usage?.total_tokens} tokens)`);
+      const choice = completion.choices[0];
+      const usage = completion.usage;
+      
+      const pricing = PRICING[model] || PRICING['gpt-4o'];
+      const costUsd = ((usage?.prompt_tokens || 0) / 1000 * pricing.in) + ((usage?.completion_tokens || 0) / 1000 * pricing.out);
+      
+      console.log(`[AIService] ✅ Sucesso OpenAI (${usage?.total_tokens} tokens)`);
 
-    return {
-      text: choice.message.content,
-      toolCalls: choice.message.tool_calls,
-      usage: {
-        prompt_tokens: usage?.prompt_tokens || 0,
-        completion_tokens: usage?.completion_tokens || 0,
-        cost_brl: costUsd * exchangeRate
-      }
-    };
+      return {
+        text: choice.message.content,
+        toolCalls: choice.message.tool_calls,
+        usage: {
+          prompt_tokens: usage?.prompt_tokens || 0,
+          completion_tokens: usage?.completion_tokens || 0,
+          cost_brl: costUsd * exchangeRate
+        }
+      };
+    } catch (error) {
+      console.error('[AIService] ❌ Erro na chamada OpenAI:', error);
+      throw error;
+    }
   } 
   
-  // --- Gemini ---
-  else if (provider === 'gemini') {
-    const key = settings.gemini_api_key || process.env.GEMINI_API_KEY;
+  // --- Google Gemini ---
+  if (provider === 'gemini') {
+    const key = (settings.gemini_api_key && settings.gemini_api_key.trim() !== '') 
+      ? settings.gemini_api_key 
+      : process.env.GEMINI_API_KEY;
+
     if (!key) {
-      console.error('[AIService] ❌ ERRO: Chave Gemini não encontrada no Banco nem no .env');
+      console.error('[AIService] ❌ ERRO: Chave Gemini não encontrada (Banco/Env vazios)');
       throw new Error('Gemini key missing');
     }
 
-    const client = new GoogleGenerativeAI(key);
-    const geminiModel = client.getGenerativeModel({ model: model });
+    const maskedKey = `${key.substring(0, 7)}...${key.substring(key.length - 4)}`;
+    console.log(`[AIService] 🔑 Utilizando chave Gemini: ${maskedKey}`);
     
-    // Convert OpenAI message format to Gemini
-    const contents = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    try {
+      const genAI = new GoogleGenerativeAI(key);
+      const geminiModel = genAI.getGenerativeModel({ model: model });
+      
+      // Convert OpenAI message format to Gemini
+      const contents = messages.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
 
-    console.log(`[AIService] 🚀 Chamando Google Gemini...`);
+      console.log(`[AIService] 🚀 Chamando Google Gemini...`);
 
-    const result = await geminiModel.generateContent({
-      contents: contents,
-      systemInstruction: systemPrompt
-    });
+      const result = await geminiModel.generateContent({
+        contents: contents,
+        systemInstruction: systemPrompt
+      });
 
-    const response = await result.response;
-    const text = response.text();
+      const response = await result.response;
+      const text = response.text();
     
     // Gemini usage info
     const usageMetadata = (response as any).usageMetadata;
