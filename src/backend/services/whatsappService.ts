@@ -494,7 +494,7 @@ class WhatsAppService {
 
       // Delete session from Redis and clean up local temp files
       const clientId = userId; // Standardized: No prefix
-      const sessionsDataPath = path.join(process.cwd(), 'sessions');
+      const sessionsDataPath = './sessions';
       const store = new RedisRemoteAuthStore(sessionsDataPath);
 
       try {

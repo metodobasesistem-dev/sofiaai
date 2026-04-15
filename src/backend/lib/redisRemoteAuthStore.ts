@@ -31,7 +31,9 @@ export class RedisRemoteAuthStore {
   }
 
   private zipPath(session: string): string {
-    return path.join(this.dataPath, `${session}.zip`);
+    // Standardize: Ensure we only use the filename, stripping any absolute paths prepended by the library
+    const sessionName = path.basename(session);
+    return path.join(this.dataPath, `${sessionName}.zip`);
   }
 
   // ─── sessionExists ────────────────────────────────────────────────────────
