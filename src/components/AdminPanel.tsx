@@ -321,6 +321,39 @@ export default function AdminPanel() {
     }
   };
 
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+            <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-slate-200">
+              <Shield size={28} />
+            </div>
+            Painel Admin
+          </h1>
+          <p className="text-slate-500 mt-2 font-medium">Controle central do ecossistema SaaS WppAI.</p>
+        </div>
+        <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+          {[
+            { id: 'overview', icon: <Activity size={18} />, label: 'Geral' },
+            { id: 'users', icon: <Users size={18} />, label: 'Inquilinos' },
+            { id: 'config', icon: <Settings size={18} />, label: 'Config' },
+            { id: 'billing', icon: <CreditCard size={18} />, label: 'Financeiro' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as AdminTab)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {renderContent()}
 
       {/* MODAL: EDIT USER */}
