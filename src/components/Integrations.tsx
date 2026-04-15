@@ -152,10 +152,13 @@ export default function Integrations({ user, role }: { user: User | null, role: 
         // Buscar perfil atualizado após processar OAuth
         const p = await getUserProfile();
         setProfile(p);
-      } catch (err) {
+      } catch (err: any) {
         console.error('[Integrations] Erro na inicialização:', err);
         localStorage.removeItem('connecting_google');
         setConnectingGoogle(false);
+        if (localStorage.getItem('connecting_google') === 'true') {
+           toast.error('Falha ao finalizar conexão com Google. Tente novamente.');
+        }
       } finally {
         clearTimeout(safetyTimeout);
         setLoading(false);

@@ -36,8 +36,10 @@ import { notificationService } from './src/backend/services/notificationService.
 
 // V2 Professional API Routes
 import agentApiRoutes from './src/backend/routes/agentApiRoutes.js';
+import contactApiRoutes from './src/backend/routes/contactApiRoutes.js';
 import profileApiRoutes from './src/backend/routes/profileApiRoutes.js';
 import quickReplyApiRoutes from './src/backend/routes/quickReplyApiRoutes.js';
+import adminApiRoutes from './src/backend/routes/adminApiRoutes.js';
 import { rPing } from './src/backend/lib/redisClient.js';
 
 async function startServer() {
@@ -122,6 +124,7 @@ async function startServer() {
     app.use('/api/v2/contacts', contactApiRoutes);
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
+    app.use('/api/v2/admin', adminApiRoutes);
     
     console.log('[Server] All API Routes Registered (v1 & v2)');
 

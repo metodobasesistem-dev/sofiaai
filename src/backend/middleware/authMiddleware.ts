@@ -76,3 +76,39 @@ export async function requireAuth(
     res.status(500).json({ error: 'Auth verification failed' });
   }
 }
+
+/**
+ * Middleware: ensure the authenticated user has the 'admin' role.
+ * MUST be used AFTER requireAuth.
+ */
+export async function requireAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const userId = req.userId;
+  if (!userId) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  try {
+    const { supabase } = await import('../lib/supabaseClient.js');
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (error || profile?.role !== 'admin') {
+      console.warn(`[AuthMiddleware] 🚫 Access denied for user ${userId} (Role: ${profile?.role})`);
+      res.status(403).json({ error: 'Access denied: Admin role required' });
+      return;
+    }
+
+    next();
+  } catch (err: any) {
+    console.error('[AuthMiddleware] Admin check error:', err.message);
+    res.status(500).json({ error: 'Internal server error while checking role' });
+  }
+}

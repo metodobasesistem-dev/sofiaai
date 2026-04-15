@@ -366,9 +366,9 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
               <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-100">
                 <Star size={24} fill="currentColor" />
               </div>
-              Minha Carteira de Clientes
+              Minha Carteira (CRM)
             </h1>
-            <p className="text-gray-500 text-sm mt-1">Gestão centralizada de todos os seus leads que fecharam contrato.</p>
+            <p className="text-gray-500 text-sm mt-1">Gestão de contatos que já converteram ou estão em negociação avançada.</p>
           </div>
           <div className="flex items-center gap-3">
             <button 
@@ -433,7 +433,7 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-24 text-gray-400">
               <Loader2 size={40} className="animate-spin mb-4 text-amber-500" />
-              <p className="font-medium">Carregando carteira de clientes...</p>
+              <p className="font-medium">Carregando carteira (CRM)...</p>
             </div>
           ) : filteredClients.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 px-6 text-center">

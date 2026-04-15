@@ -1014,3 +1014,30 @@ export const disconnectGoogleCalendar = async () => {
     google_refresh_token: null as any
   });
 };
+
+/**
+ * Admin API (v2 Backend Proxy)
+ */
+export const getAdminStats = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/stats', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
+
+export const listAdminUsers = async (): Promise<UserProfile[]> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/users', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};

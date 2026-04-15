@@ -126,7 +126,7 @@ export default function Layout({
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
-    { id: 'clients', icon: <Star size={20} />, label: 'Clientes', adminOnly: true },
+    { id: 'clients', icon: <Star size={20} />, label: 'Carteira', adminOnly: true },
     { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
     { 
       id: 'agendas', 

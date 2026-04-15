@@ -24,7 +24,7 @@ import {
   Globe
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers } from '../services/supabaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -45,30 +45,17 @@ export default function AdminPanel() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      // Fetch all profiles
-      const { data: profs, error: pErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (pErr) throw pErr;
-      setProfiles(profs || []);
-
-      // Fetch basic stats (This should ideally be a single RPC or summary table)
-      const [agentsRes, messagesRes] = await Promise.all([
-        supabase.from('agents').select('id', { count: 'exact', head: true }),
-        supabase.from('messages').select('id', { count: 'exact', head: true })
+      
+      const [statsData, usersData] = await Promise.all([
+        getAdminStats(),
+        listAdminUsers()
       ]);
 
-      setStats({
-        totalUsers: profs?.length || 0,
-        activeSessions: profs?.filter(p => p.whatsapp_status === 'connected').length || 0,
-        totalMessages: messagesRes.count || 0,
-        totalAgents: agentsRes.count || 0
-      });
+      setStats(statsData);
+      setProfiles(usersData);
     } catch (error: any) {
       console.error('Admin Fetch Error:', error);
-      toast.error('Erro ao carregar dados administrativos. Verifique se o script SQL foi executado.');
+      toast.error('Erro ao carregar dados administrativos. Verifique permissões de admin.');
     } finally {
       setIsLoading(false);
     }
