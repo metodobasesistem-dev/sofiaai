@@ -297,7 +297,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
       {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado */}
       <AnimatePresence>
-        {(whatsappStatus && whatsappStatus.status !== 'connected' && !profile?.role?.includes('admin')) && (
+        {(whatsappStatus?.status !== 'connected') && (
           <motion.div 
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}

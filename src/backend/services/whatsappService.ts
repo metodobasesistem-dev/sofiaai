@@ -127,7 +127,9 @@ class WhatsAppService {
     const initPromise = new Promise<string>((resolve, reject) => {
       let resolved = false;
       
-      // v5_RECOMECO: O golpe final para acabar com as pastas travadas
+      // Standardize session naming: Using userId directly as recommended
+      const clientId = userId;
+      
       // AÇÃO 1: Corrigir dataPath Duplicado (Sempre usar caminho relativo './sessions' para evitar aninhamento no Docker)
       const sessionsDataPath = './sessions';
 
@@ -455,7 +457,7 @@ class WhatsAppService {
 
   // AÇÃO 2: Implementar restauração automática se a sessão existir no Redis
   async restoreSessionIfExists(userId: string): Promise<string> {
-    const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
+    const clientId = userId; // Standardized: No prefix
     const sessionsDataPath = './sessions';
     const store = new RedisRemoteAuthStore(sessionsDataPath);
 
@@ -491,7 +493,7 @@ class WhatsAppService {
       this.initializing.delete(userId);
 
       // Delete session from Redis and clean up local temp files
-      const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
+      const clientId = userId; // Standardized: No prefix
       const sessionsDataPath = path.join(process.cwd(), 'sessions');
       const store = new RedisRemoteAuthStore(sessionsDataPath);
 
