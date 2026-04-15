@@ -1,106 +1,163 @@
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { supabase } from '../lib/supabaseClient.js';
 
-// Force load envs since this module can be called widely
+// Force load envs
 if (fs.existsSync('.env.local')) {
   dotenv.config({ path: '.env.local' });
 } else {
   dotenv.config();
 }
 
+// Pricing per 1k tokens (Estimated USD)
+const PRICING = {
+  'gpt-4o': { in: 0.005, out: 0.015 },
+  'gpt-4o-mini': { in: 0.00015, out: 0.0006 },
+  'gemini-1.5-pro': { in: 0.0035, out: 0.0105 },
+  'gemini-1.5-flash': { in: 0.000075, out: 0.0003 }
+} as any;
+
 let openai: OpenAI | null = null;
-if (process.env.OPENAI_API_KEY) {
-  openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-} else {
-  console.warn('[AIService] OPENAI_API_KEY is not configured.');
+let genAI: GoogleGenerativeAI | null = null;
+
+async function getAISettings() {
+  try {
+    const { data: settings } = await supabase.from('global_settings').select('*').limit(1).maybeSingle();
+    return settings || {
+      openai_api_key: process.env.OPENAI_API_KEY,
+      gemini_api_key: process.env.GEMINI_API_KEY,
+      default_ai_model: 'gpt-4o',
+      llm_provider: 'openai',
+      usd_brl_rate: 5.30
+    };
+  } catch (err) {
+    return {
+      openai_api_key: process.env.OPENAI_API_KEY,
+      gemini_api_key: process.env.GEMINI_API_KEY,
+      default_ai_model: 'gpt-4o',
+      llm_provider: 'openai',
+      usd_brl_rate: 5.30
+    };
+  }
 }
 
 /**
- * Generates an AI response using OpenAI based on the provided system conditions.
- * Supports tool calling for integration with other systems.
+ * Generates an AI response using the configured provider (OpenAI or Gemini).
  */
 export async function generateAIResponse(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; [key: string]: any }[],
   tools?: any[],
   toolChoice: 'auto' | 'none' | 'required' = 'auto'
-): Promise<{ text: string | null; toolCalls?: any[] }> {
-  if (!openai) {
-    console.error('[AIService] OpenAI is not initialized. Cannot generate response.');
-    return { text: null };
-  }
+): Promise<{ 
+  text: string | null; 
+  toolCalls?: any[]; 
+  usage?: { prompt_tokens: number; completion_tokens: number; cost_brl: number } 
+}> {
+  const settings = await getAISettings();
+  const provider = settings.llm_provider || 'openai';
+  const model = settings.default_ai_model || 'gpt-4o';
+  const exchangeRate = settings.usd_brl_rate || 5.30;
 
-  try {
-    console.log(`[AIService] Sending ${messages.length} messages to OpenAI. Last message: "${messages[messages.length - 1]?.content.substring(0, 50)}..."`);
-    // Debug history
-    console.log('[AIService] Context summary:');
-    messages.forEach((m, i) => console.log(`  ${i}: [${m.role}] ${m.content.substring(0, 30)}...`));
-
-    const options: any = {
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages
-      ],
-      temperature: 0.7,
-      max_tokens: 800,
-    };
-
-    if (tools && tools.length > 0) {
-      options.tools = tools;
-      options.tool_choice = toolChoice;
+  if (provider === 'openai') {
+    if (!openai && settings.openai_api_key) {
+      openai = new OpenAI({ apiKey: settings.openai_api_key });
     }
+    if (!openai) throw new Error('OpenAI key missing');
 
-    // console.log('[AIService] DEBUG FULL OPTIONS:', JSON.stringify(options, null, 2));
-
-    const completion = await openai.chat.completions.create(options);
+    const completion = await openai.chat.completions.create({
+      model: model,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: 0.7,
+      max_tokens: 1000,
+      tools: tools?.length ? tools : undefined,
+      tool_choice: tools?.length ? toolChoice : undefined,
+    });
 
     const choice = completion.choices[0];
-    const message = choice?.message;
-    const finishReason = choice?.finish_reason;
+    const usage = completion.usage;
     
-    if (!message?.content && !message?.tool_calls) {
-      console.warn(`[AIService] ⚠️ Warning: OpenAI returned empty response. Finish Reason: ${finishReason}`);
-      console.log('[AIService] Full choice object:', JSON.stringify(choice, null, 2));
-    }
+    // Calculate cost in BRL
+    const pricing = PRICING[model] || PRICING['gpt-4o'];
+    const costUsd = ((usage?.prompt_tokens || 0) / 1000 * pricing.in) + ((usage?.completion_tokens || 0) / 1000 * pricing.out);
     
     return {
-      text: message?.content || null,
-      toolCalls: message?.tool_calls,
+      text: choice.message.content,
+      toolCalls: choice.message.tool_calls,
+      usage: {
+        prompt_tokens: usage?.prompt_tokens || 0,
+        completion_tokens: usage?.completion_tokens || 0,
+        cost_brl: costUsd * exchangeRate
+      }
     };
-  } catch (error) {
-    console.error('[AIService] Error communicating with OpenAI:', error);
-    return { text: null };
+  } 
+  
+  else if (provider === 'gemini') {
+    if (!genAI && settings.gemini_api_key) {
+      genAI = new GoogleGenerativeAI(settings.gemini_api_key);
+    }
+    if (!genAI) throw new Error('Gemini key missing');
+
+    const geminiModel = genAI.getGenerativeModel({ model: model });
+    
+    // Convert OpenAI message format to Gemini
+    const contents = messages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    // Add system instructions if supported by this version of SDK, or prepended to first message
+    const result = await geminiModel.generateContent({
+      contents: contents,
+      systemInstruction: systemPrompt
+    });
+
+    const response = await result.response;
+    const text = response.text();
+    
+    // Gemini usage info
+    const usageMetadata = (response as any).usageMetadata;
+    const promptTokens = usageMetadata?.promptTokenCount || 0;
+    const completionTokens = usageMetadata?.candidatesTokenCount || 0;
+
+    const pricing = PRICING[model] || PRICING['gemini-1.5-flash'];
+    const costUsd = (promptTokens / 1000 * pricing.in) + (completionTokens / 1000 * pricing.out);
+
+    return {
+      text: text,
+      usage: {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        cost_brl: costUsd * exchangeRate
+      }
+    };
   }
+
+  return { text: null };
 }
 
 /**
  * Transcribes audio using OpenAI Whisper.
  */
 export async function transcribeAudio(buffer: Buffer, filename: string): Promise<string | null> {
-  if (!openai) {
-    console.error('[AIService] OpenAI not initialized for transcription.');
-    return null;
+  const settings = await getAISettings();
+  if (!openai && settings.openai_api_key) {
+    openai = new OpenAI({ apiKey: settings.openai_api_key });
   }
+  if (!openai) return null;
+
   try {
-    console.log(`[AIService] Transcribing audio buffer of size: ${buffer.length} bytes...`);
-    
-    // Use .mp3 extension even if it's ogg/opus, OpenAI often handles the buffer better this way
     const safeFilename = filename.endsWith('.ogg') ? filename.replace('.ogg', '.mp3') : filename;
-    
     const file = await OpenAI.toFile(buffer, safeFilename);
     const transcription = await openai.audio.transcriptions.create({
       file: file,
       model: 'whisper-1',
     });
-    
-    console.log(`[AIService] Transcription success: "${transcription.text.substring(0, 30)}..."`);
     return transcription.text;
-  } catch (error: any) {
-    console.error('[AIService] Transcription error details:', error.response?.data || error.message);
+  } catch (error) {
+    console.error('[AIService] Transcription error:', error);
     return null;
   }
 }

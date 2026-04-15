@@ -24,7 +24,7 @@ import {
   Globe
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats } from '../services/supabaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -49,22 +49,51 @@ export default function AdminPanel() {
   const [userActivity, setUserActivity] = useState<any[]>([]);
   const [isActionLoading, setIsActionLoading] = useState(false);
 
+  const [globalSettings, setGlobalSettings] = useState<any>({
+    openai_api_key: '',
+    gemini_api_key: '',
+    default_ai_model: 'gpt-4o',
+    llm_provider: 'openai',
+    usd_brl_rate: 5.30
+  });
+  const [financeStats, setFinanceStats] = useState<any>({
+    totalCostBrl: 0,
+    totalTokens: 0,
+    userCosts: {}
+  });
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
       
-      const [statsData, usersData] = await Promise.all([
+      const [statsData, usersData, settingsData, financeData] = await Promise.all([
         getAdminStats(),
-        listAdminUsers()
+        listAdminUsers(),
+        getGlobalSettings(),
+        getAdminFinanceStats()
       ]);
 
       setStats(statsData);
       setProfiles(usersData);
+      if (settingsData) setGlobalSettings(settingsData);
+      if (financeData) setFinanceStats(financeData);
     } catch (error: any) {
       console.error('Admin Fetch Error:', error);
-      toast.error('Erro ao carregar dados administrativos. Verifique permissões de admin.');
+      toast.error('Erro ao carregar dados administrativos.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      setIsActionLoading(true);
+      await updateGlobalSettings(globalSettings);
+      toast.success('Configurações globais salvas!');
+    } catch (error: any) {
+      toast.error('Erro ao salvar: ' + error.message);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -204,6 +233,7 @@ export default function AdminPanel() {
                     <th className="px-6 py-4 text-left">Inquilino</th>
                     <th className="px-6 py-4">Status Wpp</th>
                     <th className="px-6 py-4">Plano</th>
+                    <th className="px-6 py-4">Consumo (BRL)</th>
                     <th className="px-6 py-4">Criado em</th>
                     <th className="px-6 py-4 text-right">Ações</th>
                   </tr>
@@ -232,6 +262,9 @@ export default function AdminPanel() {
                       </td>
                       <td className="px-6 py-4 text-xs font-bold text-slate-600">
                         {user.plano || 'Starter'}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-emerald-600">
+                        R$ {(financeStats.userCosts[user.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 text-xs text-slate-500">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
@@ -273,22 +306,88 @@ export default function AdminPanel() {
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in zoom-in-95 duration-500">
             <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-10 opacity-10"><Key size={80} /></div>
-              <h3 className="text-2xl font-black mb-6">Chaves API Mestras</h3>
+              <div className="absolute top-0 right-0 p-10 opacity-10"><Zap size={80} /></div>
+              <h3 className="text-2xl font-black mb-6">Provedor de IA Mestre</h3>
+              
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest">OpenAI API Key (Global)</label>
-                  <input type="password" value="••••••••••••••••" className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300" readOnly />
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => setGlobalSettings({...globalSettings, llm_provider: 'openai'})}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 ${globalSettings.llm_provider === 'openai' ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800 border-white/5 opacity-50'}`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black font-bold">O</div>
+                    <span className="text-xs font-black uppercase tracking-widest">OpenAI</span>
+                  </button>
+                  <button 
+                    onClick={() => setGlobalSettings({...globalSettings, llm_provider: 'gemini'})}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 ${globalSettings.llm_provider === 'gemini' ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800 border-white/5 opacity-50'}`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">G</div>
+                    <span className="text-xs font-black uppercase tracking-widest">Google Gemini</span>
+                  </button>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Model Selection</label>
-                  <select className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300">
-                    <option>GPT-4o (Padrão)</option>
-                    <option>GPT-4 turbo</option>
-                    <option>Gemini 1.5 Pro</option>
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">OpenAI API Key</label>
+                  <input 
+                    type="password" 
+                    placeholder="sk-..." 
+                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
+                    value={globalSettings.openai_api_key || ''}
+                    onChange={(e) => setGlobalSettings({...globalSettings, openai_api_key: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Gemini API Key</label>
+                  <input 
+                    type="password" 
+                    placeholder="AIza..." 
+                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
+                    value={globalSettings.gemini_api_key || ''}
+                    onChange={(e) => setGlobalSettings({...globalSettings, gemini_api_key: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Seleção de Modelo ({globalSettings.llm_provider === 'openai' ? 'OpenAI' : 'Gemini'})</label>
+                  <select 
+                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
+                    value={globalSettings.default_ai_model}
+                    onChange={(e) => setGlobalSettings({...globalSettings, default_ai_model: e.target.value})}
+                  >
+                    {globalSettings.llm_provider === 'openai' ? (
+                      <>
+                        <option value="gpt-4o">GPT-4o (Mais Nova / Robusta)</option>
+                        <option value="gpt-4o-mini">GPT-4o-mini (Intermediária / Rápida)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Mais Nova / Capaz)</option>
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Intermediária / Rápida)</option>
+                      </>
+                    )}
                   </select>
                 </div>
-                <button className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95">Salvar Configurações Globais</button>
+
+                 <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Taxa de Câmbio (USD -> BRL)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
+                    value={globalSettings.usd_brl_rate}
+                    onChange={(e) => setGlobalSettings({...globalSettings, usd_brl_rate: parseFloat(e.target.value)})}
+                  />
+                </div>
+
+                <button 
+                  onClick={handleSaveSettings}
+                  disabled={isActionLoading}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
+                >
+                  {isActionLoading ? <RefreshCw size={20} className="animate-spin mx-auto" /> : 'Salvar Configurações Globais'}
+                </button>
               </div>
             </div>
 
@@ -297,15 +396,15 @@ export default function AdminPanel() {
                 <Shield size={24} className="text-emerald-500" /> Segurança
               </h3>
               <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                  <div>
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-center">
+                  <div className="text-left">
                     <h4 className="text-sm font-bold text-slate-900">Manutenção do Sistema</h4>
                     <p className="text-xs text-slate-500">Bloqueia acesso de todos os inquilinos.</p>
                   </div>
                   <div className="w-12 h-6 bg-slate-200 rounded-full relative"><div className="absolute w-5 h-5 bg-white rounded-full top-0.5 left-0.5 shadow-sm"></div></div>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                  <div>
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-center">
+                  <div className="text-left">
                     <h4 className="text-sm font-bold text-slate-900">Novas Inscrições</h4>
                     <p className="text-xs text-slate-500">Permitir novos usuários via Login.</p>
                   </div>
@@ -316,8 +415,67 @@ export default function AdminPanel() {
           </div>
         );
 
-      default:
-        return <div className="text-center py-20 text-slate-400">Em desenvolvimento...</div>;
+      case 'billing':
+        return (
+          <div className="space-y-8 animate-in fade-in duration-500">
+             {/* Financial Overview Card */}
+             <div className="bg-indigo-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-10 opacity-10"><CreditCard size={120} /></div>
+               <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-10">
+                 <div>
+                   <p className="text-xs font-black uppercase tracking-widest text-indigo-300 mb-2">Custo Estimado de API (Mensal)</p>
+                   <h2 className="text-5xl font-black mb-4 flex items-baseline gap-2">
+                     <span className="text-2xl opacity-60">R$</span> {financeStats.totalCostBrl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                   </h2>
+                   <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
+                     <TrendingUp size={16} /> Baseado em {financeStats.totalTokens?.toLocaleString()} tokens consumidos
+                   </div>
+                 </div>
+                 <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/10">
+                   <h4 className="text-sm font-black uppercase tracking-widest mb-4 opacity-70">Top Consumidores</h4>
+                   <div className="space-y-3">
+                     {profiles.filter(p => financeStats.userCosts[p.id] > 0).sort((a, b) => financeStats.userCosts[b.id] - financeStats.userCosts[a.id]).slice(0, 3).map((u, idx) => (
+                       <div key={idx} className="flex items-center justify-between text-xs">
+                         <span className="font-medium opacity-80">{u.name || u.email.split('@')[0]}</span>
+                         <span className="font-black">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR')}</span>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               </div>
+             </div>
+
+             {/* Usage Analysis */}
+             <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900">Análise de Consumo por Cliente</h3>
+                    <p className="text-xs text-slate-500 font-medium">Detalhamento dos custos gerados por cada inquilino.</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {profiles.filter(p => financeStats.userCosts[p.id] > 0).map((u, i) => (
+                    <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 transition-all hover:border-indigo-200">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-black text-slate-400">
+                          {u.email[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-slate-900">{u.name || 'Sem nome'}</p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">{u.plano || 'Trial'}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-black text-indigo-600">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Custo Total</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </div>
+          </div>
+        );
     }
   };
 

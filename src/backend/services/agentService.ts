@@ -121,14 +121,17 @@ export class AgentService {
         { role: 'user', content: body }
       ];
 
-      let aiFinalText = null;
-      let toolCalledInThisTurn = false;
+      let finalUsage = null;
 
       while (true) {
         const response = await generateAIResponse(fullPrompt, currentMessages, tools);
         if (!response.text && (!response.toolCalls || response.toolCalls.length === 0)) {
-          console.warn('[AgentService] OpenAI returned absolutely nothing. Breaking loop.');
+          console.warn('[AgentService] AI returned absolutely nothing. Breaking loop.');
           break;
+        }
+
+        if (response.usage) {
+          finalUsage = response.usage;
         }
 
         if (response.toolCalls && response.toolCalls.length > 0) {
@@ -184,7 +187,7 @@ export class AgentService {
 
       if (aiFinalText) {
         const aiMsgId = `ai-${Date.now()}`;
-        await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome);
+        await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome, finalUsage);
         await redisService.pushMessage(threadId, 'assistant', aiFinalText);
         return { text: aiFinalText, audioBuffer: voiceBuffer };
       }
@@ -204,7 +207,8 @@ export class AgentService {
     contactName?: string,
     remoteJid?: string,
     displayPhone?: string,
-    agentName?: string
+    agentName?: string,
+    usage?: any
   ) {
     const timestamp = Date.now();
     
@@ -243,13 +247,21 @@ export class AgentService {
 
     // 2. Message Second
     try {
-       const { error: mErr } = await supabase.from('messages').insert({
+       const messageData: any = {
         user_id: userId,
         thread_id: threadId,
         text: text,
         direction: direction,
         timestamp: timestamp
-      });
+      };
+
+      if (usage) {
+        messageData.tokens_prompt = usage.prompt_tokens || 0;
+        messageData.tokens_completion = usage.completion_tokens || 0;
+        messageData.cost_brl = usage.cost_brl || 0;
+      }
+
+       const { error: mErr } = await supabase.from('messages').insert(messageData);
       if (mErr) console.error('[DEBUG-MESSAGES] ERRO NA TABELA MESSAGES:', JSON.stringify(mErr, null, 2));
     } catch (mErr) {
        console.error('[AgentService] Message insert error:', mErr);

@@ -1081,3 +1081,43 @@ export const getAdminUserActivity = async (userId: string) => {
   if (!result.success) throw new Error(result.error);
   return result.data;
 };
+
+export const getGlobalSettings = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/settings', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
+
+export const updateGlobalSettings = async (data: any) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/settings', {
+    method: 'PATCH',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify(data)
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+};
+
+export const getAdminFinanceStats = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/finance/stats', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};

@@ -127,4 +127,67 @@ router.get('/users/:id/activity', async (req: AuthenticatedRequest, res: Respons
   }
 });
 
+// ─── GET /api/v2/admin/settings ──────────────────────────────────────────
+router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase.from('global_settings').select('*').limit(1).maybeSingle();
+    if (error) throw error;
+    res.json({ success: true, data: data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── PATCH /api/v2/admin/settings ────────────────────────────────────────
+router.patch('/settings', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data: existing } = await supabase.from('global_settings').select('id').limit(1).maybeSingle();
+    
+    let result;
+    if (existing) {
+      result = await supabase.from('global_settings').update(req.body).eq('id', existing.id);
+    } else {
+      result = await supabase.from('global_settings').insert(req.body);
+    }
+
+    if (result.error) throw result.error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/v2/admin/finance/stats ─────────────────────────────────────
+router.get('/finance/stats', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // 1. Total cost
+    const { data: totalData, error: totalErr } = await supabase
+      .from('messages')
+      .select('cost_brl, tokens_prompt, tokens_completion');
+    
+    if (totalErr) throw totalErr;
+    
+    const totalCost = (totalData || []).reduce((acc, curr) => acc + (Number(curr.cost_brl) || 0), 0);
+    const totalTokensPrompt = (totalData || []).reduce((acc, curr) => acc + (curr.tokens_prompt || 0), 0);
+    const totalTokensCompletion = (totalData || []).reduce((acc, curr) => acc + (curr.tokens_completion || 0), 0);
+
+    // 2. Cost by user
+    const userCostsMap = (totalData || []).reduce((acc: any, curr: any) => {
+      acc[curr.user_id] = (acc[curr.user_id] || 0) + (Number(curr.cost_brl) || 0);
+      return acc;
+    }, {});
+
+    res.json({ 
+      success: true, 
+      data: {
+        totalCostBrl: totalCost,
+        totalTokens: totalTokensPrompt + totalTokensCompletion,
+        userCosts: userCostsMap
+      } 
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
