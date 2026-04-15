@@ -844,50 +844,58 @@ export const getGlobalRecentActivities = async () => {
  * Quick Replies
  */
 export const listQuickReplies = async (): Promise<QuickReply[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return [];
 
-  const { data, error } = await supabase
-    .from('quick_replies')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return (data || []).map(d => ({
-    id: d.id,
-    userId: d.user_id,
-    title: d.title,
-    content: d.content,
-    createdAt: d.created_at
-  }));
+  try {
+    const res = await fetch('/api/v2/quick-replies', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` }
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+    
+    return (result.data || []).map((d: any) => ({
+      id: d.id,
+      userId: d.user_id,
+      title: d.title,
+      content: d.content,
+      createdAt: d.created_at
+    }));
+  } catch (err: any) {
+    console.error('[listQuickReplies] API error:', err.message);
+    return [];
+  }
 };
 
 export const createQuickReply = async (replyData: { title: string, content: string }) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase
-    .from('quick_replies')
-    .insert({
-      user_id: user.id,
-      title: replyData.title,
-      content: replyData.content
-    })
-    .select()
-    .single();
+  const res = await fetch('/api/v2/quick-replies', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify(replyData)
+  });
 
-  if (error) throw error;
-  return data;
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
 };
 
 export const deleteQuickReply = async (id: string) => {
-  const { error } = await supabase
-    .from('quick_replies')
-    .delete()
-    .eq('id', id);
-  
-  if (error) throw error;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`/api/v2/quick-replies/${id}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
 };
 
 export const getUpcomingAppointments = async () => {
