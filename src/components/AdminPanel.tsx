@@ -371,7 +371,7 @@ export default function AdminPanel() {
                 </div>
 
                  <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Taxa de Câmbio (USD -> BRL)</label>
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Taxa de Câmbio (USD → BRL)</label>
                   <input 
                     type="number" 
                     step="0.01"
