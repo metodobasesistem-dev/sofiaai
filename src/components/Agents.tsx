@@ -185,12 +185,21 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
   const fetchAgents = async () => {
     try {
-      setIsLoading(true);
+      // Serve cache immediately — user sees their agents instantly
+      const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      const email = session?.user?.email;
+      if (email) {
+        const cached = getCachedAgents(email);
+        if (cached.length > 0) {
+          setAgents(cached);
+          setIsLoading(false); // Hide spinner right away — cache shows while we refresh
+        }
+      }
+
       const data = await listAgents();
-      setAgents(data); // banco sempre ganha — dados deletados desaparecem
-    } catch (error) {
-      console.error('[Agents] fetchAgents error:', error);
-      // erro real: manter o que está (listAgents já devolveu cache internamente)
+      setAgents(data);
+    } catch (error: any) {
+      console.error('[Agents] fetchAgents error:', error.message);
     } finally {
       setIsLoading(false);
     }
