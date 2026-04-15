@@ -2,6 +2,7 @@ import qrcode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
 import { supabase } from '../lib/supabaseClient.js';
+import { SupabaseRemoteAuthStore } from '../lib/supabaseRemoteAuthStore.js';
 import { agentService } from './agentService.js';
 import { transcribeAudio } from './aiService.js';
 
@@ -25,6 +26,7 @@ class WhatsAppService {
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private Client: any = null;
   private LocalAuth: any = null;
+  private RemoteAuth: any = null;
   private MessageMedia: any = null;
 
   private async loadClient() {
@@ -34,6 +36,7 @@ class WhatsAppService {
       const pkg = await import('whatsapp-web.js');
       this.Client = pkg.default?.Client || pkg.Client;
       this.LocalAuth = pkg.default?.LocalAuth || pkg.LocalAuth;
+      this.RemoteAuth = pkg.default?.RemoteAuth || pkg.RemoteAuth;
       this.MessageMedia = pkg.default?.MessageMedia || pkg.MessageMedia;
       console.log('[WhatsAppService] whatsapp-web.js loaded successfully');
     } catch (e) {
@@ -101,7 +104,12 @@ class WhatsAppService {
           console.log(`[WhatsAppService] Session for ${userId} is ALREADY connected and healthy.`);
           return 'connected';
         }
-        // If it exists but NOT connected, we should destroy and recreate to be safe
+        // If state is OPENING, LocalAuth may be restoring from disk — give it time
+        if (state === 'OPENING') {
+          console.log(`[WhatsAppService] Session for ${userId} is OPENING (LocalAuth restore in progress). Returning 'connecting'.`);
+          return 'connecting';
+        }
+        // If it exists but NOT connected and NOT opening, destroy and recreate
         console.log(`[WhatsAppService] Session for ${userId} exists but state is ${state}. Destroying and starting over.`);
         await this.destroySession(userId);
       } catch (err) {
@@ -117,36 +125,47 @@ class WhatsAppService {
       
       // v5_RECOMECO: O golpe final para acabar com as pastas travadas
       const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
-      const sessionPath = path.join(process.cwd(), 'sessions', `session-${clientId}`, 'Default');
-      
-      try {
-        const lockFile = path.join(sessionPath, 'SingletonLock');
-        if (fs.existsSync(lockFile)) {
-          console.log(`[WhatsAppService] Found stale lock file for client ${clientId}. Cleaning up...`);
-          fs.unlinkSync(lockFile);
-        }
-      } catch (err) {
-        console.warn(`[WhatsAppService] Could not clean up lock file for client ${clientId}:`, err);
+      const sessionsDataPath = path.join(process.cwd(), 'sessions');
+
+      // Ensure local sessions folder exists (used by RemoteAuth as temp workspace)
+      if (!fs.existsSync(sessionsDataPath)) {
+        fs.mkdirSync(sessionsDataPath, { recursive: true });
       }
 
+      // Clean stale lock files that could prevent Puppeteer from starting
+      const userDataDir = path.join(sessionsDataPath, 'RemoteAuth');
+      const lockFile = path.join(userDataDir, 'SingletonLock');
+      if (fs.existsSync(lockFile)) {
+        try {
+          fs.unlinkSync(lockFile);
+          console.log(`[WhatsAppService] Cleaned stale lock file for ${clientId}`);
+        } catch (err) {
+          console.warn(`[WhatsAppService] Could not remove lock file:`, err);
+        }
+      }
+
+      const store = new SupabaseRemoteAuthStore(sessionsDataPath);
+
       const client = new this.Client({
-        authStrategy: new this.LocalAuth({
+        authStrategy: new this.RemoteAuth({
           clientId: clientId,
-          dataPath: path.join(process.cwd(), 'sessions')
+          dataPath: sessionsDataPath,
+          store: store,
+          backupSyncIntervalMs: 300000, // Sync to Supabase every 5 minutes
         }),
         puppeteer: {
           headless: true,
           args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox', 
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--no-first-run',
             '--no-zygote',
             '--single-process'
           ],
-          executablePath: 
-            process.env.PUPPETEER_EXECUTABLE_PATH || 
+          executablePath:
+            process.env.PUPPETEER_EXECUTABLE_PATH ||
             process.env.WHATSAPP_EXECUTABLE_PATH
         }
       });
@@ -383,18 +402,27 @@ class WhatsAppService {
     } finally {
       this.sessions.delete(userId);
       this.initializing.delete(userId);
-      
-      // Aggressively try to delete the session folder to avoid "phantom" connections
+
+      // Delete session from Supabase Storage and clean up local temp files
+      const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
+      const sessionsDataPath = path.join(process.cwd(), 'sessions');
+      const store = new SupabaseRemoteAuthStore(sessionsDataPath);
+
+      try {
+        await store.delete({ session: clientId });
+      } catch (e) {
+        console.warn('[WhatsAppService] Could not delete session from Supabase:', e);
+      }
+
+      // Clean up local temp folder used by RemoteAuth
       setTimeout(() => {
-        const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
-        const sessionPath = path.join(process.cwd(), 'sessions', `session-${clientId}`);
-        if (fs.existsSync(sessionPath)) {
-          console.log(`[WhatsAppService] Aggressively cleaning up folder after logout: ${sessionPath}`);
+        const remoteAuthPath = path.join(sessionsDataPath, 'RemoteAuth');
+        if (fs.existsSync(remoteAuthPath)) {
           try {
-            fs.rmSync(sessionPath, { recursive: true, force: true });
-            console.log(`[WhatsAppService] Folder deleted.`);
+            fs.rmSync(remoteAuthPath, { recursive: true, force: true });
+            console.log(`[WhatsAppService] Local RemoteAuth folder cleaned up`);
           } catch (e) {
-            console.warn(`[WhatsAppService] Could not delete folder (locked):`, e);
+            console.warn(`[WhatsAppService] Could not delete local folder (locked):`, e);
           }
         }
       }, 2000);

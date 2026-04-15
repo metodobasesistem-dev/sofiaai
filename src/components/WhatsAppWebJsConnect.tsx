@@ -19,18 +19,28 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
     if (propUser) setUser(propUser);
   }, [propUser]);
 
-  // Fetch initial status
+  // On mount: call /restore — read-only, never destroys anything
   useEffect(() => {
     if (!user?.id) return;
-    fetch(`/api/sessions/status/${user.id}`)
-      .then(res => res.json())
-      .then(data => {
-        setSession(prev => {
-          if (prev?.status === 'waiting') return prev; // Don't overwrite if currently waiting for QR
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const res = await fetch(`/api/sessions/restore/${user.id}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        // Only update if we're not already waiting for a QR scan
+        setSession((prev: any) => {
+          if (prev?.status === 'waiting') return prev;
           return { ...prev, status: data.status };
         });
-      })
-      .catch(console.error);
+      } catch (err) {
+        console.error('[WhatsAppConnect] Error restoring session:', err);
+      }
+    };
+
+    restoreSession();
+    return () => { cancelled = true; };
   }, [user?.id]);
 
   // Poll status while waiting for QR scan
@@ -43,7 +53,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
           if (res.ok) {
             const data = await res.json();
             if (data.status === 'connected') {
-              setSession(prev => ({ ...prev, status: 'connected', qr: null }));
+              setSession((prev: any) => ({ ...prev, status: 'connected', qr: null }));
               toast.success('WhatsApp Conectado com Sucesso!');
             }
           }
@@ -59,7 +69,8 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
 
   const handleAction = async () => {
     if (!user) return;
-    
+
+    // Disconnect
     if (session?.status === 'connected') {
       try {
         setLoading(true);
@@ -76,6 +87,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
       return;
     }
 
+    // Connect — only called when NOT already connected
     setLoading(true);
     try {
       console.log('[WhatsAppConnect] Calling /api/sessions/create...');
@@ -84,7 +96,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
       });
-      
+
       console.log('[WhatsAppConnect] Response status:', response.status);
 
       if (!response.ok) {
@@ -94,19 +106,22 @@ export default function WhatsAppWebJsConnect({ user: propUser }: { user?: any })
           const error = JSON.parse(text);
           throw new Error(error.error || 'Falha ao iniciar sessão');
         } catch (e) {
-          throw new Error(`Erro do servidor (HTML): ${text.substring(0, 100)}...`);
+          throw new Error(`Erro do servidor: ${text.substring(0, 100)}`);
         }
       }
 
       const data = await response.json();
       console.log('[WhatsAppConnect] Success response:', data);
-      
+
       if (data.qr) {
         setSession({ ...(session || {}), qr: data.qr, status: 'waiting' });
         toast.info('QR Code gerado! Escaneie no seu WhatsApp.');
       } else if (data.status === 'connected') {
         setSession({ ...(session || {}), status: 'connected', qr: null });
-        toast.success('Sessão Restaurada! Seu WhatsApp já estava conectado e pronto para uso.');
+        toast.success('Sessão Restaurada! Seu WhatsApp já estava conectado.');
+      } else if (data.status === 'connecting') {
+        setSession({ ...(session || {}), status: 'waiting' });
+        toast.info('Restaurando conexão existente...');
       } else {
         toast.info(data.message || 'Iniciando conexão...');
       }

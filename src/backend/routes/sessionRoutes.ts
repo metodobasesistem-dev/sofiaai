@@ -11,6 +11,7 @@ router.use((req, res, next) => {
 
 router.post('/create', sessionController.createSession);
 router.get('/status/:userId', sessionController.getStatus);
+router.get('/restore/:userId', sessionController.restoreSession);
 router.post('/send', sessionController.sendMessage);
 router.post('/disconnect', sessionController.disconnectSession);
 router.get('/health', (req, res) => res.json({ status: 'ok', message: 'Session router is active' }));

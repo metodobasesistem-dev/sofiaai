@@ -71,6 +71,22 @@ class SessionController {
     }
   }
 
+  async restoreSession(req: Request, res: Response) {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+    try {
+      // Only reads status — never creates or destroys anything
+      const status = await whatsappService.getSessionStatus(userId);
+      console.log(`[SessionController] Restore check for ${userId}: ${status}`);
+      res.json({ status });
+    } catch (error: any) {
+      console.error('Error restoring session:', error);
+      res.status(500).json({ error: error.message || 'Failed to restore session' });
+    }
+  }
+
   async disconnectSession(req: Request, res: Response) {
     let { userId } = req.body;
     if (!userId) {
