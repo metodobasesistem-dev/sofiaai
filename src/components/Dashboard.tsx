@@ -162,7 +162,12 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
         const isAdmin = role === 'admin';
 
         // 1. Profile (Fastest usually)
-        getUserProfile(userId).then(p => setProfile(p || null));
+        getUserProfile(userId).then(p => {
+          setProfile(p || null);
+          if (p?.whatsapp_status && !whatsappStatus) {
+            setWhatsappStatus({ status: p.whatsapp_status as any });
+          }
+        });
 
         // 2. Stats + Activities + Appointments em paralelo (aguarda todos juntos)
         const statsPromise = isAdmin ? getGlobalDashboardStats() : getDashboardStats(userId);
@@ -287,7 +292,8 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
       {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado */}
       <AnimatePresence>
-        {whatsappStatus && whatsappStatus.status !== 'connected' && (
+        {((whatsappStatus && whatsappStatus.status !== 'connected') || 
+          (!whatsappStatus && profile?.whatsapp_status && profile.whatsapp_status !== 'connected')) && (
           <motion.div 
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
