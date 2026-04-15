@@ -151,7 +151,7 @@ class WhatsAppService {
           clientId: clientId,
           dataPath: sessionsDataPath,
           store: store,
-          backupSyncIntervalMs: 300000, // Sync to Supabase every 5 minutes
+          backupSyncIntervalMs: 60000, // Sync to Supabase every 60s (not 5min)
         }),
         puppeteer: {
           headless: true,
@@ -160,9 +160,18 @@ class WhatsAppService {
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
+            '--disable-extensions',
+            '--disable-background-networking',
+            '--disable-default-apps',
+            '--disable-sync',
             '--no-first-run',
-            '--no-zygote',
-            '--single-process'
+            '--disable-translate',
+            '--hide-scrollbars',
+            '--metrics-recording-only',
+            '--mute-audio',
+            '--safebrowsing-disable-auto-update',
+            '--js-flags=--max_old_space_size=512'
+            // NOTE: --single-process and --no-zygote removed — they cause guaranteed crashes on Linux
           ],
           executablePath:
             process.env.PUPPETEER_EXECUTABLE_PATH ||
@@ -192,7 +201,7 @@ class WhatsAppService {
         session.readyTimestamp = Math.floor(Date.now() / 1000);
         this.sessions.set(userId, session);
         this.initializing.delete(userId);
-        
+
         await this.updateProfileStatus(userId, { status: 'connected' });
 
         if (!resolved) {
@@ -201,6 +210,10 @@ class WhatsAppService {
         }
       });
 
+      // RemoteAuth backup confirmation
+      client.on('remote_session_saved', () => {
+        console.log(`[WhatsAppService] ✅ Session backup saved to Supabase Storage for ${userId}`);
+      });
       client.on('message', async (msg) => {
         if (msg.from.includes('@g.us') || msg.from === 'status@broadcast') return;
         

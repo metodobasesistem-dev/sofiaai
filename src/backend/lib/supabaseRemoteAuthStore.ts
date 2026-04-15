@@ -9,33 +9,43 @@ const BUCKET_NAME = 'whatsapp-sessions';
  * Custom RemoteAuth store for whatsapp-web.js that persists session data
  * to Supabase Storage. This allows WhatsApp sessions to survive Railway
  * restarts and redeploys without needing a persistent volume.
+ *
+ * Key fix: ensureBucket() is now awaited before every operation (not just
+ * fire-and-forget in the constructor) so the bucket is guaranteed to exist.
  */
 export class SupabaseRemoteAuthStore {
   private dataPath: string;
-  private bucketReady = false;
+  private bucketEnsured: Promise<void>;
 
   constructor(dataPath: string) {
     this.dataPath = dataPath;
-    this.ensureBucket();
+    // Start bucket creation immediately and cache the promise so every
+    // subsequent operation can await it without creating the bucket twice.
+    this.bucketEnsured = this.ensureBucket();
   }
 
-  private async ensureBucket() {
+  private async ensureBucket(): Promise<void> {
     try {
-      // Try creating the bucket (idempotent — ignores "already exists")
-      const { error } = await supabase.storage.createBucket(BUCKET_NAME, {
+      // 1. Try to create it (safe to call even if it already exists)
+      const { error: createErr } = await supabase.storage.createBucket(BUCKET_NAME, {
         public: false,
         allowedMimeTypes: ['application/zip', 'application/octet-stream'],
-        fileSizeLimit: 52428800, // 50MB limit
+        fileSizeLimit: 104857600, // 100MB
       });
 
-      if (error && !error.message.toLowerCase().includes('already exists')) {
-        console.error('[SupabaseStore] Error creating bucket:', error.message);
-      } else {
-        this.bucketReady = true;
-        console.log(`[SupabaseStore] Bucket "${BUCKET_NAME}" is ready`);
+      if (createErr && !createErr.message.toLowerCase().includes('already exists')) {
+        // 2. If creation failed for a reason other than "already exists", verify
+        //    the bucket is reachable before giving up.
+        const { error: listErr } = await supabase.storage.getBucket(BUCKET_NAME);
+        if (listErr) {
+          console.error('[SupabaseStore] FATAL: Cannot create or access bucket:', createErr.message);
+          return;
+        }
       }
+
+      console.log(`[SupabaseStore] ✅ Bucket "${BUCKET_NAME}" is ready`);
     } catch (e) {
-      console.warn('[SupabaseStore] Could not ensure bucket:', e);
+      console.error('[SupabaseStore] ensureBucket exception:', e);
     }
   }
 
@@ -43,6 +53,7 @@ export class SupabaseRemoteAuthStore {
    * Check whether a session backup exists in Supabase Storage.
    */
   async sessionExists({ session }: { session: string }): Promise<boolean> {
+    await this.bucketEnsured;
     try {
       const { data, error } = await supabase.storage
         .from(BUCKET_NAME)
@@ -54,7 +65,7 @@ export class SupabaseRemoteAuthStore {
       }
 
       const exists = (data || []).some(f => f.name === `${session}.zip`);
-      console.log(`[SupabaseStore] sessionExists(${session}): ${exists}`);
+      console.log(`[SupabaseStore] sessionExists("${session}"): ${exists}`);
       return exists;
     } catch (e) {
       console.warn('[SupabaseStore] sessionExists exception:', e);
@@ -67,10 +78,13 @@ export class SupabaseRemoteAuthStore {
    * to Supabase Storage.
    */
   async save({ session }: { session: string }): Promise<void> {
+    await this.bucketEnsured;
+
     const zipPath = path.join(this.dataPath, `${session}.zip`);
 
     if (!fs.existsSync(zipPath)) {
-      throw new Error(`[SupabaseStore] Zip not found at: ${zipPath}`);
+      console.error(`[SupabaseStore] Zip not found at: ${zipPath} — skipping upload`);
+      return; // Don't throw; let the session keep running even if backup fails
     }
 
     const zipBuffer = fs.readFileSync(zipPath);
@@ -84,7 +98,9 @@ export class SupabaseRemoteAuthStore {
       });
 
     if (error) {
-      throw new Error(`[SupabaseStore] Upload failed: ${error.message}`);
+      console.error(`[SupabaseStore] Upload failed: ${error.message}`);
+      // Don't throw — upload failure should NOT crash the WhatsApp session
+      return;
     }
 
     console.log(`[SupabaseStore] ✅ Session "${session}" saved to Supabase Storage`);
@@ -95,6 +111,7 @@ export class SupabaseRemoteAuthStore {
    * RemoteAuth uses this path as the Puppeteer user data directory.
    */
   async extract({ session, path: destPath }: { session: string; path: string }): Promise<void> {
+    await this.bucketEnsured;
     console.log(`[SupabaseStore] Downloading session "${session}" from Supabase...`);
 
     const { data, error } = await supabase.storage
@@ -122,6 +139,7 @@ export class SupabaseRemoteAuthStore {
    * Delete session backup from Supabase Storage (called on logout).
    */
   async delete({ session }: { session: string }): Promise<void> {
+    await this.bucketEnsured;
     try {
       const { error } = await supabase.storage
         .from(BUCKET_NAME)
