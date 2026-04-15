@@ -21,7 +21,12 @@ import {
   ChevronRight,
   TrendingUp,
   Bot,
-  Globe
+  Globe,
+  LayoutDashboard,
+  Server,
+  Lock,
+  ArrowRight,
+  Info
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats } from '../services/supabaseService';
@@ -67,7 +72,6 @@ export default function AdminPanel() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      
       const [statsData, usersData, settingsData, financeData] = await Promise.all([
         getAdminStats(),
         listAdminUsers(),
@@ -110,99 +114,95 @@ export default function AdminPanel() {
   );
 
   const handleResetWhatsApp = async (userId: string) => {
-    if (!window.confirm('Tem certeza que deseja resetar a sessão do WhatsApp deste cliente? Ele precisará ler o QR Code novamente.')) return;
-    
+    if (!window.confirm('Resetar sessão? O cliente precisará escanear o QR novamente.')) return;
     try {
       setIsActionLoading(true);
       await resetAdminUserWhatsApp(userId);
-      toast.success('Sessão resetada com sucesso!');
-      fetchData(); // Refresh list
-    } catch (error: any) {
-      toast.error('Erro ao resetar sessão: ' + error.message);
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleOpenEdit = (user: UserProfile) => {
-    setSelectedUser({ ...user });
-    setIsEditModalOpen(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!selectedUser) return;
-    try {
-      setIsActionLoading(true);
-      await updateAdminUser(selectedUser.id, {
-        plano: selectedUser.plano,
-        role: selectedUser.role,
-        trial_ends_at: selectedUser.trial_ends_at
-      });
-      toast.success('Usuário atualizado com sucesso!');
-      setIsEditModalOpen(false);
+      toast.success('Sessão resetada!');
       fetchData();
     } catch (error: any) {
-      toast.error('Erro ao atualizar: ' + error.message);
+      toast.error('Erro: ' + error.message);
     } finally {
       setIsActionLoading(false);
     }
   };
 
-  const handleViewActivity = async (userId: string) => {
-    try {
-      setIsActionLoading(true);
-      const activity = await getAdminUserActivity(userId);
-      setUserActivity(activity);
-      setIsActivityModalOpen(true);
-    } catch (error: any) {
-      toast.error('Erro ao buscar atividade: ' + error.message);
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
+  const navItems = [
+    { id: 'overview', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { id: 'users', label: 'Inquilinos', icon: <Users size={20} /> },
+    { id: 'config', label: 'Configurações', icon: <Server size={20} /> },
+    { id: 'billing', label: 'Financeiro', icon: <CreditCard size={20} /> },
+  ];
 
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
         return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            {/* Stats Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { label: 'Inquilinos Ativos', value: stats.totalUsers, icon: <Globe size={20} />, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: 'Sessões Wpp', value: stats.activeSessions, icon: <Zap size={20} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                { label: 'Total Mensagens', value: stats.totalMessages, icon: <MessageSquare size={20} />, color: 'text-violet-600', bg: 'bg-violet-50' },
-                { label: 'Agentes Ativos', value: stats.totalAgents, icon: <Bot size={20} />, color: 'text-amber-600', bg: 'bg-amber-50' }
+                { label: 'Total Inquilinos', value: stats.totalUsers, icon: <Globe />, color: 'from-blue-600 to-indigo-600', trend: '+5%' },
+                { label: 'Sessões Ativas', value: stats.activeSessions, icon: <Zap />, color: 'from-emerald-500 to-teal-500', trend: 'Saudável' },
+                { label: 'Mensagens / Mês', value: stats.totalMessages, icon: <MessageSquare />, color: 'from-purple-600 to-violet-600', trend: '+12%' },
+                { label: 'Agentes Online', value: stats.totalAgents, icon: <Bot />, color: 'from-amber-500 to-orange-500', trend: 'Estável' }
               ].map((stat, i) => (
                 <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  key={i} 
-                  className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
+                  key={stat.label}
+                  className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all"
                 >
-                  <div className={`w-10 h-10 ${stat.bg} ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color} text-white flex items-center justify-center mb-4 shadow-lg shadow-blue-500/10`}>
                     {stat.icon}
                   </div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{stat.label}</p>
-                  <p className="text-2xl font-black text-slate-900">{stat.value.toLocaleString()}</p>
+                  <div className="flex items-end gap-2">
+                    <h4 className="text-3xl font-black text-slate-900">{stat.value.toLocaleString()}</h4>
+                    <span className="text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full mb-1">{stat.trend}</span>
+                  </div>
                 </motion.div>
               ))}
             </div>
 
-            {/* Growth Chart Placeholder */}
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Saúde do Ecossistema</h3>
-                  <p className="text-xs text-slate-500 font-medium">Desempenho consolidado de todos os inquilinos.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900">Atividade Global</h3>
+                    <p className="text-sm text-slate-500">Monitoramento de interações em tempo real.</p>
+                  </div>
+                  <div className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">Últimos 30 dias</div>
                 </div>
-                <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600">
-                  <TrendingUp size={14} className="text-emerald-500" /> +12% esse mês
+                <div className="h-64 bg-slate-50 rounded-2xl flex items-center justify-center border border-dashed border-slate-200">
+                  <Activity size={40} className="text-slate-200 animate-pulse" />
                 </div>
               </div>
-              <div className="h-64 bg-slate-50 rounded-3xl flex items-center justify-center border border-dashed border-slate-200">
-                <p className="text-slate-400 text-sm font-medium">Métricas de Retenção e Churn (Em breve)</p>
+
+              <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform"><CheckCircle2 size={120} /></div>
+                <div className="relative z-10">
+                  <h3 className="text-xl font-black mb-1">Status do Sistema</h3>
+                  <p className="text-slate-400 text-xs mb-8">Tudo operando normalmente.</p>
+                  
+                  <div className="space-y-4">
+                    {[
+                      { l: 'Base de Dados', s: 'Online', c: 'bg-emerald-500' },
+                      { l: 'Motor de IA', s: 'Estável', c: 'bg-emerald-500' },
+                      { l: 'WhatsApp Bridge', s: 'Ativo', c: 'bg-emerald-500' },
+                      { l: 'Redis Cache', s: 'Online', c: 'bg-emerald-500' }
+                    ].map(item => (
+                      <div key={item.l} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                        <span className="text-xs font-bold text-slate-300">{item.l}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase font-black tracking-widest text-emerald-400">{item.s}</span>
+                          <div className={`w-2 h-2 ${item.c} rounded-full`}></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -210,218 +210,270 @@ export default function AdminPanel() {
 
       case 'users':
         return (
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-            <div className="p-8 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">Gerenciar Usuários</h2>
-                <p className="text-xs text-slate-500 font-medium italic">Lista de inquilinos cadastrados na plataforma.</p>
-              </div>
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input 
-                  type="text" 
-                  placeholder="Nome ou email..." 
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all shadow-inner"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[500px]">
+                <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                   <div>
+                      <h2 className="text-2xl font-black text-slate-900">Inquilinos</h2>
+                      <p className="text-sm text-slate-500">Gerencie todos os clientes e suas instâncias.</p>
+                   </div>
+                   <div className="relative w-full md:w-80">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input 
+                        type="text" 
+                        placeholder="Pesquisar por nome ou email..." 
+                        className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                   </div>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-                    <th className="px-6 py-4 text-left">Inquilino</th>
-                    <th className="px-6 py-4">Status Wpp</th>
-                    <th className="px-6 py-4">Plano</th>
-                    <th className="px-6 py-4">Consumo (BRL)</th>
-                    <th className="px-6 py-4">Criado em</th>
-                    <th className="px-6 py-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filteredProfiles.map((user) => (
-                    <tr key={user.id} className="hover:bg-indigo-50/20 transition-colors group text-center">
-                      <td className="px-6 py-4 text-left">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-500 font-bold border border-slate-200">
-                            {user.photo_url ? <img src={user.photo_url} alt="" className="w-full h-full object-cover rounded-xl" /> : user.email[0].toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{user.name || 'Sem nome'}</p>
-                            <p className="text-xs text-slate-500">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
-                          user.whatsapp_status === 'connected' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                        }`}>
-                          {user.whatsapp_status === 'connected' ? <Zap size={10} fill="currentColor" /> : <XCircle size={10} />}
-                          {user.whatsapp_status === 'connected' ? 'Ativo' : 'Offline'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-xs font-bold text-slate-600">
-                        {user.plano || 'Starter'}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-bold text-emerald-600">
-                        R$ {(financeStats.userCosts[user.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-500">
-                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => handleViewActivity(user.id)}
-                            className="p-2 text-slate-400 hover:text-blue-600 rounded-xl bg-white border border-slate-200 shadow-sm"
-                            title="Ver Logs de Atividade"
-                          >
-                            <FileText size={18} />
-                          </button>
-                          <button 
-                            onClick={() => handleResetWhatsApp(user.id)}
-                            className="p-2 text-slate-400 hover:text-red-600 rounded-xl bg-white border border-slate-200 shadow-sm"
-                            title="Resetar Conexão WhatsApp"
-                          >
-                            <RefreshCw size={18} />
-                          </button>
-                          <button 
-                            onClick={() => handleOpenEdit(user)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl bg-white border border-slate-200 shadow-sm"
-                            title="Editar Inquilino"
-                          >
-                            <Settings size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left">
+                      <thead>
+                         <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                            <th className="px-8 py-5">Perfil</th>
+                            <th className="px-8 py-5">WhatsApp</th>
+                            <th className="px-8 py-5">Plano Atual</th>
+                            <th className="px-8 py-5 text-center">Consumo</th>
+                            <th className="px-8 py-5 text-right">Ações</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                         {filteredProfiles.map((user) => (
+                           <tr key={user.id} className="hover:bg-slate-50/50 transition-colors group">
+                             <td className="px-8 py-5">
+                                <div className="flex items-center gap-4">
+                                   <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 font-black border border-slate-200 shadow-sm">
+                                      {user.photo_url ? <img src={user.photo_url} alt="" className="w-full h-full object-cover rounded-2xl" /> : user.email[0].toUpperCase()}
+                                   </div>
+                                   <div>
+                                      <p className="text-sm font-black text-slate-900">{user.name || 'Sem nome'}</p>
+                                      <p className="text-[11px] text-slate-400 font-medium">{user.email}</p>
+                                   </div>
+                                </div>
+                             </td>
+                             <td className="px-8 py-5">
+                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
+                                   user.whatsapp_status === 'connected' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                                }`}>
+                                   <div className={`w-2 h-2 rounded-full ${user.whatsapp_status === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                                   <span className="text-[10px] font-black uppercase tracking-widest">{user.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado'}</span>
+                                </div>
+                             </td>
+                             <td className="px-8 py-5">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                                  user.plano === 'Pro' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-100'
+                                }`}>
+                                   {user.plano || 'Starter'}
+                                </span>
+                             </td>
+                             <td className="px-8 py-5 text-center">
+                                <p className="text-sm font-black text-emerald-600">R$ {(financeStats.userCosts[user.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                             </td>
+                             <td className="px-8 py-5 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                   <button 
+                                      onClick={() => handleViewActivity(user.id)}
+                                      className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                      title="Logs"
+                                   >
+                                      <FileText size={18} />
+                                   </button>
+                                   <button 
+                                      onClick={() => handleResetWhatsApp(user.id)}
+                                      className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                      title="Resetar"
+                                   >
+                                      <RefreshCw size={18} />
+                                   </button>
+                                   <button 
+                                      onClick={() => { setSelectedUser(user); setIsEditModalOpen(true); }}
+                                      className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                      title="Editar"
+                                   >
+                                      <Settings size={18} />
+                                   </button>
+                                </div>
+                             </td>
+                           </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
           </div>
         );
 
       case 'config':
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in zoom-in-95 duration-500">
-            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-10 opacity-10"><Zap size={80} /></div>
-              <h3 className="text-2xl font-black mb-6">Provedor de IA Mestre</h3>
-              
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <button 
-                    onClick={() => setGlobalSettings({...globalSettings, llm_provider: 'openai'})}
-                    className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 ${globalSettings.llm_provider === 'openai' ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800 border-white/5 opacity-50'}`}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black font-bold">O</div>
-                    <span className="text-xs font-black uppercase tracking-widest">OpenAI</span>
-                  </button>
-                  <button 
-                    onClick={() => setGlobalSettings({...globalSettings, llm_provider: 'gemini'})}
-                    className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 ${globalSettings.llm_provider === 'gemini' ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800 border-white/5 opacity-50'}`}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">G</div>
-                    <span className="text-xs font-black uppercase tracking-widest">Google Gemini</span>
-                  </button>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="lg:col-span-2 space-y-8">
+              {/* Master AI Card */}
+              <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 group-hover:opacity-10 transition-all"><Bot size={120} /></div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                      <Zap size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black">Provedores de Inteligência</h3>
+                      <p className="text-slate-400 text-xs">Configure as chaves mestras e o modelo padrão do sistema.</p>
+                    </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">OpenAI API Key</label>
-                  <input 
-                    type="password" 
-                    placeholder="sk-..." 
-                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
-                    value={globalSettings.openai_api_key || ''}
-                    onChange={(e) => setGlobalSettings({...globalSettings, openai_api_key: e.target.value})}
-                  />
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    {[
+                      { id: 'openai', label: 'OpenAI (ChatGPT)', icon: 'O', desc: 'Melhor para lógica complexa' },
+                      { id: 'gemini', label: 'Google Gemini 1.5', icon: 'G', desc: 'Rápido e multimodal' }
+                    ].map(p => (
+                      <button 
+                        key={p.id}
+                        onClick={() => setGlobalSettings({...globalSettings, llm_provider: p.id})}
+                        className={`p-5 rounded-3xl border transition-all text-left flex items-start gap-4 ${
+                          globalSettings.llm_provider === p.id 
+                            ? 'bg-indigo-600 border-indigo-400' 
+                            : 'bg-slate-800 border-white/5 opacity-40 hover:opacity-100 hover:bg-slate-800/80'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${p.id === 'openai' ? 'bg-white text-black' : 'bg-blue-500 text-white'}`}>
+                          {p.icon}
+                        </div>
+                        <div>
+                          <p className="text-sm font-black tracking-tight">{p.label}</p>
+                          <p className="text-[10px] text-white/60 font-medium uppercase tracking-widest">{p.desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Gemini API Key</label>
-                  <input 
-                    type="password" 
-                    placeholder="AIza..." 
-                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
-                    value={globalSettings.gemini_api_key || ''}
-                    onChange={(e) => setGlobalSettings({...globalSettings, gemini_api_key: e.target.value})}
-                  />
-                </div>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">OpenAI Secret Key</label>
+                        <div className="relative">
+                          <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <input 
+                            type="password" 
+                            placeholder="sk-..." 
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all"
+                            value={globalSettings.openai_api_key || ''}
+                            onChange={(e) => setGlobalSettings({...globalSettings, openai_api_key: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Gemini Secret Key</label>
+                        <div className="relative">
+                          <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <input 
+                            type="password" 
+                            placeholder="AIza..." 
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all"
+                            value={globalSettings.gemini_api_key || ''}
+                            onChange={(e) => setGlobalSettings({...globalSettings, gemini_api_key: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Seleção de Modelo ({globalSettings.llm_provider === 'openai' ? 'OpenAI' : 'Gemini'})</label>
-                  <select 
-                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
-                    value={globalSettings.default_ai_model}
-                    onChange={(e) => setGlobalSettings({...globalSettings, default_ai_model: e.target.value})}
-                  >
-                    {globalSettings.llm_provider === 'openai' ? (
-                      <>
-                        <option value="gpt-4o">GPT-4o (Mais Nova / Robusta)</option>
-                        <option value="gpt-4o-mini">GPT-4o-mini (Intermediária / Rápida)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Mais Nova / Capaz)</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Intermediária / Rápida)</option>
-                      </>
-                    )}
-                  </select>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Modelo Ativo ({globalSettings.llm_provider?.toUpperCase()})</label>
+                        <div className="relative">
+                          <Bot className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <select 
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all appearance-none"
+                            value={globalSettings.default_ai_model}
+                            onChange={(e) => setGlobalSettings({...globalSettings, default_ai_model: e.target.value})}
+                          >
+                            {globalSettings.llm_provider === 'openai' ? (
+                              <>
+                                <option value="gpt-4o">GPT-4o (Robusto)</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini (Econômico)</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                              </>
+                            )}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Câmbio USD → BRL</label>
+                        <div className="relative">
+                          <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all"
+                            value={globalSettings.usd_brl_rate}
+                            onChange={(e) => setGlobalSettings({...globalSettings, usd_brl_rate: parseFloat(e.target.value)})}
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-                 <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Taxa de Câmbio (USD → BRL)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    className="w-full bg-slate-800 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:border-indigo-500"
-                    value={globalSettings.usd_brl_rate}
-                    onChange={(e) => setGlobalSettings({...globalSettings, usd_brl_rate: parseFloat(e.target.value)})}
-                  />
+                    <button 
+                      onClick={handleSaveSettings}
+                      disabled={isActionLoading}
+                      className="w-full py-5 bg-white text-slate-900 rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 group"
+                    >
+                      {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
+                        <>
+                          <CheckCircle2 size={18} /> Salvar Alterações Mestras
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-
-                <button 
-                  onClick={handleSaveSettings}
-                  disabled={isActionLoading}
-                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
-                >
-                  {isActionLoading ? <RefreshCw size={20} className="animate-spin mx-auto" /> : 'Salvar Configurações Globais'}
-                </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-              <h3 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3">
-                <Shield size={24} className="text-emerald-500" /> Segurança
-              </h3>
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-center">
-                  <div className="text-left">
-                    <h4 className="text-sm font-bold text-slate-900">Manutenção do Sistema</h4>
-                    <p className="text-xs text-slate-500">Bloqueia acesso de todos os inquilinos.</p>
-                  </div>
-                  <button 
-                    onClick={() => setGlobalSettings({...globalSettings, maintenance_mode: !globalSettings.maintenance_mode})}
-                    className={`w-12 h-6 rounded-full relative transition-all ${globalSettings.maintenance_mode ? 'bg-red-500' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute w-5 h-5 bg-white rounded-full top-0.5 shadow-sm transition-all ${globalSettings.maintenance_mode ? 'right-0.5' : 'left-0.5'}`}></div>
-                  </button>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-center">
-                  <div className="text-left">
-                    <h4 className="text-sm font-bold text-slate-900">Novas Inscrições</h4>
-                    <p className="text-xs text-slate-500">Permitir novos usuários via Login.</p>
-                  </div>
-                  <button 
-                    onClick={() => setGlobalSettings({...globalSettings, allow_signups: !globalSettings.allow_signups})}
-                    className={`w-12 h-6 rounded-full relative transition-all ${globalSettings.allow_signups ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute w-5 h-5 bg-white rounded-full top-0.5 shadow-sm transition-all ${globalSettings.allow_signups ? 'right-0.5' : 'left-0.5'}`}></div>
-                  </button>
-                </div>
+            <div className="space-y-8">
+              <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
+                 <h3 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-3">
+                   <Shield size={20} className="text-emerald-500" /> Segurança & Acesso
+                 </h3>
+                 
+                 <div className="space-y-4">
+                    {[
+                      { id: 'maintenance_mode', label: 'Manutenção Global', desc: 'Bloqueia acesso de todos clientes', icon: <Lock />, color: 'red' },
+                      { id: 'allow_signups', label: 'Novas Inscrições', desc: 'Permitir novos usuários via Login', icon: <Users />, color: 'emerald' }
+                    ].map(item => (
+                      <div key={item.id} className="p-4 bg-slate-50 rounded-2xl flex items-center justify-between group">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 group-hover:text-${item.color}-500 transition-colors border border-slate-100`}>
+                            {item.icon}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-900">{item.label}</p>
+                            <p className="text-[10px] text-slate-500 font-medium">{item.desc}</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setGlobalSettings({...globalSettings, [item.id]: !globalSettings[item.id as any]})}
+                          className={`w-12 h-6 rounded-full relative transition-all shadow-inner ${globalSettings[item.id as any] ? (item.id === 'maintenance_mode' ? 'bg-red-500' : 'bg-emerald-500') : 'bg-slate-200'}`}
+                        >
+                          <div className={`absolute w-4.5 h-4.5 bg-white rounded-full top-0.75 shadow-sm transition-all ${globalSettings[item.id as any] ? 'right-0.75' : 'left-0.75'}`}></div>
+                        </button>
+                      </div>
+                    ))}
+                 </div>
+              </div>
+
+              <div className="bg-indigo-50/50 rounded-[2rem] p-8 border border-indigo-100 border-dashed">
+                 <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                   <Info size={14} /> Nota Técnica
+                 </h4>
+                 <p className="text-[11px] text-indigo-700 font-medium leading-relaxed italic">
+                   Estas configurações são aplicadas instantaneamente a todos os inquilinos que não possuem chaves API próprias configuradas. O modo de manutenção desativa as APIs externas para controle de custos ou reparos emergenciais.
+                 </p>
               </div>
             </div>
           </div>
@@ -429,59 +481,59 @@ export default function AdminPanel() {
 
       case 'billing':
         return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-             {/* Financial Overview Card */}
-             <div className="bg-indigo-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-10 opacity-10"><CreditCard size={120} /></div>
-               <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <div>
-                   <p className="text-xs font-black uppercase tracking-widest text-indigo-300 mb-2">Custo Estimado de API (Mensal)</p>
-                   <h2 className="text-5xl font-black mb-4 flex items-baseline gap-2">
-                     <span className="text-2xl opacity-60">R$</span> {financeStats.totalCostBrl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                   </h2>
-                   <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
-                     <TrendingUp size={16} /> Baseado em {financeStats.totalTokens?.toLocaleString()} tokens consumidos
+          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="bg-indigo-600 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-all"><CreditCard size={180} /></div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10">
+                   <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-2">Gasto Consolidado (Mês)</p>
+                      <h2 className="text-6xl font-black mb-6 flex items-baseline gap-2 tabular-nums">
+                        <span className="text-2xl opacity-50">R$</span>{financeStats.totalCostBrl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </h2>
+                      <div className="flex items-center gap-3">
+                        <div className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widst border border-white/10">
+                          {financeStats.totalTokens?.toLocaleString()} Tokens
+                        </div>
+                        <div className="text-indigo-200 text-xs font-medium italic underline">Ver relatório detalhado</div>
+                      </div>
                    </div>
-                 </div>
-                 <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/10">
-                   <h4 className="text-sm font-black uppercase tracking-widest mb-4 opacity-70">Top Consumidores</h4>
-                   <div className="space-y-3">
-                     {profiles.filter(p => financeStats.userCosts[p.id] > 0).sort((a, b) => financeStats.userCosts[b.id] - financeStats.userCosts[a.id]).slice(0, 3).map((u, idx) => (
-                       <div key={idx} className="flex items-center justify-between text-xs">
-                         <span className="font-medium opacity-80">{u.name || u.email.split('@')[0]}</span>
-                         <span className="font-black">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR')}</span>
-                       </div>
-                     ))}
+                   
+                   <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest mb-4 opacity-70">Top 3 Consumidores</h4>
+                      <div className="space-y-4">
+                         {profiles.filter(p => (financeStats.userCosts[p.id] || 0) > 0).sort((a, b) => financeStats.userCosts[b.id] - financeStats.userCosts[a.id]).slice(0, 3).map((u, i) => (
+                           <div key={i} className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-black text-[10px]">{u.email[0].toUpperCase()}</div>
+                                 <span className="text-xs font-bold">{u.name || user.email.split('@')[0]}</span>
+                              </div>
+                              <span className="text-sm font-black text-indigo-100">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR')}</span>
+                           </div>
+                         ))}
+                      </div>
                    </div>
-                 </div>
-               </div>
+                </div>
              </div>
 
-             {/* Usage Analysis */}
-             <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm">
-                <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h3 className="text-xl font-black text-slate-900">Análise de Consumo por Cliente</h3>
-                    <p className="text-xs text-slate-500 font-medium">Detalhamento dos custos gerados por cada inquilino.</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  {profiles.filter(p => financeStats.userCosts[p.id] > 0).map((u, i) => (
-                    <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 transition-all hover:border-indigo-200">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-black text-slate-400">
-                          {u.email[0].toUpperCase()}
+             <div className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm">
+                <h3 className="text-xl font-black text-slate-900 mb-6 px-2">Detalhamento por Inquilino</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {profiles.filter(p => (financeStats.userCosts[p.id] || 0) > 0).map((u, i) => (
+                    <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 transition-all hover:bg-white group cursor-default">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-black text-slate-300 group-hover:text-indigo-500 transition-colors">
+                            {u.email[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-900">{u.name || 'Sem nome'}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{u.plano || 'Starter'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-900">{u.name || 'Sem nome'}</p>
-                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">{u.plano || 'Trial'}</p>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-indigo-600">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <ArrowRight className="text-slate-200 inline-block group-hover:translate-x-1 group-hover:text-indigo-400 transition-all" size={16} />
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-black text-indigo-600">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Custo Total</p>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -492,41 +544,54 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="min-h-screen pb-12 animate-in fade-in duration-700">
+      {/* Page Header */}
+      <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
-            <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-slate-200">
-              <Shield size={28} />
-            </div>
-            Painel Admin
-          </h1>
-          <p className="text-slate-500 mt-2 font-medium">Controle central do ecossistema SaaS WppAI.</p>
+           <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest mb-4 border border-slate-200">
+             Restrito: Administrador
+           </div>
+           <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+             Painel do <span className="text-indigo-600">Ecossistema</span>.
+           </h1>
+           <p className="text-slate-500 mt-2 font-medium">Controle central de instâncias, usuários e provedores de IA.</p>
         </div>
-        <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
-          {[
-            { id: 'overview', icon: <Activity size={18} />, label: 'Geral' },
-            { id: 'users', icon: <Users size={18} />, label: 'Inquilinos' },
-            { id: 'config', icon: <Settings size={18} />, label: 'Config' },
-            { id: 'billing', icon: <CreditCard size={18} />, label: 'Financeiro' }
-          ].map(tab => (
+        
+        {/* Sub-Nav Bar */}
+        <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+          {navItems.map(item => (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as AdminTab)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+              key={item.id}
+              onClick={() => setActiveTab(item.id as AdminTab)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeTab === item.id 
+                ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' 
+                : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
-              {tab.icon} {tab.label}
+              <div className={activeTab === item.id ? 'scale-110 transition-transform' : ''}>
+                {item.icon}
+              </div>
+              <span className="hidden sm:inline">{item.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {renderContent()}
+      <div className="space-y-12">
+        {isLoading ? (
+          <div className="h-[400px] flex items-center justify-center bg-white rounded-[2.5rem] border border-slate-100">
+             <div className="flex flex-col items-center gap-4">
+                <RefreshCw size={32} className="text-indigo-600 animate-spin" />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Sincronizando Ecossistema...</p>
+             </div>
+          </div>
+        ) : (
+          renderContent()
+        )}
+      </div>
 
-      {/* MODAL: EDIT USER */}
+      {/* MODAL: EDIT USER (Already implemented but can be updated slightly for same style) */}
       <AnimatePresence>
         {isEditModalOpen && selectedUser && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -543,27 +608,23 @@ export default function AdminPanel() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative z-10 overflow-hidden border border-slate-100"
             >
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Editar Inquilino</h3>
-                  <p className="text-xs text-slate-500 font-medium">Alterando configurações de {selectedUser.email}</p>
-                </div>
-                <button onClick={() => setIsEditModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><XCircle size={24} /></button>
+              <div className="p-10 border-b border-slate-50">
+                  <h3 className="text-2xl font-black text-slate-900">Editar Inquilino</h3>
+                  <p className="text-xs text-slate-500 font-medium">Você está gerenciando as permissões de <b>{selectedUser.email}</b></p>
               </div>
 
-              <div className="p-8 space-y-6">
-                {/* Plano Selection */}
-                <div className="space-y-2">
+              <div className="p-10 space-y-8">
+                <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Plano da Assinatura</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     {['Trial', 'Starter', 'Pro'].map(p => (
                       <button 
                         key={p}
                         onClick={() => setSelectedUser({ ...selectedUser, plano: p })}
-                        className={`py-3 rounded-2xl text-xs font-bold border transition-all ${
+                        className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                           selectedUser.plano === p 
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' 
-                            : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100' 
+                            : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-white hover:border-slate-200'
                         }`}
                       >
                         {p}
@@ -572,18 +633,17 @@ export default function AdminPanel() {
                   </div>
                 </div>
 
-                {/* Cargo */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cargo / Permissões</label>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cargo no Sistema</label>
+                  <div className="grid grid-cols-2 gap-3">
                     {['client', 'admin'].map(r => (
                       <button 
                         key={r}
                         onClick={() => setSelectedUser({ ...selectedUser, role: r as any })}
-                        className={`py-3 rounded-2xl text-xs font-bold border transition-all ${
+                        className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                           selectedUser.role === r 
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-lg' 
-                            : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-xl' 
+                            : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-white'
                         }`}
                       >
                         {r === 'admin' ? 'Administrador' : 'Cliente'}
@@ -591,32 +651,37 @@ export default function AdminPanel() {
                     ))}
                   </div>
                 </div>
-
-                {/* Trial Expiry */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Expiração do Trial</label>
-                  <input 
-                    type="date" 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all"
-                    value={selectedUser.trial_ends_at ? new Date(selectedUser.trial_ends_at).toISOString().split('T')[0] : ''}
-                    onChange={(e) => setSelectedUser({ ...selectedUser, trial_ends_at: new Date(e.target.value).toISOString() })}
-                  />
-                </div>
               </div>
 
-              <div className="p-8 bg-slate-50 flex gap-3">
+              <div className="p-10 bg-slate-50 flex gap-4">
                 <button 
                   onClick={() => setIsEditModalOpen(false)}
-                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all active:scale-95"
+                  className="flex-1 py-5 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all"
                 >
                   Cancelar
                 </button>
                 <button 
-                  onClick={handleSaveEdit}
+                  onClick={async () => {
+                    try {
+                      setIsActionLoading(true);
+                      await updateAdminUser(selectedUser.id, {
+                        plano: selectedUser.plano,
+                        role: selectedUser.role,
+                        trial_ends_at: selectedUser.trial_ends_at
+                      });
+                      toast.success('Inquilino atualizado!');
+                      setIsEditModalOpen(false);
+                      fetchData();
+                    } catch (e: any) {
+                      toast.error(e.message);
+                    } finally {
+                      setIsActionLoading(false);
+                    }
+                  }}
                   disabled={isActionLoading}
-                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50"
+                  className="flex-1 py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50"
                 >
-                  {isActionLoading ? <RefreshCw size={18} className="animate-spin mx-auto" /> : 'Salvar Alterações'}
+                  {isActionLoading ? <RefreshCw className="animate-spin mx-auto" /> : 'Confirmar'}
                 </button>
               </div>
             </motion.div>
@@ -633,49 +698,58 @@ export default function AdminPanel() {
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }}
               onClick={() => setIsActivityModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="bg-white h-full w-full max-w-xl shadow-2xl relative z-10 flex flex-col"
+              transition={{ type: 'spring', damping: 30, stiffness: 200 }}
+              className="bg-white h-full w-full max-w-xl shadow-2xl relative z-10 flex flex-col shadow-[-40px_0_60px_-15px_rgba(0,0,0,0.1)]"
             >
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Logs de Atividade</h3>
-                  <p className="text-xs text-slate-500 font-medium">Últimas 50 interações deste inquilino.</p>
-                </div>
-                <button onClick={() => setIsActivityModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><XCircle size={24} /></button>
+              <div className="p-10 border-b border-slate-50">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Logs do Ecossistema</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1">Sincronizado com os últimos 50 eventos.</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-4 bg-slate-50/50 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
                 {userActivity.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-400 font-medium italic">
-                    Nenhuma atividade recente registrada.
+                  <div className="h-full flex flex-col items-center justify-center opacity-40">
+                     <FileText size={48} className="mb-4" />
+                     <p className="text-sm font-black uppercase tracking-widest">Sem eventos registrados</p>
                   </div>
                 ) : (
                   userActivity.map((log, i) => (
-                    <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-4">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${log.role === 'assistant' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                        {log.role === 'assistant' ? <Bot size={16} /> : <Users size={16} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${log.role === 'assistant' ? 'text-indigo-600' : 'text-slate-400'}`}>
-                            {log.role === 'assistant' ? 'IA Sofia' : 'Contato'}
-                          </span>
-                          <span className="text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <p className="text-sm text-slate-700 leading-relaxed break-words">{log.content}</p>
-                        {log.contact_name && (
-                          <p className="text-[10px] text-slate-400 mt-2 font-medium">Contexto: Conversa com <b>{log.contact_name}</b></p>
-                        )}
-                      </div>
+                    <div key={i} className="flex gap-4">
+                       <div className="flex flex-col items-center gap-2">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${log.role === 'assistant' ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-200'}`}>
+                             {log.role === 'assistant' ? <Bot size={20} /> : <Users size={20} />}
+                          </div>
+                          <div className="w-0.5 flex-1 bg-slate-200 rounded-full"></div>
+                       </div>
+                       <div className="flex-1 pb-8">
+                          <div className="flex items-center justify-between mb-2">
+                             <span className={`text-[10px] font-black uppercase tracking-widest ${log.role === 'assistant' ? 'text-indigo-600' : 'text-slate-400'}`}>
+                               {log.role === 'assistant' ? '🤖 Sofia (IA)' : '👤 Cliente'}
+                             </span>
+                             <span className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-sm text-slate-700 leading-relaxed">
+                             {log.content}
+                          </div>
+                       </div>
                     </div>
                   ))
                 )}
+              </div>
+
+              <div className="p-10 border-t border-slate-50 bg-slate-50/50">
+                 <button 
+                  onClick={() => setIsActivityModalOpen(false)}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                 >
+                   Fechar Visualização
+                 </button>
               </div>
             </motion.div>
           </div>

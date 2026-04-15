@@ -16,7 +16,8 @@ const PRICING = {
   'gpt-4o': { in: 0.005, out: 0.015 },
   'gpt-4o-mini': { in: 0.00015, out: 0.0006 },
   'gemini-1.5-pro': { in: 0.0035, out: 0.0105 },
-  'gemini-1.5-flash': { in: 0.000075, out: 0.0003 }
+  'gemini-1.5-flash': { in: 0.000075, out: 0.0003 },
+  'gemini-1.5-flash-latest': { in: 0.000075, out: 0.0003 }
 } as any;
 
 async function getAISettings() {
@@ -63,8 +64,13 @@ export async function generateAIResponse(
 }> {
   const settings = await getAISettings();
   const provider = settings.llm_provider || 'openai';
-  const model = settings.default_ai_model || 'gpt-4o';
+  let model = settings.default_ai_model || 'gpt-4o';
   const exchangeRate = settings.usd_brl_rate || 5.30;
+
+  // Normalize Gemini model string for stability
+  if (provider === 'gemini' && model === 'gemini-1.5-flash') {
+    model = 'gemini-1.5-flash-latest';
+  }
 
   console.log(`[AIService] 🤖 Gerando resposta... [Provider: ${provider}] [Model: ${model}]`);
 
