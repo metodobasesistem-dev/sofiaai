@@ -54,4 +54,77 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── PATCH /api/v2/admin/users/:id ────────────────────────────────────────
+router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update(req.body)
+      .eq('id', targetUserId);
+
+    if (error) throw error;
+    
+    // Invalidate profile cache for the target user
+    const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
+    await invalidateCache(cacheKey.profile(targetUserId));
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[AdminAPI] User Update Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/admin/users/:id/reset-whatsapp ──────────────────────────
+router.post('/users/:id/reset-whatsapp', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  try {
+    const { whatsappService } = await import('../services/whatsappService.js');
+    
+    // 1. Force logout and cleanup in memory + Supabase sessions table
+    await whatsappService.logout(targetUserId);
+    
+    // 2. Clear status in profiles
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        whatsapp_status: 'disconnected',
+        whatsapp_instance_id: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetUserId);
+
+    if (error) throw error;
+
+    // 3. Clear profile cache
+    const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
+    await invalidateCache(cacheKey.profile(targetUserId));
+
+    res.json({ success: true, message: 'WhatsApp session reset successfully' });
+  } catch (err: any) {
+    console.error('[AdminAPI] WhatsApp Reset Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/v2/admin/users/:id/activity ─────────────────────────────────
+router.get('/users/:id/activity', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('user_id', targetUserId)
+      .order('timestamp', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+    res.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error('[AdminAPI] Activity Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

@@ -1041,3 +1041,43 @@ export const listAdminUsers = async (): Promise<UserProfile[]> => {
   if (!result.success) throw new Error(result.error);
   return result.data;
 };
+
+export const updateAdminUser = async (userId: string, data: Partial<UserProfile>) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`/api/v2/admin/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify(data)
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+};
+
+export const resetAdminUserWhatsApp = async (userId: string) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`/api/v2/admin/users/${userId}/reset-whatsapp`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+};
+
+export const getAdminUserActivity = async (userId: string) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`/api/v2/admin/users/${userId}/activity`, {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
