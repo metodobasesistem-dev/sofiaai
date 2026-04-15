@@ -164,8 +164,9 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
         // 1. Profile (Fastest usually)
         getUserProfile(userId).then(p => {
           setProfile(p || null);
-          if (p?.whatsapp_status && !whatsappStatus) {
-            setWhatsappStatus({ status: p.whatsapp_status as any });
+          // AÇÃO: Garantir que o whatsappStatus seja inicializado mesmo se for 'null' no banco
+          if (p && !whatsappStatus) {
+            setWhatsappStatus({ status: (p.whatsapp_status || 'disconnected') as any });
           }
         });
 
@@ -293,7 +294,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
       {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado */}
       <AnimatePresence>
         {((whatsappStatus && whatsappStatus.status !== 'connected') || 
-          (!whatsappStatus && profile?.whatsapp_status && profile.whatsapp_status !== 'connected')) && (
+          (!whatsappStatus && profile && profile.whatsapp_status !== 'connected')) && (
           <motion.div 
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
