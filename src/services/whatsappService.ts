@@ -59,12 +59,15 @@ export const listenToWhatsAppSession = (userId: string, callback: (data: WhatsAp
   // Also fetch initial status
   supabase
     .from('profiles')
-    .select('whatsapp_status')
+    .select('whatsapp_status, whatsapp_qr')
     .eq('id', userId)
     .single()
     .then(({ data }) => {
       if (data) {
-        callback({ status: data.whatsapp_status as any });
+        callback({ 
+          status: data.whatsapp_status as any,
+          qr: data.whatsapp_qr
+        });
       }
     });
 

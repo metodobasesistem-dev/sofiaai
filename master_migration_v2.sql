@@ -2,6 +2,11 @@
 -- MASTER MIGRATION V2: IA MULTI-PROVEDOR, FINANCEIRO E SEGURANÇA
 -- ############################################################
 
+-- 0. Estrutura de Perfil (Garantir que as colunas de WhatsApp existem)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS whatsapp_qr TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS whatsapp_instance_id TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS whatsapp_status TEXT;
+
 -- 1. Tabela de Configurações Globais
 CREATE TABLE IF NOT EXISTS global_settings (
     id UUID PRIMARY KEY DEFAULT '00000000-0000-0000-0000-000000000000',

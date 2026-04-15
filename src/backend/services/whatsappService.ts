@@ -59,6 +59,7 @@ class WhatsAppService {
         .from('profiles')
         .update({
           whatsapp_status: dbStatus,
+          whatsapp_qr: (dbStatus === 'connected' || dbStatus === 'disconnected') ? null : data.qr,
           whatsapp_instance_id: userId,
           updated_at: new Date().toISOString()
         })
@@ -92,11 +93,11 @@ class WhatsAppService {
       throw new Error('userId is required');
     }
 
-    // Fix: If we are already initializing this user, return the existing promise
+    // Fix: If we are already initializing, return the existing promise instead of resetting.
+    // This prevents double-clicks or race conditions from killing the QR generation.
     if (this.initializing.has(userId)) {
-      console.warn(`[WhatsAppService] Session for ${userId} is already initializing. Attempting to force reset to avoid hang.`);
-      this.initializing.delete(userId);
-      await this.destroySession(userId);
+      console.log(`[WhatsAppService] Session for ${userId} is already initializing. Returning existing promise.`);
+      return this.initializing.get(userId)!;
     }
 
     // Fix: If session exists, check its REAL state
@@ -457,11 +458,16 @@ class WhatsAppService {
       }
 
       // Se estiver em estado de conflito ou desconectado, limpa e retorna desconectado
-      if (state === 'CONFLICT' || state === 'UNLAUNCHED' || state === 'DISCONNECTED') {
+      if (state === 'CONFLICT' || state === 'DISCONNECTED') {
         console.warn(`[WhatsAppService] Session ${userId} is in state ${state}. Marking as disconnected.`);
         await this.updateProfileStatus(userId, { status: 'disconnected' });
-        // Don't destroy here to avoid race conditions with reconnect heartbeat
         return 'disconnected';
+      }
+
+      // Se estiver UNLAUNCHED ou NULL mas o objeto de sessão existe, significa que ainda está carregando o navegador
+      if (state === 'UNLAUNCHED' || state === null) {
+        console.log(`[WhatsAppService] Session ${userId} state is ${state} (still warming up). Returning 'connecting'.`);
+        return 'connecting';
       }
 
       return 'disconnected';
