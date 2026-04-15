@@ -12,6 +12,7 @@ import Settings from './components/Settings';
 import Reports from './components/Reports';
 import Professionals from './components/Professionals';
 import Health from './components/Health';
+ import AdminPanel from './components/AdminPanel';
  import Login from './components/Login';
  import MaintenancePage from './components/MaintenancePage';
 import { supabase } from './lib/supabase';

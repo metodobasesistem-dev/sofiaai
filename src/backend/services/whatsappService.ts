@@ -536,7 +536,27 @@ class WhatsAppService {
   async sendMessage(userId: string, to: string, message: string) {
     const session = this.sessions.get(userId);
     if (!session) throw new Error('WhatsApp session not found or not connected');
+    
     const result = await session.client.sendMessage(to, message);
+    
+    // PERSISTENCE: Save manual message to CRM
+    try {
+      const threadId = `${userId}_${to.split('@')[0].replace(/\D/g, '')}`;
+      await agentService.persistMessage(
+        threadId,
+        userId,
+        message,
+        'outbound',
+        result.id.id,
+        'Cliente', // Generic, persistMessage handles fetching contact name
+        to,
+        to.split('@')[0].replace(/\D/g, ''),
+        'Atendente' // Mark as human agent
+      );
+    } catch (err) {
+      console.error('[WhatsAppService] Fail to persist manual message:', err);
+    }
+
     return { success: true, messageId: result.id.id };
   }
 
@@ -546,6 +566,25 @@ class WhatsAppService {
     
     const media = new this.MessageMedia('audio/mp3', audioBuffer.toString('base64'));
     const result = await session.client.sendMessage(to, media, { sendAudioAsVoice: true });
+
+    // PERSISTENCE: Save manual audio to CRM
+    try {
+      const threadId = `${userId}_${to.split('@')[0].replace(/\D/g, '')}`;
+      await agentService.persistMessage(
+        threadId,
+        userId,
+        '[Áudio enviado pelo atendente]',
+        'outbound',
+        result.id.id,
+        'Cliente',
+        to,
+        to.split('@')[0].replace(/\D/g, ''),
+        'Atendente'
+      );
+    } catch (err) {
+      console.error('[WhatsAppService] Fail to persist manual audio message:', err);
+    }
+
     return { success: true, messageId: result.id.id };
   }
 
