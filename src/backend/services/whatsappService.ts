@@ -128,8 +128,8 @@ class WhatsAppService {
       let resolved = false;
       
       // v5_RECOMECO: O golpe final para acabar com as pastas travadas
-      const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
-      const sessionsDataPath = path.join(process.cwd(), 'sessions');
+      // AÇÃO 1: Corrigir dataPath Duplicado (Sempre usar caminho relativo './sessions' para evitar aninhamento no Docker)
+      const sessionsDataPath = './sessions';
 
       // Ensure local sessions folder exists (used by RemoteAuth as temp workspace)
       if (!fs.existsSync(sessionsDataPath)) {
@@ -178,7 +178,8 @@ class WhatsAppService {
           ],
           executablePath:
             process.env.PUPPETEER_EXECUTABLE_PATH ||
-            process.env.WHATSAPP_EXECUTABLE_PATH
+            process.env.WHATSAPP_EXECUTABLE_PATH ||
+            '/usr/bin/google-chrome-stable' // Fallback para Railway
         }
       });
 
@@ -418,34 +419,61 @@ class WhatsAppService {
   async getSessionStatus(userId: string): Promise<string> {
     const session = this.sessions.get(userId);
 
-    // No session in memory at all
-    if (!session) return 'disconnected';
+    // AÇÃO 2: Se não existe em memória, tenta restaurar do Redis se houver backup
+    if (!session) {
+      console.log(`[WhatsAppService] No memory session for ${userId}. Checking Redis for restoration...`);
+      return this.restoreSessionIfExists(userId);
+    }
 
-    // Session exists but hasn't authenticated yet (still showing QR or initializing)
-    // In this case, getState() may throw or return null — we return 'connecting'
-    // so the frontend doesn't reset the UI and trigger a new /create call.
     try {
-      const state = await session.client.getState();
+      const state = await session.client.getState().catch(() => null);
+      console.log(`[WhatsAppService] Current state for ${userId}: ${state}`);
 
       if (state === 'CONNECTED') {
         await this.updateProfileStatus(userId, { status: 'connected' });
         return 'connected';
       }
 
-      if (state === 'OPENING' || state === null || state === undefined) {
-        // Still initializing or waiting for QR — report as connecting
+      if (state === 'OPENING' || state === 'PAIRING' || state === null) {
         return 'connecting';
       }
 
-      // Any other state (CONFLICT, UNLAUNCHED, etc.) = disconnected
-      await this.updateProfileStatus(userId, { status: 'disconnected' });
+      // Se estiver em estado de conflito ou desconectado, limpa e retorna desconectado
+      if (state === 'CONFLICT' || state === 'UNLAUNCHED' || state === 'DISCONNECTED') {
+        console.warn(`[WhatsAppService] Session ${userId} is in state ${state}. Marking as disconnected.`);
+        await this.updateProfileStatus(userId, { status: 'disconnected' });
+        // Don't destroy here to avoid race conditions with reconnect heartbeat
+        return 'disconnected';
+      }
+
       return 'disconnected';
-    } catch {
-      // getState() throws when Chrome crashed or session is truly gone
-      // If we have a QR stored in memory, we're still in the connecting phase
+    } catch (e) {
       if (session.qr) return 'connecting';
       return 'disconnected';
     }
+  }
+
+  // AÇÃO 2: Implementar restauração automática se a sessão existir no Redis
+  async restoreSessionIfExists(userId: string): Promise<string> {
+    const clientId = userId.startsWith('v5_RECOMECO-') ? userId : `v5_RECOMECO-${userId}`;
+    const sessionsDataPath = './sessions';
+    const store = new RedisRemoteAuthStore(sessionsDataPath);
+
+    try {
+      const exists = await store.sessionExists({ session: clientId });
+      if (exists) {
+        console.log(`[WhatsAppService] Found Redis session for ${userId}. Restoring...`);
+        // Trigger initialization in background - we return 'connecting' so frontend waits
+        this.createSession(userId).catch(err => {
+          console.error(`[WhatsAppService] Background restoration failed for ${userId}:`, err.message);
+        });
+        return 'connecting';
+      }
+    } catch (err) {
+      console.error(`[WhatsAppService] Error checking Redis session for ${userId}:`, err);
+    }
+
+    return 'disconnected';
   }
 
   async logout(userId: string) {

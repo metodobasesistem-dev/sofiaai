@@ -26,7 +26,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
           .from('contacts')
           .select('*')
           .eq('user_id', userId)
-          .order('ultima_interacao', { ascending: false });
+          .order('updated_at', { ascending: false });
 
         if (error) throw error;
         return data || [];
@@ -35,7 +35,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
     res.json({ success: true, data: contacts });
   } catch (err: any) {
-    console.error('[ContactAPI] GET error:', err.message);
+    console.error('[ContactAPI] Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -110,7 +110,9 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
     const { agentService } = await import('../services/agentService.js');
     const result = await agentService.syncContactsFromThreads(userId);
     
+    // Invalida o cache após o sync para forçar recarregamento
     await invalidateCache(cacheKey.contacts(userId));
+    
     res.json(result);
   } catch (err: any) {
     console.error('[ContactAPI] SYNC error:', err.message);
