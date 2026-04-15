@@ -87,7 +87,11 @@ async function startServer() {
         data: data || { maintenance_mode: false, allow_signups: true } 
       });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      console.warn('[Server] Public settings fetch failed (using defaults):', err.message);
+      res.json({ 
+        success: true, 
+        data: { maintenance_mode: false, allow_signups: true } 
+      });
     }
   });
 

@@ -176,7 +176,10 @@ class WhatsAppService {
             '--metrics-recording-only',
             '--mute-audio',
             '--safebrowsing-disable-auto-update',
-            '--js-flags=--max_old_space_size=512'
+            '--js-flags=--max_old_space_size=512',
+            '--remote-debugging-port=9222',
+            '--disable-web-security',
+            '--no-zygote'
           ],
           executablePath: (() => {
             const paths = [
@@ -194,28 +197,7 @@ class WhatsAppService {
         }
       });
 
-      // --- Heartbeat & Auto-Reconnect Logic ---
-      const heartbeatInterval = setInterval(async () => {
-        const currentSess = this.sessions.get(userId);
-        if (!currentSess || !currentSess.client) {
-          clearInterval(heartbeatInterval);
-          return;
-        }
-
-        try {
-          const state = await currentSess.client.getState().catch(() => null);
-          console.log(`[WhatsAppService] Heartbeat for ${userId}: ${state}`);
-
-          if (state === 'CONFLICT' || state === 'UNLAUNCHED') {
-            console.warn(`[WhatsAppService] Critical state "${state}" for ${userId}. Attempting auto-reconnect...`);
-            await this.createSession(userId).catch(() => {});
-          } else if (state === 'CONNECTED') {
-            await this.updateProfileStatus(userId, { status: 'connected' });
-          }
-        } catch (e) {
-          console.error(`[WhatsAppService] Heartbeat error for ${userId}:`, e);
-        }
-      }, 30000); // Check every 30s
+      // Heartbeat moved to 'ready' event for stability
 
       client.on('qr', async (qr) => {
         try {
@@ -246,6 +228,25 @@ class WhatsAppService {
           resolved = true;
           resolve('connected');
         }
+
+        // --- Start Heartbeat NOW that it's connected ---
+        const heartbeatInterval = setInterval(async () => {
+          const currentSess = this.sessions.get(userId);
+          if (!currentSess || !currentSess.client) {
+            clearInterval(heartbeatInterval);
+            return;
+          }
+
+          try {
+            const state = await currentSess.client.getState().catch(() => null);
+            if (state === 'CONFLICT') {
+              console.warn(`[WhatsAppService] Conflict detected for ${userId}. Restarting session...`);
+              await this.createSession(userId).catch(() => {});
+            } else if (state === 'CONNECTED') {
+              await this.updateProfileStatus(userId, { status: 'connected' });
+            }
+          } catch (e) {}
+        }, 60000); // Check every 1m
       });
 
       // RemoteAuth backup confirmation
