@@ -36,6 +36,20 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [allowSignups, setAllowSignups] = useState(true);
+
+  React.useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/v2/public-settings');
+        const result = await res.json();
+        if (result.success) {
+          setAllowSignups(result.data.allow_signups);
+        }
+      } catch (e) {}
+    };
+    fetchSettings();
+  }, []);
 
   const handleGoogleLogin = async () => {
     try {
@@ -231,15 +245,21 @@ export default function Login() {
                     >
                       <LogIn size={18} /> Entrar
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode('register')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                        mode === 'register' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <UserPlus size={18} /> Cadastrar
-                    </button>
+                    {allowSignups ? (
+                      <button
+                        type="button"
+                        onClick={() => setMode('register')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
+                          mode === 'register' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <UserPlus size={18} /> Cadastrar
+                      </button>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-not-allowed">
+                        <Lock size={14} /> Inscrições Off
+                      </div>
+                    )}
                   </div>
                 )}
 

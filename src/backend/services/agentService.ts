@@ -262,9 +262,28 @@ export class AgentService {
       }
 
        const { error: mErr } = await supabase.from('messages').insert(messageData);
-      if (mErr) console.error('[DEBUG-MESSAGES] ERRO NA TABELA MESSAGES:', JSON.stringify(mErr, null, 2));
+      
+      if (mErr) {
+        console.warn('[AgentService] ⚠️ Falha na persistência completa da mensagem. Provável script SQL não executado.', mErr.message);
+        
+        // --- FALLBACK: Try minimal insert without finance columns ---
+        if (usage) {
+          console.log('[AgentService] 🔄 Tentando persistência minimalista (sem dados financeiros)...');
+          const { error: fErr } = await supabase.from('messages').insert({
+            user_id: userId,
+            thread_id: threadId,
+            text: text,
+            direction: direction,
+            timestamp: timestamp
+          });
+          if (fErr) console.error('[AgentService] ❌ Falha crítica: Nem a persistência mínima funcionou:', fErr);
+          else console.log('[AgentService] ✅ Mensagem salva com sucesso usando fallback.');
+        } else {
+           console.error('[AgentService] ❌ Erro de persistência (sem uso de IA):', mErr);
+        }
+      }
     } catch (mErr) {
-       console.error('[AgentService] Message insert error:', mErr);
+       console.error('[AgentService] Message insert exception:', mErr);
     }
 
     // 3. Update Contact

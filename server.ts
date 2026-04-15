@@ -73,6 +73,24 @@ async function startServer() {
     });
   });
 
+  // Public settings for maintenance/signups
+  app.get('/api/v2/public-settings', async (req, res) => {
+    try {
+      const { data, error } = await supabase.from('global_settings')
+        .select('maintenance_mode, allow_signups')
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      res.json({ 
+        success: true, 
+        data: data || { maintenance_mode: false, allow_signups: true } 
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Diagnostic route to troubleshoot production issues
   app.get('/api/diag/system', async (req, res) => {
     const mask = (str?: string) => str ? `${str.substring(0, 5)}...${str.substring(str.length - 4)}` : 'MISSING';

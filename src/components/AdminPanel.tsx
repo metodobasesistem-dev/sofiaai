@@ -54,7 +54,9 @@ export default function AdminPanel() {
     gemini_api_key: '',
     default_ai_model: 'gpt-4o',
     llm_provider: 'openai',
-    usd_brl_rate: 5.30
+    usd_brl_rate: 5.30,
+    maintenance_mode: false,
+    allow_signups: true
   });
   const [financeStats, setFinanceStats] = useState<any>({
     totalCostBrl: 0,
@@ -401,14 +403,24 @@ export default function AdminPanel() {
                     <h4 className="text-sm font-bold text-slate-900">Manutenção do Sistema</h4>
                     <p className="text-xs text-slate-500">Bloqueia acesso de todos os inquilinos.</p>
                   </div>
-                  <div className="w-12 h-6 bg-slate-200 rounded-full relative"><div className="absolute w-5 h-5 bg-white rounded-full top-0.5 left-0.5 shadow-sm"></div></div>
+                  <button 
+                    onClick={() => setGlobalSettings({...globalSettings, maintenance_mode: !globalSettings.maintenance_mode})}
+                    className={`w-12 h-6 rounded-full relative transition-all ${globalSettings.maintenance_mode ? 'bg-red-500' : 'bg-slate-200'}`}
+                  >
+                    <div className={`absolute w-5 h-5 bg-white rounded-full top-0.5 shadow-sm transition-all ${globalSettings.maintenance_mode ? 'right-0.5' : 'left-0.5'}`}></div>
+                  </button>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-center">
                   <div className="text-left">
                     <h4 className="text-sm font-bold text-slate-900">Novas Inscrições</h4>
                     <p className="text-xs text-slate-500">Permitir novos usuários via Login.</p>
                   </div>
-                  <div className="w-12 h-6 bg-emerald-500 rounded-full relative"><div className="absolute w-5 h-5 bg-white rounded-full top-0.5 right-0.5 shadow-sm"></div></div>
+                  <button 
+                    onClick={() => setGlobalSettings({...globalSettings, allow_signups: !globalSettings.allow_signups})}
+                    className={`w-12 h-6 rounded-full relative transition-all ${globalSettings.allow_signups ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                  >
+                    <div className={`absolute w-5 h-5 bg-white rounded-full top-0.5 shadow-sm transition-all ${globalSettings.allow_signups ? 'right-0.5' : 'left-0.5'}`}></div>
+                  </button>
                 </div>
               </div>
             </div>

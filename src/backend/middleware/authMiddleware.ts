@@ -70,6 +70,22 @@ export async function requireAuth(
 
     req.userId = user.id;
     req.userEmail = user.email;
+
+    // --- MAINTENANCE MODE CHECK ---
+    const { supabase: db } = await import('../lib/supabaseClient.js');
+    const [{ data: settings }, { data: profile }] = await Promise.all([
+      db.from('global_settings').select('maintenance_mode').limit(1).maybeSingle(),
+      db.from('profiles').select('role').eq('id', user.id).single()
+    ]);
+
+    if (settings?.maintenance_mode && profile?.role !== 'admin') {
+      res.status(503).json({ 
+        error: 'System is under maintenance', 
+        message: 'O sistema está em manutenção programada. Por favor, tente novamente mais tarde.' 
+      });
+      return;
+    }
+
     next();
   } catch (err: any) {
     console.error('[AuthMiddleware] Internal Exception:', err.message);

@@ -12,8 +12,8 @@ import Settings from './components/Settings';
 import Reports from './components/Reports';
 import Professionals from './components/Professionals';
 import Health from './components/Health';
-import AdminPanel from './components/AdminPanel';
  import Login from './components/Login';
+ import MaintenancePage from './components/MaintenancePage';
 import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
@@ -25,6 +25,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
   // Track current user ID to prevent unnecessary re-renders from onAuthStateChange
   const currentUserIdRef = useRef<string | null>(null);
 
@@ -98,6 +99,18 @@ export default function App() {
       }
     };
 
+    // Check public settings (maintenance/signups)
+    const checkSafety = async () => {
+      try {
+        const res = await fetch('/api/v2/public-settings');
+        const result = await res.json();
+        if (result.success) {
+          setMaintenanceMode(result.data.maintenance_mode);
+        }
+      } catch (e) {}
+    };
+
+    checkSafety();
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -226,6 +239,8 @@ export default function App() {
     <>
       {!user ? (
         <Login />
+      ) : maintenanceMode && role !== 'admin' ? (
+        <MaintenancePage />
       ) : (
         <Layout activeTab={activeTab} onTabChange={handleTabChange} user={user} role={role}>
           {renderContent()}

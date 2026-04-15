@@ -20,7 +20,9 @@ const PRICING = {
 } as any;
 
 let openai: OpenAI | null = null;
+let currentOpenAIKey: string | null = null;
 let genAI: GoogleGenerativeAI | null = null;
+let currentGeminiKey: string | null = null;
 
 async function getAISettings() {
   try {
@@ -61,10 +63,15 @@ export async function generateAIResponse(
   const model = settings.default_ai_model || 'gpt-4o';
   const exchangeRate = settings.usd_brl_rate || 5.30;
 
+  // --- OpenAI Client Refresh ---
   if (provider === 'openai') {
-    if (!openai && settings.openai_api_key) {
-      openai = new OpenAI({ apiKey: settings.openai_api_key });
+    const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
+    if (key !== currentOpenAIKey) {
+      console.log('[AIService] 🔄 Refrescando cliente OpenAI com nova chave...');
+      openai = key ? new OpenAI({ apiKey: key }) : null;
+      currentOpenAIKey = key;
     }
+    
     if (!openai) throw new Error('OpenAI key missing');
 
     const completion = await openai.chat.completions.create({
@@ -94,10 +101,15 @@ export async function generateAIResponse(
     };
   } 
   
+  // --- Gemini Client Refresh ---
   else if (provider === 'gemini') {
-    if (!genAI && settings.gemini_api_key) {
-      genAI = new GoogleGenerativeAI(settings.gemini_api_key);
+    const key = settings.gemini_api_key || process.env.GEMINI_API_KEY;
+    if (key !== currentGeminiKey) {
+      console.log('[AIService] 🔄 Refrescando cliente Gemini com nova chave...');
+      genAI = key ? new GoogleGenerativeAI(key) : null;
+      currentGeminiKey = key;
     }
+
     if (!genAI) throw new Error('Gemini key missing');
 
     const geminiModel = genAI.getGenerativeModel({ model: model });
@@ -108,7 +120,6 @@ export async function generateAIResponse(
       parts: [{ text: m.content }]
     }));
 
-    // Add system instructions if supported by this version of SDK, or prepended to first message
     const result = await geminiModel.generateContent({
       contents: contents,
       systemInstruction: systemPrompt
