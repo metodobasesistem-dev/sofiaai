@@ -579,21 +579,21 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
                 {activeTab === 'knowledge' && (
                   <div className="space-y-8">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div>
                         <h2 className="text-xl font-bold text-gray-900">Base de Inteligência</h2>
-                        <p className="text-sm text-gray-500 mt-1">Gerencie as informações que o assistente usará para aprender sobre seu negócio.</p>
+                        <p className="text-sm text-gray-500 mt-1">Dados estruturados que o assistente usará para aprender sobre seu negócio.</p>
                       </div>
                       
                       <div className="flex items-center gap-3">
-                        <div className="text-right mr-4">
-                          <div className="text-[10px] font-bold text-gray-400 uppercase">Capacidade</div>
+                        <div className="text-right mr-4 hidden md:block">
+                          <div className="text-[10px] font-bold text-gray-400 uppercase">Capacidade de Memória</div>
                           <div className="w-32 h-2 bg-gray-100 rounded-full mt-1 overflow-hidden">
                             <div 
                               className={`h-full transition-all ${
-                                (JSON.stringify(formData.knowledgeBase).length / 15000) > 0.8 ? 'bg-amber-500' : 'bg-teal-500'
+                                (JSON.stringify(formData.knowledgeBase).length / 20000) > 0.8 ? 'bg-amber-500' : 'bg-teal-500'
                               }`} 
-                              style={{ width: `${Math.min(100, (JSON.stringify(formData.knowledgeBase).length / 15000) * 100)}%` }} 
+                              style={{ width: `${Math.min(100, (JSON.stringify(formData.knowledgeBase).length / 20000) * 100)}%` }} 
                             />
                           </div>
                         </div>
@@ -615,9 +615,6 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
                               if (file.name.endsWith('.pdf')) {
                                 toast.info('Extração de PDF em processamento... (Simulado para MVP)');
-                                // For now, we'll inform that PDF text extraction is a "Pro" feature coming soon, 
-                                // but we could add a library here later.
-                                // Let's just create a placeholder text item.
                                 const newItem: KnowledgeItem = {
                                   id: Math.random().toString(36).substr(2, 9),
                                   type: 'text',
@@ -647,10 +644,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                           />
                           <button 
                             onClick={() => document.getElementById('kb-file-upload')?.click()}
-                            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 text-gray-700"
+                            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-50 text-gray-700 transition-all"
                           >
                             <Plus size={16} />
-                            Importar Arquivo
+                            Importar
                           </button>
                           <button 
                             onClick={() => {
@@ -663,10 +660,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                               };
                               setFormData({...formData, knowledgeBase: [newItem, ...(formData.knowledgeBase || [])]});
                             }}
-                            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 text-gray-700"
+                            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-50 text-gray-700 transition-all"
                           >
                             <MessageSquare size={16} />
-                            P&R
+                            Inserir P&R
                           </button>
                           <button 
                             onClick={() => {
@@ -679,12 +676,22 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                               };
                               setFormData({...formData, knowledgeBase: [newItem, ...(formData.knowledgeBase || [])]});
                             }}
-                            className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-teal-700"
+                            className="px-4 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-teal-700 transition-all shadow-md shadow-teal-100"
                           >
                             <Sparkles size={16} />
                             Bloco de Texto
                           </button>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-start gap-3">
+                      <div className="p-2 bg-white rounded-lg text-amber-600 shadow-sm shrink-0">
+                        <AlertCircle size={18} />
+                      </div>
+                      <div className="text-xs text-amber-800 leading-relaxed">
+                        <p className="font-bold">Dica para Evitar Alucinações:</p>
+                        <p className="mt-0.5">Mantenha as informações curtas e diretas. Use o formato de Pergunta e Resposta para dúvidas específicas e Blocos de Texto para políticas gerais ou história da empresa.</p>
                       </div>
                     </div>
 

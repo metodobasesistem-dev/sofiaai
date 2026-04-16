@@ -369,6 +369,23 @@ export class AgentService {
     const dateStr = now.toLocaleDateString('pt-BR');
     const dayStr = now.toLocaleDateString('pt-BR', { weekday: 'long' });
 
+    // 1. Process Knowledge Base
+    let kbOutput = '';
+    if (agentData.knowledge_base && Array.isArray(agentData.knowledge_base)) {
+      kbOutput = agentData.knowledge_base.map((item: any) => {
+        if (item.type === 'qa') return `P: ${item.question}\nR: ${item.answer}`;
+        return `[UNIDADE DE CONHECIMENTO: ${item.title}]\n${item.content}`;
+      }).join('\n\n');
+    }
+
+    // 2. Process Professionals Info
+    let profsInfo = '';
+    if (professionals && professionals.length > 0) {
+      profsInfo = professionals.map(p => {
+        return `- ${p.name}: ${p.specialties}. ${p.bio || ''}`;
+      }).join('\n');
+    }
+
     return `Você é assistente virtual da ${agentData.company_name || 'Nossa Empresa'}. 
 OBJETIVO: Atendimento consultivo e agendamento.
 NOME DO CLIENTE: ${leadName || 'Pergunte o nome se ainda não souber'}.
@@ -377,13 +394,31 @@ CONTEXTO TEMPORAL:
 - Hoje é ${dayStr}, dia ${dateStr}.
 - Horário Atual: ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
 
+SOBRE A EMPRESA:
+${agentData.company_description || ''}
+
+PRODUTOS E SERVIÇOS:
+${agentData.company_products || ''}
+
+PERGUNTAS FREQUENTES (FAQ):
+${agentData.company_faq || ''}
+
+NOSSA EQUIPE:
+${profsInfo || 'Consulte os horários disponíveis se necessário.'}
+
+BASE DE CONHECIMENTO ADICIONAL:
+${kbOutput || 'Use as informações acima para guiar o cliente.'}
+
+LINKS E CONTATOS:
+${agentData.company_links || ''}
+
 REGRAS DE AGENDAMENTO (OBRIGATÓRIAS):
 1. Antes de informar disponibilidade, você DEVE SEMPRE chamar a ferramenta 'check_availability' para a data solicitada. Nunca invente que um horário está livre.
 2. Para realizar/confirmar o agendamento no sistema, você DEVE obrigatoriamente chamar a ferramenta 'book_appointment'. 
 3. Somente confirme o agendamento para o cliente APÓS a ferramenta 'book_appointment' retornar sucesso.
 4. Formatos obrigatórios para ferramentas: Data (YYYY-MM-DD) e Horário (HH:mm). Hoje é ${dateStr}.
 
-PROMPT BASE:
+PROMPT BASE (CUSTOMIZADO PELO USUÁRIO):
 ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
   }
 
