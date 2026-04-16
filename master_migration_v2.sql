@@ -6,6 +6,10 @@
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS whatsapp_qr TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS whatsapp_instance_id TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS whatsapp_status TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS llm_provider TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS openai_api_key TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gemini_api_key TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS default_ai_model TEXT;
 
 -- 1. Tabela de Configurações Globais
 CREATE TABLE IF NOT EXISTS global_settings (

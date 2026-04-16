@@ -20,33 +20,52 @@ const PRICING = {
   'gemini-1.5-flash-latest': { in: 0.000075, out: 0.0003 }
 } as any;
 
-async function getAISettings() {
-  const mask = (key?: string) => key ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : 'MISSING';
+async function getAISettings(userId?: string) {
+  const mask = (key?: string) => key && key.trim() !== '' ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : 'MISSING';
 
-  try {
-    const { data: settings, error } = await supabase.from('global_settings')
-      .select('*')
-      .limit(1)
-      .maybeSingle();
-    
-    if (error) {
-      console.warn(`[AIService] ⚠️ Erro ao consultar Banco (Tabela pode não existir): ${error.message}`);
-    } else if (settings) {
-      console.log(`[AIService] ⚙️ Configurações detectadas no Banco. Provider: ${settings.llm_provider}`);
-      return settings;
-    }
-  } catch (err: any) {
-    console.warn(`[AIService] ⚠️ Falha crítica na conexão com Banco: ${err.message}`);
-  }
-
-  console.log('[AIService] ℹ️ Usando configurações de fallback (.env)');
-  return {
+  // 1. Iniciar com valores padrão/env
+  let finalSettings = {
     openai_api_key: process.env.OPENAI_API_KEY,
     gemini_api_key: process.env.GEMINI_API_KEY,
     default_ai_model: 'gpt-4o',
     llm_provider: 'openai',
     usd_brl_rate: 5.30
   };
+
+  try {
+    // 2. Tentar Configurações Globais
+    const { data: global, error: globalErr } = await supabase.from('global_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    
+    if (global && !globalErr) {
+      finalSettings = { ...finalSettings, ...global };
+      console.log(`[AIService] ⚙️ Settings globais carregadas (Provider: ${global.llm_provider})`);
+    }
+
+    // 3. Tentar Configurações Individuais (Profile)
+    if (userId) {
+      const { data: profile, error: profileErr } = await supabase.from('profiles')
+        .select('llm_provider, openai_api_key, gemini_api_key, default_ai_model')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile && !profileErr) {
+        // Apenas sobrescreve se o usuário definiu algo específico
+        if (profile.llm_provider) finalSettings.llm_provider = profile.llm_provider;
+        if (profile.openai_api_key) finalSettings.openai_api_key = profile.openai_api_key;
+        if (profile.gemini_api_key) finalSettings.gemini_api_key = profile.gemini_api_key;
+        if (profile.default_ai_model) finalSettings.default_ai_model = profile.default_ai_model;
+        
+        console.log(`[AIService] 👤 Settings individuais aplicadas para User: ${userId}`);
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[AIService] ⚠️ Falha na consulta de configurações: ${err.message}`);
+  }
+
+  return finalSettings;
 }
 
 /**
@@ -56,21 +75,17 @@ export async function generateAIResponse(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; [key: string]: any }[],
   tools?: any[],
-  toolChoice: 'auto' | 'none' | 'required' = 'auto'
+  toolChoice: 'auto' | 'none' | 'required' = 'auto',
+  userId?: string
 ): Promise<{ 
   text: string | null; 
   toolCalls?: any[]; 
   usage?: { prompt_tokens: number; completion_tokens: number; cost_brl: number } 
 }> {
-  const settings = await getAISettings();
+  const settings = await getAISettings(userId);
   const provider = settings.llm_provider || 'openai';
   let model = settings.default_ai_model || 'gpt-4o';
   const exchangeRate = settings.usd_brl_rate || 5.30;
-
-  // Normalize Gemini model string for stability
-  if (provider === 'gemini' && model === 'gemini-1.5-flash') {
-    model = 'gemini-1.5-flash-latest';
-  }
 
   console.log(`[AIService] 🤖 Gerando resposta... [Provider: ${provider}] [Model: ${model}]`);
 
@@ -186,17 +201,16 @@ export async function generateAIResponse(
 /**
  * Transcribes audio using OpenAI Whisper.
  */
-export async function transcribeAudio(buffer: Buffer, filename: string): Promise<string | null> {
-  const settings = await getAISettings();
-  if (!openai && settings.openai_api_key) {
-    openai = new OpenAI({ apiKey: settings.openai_api_key });
-  }
-  if (!openai) return null;
+export async function transcribeAudio(buffer: Buffer, filename: string, userId?: string): Promise<string | null> {
+  const settings = await getAISettings(userId);
+  const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
+  if (!key) return null;
 
   try {
+    const client = new OpenAI({ apiKey: key });
     const safeFilename = filename.endsWith('.ogg') ? filename.replace('.ogg', '.mp3') : filename;
     const file = await OpenAI.toFile(buffer, safeFilename);
-    const transcription = await openai.audio.transcriptions.create({
+    const transcription = await client.audio.transcriptions.create({
       file: file,
       model: 'whisper-1',
     });

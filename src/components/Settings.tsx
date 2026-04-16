@@ -179,7 +179,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     produtos_servicos: '',
     faq: '',
     links_importantes: '',
-    notification_phone: ''
+    notification_phone: '',
+    llm_provider: '',
+    openai_api_key: '',
+    gemini_api_key: '',
+    default_ai_model: ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -206,7 +210,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
             produtos_servicos: profileData.produtos_servicos || '',
             faq: profileData.faq || '',
             links_importantes: profileData.links_importantes || '',
-            notification_phone: profileData.notification_phone || ''
+            notification_phone: profileData.notification_phone || '',
+            llm_provider: profileData.llm_provider || '',
+            openai_api_key: profileData.openai_api_key || '',
+            gemini_api_key: profileData.gemini_api_key || '',
+            default_ai_model: profileData.default_ai_model || ''
           });
         }
       } catch (err) {
@@ -263,7 +271,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
         produtos_servicos: formData.produtos_servicos,
         faq: formData.faq,
         links_importantes: formData.links_importantes,
-        notification_phone: formData.notification_phone
+        notification_phone: formData.notification_phone,
+        llm_provider: formData.llm_provider,
+        openai_api_key: formData.openai_api_key,
+        gemini_api_key: formData.gemini_api_key,
+        default_ai_model: formData.default_ai_model
       });
       toast.success('Perfil atualizado com sucesso!');
     } catch (error) {
@@ -350,6 +362,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     { id: 'account', label: 'Conta', icon: <User size={18} /> },
     { id: 'subscription', label: 'Assinatura', icon: <CreditCard size={18} /> },
     { id: 'channels', label: 'Canais', icon: <MessageSquare size={18} /> },
+    { id: 'ai_config', label: 'Configuração IA', icon: <Zap size={18} /> },
     { id: 'quick_replies', label: 'Respostas Rápidas', icon: <MessageSquare size={18} /> },
   ];
 
@@ -753,6 +766,148 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSubTab === 'ai_config' && (
+            <div className="space-y-8">
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+                      <Zap size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Configuração de Inteligência Artificial</h3>
+                      <p className="text-sm text-gray-500">Configure seu próprio provedor de IA e chaves API (BYOK)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-8 space-y-8">
+                  {/* Provider Selection */}
+                  <div className="space-y-4">
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Escolha seu Provedor de IA</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <button
+                        onClick={() => setFormData({...formData, llm_provider: 'openai'})}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left
+                          ${formData.llm_provider === 'openai' ? 'border-teal-600 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl 
+                          ${formData.llm_provider === 'openai' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                          O
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900">OpenAI (ChatGPT)</p>
+                          <p className="text-xs text-gray-500">Modelos GPT-4o e GPT-4o-mini</p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => setFormData({...formData, llm_provider: 'gemini'})}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left
+                          ${formData.llm_provider === 'gemini' ? 'border-teal-600 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl 
+                          ${formData.llm_provider === 'gemini' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                          G
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900">Google Gemini</p>
+                          <p className="text-xs text-gray-500">Modelos Gemini 1.5 Pro e Flash</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* API Keys and Model */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                      {formData.llm_provider === 'openai' ? (
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">OpenAI API Key</label>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={formData.openai_api_key}
+                              onChange={e => setFormData({...formData, openai_api_key: e.target.value})}
+                              placeholder="sk-..."
+                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                            />
+                            <Key size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                          </div>
+                          <p className="text-[10px] text-gray-400">Suas chaves são criptografadas e usadas apenas para suas interações.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Gemini API Key</label>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={formData.gemini_api_key}
+                              onChange={e => setFormData({...formData, gemini_api_key: e.target.value})}
+                              placeholder="AIza..."
+                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                            />
+                            <Key size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                          </div>
+                          <p className="text-[10px] text-gray-400">Obtenha sua chave no Google AI Studio.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Modelo Padrão</label>
+                      <select
+                        value={formData.default_ai_model}
+                        onChange={e => setFormData({...formData, default_ai_model: e.target.value})}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm appearance-none bg-white font-bold"
+                      >
+                        <option value="">Selecione um modelo...</option>
+                        {formData.llm_provider === 'openai' ? (
+                          <>
+                            <option value="gpt-4o">GPT-4o (Mais inteligente)</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini (Mais rápido/econômico)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                          </>
+                        )}
+                      </select>
+                      <p className="text-[10px] text-gray-400">Escolha o modelo que melhor se adapta ao seu custo/benefício.</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6">
+                    <div className="flex gap-4">
+                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-blue-600 shrink-0 shadow-sm">
+                        <ShieldCheck size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-900">Uso da sua própria chave</h4>
+                        <p className="text-xs text-gray-600 leading-relaxed mt-1">
+                          Ao configurar sua própria chave, você terá custo zero de processamento no WppAI. 
+                          As cobranças da OpenAI/Google virão diretamente para você, e o WppAI não descontará créditos de mensagens do seu plano.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <button 
+                      onClick={handleSaveProfile}
+                      disabled={isSaving}
+                      className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-teal-100 disabled:opacity-50"
+                    >
+                      {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      Salvar Configuração IA
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

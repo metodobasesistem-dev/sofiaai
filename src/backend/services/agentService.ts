@@ -125,7 +125,7 @@ export class AgentService {
 
       while (true) {
         console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId})`);
-        const response = await generateAIResponse(fullPrompt, currentMessages, tools);
+        const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', dbUserId);
         
         if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
           console.warn(`[AgentService] ⚠️ Resposta da IA vazia na thread: ${threadId}. Encerrando loop.`);

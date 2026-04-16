@@ -6,12 +6,12 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 async function checkSchema() {
-  console.log('--- Checking quick_replies schema ---');
-  const { data, error } = await supabase.rpc('get_table_schema', { table_name: 'quick_replies' });
+  console.log('--- Checking agents schema ---');
+  const { data, error } = await supabase.rpc('get_table_schema', { table_name: 'agents' });
   
   if (error) {
     // If RPC doesn't exist, try a simple select
-    const { data: cols, error: err2 } = await supabase.from('quick_replies').select('*').limit(1);
+    const { data: cols, error: err2 } = await supabase.from('agents').select('*').limit(1);
     if (err2) {
        console.error('Error:', err2.message);
     } else {
