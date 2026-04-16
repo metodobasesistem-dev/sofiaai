@@ -1,8 +1,41 @@
+# Dependencies
 node_modules/
-build/
+
+# Build and Output
 dist/
+build/
 coverage/
-.DS_Store
-*.log
+.next/
+out/
+
+# WhatsApp Web Session & Cache (CRITICAL for deploy speed)
+sessions/
+.wwebjs_cache/
+.wwebjs_auth/
+
+# Secrets and Env
 .env*
 !.env.example
+
+# Logs and Temp
+*.log
+audio_debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Large / Backup Files
+*.zip
+*.rar
+*.7z
+wppai.zip
+
+# AI Assistant Brain / Scratch
+scratch/
+.gemini/
+.antigravity/
