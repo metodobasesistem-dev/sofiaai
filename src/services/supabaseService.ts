@@ -94,6 +94,10 @@ export interface UserProfile {
   notification_phone?: string;
   nicho?: string;
   trial_ends_at?: string;
+  llm_provider?: string;
+  openai_api_key?: string;
+  gemini_api_key?: string;
+  default_ai_model?: string;
 }
 
 export interface AvailabilityConfig {
@@ -524,7 +528,11 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
         plano: profile.plano,
         notification_phone: profile.notification_phone,
         nicho: profile.nicho,
-        trial_ends_at: profile.trial_ends_at
+        trial_ends_at: profile.trial_ends_at,
+        llm_provider: profile.llm_provider,
+        openai_api_key: profile.openai_api_key,
+        gemini_api_key: profile.gemini_api_key,
+        default_ai_model: profile.default_ai_model
       };
     }
 
