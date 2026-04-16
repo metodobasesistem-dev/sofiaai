@@ -78,21 +78,17 @@ export class AgentService {
       let agentData: any = null;
       let activeProfessionals: any[] = [];
 
-      const [{ data: agentRes, error: agentError }, { data: profsRes }] = await Promise.all([
-        supabase.from('agents').select('*').eq('user_id', dbUserId).eq('status_ativo', true).limit(1).maybeSingle(),
-        supabase.from('professionals').select('*').eq('user_id', dbUserId).eq('is_active', true)
-      ]);
-      
-      if (agentError || !agentRes) {
-        agentData = {
-          nome: 'Natan', 
-          prompt_base: 'Você é um assistente prestativo focado em atendimento ao cliente no WhatsApp.',
-          voice_mode: 'disabled',
-          voice_id: 'alloy'
-        };
-      } else {
-        agentData = agentRes;
+      if (agentError) {
+        console.error('[AgentService] Error fetching agent:', agentError);
+        return null;
       }
+
+      if (!agentRes) {
+        console.log(`[AgentService] 🛑 No ACTIVE agent found for user ${dbUserId}. AI response skipped.`);
+        return null;
+      }
+
+      agentData = agentRes;
       activeProfessionals = profsRes || [];
 
       // 3. Persistent History - Limit to last 10 messages to avoid AI confusion
