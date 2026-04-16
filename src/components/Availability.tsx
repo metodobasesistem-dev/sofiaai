@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { getAvailability, saveAvailability } from '../services/supabaseService';
+import { getAvailability, saveAvailability, listProfessionals, type Professional } from '../services/supabaseService';
 
 interface TimeSlot {
   start: string;
@@ -302,6 +302,10 @@ export default function Availability() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [specificDates, setSpecificDates] = useState<SpecificDate[]>([]);
+  const [profs, setProfs] = useState<Professional[]>([]);
+  const [selectedProfId, setSelectedProfId] = useState<string>('');
+  const [loadingProfs, setLoadingProfs] = useState(true);
+
   const [days, setDays] = useState<DayAvailability[]>([
     { day: 'Segunda-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
     { day: 'Terça-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
@@ -312,28 +316,58 @@ export default function Availability() {
     { day: 'Domingo', active: false, slots: [] },
   ]);
 
-  React.useEffect(() => {
-    const loadAvailability = async () => {
+  useEffect(() => {
+    const init = async () => {
       try {
-        const config = await getAvailability();
+        setLoadingProfs(true);
+        const list = await listProfessionals();
+        setProfs(list);
+        if (list.length > 0) {
+          setSelectedProfId(list[0].id || '');
+        }
+      } catch (err) {
+        console.error('Error listing professionals:', err);
+      } finally {
+        setLoadingProfs(false);
+      }
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      if (!selectedProfId) return;
+
+      try {
+        const config = await getAvailability(selectedProfId);
         if (config) {
           if (config.weekly) setDays(config.weekly);
           if (config.specificDates) {
-            // Convert string dates back to Date objects for the UI
             const datesWithObj = config.specificDates.map((sd: any) => ({
               ...sd,
               date: new Date(sd.date + 'T12:00:00')
             }));
             setSpecificDates(datesWithObj);
           }
+        } else {
+          // Default state if no availability found
+          setDays([
+            { day: 'Segunda-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
+            { day: 'Terça-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
+            { day: 'Quarta-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
+            { day: 'Quinta-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
+            { day: 'Sexta-feira', active: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }] },
+            { day: 'Sábado', active: true, slots: [{ start: '09:00', end: '12:00' }] },
+            { day: 'Domingo', active: false, slots: [] },
+          ]);
+          setSpecificDates([]);
         }
       } catch (error) {
         console.error('Error loading availability:', error);
-        toast.error('Erro ao carregar configurações de disponibilidade.');
       }
     };
     loadAvailability();
-  }, []);
+  }, [selectedProfId]);
 
   const handleToggleDay = (index: number) => {
     setDays(prev => prev.map((d, i) => {
@@ -428,7 +462,7 @@ export default function Availability() {
         }))
       };
 
-      await saveAvailability(dataToSave);
+      await saveAvailability(dataToSave, selectedProfId);
       toast.success('Configurações de disponibilidade salvas com sucesso!');
     } catch (error) {
       console.error('Error saving availability:', error);
@@ -451,14 +485,30 @@ export default function Availability() {
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profissional</label>
           <div className="flex items-center gap-3">
             <div className="relative flex-1 max-w-xs">
-              <select className="w-full pl-4 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
-                <option>Natan de Souza</option>
+              <select 
+                value={selectedProfId}
+                onChange={(e) => setSelectedProfId(e.target.value)}
+                className="w-full pl-4 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer"
+              >
+                {loadingProfs ? (
+                  <option>Carregando equipe...</option>
+                ) : profs.length === 0 ? (
+                  <option>Nenhum profissional cadastrado</option>
+                ) : (
+                  profs.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))
+                )}
               </select>
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                 <ChevronDown size={18} />
               </div>
             </div>
-            <button className="w-10 h-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-all">
+            <button 
+              onClick={() => window.location.hash = '#/equipe'}
+              className="w-10 h-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-all"
+              title="Gerenciar Equipe"
+            >
               <Plus size={20} />
             </button>
           </div>

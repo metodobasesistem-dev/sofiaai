@@ -102,6 +102,7 @@ export interface UserProfile {
 
 export interface AvailabilityConfig {
   userId: string;
+  professionalId?: string;
   weekly: any[];
   specificDates: any[];
 }
@@ -563,21 +564,28 @@ export const updateUserProfile = async (profileData: Partial<UserProfile>) => {
 /**
  * Availability
  */
-export const getAvailability = async (): Promise<AvailabilityConfig | null> => {
+export const getAvailability = async (professionalId?: string): Promise<AvailabilityConfig | null> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('availability')
     .select('*')
-    .eq('user_id', user.id)
-    .single();
+    .eq('user_id', user.id);
 
-  if (error && error.code !== 'PGRST116') throw error;
-  return data ? { userId: data.user_id, weekly: data.config.weekly, specificDates: data.config.specificDates } : null;
+  if (professionalId) {
+    query = query.eq('professional_id', professionalId);
+  } else {
+    query = query.is('professional_id', null);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) throw error;
+  return data ? { userId: data.user_id, professionalId: data.professional_id, weekly: data.config.weekly, specificDates: data.config.specificDates } : null;
 };
 
-export const saveAvailability = async (config: Omit<AvailabilityConfig, 'userId'>) => {
+export const saveAvailability = async (config: Omit<AvailabilityConfig, 'userId'>, professionalId?: string) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -585,7 +593,10 @@ export const saveAvailability = async (config: Omit<AvailabilityConfig, 'userId'
     .from('availability')
     .upsert({
       user_id: user.id,
+      professional_id: professionalId || null,
       config: config
+    }, {
+      onConflict: 'user_id, professional_id'
     });
 
   if (error) throw error;
