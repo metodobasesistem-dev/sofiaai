@@ -290,7 +290,7 @@ class WhatsAppService {
                 const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
                 if (transcription) {
                   console.log(`[WhatsAppService] Transcription for ${msg.from}: ${transcription}`);
-                  await msg.reply(`Transcrição do áudio: "${transcription}"`);
+                  // [FIX] Removed forced msg.reply with transcription to prevent leak when agent is disabled
                   this.triggerAIResponse(userId, msg, contact, transcription, true);
                   return;
                 } else {
