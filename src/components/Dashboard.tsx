@@ -239,6 +239,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
     }
     try {
       setIsConnecting(true);
+      setIsWhatsAppModalOpen(true);
       const result = await connectWhatsApp();
       if (result.success && result.qr) {
         setWhatsappStatus(prev => ({
@@ -246,7 +247,6 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           qr: result.qr
         }));
       }
-      setIsWhatsAppModalOpen(true);
     } catch (error: any) {
       console.error('Failed to connect WhatsApp:', error);
       const errorMsg = error.message || 'Erro ao iniciar conexão com WhatsApp';
