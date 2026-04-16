@@ -424,32 +424,64 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
     ];
   }
 
+  private async asyncFilter(arr: any[], predicate: any) {
+    const results = await Promise.all(arr.map(predicate));
+    return arr.filter((_v, index) => results[index]);
+  }
+
   private async handleCheckAvailability(userId: string, targetDate: string, agentData: any, professionals: any[], profName?: string) {
     try {
-      // 1. Get all standard slots
+      console.log(`[AgentService] 🔍 Checking availability for ${targetDate} (Professional: ${profName || 'Any'})`);
+      
+      // 1. Get all standard slots (could be from agentData in future)
       let allSlots = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
       
-      // 2. Fetch existing appointments for this user and date
+      // 2. Resolve Professional and their Google Calendar
+      let busyTimesFromGoogle: string[] = [];
+      const selectedProf = profName 
+        ? professionals.find(p => p.name.toLowerCase().includes(profName.toLowerCase()))
+        : null;
+
+      if (selectedProf?.google_calendar_id) {
+        console.log(`[AgentService] 📅 Fetching busy slots from Google Calendar: ${selectedProf.google_calendar_id}`);
+        const googleBusy = await googleCalendarService.getBusySlots(userId, selectedProf.google_calendar_id, targetDate);
+        
+        // Convert ISO busy sessions to HH:mm slots that are "blocked"
+        googleBusy.forEach((b: any) => {
+          const start = new Date(b.start);
+          const end = new Date(b.end);
+          
+          allSlots.forEach(slot => {
+            const slotDate = new Date(`${targetDate}T${slot}:00`);
+            // If slot is within a busy interval, it's busy
+            if (slotDate >= start && slotDate < end) {
+              busyTimesFromGoogle.push(slot);
+            }
+          });
+        });
+      }
+
+      // 3. Fetch existing appointments for this user and date from Local DB
       const { data: existingAppts } = await supabase
         .from('appointments')
-        .select('time')
+        .select('time, professional_name')
         .eq('user_id', userId)
         .eq('data', targetDate)
         .neq('status', 'cancelled');
 
-      // 3. Filter out busy slots
-      if (existingAppts && existingAppts.length > 0) {
-        const busyTimes = existingAppts.map(a => {
-          // Ensure time format matches (HH:mm)
-          return a.time.substring(0, 5);
-        });
-        allSlots = allSlots.filter(slot => !busyTimes.includes(slot));
-      }
+      // 4. Filter out busy slots
+      const busyTimesFromDB = (existingAppts || [])
+        .filter(a => !profName || a.professional_name === profName)
+        .map(a => a.time.substring(0, 5));
+
+      const totalBusy = Array.from(new Set([...busyTimesFromGoogle, ...busyTimesFromDB]));
+      const availableSlots = allSlots.filter(slot => !totalBusy.includes(slot));
 
       return { 
-        slots: allSlots, 
+        slots: availableSlots, 
         date: targetDate,
-        total_available: allSlots.length
+        professional: selectedProf?.name || null,
+        total_available: availableSlots.length
       }; 
     } catch (e) {
       console.error('[AgentService] Check availability error:', e);
@@ -459,17 +491,58 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
 
   private async handleBookAppointment(userId: string, threadId: string, contactName: string, args: any, agentData: any, professionals: any[]) {
     try {
+      console.log(`[AgentService] 📝 Booking appointment for ${args.clientName} on ${args.date} at ${args.time}`);
+      
+      const selectedProf = args.professional_name 
+        ? professionals.find(p => p.name.toLowerCase().includes(args.professional_name.toLowerCase()))
+        : null;
+
+      // 1. Create in Google Calendar if integrated
+      let googleEventId = null;
+      if (selectedProf?.google_calendar_id) {
+        try {
+          const start = new Date(`${args.date}T${args.time}:00`);
+          const end = new Date(start.getTime() + (agentData.appointment_duration || 30) * 60000);
+          
+          const event = await googleCalendarService.createEvent(userId, selectedProf.google_calendar_id, {
+            summary: `📅 Agendamento: ${args.clientName} (${agentData.nome})`,
+            description: `Agendamento realizado via WhatsApp AI.\nCliente: ${contactName}\nProtocolo: ${threadId}`,
+            start: start.toISOString(),
+            end: end.toISOString()
+          });
+          googleEventId = event.id;
+        } catch (gErr) {
+          console.error('[AgentService] Failed to create Google Event:', gErr);
+        }
+      }
+
+      // 2. Save in Local DB
       const { data: newDoc, error } = await supabase.from('appointments').insert({
         user_id: userId,
         data: args.date,
         time: args.time,
         client_name: args.clientName,
         client_phone: threadId.split('_')[1],
-        status: 'confirmed'
+        status: 'confirmed',
+        professional_id: selectedProf?.id,
+        professional_name: selectedProf?.name,
+        google_event_id: googleEventId,
+        agent_id: agentData.id,
+        summary: `Agendado com ${selectedProf?.name || 'IA'}`
       }).select().single();
+
       if (error) throw error;
-      return { success: true, id: newDoc.id };
-    } catch (e) { return { success: false }; }
+      
+      return { 
+        success: true, 
+        id: newDoc.id, 
+        professional: selectedProf?.name || null,
+        google_synced: !!googleEventId 
+      };
+    } catch (e) { 
+      console.error('[AgentService] Book appointment error:', e);
+      return { success: false }; 
+    }
   }
 
   private async getHistoryFromSupabase(threadId: string, limit: number) {

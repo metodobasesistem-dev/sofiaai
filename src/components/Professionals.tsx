@@ -253,15 +253,28 @@ export default function Professionals() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Google Calendar ID</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Google Calendar ID</label>
+                    <a 
+                      href="https://calendar.google.com/calendar/u/0/r/settings" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      Como achar o ID?
+                    </a>
+                  </div>
                   <input 
                     type="text" 
                     value={formData.googleCalendarId}
                     onChange={e => setFormData({...formData, googleCalendarId: e.target.value})}
-                    placeholder="ex: barbeiro.joao@gmail.com"
+                    placeholder="ex: barbeiro.joao@gmail.com ou ID secundário"
                     className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:bg-white transition-all font-medium text-slate-900"
                   />
-                  <p className="text-[10px] text-slate-400 mt-2 italic">* Se deixado em branco, a IA usará a agenda principal conectada.</p>
+                  <p className="text-[10px] text-slate-400 mt-2 italic">
+                    * Use o e-mail do profissional ou o "ID da agenda" nas configurações do Google Calendar. 
+                    Se vazio, usará a agenda principal.
+                  </p>
                 </div>
 
                 <div>
