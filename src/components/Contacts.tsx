@@ -346,19 +346,17 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
 
     try {
       setIsLoading(true);
-      console.log('[Contacts] Fetching contacts for UID:', user?.id);
       const data = await listContacts();
-      console.log(`[Contacts] Received ${data.length} contacts.`);
       
-      const sorted = data.sort((a, b) => {
+      const sorted = (data || []).sort((a, b) => {
         const aTime = new Date(a.ultimaInteracao || a.data_criacao || 0).getTime();
         const bTime = new Date(b.ultimaInteracao || b.data_criacao || 0).getTime();
         return bTime - aTime;
       });
       setContacts(sorted);
-    } catch (error) {
-      console.error('[Contacts] Failed to fetch contacts:', error);
-      toast.error('Erro ao carregar lista de contatos');
+    } catch (error: any) {
+      console.error('[Contacts] Failed to fetch contacts:', error.message);
+      toast.error('Estabilidade: Erro ao carregar contatos.');
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);

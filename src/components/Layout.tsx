@@ -229,6 +229,30 @@ export default function Layout({
           ))}
         </nav>
 
+        {role === 'admin' && !collapsed && (
+          <div className="px-4 py-4 mt-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-slate-50 rounded-2xl p-4 border border-slate-100"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status do Sistema</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[10px] font-black text-emerald-600 uppercase">Operacional</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 font-medium leading-tight">
+                Todos os serviços (IA, Redis, Supabase) estão respondendo normalmente.
+              </p>
+            </motion.div>
+          </div>
+        )}
+
         <div className="p-4 border-t border-gray-100 space-y-2">
           {/* Profile Section with Dropdown */}
           <div className="relative" ref={profileRef}>

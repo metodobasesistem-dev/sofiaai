@@ -35,14 +35,20 @@ export default function Professionals() {
   });
 
   const fetchData = async () => {
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      console.warn('[Professionals] Safety timeout reached (5s)');
+    }, 5000);
+
     try {
       setLoading(true);
       const data = await listProfessionals();
-      setProfs(data);
-    } catch (error) {
-      console.error('Failed to fetch professionals:', error);
-      toast.error('Erro ao carregar equipe.');
+      setProfs(data || []);
+    } catch (error: any) {
+      console.error('[Professionals] Failed to fetch:', error.message);
+      toast.error('Erro de conexão ao carregar equipe.');
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
