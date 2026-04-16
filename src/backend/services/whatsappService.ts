@@ -140,14 +140,22 @@ class WhatsAppService {
       }
 
       // Clean stale lock files that could prevent Puppeteer from starting
-      const userDataDir = path.join(sessionsDataPath, 'RemoteAuth');
-      const lockFile = path.join(userDataDir, 'SingletonLock');
-      if (fs.existsSync(lockFile)) {
-        try {
-          fs.unlinkSync(lockFile);
-          console.log(`[WhatsAppService] Cleaned stale lock file for ${clientId}`);
-        } catch (err) {
-          console.warn(`[WhatsAppService] Could not remove lock file:`, err);
+      // [CRITICAL] Search recursively in the session folder to find SingletonLock
+      const sessionFolder = path.join(sessionsDataPath, 'RemoteAuth', `session-${clientId}`);
+      const possibleLockPaths = [
+        path.join(sessionsDataPath, 'RemoteAuth', 'SingletonLock'),
+        path.join(sessionFolder, 'SingletonLock'),
+        path.join(sessionFolder, 'Default', 'SingletonLock')
+      ];
+
+      for (const lp of possibleLockPaths) {
+        if (fs.existsSync(lp)) {
+          try {
+            fs.unlinkSync(lp);
+            console.log(`[WhatsAppService] 🧹 Cleaned stale lock file at: ${lp}`);
+          } catch (err) {
+            console.warn(`[WhatsAppService] ⚠️ Could not remove lock file at ${lp}:`, err);
+          }
         }
       }
 
@@ -177,9 +185,11 @@ class WhatsAppService {
             '--metrics-recording-only',
             '--mute-audio',
             '--safebrowsing-disable-auto-update',
+            '--ignore-certificate-errors',
+            '--ignore-ssl-errors',
+            '--ignore-certificate-errors-spki-list',
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
             '--js-flags=--max_old_space_size=512',
-            '--remote-debugging-port=9222',
-            '--disable-web-security',
             '--no-zygote'
           ],
           executablePath: (() => {

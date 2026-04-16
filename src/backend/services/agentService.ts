@@ -23,7 +23,24 @@ export class AgentService {
     try {
       let dbUserId = userId;
 
-      console.log(`[AgentService] 🚀 PROCESS INCOMING -> Using ID: ${userId}, Msg: "${body.substring(0, 30)}..."`);
+      // [CRITICAL-HOSTINGER] Resolve UUID if userId project name or email is passed instead of UUID
+      if (userId.includes('@')) {
+        console.log(`[AgentService] 🔍 Detected email-based userId: ${userId}. Resolving real UUID...`);
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', userId)
+          .maybeSingle();
+        
+        if (prof?.id) {
+          dbUserId = prof.id;
+          console.log(`[AgentService] ✅ Resolved email ${userId} to UUID: ${dbUserId}`);
+        } else {
+          console.warn(`[AgentService] ⚠️ Could not resolve UUID for email ${userId}. Profile error:`, profErr?.message);
+        }
+      }
+
+      console.log(`[AgentService] 🚀 PROCESS INCOMING -> Using DB ID: ${dbUserId}, Msg: "${body.substring(0, 30)}..."`);
 
       // 1. Thread and Status Management
       console.log('--- [DEBUG-AGENT] PROCESS_INCOMING START - VERSAO NOVA 2:00h ---');
@@ -78,17 +95,30 @@ export class AgentService {
       let agentData: any = null;
       let activeProfessionals: any[] = [];
 
+      const [{ data: agentRes, error: agentError }, { data: profsRes }] = await Promise.all([
+        supabase.from('agents').select('*').eq('user_id', dbUserId).eq('status_ativo', true).limit(1).maybeSingle(),
+        supabase.from('professionals').select('*').eq('user_id', dbUserId).eq('is_active', true)
+      ]);
+      
       if (agentError) {
-        console.error('[AgentService] Error fetching agent:', agentError);
+        console.error('[AgentService] ❌ Error fetching agent from Supabase:', agentError);
         return null;
       }
 
       if (!agentRes) {
-        console.log(`[AgentService] 🛑 No ACTIVE agent found for user ${dbUserId}. AI response skipped.`);
+        console.log(`[AgentService] 🛑 No ACTIVE agent found for user ${dbUserId} (Original: ${userId}). AI response skipped.`);
+        // [DEBUG] Let's list ANY agent to see if it exists but is inactive
+        const { data: anyAgent } = await supabase.from('agents').select('nome, status_ativo').eq('user_id', dbUserId).limit(1).maybeSingle();
+        if (anyAgent) {
+          console.log(`[AgentService] Found agent "${anyAgent.nome}" but status_ativo is ${anyAgent.status_ativo}`);
+        } else {
+          console.log(`[AgentService] No agents AT ALL found for user ${dbUserId}`);
+        }
         return null;
       }
 
       agentData = agentRes;
+      console.log(`[AgentService] 🧠 Agent found: "${agentData.nome}". Proceeding with AI loop.`);
       activeProfessionals = profsRes || [];
 
       // 3. Persistent History - Limit to last 10 messages to avoid AI confusion
