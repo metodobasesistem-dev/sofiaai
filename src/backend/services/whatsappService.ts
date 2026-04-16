@@ -489,9 +489,26 @@ class WhatsAppService {
       clearTimeout(this.debounceTimers.get(timerKey)!);
     }
 
+    // 1. Fetch Agent response_delay for this user
+    let delayMs = 15000; // Default 15s if everything fails
+    try {
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('response_delay')
+        .eq('user_id', userId)
+        .eq('status_ativo', true)
+        .maybeSingle();
+      
+      if (agent?.response_delay) {
+        delayMs = agent.response_delay * 1000;
+      }
+    } catch (e) {
+      console.warn('[WhatsAppService] Fail to fetch agent delay, using default 15s');
+    }
+
     const timeout = setTimeout(async () => {
       this.debounceTimers.delete(timerKey);
-      console.log(`[WhatsAppService] Timer expired. Triggering AI response for ${msg.from}`);
+      console.log(`[WhatsAppService] Timer expired (${delayMs}ms). Triggering AI response for ${msg.from}`);
 
       try {
         const sess = this.sessions.get(userId);
@@ -559,7 +576,7 @@ class WhatsAppService {
       } catch (err) {
         console.error(`[WhatsAppService] AI trigger error:`, err);
       }
-    }, 2000); // 2s debounce for faster feeling
+    }, delayMs);
 
     this.debounceTimers.set(timerKey, timeout);
   }

@@ -41,6 +41,7 @@ export interface Agent {
     sendAfterTime: boolean;
   }[];
   appointmentDuration?: number;
+  response_delay?: number;
 }
 
 export interface Professional {
@@ -183,7 +184,8 @@ const mapAgents = (data: any[]): Agent[] =>
     knowledgeBase: a.knowledge_base,
     followUps: a.follow_ups,
     reminders: a.reminders,
-    appointmentDuration: a.appointment_duration
+    appointmentDuration: a.appointment_duration,
+    response_delay: a.response_delay
   }));
 
 export const listAgents = async (): Promise<Agent[]> => {
@@ -247,7 +249,8 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
       knowledge_base: agentData.knowledgeBase || [],
       follow_ups: agentData.followUps || [],
       reminders: agentData.reminders || [],
-      appointment_duration: agentData.appointmentDuration || 30
+      appointment_duration: agentData.appointmentDuration || 30,
+      response_delay: agentData.response_delay || 15
     })
   });
 
@@ -284,6 +287,7 @@ export const updateAgent = async (agentId: string, agentData: Partial<Agent>) =>
       voice_mode: agentData.voice_mode,
       voice_id: agentData.voice_id,
       appointment_duration: agentData.appointmentDuration,
+      response_delay: agentData.response_delay,
       knowledge_base: agentData.knowledgeBase,
       follow_ups: agentData.followUps,
       reminders: agentData.reminders

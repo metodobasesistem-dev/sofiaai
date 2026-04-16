@@ -177,7 +177,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     knowledgeBase: [],
     followUps: [{ delayMinutes: 60, type: 'static', message: '', extraPrompt: '' }],
     reminders: [{ mode: 'Tempo antes', hoursBefore: 24, message: '', sendAfterTime: false }],
-    appointmentDuration: 30
+    appointmentDuration: 30,
+    response_delay: 15
   });
 
   const [previewMessages, setPreviewMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
@@ -1003,16 +1004,32 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                       </div>
                       <p className="text-sm text-gray-500">Configure as regras padrão de agendamento para este agente.</p>
                       
-                      <div className="max-w-xs">
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Duração de cada agendamento (minutos)</label>
-                        <div className="relative flex items-center">
-                          <input 
-                            type="number"
-                            value={formData.appointmentDuration}
-                            onChange={e => setFormData({...formData, appointmentDuration: parseInt(e.target.value)})}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all text-sm pr-12"
-                          />
-                          <span className="absolute right-4 text-xs font-bold text-gray-400">min</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Duração de cada agendamento</label>
+                          <div className="relative flex items-center">
+                            <input 
+                              type="number"
+                              value={formData.appointmentDuration}
+                              onChange={e => setFormData({...formData, appointmentDuration: parseInt(e.target.value)})}
+                              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm pr-12"
+                            />
+                            <span className="absolute right-4 text-xs font-bold text-gray-400">min</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Atraso de Resposta (Agrupamento)</label>
+                          <div className="relative flex items-center">
+                            <input 
+                              type="number"
+                              value={formData.response_delay || 15}
+                              onChange={e => setFormData({...formData, response_delay: parseInt(e.target.value)})}
+                              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm pr-12"
+                            />
+                            <span className="absolute right-4 text-xs font-bold text-gray-400">seg</span>
+                          </div>
+                          <p className="mt-2 text-[10px] text-gray-400">Tempo que a IA aguarda o cliente parar de digitar para responder de uma vez.</p>
                         </div>
                       </div>
                     </div>
