@@ -30,7 +30,9 @@ export interface Agent {
   knowledgeBase?: KnowledgeItem[];
   followUps?: {
     delayMinutes: number;
-    extraPrompt: string;
+    extraPrompt?: string;
+    type: 'static' | 'ai';
+    message?: string;
   }[];
   reminders?: {
     mode: string;

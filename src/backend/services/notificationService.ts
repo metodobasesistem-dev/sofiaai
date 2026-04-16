@@ -75,55 +75,121 @@ export class NotificationService {
   }
 
   async checkFollowUps() {
-    console.log('[NotificationService] Checking for inactive leads (Follow-ups)...');
+    console.log('[NotificationService] Checking for dynamic follow-ups...');
     const now = new Date();
-    const twentyFourHoursAgo = subHours(now, 24);
 
-    // Fetch threads that were updated more than 24h ago, stay in IA mode, and haven't gotten follow-up
+    // 1. Fetch threads in IA mode 
     const { data: threads, error } = await supabase
       .from('threads')
-      .select('*')
-      .eq('status', 'ia')
-      .eq('follow_up_sent', false)
-      .lt('updated_at', twentyFourHoursAgo.toISOString());
+      .select('*, profiles(id)')
+      .eq('status', 'ia');
 
     if (error || !threads) return;
 
+    // To avoid redundant DB calls, we cache agent configs per user in this run
+    const agentCache: Record<string, any> = {};
+
     for (const thread of threads) {
       try {
-        // Double check: do they have a future appointment?
+        const userId = thread.user_id;
+        
+        // 2. Load Agent Config (with cache for this loop)
+        if (!agentCache[userId]) {
+          const { data: agent } = await supabase
+            .from('agents')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('status_ativo', true)
+            .maybeSingle();
+          agentCache[userId] = agent;
+        }
+
+        const agent = agentCache[userId];
+        if (!agent || !agent.follow_ups || !Array.isArray(agent.follow_ups) || agent.follow_ups.length === 0) continue;
+
+        // 3. Determine current level
+        const currentLevelIdx = thread.follow_up_level || 0;
+        if (currentLevelIdx >= agent.follow_ups.length) continue; // Already finished all levels
+
+        const levelConfig = agent.follow_ups[currentLevelIdx];
+        const delayMinutes = levelConfig.delayMinutes || 60;
+        
+        // 4. Time Check
+        const lastInteraction = new Date(thread.updated_at);
+        const diffMinutes = (now.getTime() - lastInteraction.getTime()) / (1000 * 60);
+
+        if (diffMinutes < delayMinutes) continue;
+
+        // 5. Check for confirmed future appointments (to skip follow-up)
         const cleanPhone = thread.id.split('_')[1];
         const { count } = await supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
-          .eq('user_id', thread.user_id)
+          .eq('user_id', userId)
           .eq('status', 'confirmed')
           .ilike('client_phone', `%${cleanPhone}%`)
           .gte('data', format(now, 'yyyy-MM-dd'));
 
         if (count && count > 0) {
-          // They already have an appointment, skip follow-up and mark as sent to avoid re-checking
-          await supabase.from('threads').update({ follow_up_sent: true }).eq('id', thread.id);
+          // Skip and mark as completed levels to avoid checking again
+          await supabase.from('threads').update({ follow_up_level: 99 }).eq('id', thread.id);
           continue;
         }
 
-        console.log(`[NotificationService] Sending follow-up for thread ${thread.id} to ${thread.id.split('_')[1]}`);
-        
-        const clientName = thread.lead_name || thread.contact_name || 'lá';
-        const msg = `Oi *${clientName}*, tudo bem? Notei que não chegamos a concluir seu agendamento. Ainda tem interesse em marcar um horário? Posso te ajudar com alguma dúvida?`;
-        
-        await whatsappService.sendMessage(thread.user_id, thread.id.split('_')[1], msg);
+        // 6. Generate Message
+        let messageToSend = '';
+        if (levelConfig.type === 'ai') {
+          console.log(`[NotificationService] 🤖 Generating AI follow-up for ${thread.id}`);
+          const { agentService } = await import('./agentService.js');
+          
+          // Get history for context
+          const history = await agentService['getHistoryFromSupabase'](thread.id, 10);
+          
+          const simulation = await agentService.processChatSimulation(userId, agent, [
+            ...history,
+            { role: 'user', content: `[SISTEMA: O cliente parou de responder. Envie um follow-up agora seguindo esta instrução: ${levelConfig.extraPrompt || 'Seja prestativo'}]` }
+          ]);
+          messageToSend = simulation.text;
+        } else {
+          const clientName = thread.lead_name || thread.contact_name || 'lá';
+          messageToSend = (levelConfig.message || '')
+            .replace('{nome}', clientName)
+            .replace('{client_name}', clientName);
+        }
 
-        // Mark as sent
-        await supabase.from('threads').update({ follow_up_sent: true }).eq('id', thread.id);
+        if (!messageToSend) continue;
+
+        // 7. Send & Update
+        console.log(`[NotificationService] 📤 Sending Follow-up Lvl ${currentLevelIdx + 1} to ${cleanPhone}`);
+        await whatsappService.sendMessage(userId, cleanPhone, messageToSend);
+
+        await supabase.from('threads').update({ 
+          follow_up_level: currentLevelIdx + 1,
+          last_message: messageToSend,
+          updated_at: new Date().toISOString() // We update this so the next level timer starts from now
+        }).eq('id', thread.id);
+
+        // Also persist as an outbound message
+        const { agentService } = await import('./agentService.js');
+        await agentService.persistMessage(
+          thread.id, 
+          userId, 
+          messageToSend, 
+          'outbound', 
+          `fup-${currentLevelIdx}-${Date.now()}`, 
+          thread.contact_name, 
+          thread.remote_jid, 
+          cleanPhone, 
+          agent.nome
+        );
+
       } catch (err) {
-        console.error(`[NotificationService] Error processing follow-up for thread ${thread.id}:`, err);
+        console.error(`[NotificationService] Error in follow-up thread ${thread.id}:`, err);
       }
     }
 
-    // Record success heartbeat
+    // Heartbeat
     await monitoringService.recordHeartbeat('follow_ups', 'healthy', {
-      total_checked: threads.length,
       timestamp: new Date().toISOString()
     });
   }

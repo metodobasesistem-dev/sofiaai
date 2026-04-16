@@ -175,7 +175,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     companyFAQ: '',
     companyLinks: '',
     knowledgeBase: [],
-    followUps: [{ delayMinutes: 60, extraPrompt: '' }],
+    followUps: [{ delayMinutes: 60, type: 'static', message: '', extraPrompt: '' }],
     reminders: [{ mode: 'Tempo antes', hoursBefore: 24, message: '', sendAfterTime: false }],
     appointmentDuration: 30
   });
@@ -281,7 +281,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       companyFAQ: '',
       companyLinks: '',
       knowledgeBase: [],
-      followUps: [{ delayMinutes: 60, extraPrompt: '' }],
+      followUps: [{ delayMinutes: 60, type: 'static', message: '', extraPrompt: '' }],
       reminders: [{ mode: 'Tempo antes', hoursBefore: 24, message: '', sendAfterTime: false }],
       appointmentDuration: 30,
       voice_mode: 'disabled',
@@ -1023,56 +1023,134 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                         <RotateCcw size={20} className="text-gray-400" />
                         <h2 className="text-lg font-bold">Configuração de Follow-up</h2>
                       </div>
-                      <p className="text-sm text-gray-500">Configure mensagens automáticas de follow-up para reengajar contatos que não responderam...</p>
+                      <p className="text-sm text-gray-500">Configure mensagens automáticas para reengajar contatos que pararam de responder.</p>
                       
                       <div className="space-y-4">
                         {formData.followUps?.map((followUp, index) => (
                           <div key={index} className="p-8 border border-gray-100 rounded-2xl bg-gray-50/30 space-y-6 relative group">
-                            <button 
-                              onClick={() => {
-                                const newFollowUps = [...(formData.followUps || [])];
-                                newFollowUps.splice(index, 1);
-                                setFormData({...formData, followUps: newFollowUps});
-                              }}
-                              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                            <div className="max-w-xs">
-                              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Tempo de espera antes do follow-up (minutos)</label>
-                              <input 
-                                type="number"
-                                value={followUp.delayMinutes}
-                                onChange={e => {
+                            <div className="absolute top-6 right-6 flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-white px-2 py-1 rounded-lg border border-gray-100">Nível {index + 1}</span>
+                              <button 
+                                onClick={() => {
                                   const newFollowUps = [...(formData.followUps || [])];
-                                  newFollowUps[index].delayMinutes = parseInt(e.target.value);
+                                  newFollowUps.splice(index, 1);
                                   setFormData({...formData, followUps: newFollowUps});
                                 }}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
-                              />
+                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 size={18} />
+                              </button>
                             </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Conteúdo extra do prompt (opcional)</label>
-                              <textarea 
-                                rows={3}
-                                value={followUp.extraPrompt}
-                                onChange={e => {
-                                  const newFollowUps = [...(formData.followUps || [])];
-                                  newFollowUps[index].extraPrompt = e.target.value;
-                                  setFormData({...formData, followUps: newFollowUps});
-                                }}
-                                placeholder="Instruções adicionais para o agente ao enviar o follow-up..."
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none"
-                              />
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tempo de espera</label>
+                                <div className="flex items-center gap-2">
+                                  <input 
+                                    type="number"
+                                    value={followUp.delayMinutes >= 1440 ? followUp.delayMinutes / 1440 : followUp.delayMinutes >= 60 ? followUp.delayMinutes / 60 : followUp.delayMinutes}
+                                    onChange={e => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      const newFollowUps = [...(formData.followUps || [])];
+                                      // Default to minutes for now, the unit selector will handle the multiplier
+                                      newFollowUps[index].delayMinutes = val; 
+                                      setFormData({...formData, followUps: newFollowUps});
+                                    }}
+                                    className="w-24 px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                                  />
+                                  <select 
+                                    value={followUp.delayMinutes % 1440 === 0 && followUp.delayMinutes > 0 ? 'days' : followUp.delayMinutes % 60 === 0 && followUp.delayMinutes > 0 ? 'hours' : 'minutes'}
+                                    onChange={e => {
+                                      const unit = e.target.value;
+                                      const newFollowUps = [...(formData.followUps || [])];
+                                      const currentVal = followUp.delayMinutes >= 1440 ? followUp.delayMinutes / 1440 : followUp.delayMinutes >= 60 ? followUp.delayMinutes / 60 : followUp.delayMinutes;
+                                      
+                                      if (unit === 'days') newFollowUps[index].delayMinutes = currentVal * 1440;
+                                      else if (unit === 'hours') newFollowUps[index].delayMinutes = currentVal * 60;
+                                      else newFollowUps[index].delayMinutes = currentVal;
+                                      
+                                      setFormData({...formData, followUps: newFollowUps});
+                                    }}
+                                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm bg-white"
+                                  >
+                                    <option value="minutes">Minutos</option>
+                                    <option value="hours">Horas</option>
+                                    <option value="days">Dias</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tipo de Resposta</label>
+                                <div className="grid grid-cols-2 gap-2 p-1 bg-white border border-gray-200 rounded-xl">
+                                  <button
+                                    onClick={() => {
+                                      const newFollowUps = [...(formData.followUps || [])];
+                                      newFollowUps[index].type = 'static';
+                                      setFormData({...formData, followUps: newFollowUps});
+                                    }}
+                                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${followUp.type === 'static' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                                  >
+                                    Texto Fixo
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const newFollowUps = [...(formData.followUps || [])];
+                                      newFollowUps[index].type = 'ai';
+                                      setFormData({...formData, followUps: newFollowUps});
+                                    }}
+                                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${followUp.type === 'ai' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                                  >
+                                    Gerado com IA
+                                  </button>
+                                </div>
+                              </div>
                             </div>
+
+                            {followUp.type === 'static' ? (
+                              <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Mensagem do Follow-up</label>
+                                <textarea 
+                                  rows={3}
+                                  value={followUp.message}
+                                  onChange={e => {
+                                    const newFollowUps = [...(formData.followUps || [])];
+                                    newFollowUps[index].message = e.target.value;
+                                    setFormData({...formData, followUps: newFollowUps});
+                                  }}
+                                  placeholder="Ex: Oi, notei que não concluímos seu agendamento. Ainda tem interesse?"
+                                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none"
+                                />
+                              </div>
+                            ) : (
+                              <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Instrução para a IA (Prompt)</label>
+                                  <span className="flex items-center gap-1 text-[9px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded uppercase tracking-tighter">
+                                    <Sparkles size={10} /> IA decidirá o que dizer
+                                  </span>
+                                </div>
+                                <textarea 
+                                  rows={3}
+                                  value={followUp.extraPrompt}
+                                  onChange={e => {
+                                    const newFollowUps = [...(formData.followUps || [])];
+                                    newFollowUps[index].extraPrompt = e.target.value;
+                                    setFormData({...formData, followUps: newFollowUps});
+                                  }}
+                                  placeholder="Ex: Seja descontraído e ofereça um cupom de 5% caso ele responda agora..."
+                                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none"
+                                />
+                              </div>
+                            )}
                           </div>
                         ))}
                         <button 
-                          onClick={() => setFormData({...formData, followUps: [...(formData.followUps || []), { delayMinutes: 60, extraPrompt: '' }]})}
-                          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                          onClick={() => setFormData({...formData, followUps: [...(formData.followUps || []), { delayMinutes: 60, type: 'static', message: '', extraPrompt: '' }]})}
+                          className="flex items-center gap-2 px-6 py-3 border-2 border-dashed border-gray-200 rounded-2xl text-sm font-bold text-gray-500 hover:border-teal-200 hover:text-teal-600 hover:bg-teal-50/30 transition-all w-full justify-center"
                         >
-                          <Plus size={16} />
-                          Adicionar follow-up
+                          <Plus size={18} />
+                          Adicionar Próximo Nível de Follow-up
                         </button>
                       </div>
                     </div>
