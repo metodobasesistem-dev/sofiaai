@@ -122,6 +122,8 @@ export class AgentService {
       ];
 
       let finalUsage = null;
+      let aiFinalText: string | null = null;
+      let toolCalledInThisTurn = false;
 
       while (true) {
         console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId})`);
