@@ -109,7 +109,8 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
               updateStatus('connecting', null);
             }
           } else if (newStatus === 'disconnected') {
-            // Only reset if we were fully connected (not connecting/waiting)
+            // Only reset if we were fully connected.
+            // If we are 'waiting' for QR, don't clear the QR just because of a status flicker to disconnected.
             if (statusRef.current === 'connected') {
               updateStatus('disconnected', null);
               stopPolling();

@@ -140,7 +140,10 @@ class WhatsAppService {
         .from('profiles')
         .update({
           whatsapp_status: dbStatus,
-          whatsapp_qr: (dbStatus === 'connected' || dbStatus === 'disconnected') ? null : data.qr,
+          // Only clear QR if fully connected or fully disconnected.
+          // If connecting and data.qr is provided, update it.
+          // If connecting and data.qr is MISSING, keep the old one (don't update it to null).
+          ...(data.qr ? { whatsapp_qr: data.qr } : (dbStatus === 'connected' || dbStatus === 'disconnected' ? { whatsapp_qr: null } : {})),
           whatsapp_instance_id: userId,
           updated_at: new Date().toISOString()
         })

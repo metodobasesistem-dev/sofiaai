@@ -964,22 +964,34 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                 {/* QR Code Placeholder */}
                 <div className="flex flex-col items-center justify-center">
                   <div className="w-56 h-56 border-2 border-dashed border-gray-200 rounded-3xl flex items-center justify-center bg-gray-50/50 relative group overflow-hidden">
-                    {whatsappStatus?.qr ? (
-                      <img 
-                        src={whatsappStatus.qr.startsWith('data:') ? whatsappStatus.qr : `data:image/png;base64,${whatsappStatus.qr}`} 
-                        alt="WhatsApp QR Code" 
-                        className="w-full h-full object-contain p-2"
-                        style={{ imageRendering: 'pixelated' }}
-                      />
-                    ) : (
-                      <QrCode size={120} className="text-gray-200 group-hover:text-emerald-500 transition-colors" />
-                    )}
-                    
-                    {isConnecting && (
-                      <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] flex items-center justify-center">
-                        <Loader2 size={40} className="animate-spin text-emerald-500" />
-                      </div>
-                    )}
+                    {/* QR Code and States */}
+                    <div className="w-full h-full flex items-center justify-center relative">
+                      {isConnecting && !whatsappStatus?.qr && (
+                        <div className="flex flex-col items-center gap-3">
+                          <Loader2 size={40} className="animate-spin text-emerald-500" />
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Iniciando...</p>
+                        </div>
+                      )}
+
+                      {!isConnecting && !whatsappStatus?.qr && (
+                        <QrCode size={120} className="text-gray-200 group-hover:text-emerald-500 transition-colors" />
+                      )}
+
+                      {whatsappStatus?.qr && (
+                        <img 
+                          src={whatsappStatus.qr.startsWith('data:') ? whatsappStatus.qr : `data:image/png;base64,${whatsappStatus.qr}`} 
+                          alt="WhatsApp QR Code" 
+                          className={`w-full h-full object-contain p-2 ${isConnecting ? 'opacity-50' : 'opacity-100'}`}
+                          style={{ imageRendering: 'pixelated' }}
+                        />
+                      )}
+
+                      {isConnecting && whatsappStatus?.qr && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 size={30} className="animate-spin text-emerald-500/50" />
+                        </div>
+                      )}
+                    </div>
 
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
