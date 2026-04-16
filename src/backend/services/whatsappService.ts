@@ -589,7 +589,7 @@ class WhatsAppService {
     }
   }
 
-  async getSessionStatus(userId: string): Promise<string> {
+  async getSessionStatus(userId: string): Promise<{ status: string; qr?: string }> {
     const session = this.sessions.get(userId);
 
     // AÇÃO 2: Se não existe em memória, tenta restaurar do Redis se houver backup
@@ -597,11 +597,12 @@ class WhatsAppService {
       // Se já estamos tentando inicializar esta sessão, não dispare outra restauração
       if (this.initializing.has(userId)) {
         console.log(`[WhatsAppService] Session ${userId} is already being initialized/restored. Returning 'connecting'.`);
-        return 'connecting';
+        return { status: 'connecting' };
       }
       
       console.log(`[WhatsAppService] No memory session for ${userId}. Checking Redis for restoration...`);
-      return this.restoreSessionIfExists(userId);
+      const status = await this.restoreSessionIfExists(userId);
+      return { status };
     }
 
     try {
@@ -610,30 +611,30 @@ class WhatsAppService {
 
       if (state === 'CONNECTED') {
         await this.updateProfileStatus(userId, { status: 'connected' });
-        return 'connected';
+        return { status: 'connected' };
       }
 
       if (state === 'OPENING' || state === 'PAIRING' || state === null) {
-        return 'connecting';
+        return { status: 'connecting', qr: session.qr };
       }
 
       // Se estiver em estado de conflito ou desconectado, limpa e retorna desconectado
       if (state === 'CONFLICT' || state === 'DISCONNECTED') {
         console.warn(`[WhatsAppService] Session ${userId} is in state ${state}. Marking as disconnected.`);
         await this.updateProfileStatus(userId, { status: 'disconnected' });
-        return 'disconnected';
+        return { status: 'disconnected' };
       }
 
       // Se estiver UNLAUNCHED ou NULL mas o objeto de sessão existe, significa que ainda está carregando o navegador
       if (state === 'UNLAUNCHED' || state === null) {
         console.log(`[WhatsAppService] Session ${userId} state is ${state} (still warming up). Returning 'connecting'.`);
-        return 'connecting';
+        return { status: 'connecting', qr: session.qr };
       }
 
-      return 'disconnected';
+      return { status: 'disconnected' };
     } catch (e) {
-      if (session.qr) return 'connecting';
-      return 'disconnected';
+      if (session.qr) return { status: 'connecting', qr: session.qr };
+      return { status: 'disconnected' };
     }
   }
 
@@ -682,7 +683,7 @@ class WhatsAppService {
       try {
         await store.delete({ session: clientId });
       } catch (e) {
-        console.warn('[WhatsAppService] Could not delete session from Supabase:', e);
+        console.warn(`[WhatsAppService] Could not delete session ${userId} from storage:`, e);
       }
 
       // Clean up local temp folder used by RemoteAuth

@@ -239,7 +239,13 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
     }
     try {
       setIsConnecting(true);
-      await connectWhatsApp();
+      const result = await connectWhatsApp();
+      if (result.success && result.qr) {
+        setWhatsappStatus(prev => ({
+          status: (result.status as any) || 'waiting',
+          qr: result.qr
+        }));
+      }
       setIsWhatsAppModalOpen(true);
     } catch (error: any) {
       console.error('Failed to connect WhatsApp:', error);
@@ -253,7 +259,13 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
   const handleRefreshQr = async () => {
     try {
       setIsConnecting(true);
-      await connectWhatsApp();
+      const result = await connectWhatsApp();
+      if (result.success && result.qr) {
+        setWhatsappStatus(prev => ({
+          status: (result.status as any) || 'waiting',
+          qr: result.qr
+        }));
+      }
     } catch (error: any) {
       console.error('Failed to refresh QR:', error);
       const errorMsg = error.message || 'Erro ao atualizar QR Code';
@@ -268,10 +280,27 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
       setIsConnecting(true);
       const { disconnectWhatsApp } = await import('../services/whatsappService');
       await disconnectWhatsApp();
+      setWhatsappStatus({ status: 'disconnected' });
       toast.success('WhatsApp desconectado com sucesso!');
     } catch (error: any) {
       console.error('Failed to disconnect WhatsApp:', error);
       toast.error(error.message || 'Erro ao desconectar WhatsApp');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleReset = async () => {
+    try {
+      setIsConnecting(true);
+      const { disconnectWhatsApp } = await import('../services/whatsappService');
+      await disconnectWhatsApp();
+      setWhatsappStatus({ status: 'disconnected' });
+      toast.success('Conexão resetada com sucesso.');
+      setIsWhatsAppModalOpen(false);
+    } catch (error: any) {
+      console.error('Failed to reset WhatsApp:', error);
+      toast.error('Erro ao resetar conexão.');
     } finally {
       setIsConnecting(false);
     }
@@ -340,17 +369,29 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={handleConnect}
-                disabled={isConnecting || whatsappStatus?.status === 'connecting'}
-                className={`whitespace-nowrap px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 
-                  ${whatsappStatus?.status === 'connecting' 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200' 
-                    : 'bg-green-600 hover:bg-green-700 text-white shadow-green-200'}`}
-              >
-                { (isConnecting || whatsappStatus?.status === 'connecting') ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
-                {whatsappStatus?.status === 'connecting' ? 'Aguarde...' : 'Conectar WhatsApp'}
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button 
+                  onClick={handleConnect}
+                  disabled={isConnecting || whatsappStatus?.status === 'connecting'}
+                  className={`whitespace-nowrap px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 
+                    ${whatsappStatus?.status === 'connecting' 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 cursor-not-allowed' 
+                      : 'bg-green-600 hover:bg-green-700 text-white shadow-green-200'}`}
+                >
+                  { (isConnecting || whatsappStatus?.status === 'connecting') ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
+                  {whatsappStatus?.status === 'connecting' ? 'Aguarde...' : 'Conectar WhatsApp'}
+                </button>
+
+                {whatsappStatus?.status === 'connecting' && (
+                  <button 
+                    onClick={handleReset}
+                    className="whitespace-nowrap px-6 py-3 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                  >
+                    <RefreshCw size={18} />
+                    Resetar
+                  </button>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -927,7 +968,8 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                       <img 
                         src={whatsappStatus.qr.startsWith('data:') ? whatsappStatus.qr : `data:image/png;base64,${whatsappStatus.qr}`} 
                         alt="WhatsApp QR Code" 
-                        className="w-full h-full object-contain p-4"
+                        className="w-full h-full object-contain p-2"
+                        style={{ imageRendering: 'pixelated' }}
                       />
                     ) : (
                       <QrCode size={120} className="text-gray-200 group-hover:text-emerald-500 transition-colors" />
@@ -953,7 +995,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               </div>
 
               {/* Footer */}
-              <div className="p-6 bg-gray-50 flex flex-col items-center justify-center gap-2 border-t border-gray-100">
+              <div className="p-6 bg-gray-50 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-100">
                 <div className="flex items-center gap-3 text-gray-400 text-sm font-medium">
                   {whatsappStatus?.status === 'connected' ? (
                     <div className="flex items-center gap-2 text-emerald-600">
@@ -963,10 +1005,20 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                   ) : (
                     <>
                       <Loader2 size={18} className="animate-spin text-emerald-500" />
-                      Aguardando leitura do QR Code…
+                      {isConnecting ? 'Processando...' : 'Aguardando leitura do QR Code…'}
                     </>
                   )}
                 </div>
+
+                {whatsappStatus?.status !== 'connected' && (
+                  <button 
+                    onClick={handleReset}
+                    className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors flex items-center gap-2"
+                  >
+                    <RefreshCw size={14} />
+                    Resetar conexão
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>

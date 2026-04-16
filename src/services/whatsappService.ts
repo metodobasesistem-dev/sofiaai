@@ -79,7 +79,7 @@ export const listenToWhatsAppSession = (userId: string, callback: (data: WhatsAp
 /**
  * Get the current WhatsApp connection status via API.
  */
-export const getWhatsAppStatus = async (): Promise<{ status: string }> => {
+export const getWhatsAppStatus = async (): Promise<WhatsAppStatusResponse> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 

@@ -48,8 +48,8 @@ class SessionController {
   async getStatus(req: Request, res: Response) {
     let { userId } = req.params;
     try {
-      const status = await whatsappService.getSessionStatus(userId);
-      res.json({ status });
+      const data = await whatsappService.getSessionStatus(userId);
+      res.json(data);
     } catch (error: any) {
       console.error('Error getting status:', error);
       res.status(500).json({ error: error.message || 'Failed to get status' });
@@ -78,9 +78,9 @@ class SessionController {
     }
     try {
       // Only reads status — never creates or destroys anything
-      const status = await whatsappService.getSessionStatus(userId);
-      console.log(`[SessionController] Restore check for ${userId}: ${status}`);
-      res.json({ status });
+      const data = await whatsappService.getSessionStatus(userId);
+      console.log(`[SessionController] Restore check for ${userId}: ${data.status}`);
+      res.json(data);
     } catch (error: any) {
       console.error('Error restoring session:', error);
       res.status(500).json({ error: error.message || 'Failed to restore session' });
