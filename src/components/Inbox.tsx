@@ -300,70 +300,85 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   useEffect(() => {
     let channel: any;
 
-    const setupThreads = async () => {
-      const timeoutId = setTimeout(() => {
-        setLoadingThreads(false);
-        console.warn('[Inbox] Safety timeout: 5s reached');
-      }, 5000);
-
-      const userId = user?.id;
-      if (!userId) {
-        clearTimeout(timeoutId);
-        return;
-      }
-      
-      // Initial Fetch: Threads + Contacts using the fixed UUID
-      const { data: contactsData } = await supabase.from('contacts').select('telefone, status_funil').eq('user_id', userId);
-      const { data, error } = await supabase.from('threads').select('*').eq('user_id', userId);
-
-      if (data) {
-        const formatted = data.map(d => {
-          const phoneNumber = d.remote_jid.split('@')[0];
-          const contact = contactsData?.find(c => {
-            const contactPhone = c.telefone?.replace(/\D/g, '');
-            if (!contactPhone) return false;
-            
-            // Clean numbers (remove country code 55)
-            const p1 = phoneNumber.replace(/^55/, '');
-            const p2 = contactPhone.replace(/^55/, '');
-            
-            // Exact match
-            if (p1 === p2) return true;
-            
-            // Match last 8 digits (core number in Brazil)
-            if (p1.length >= 8 && p2.length >= 8) {
-              return p1.slice(-8) === p2.slice(-8);
-            }
-            
-            return false;
-          });
-          
-          return {
-            id: d.id,
-            name: d.contact_name || 'Lead WhatsApp',
-            lastMessage: d.last_message || '',
-            time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-            status: d.status as any,
-            unreadCount: d.unread_count || 0,
-            remoteJid: d.remote_jid,
-            updatedAt: d.updated_at,
-            agent_name: d.agent_name || 'Robô IA',
-            funilStatus: contact?.status_funil || 'Lead'
-          };
-        });
-        const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        setThreads(sorted);
-        setLoadingThreads(false);
-
-        // Auto-select jid if present in URL
-        const params = new URLSearchParams(window.location.search);
-        const jid = params.get('jid');
-        if (jid) {
-          const match = sorted.find(t => t.remoteJid.includes(jid));
-          if (match) setSelectedThreadId(match.id);
+      try {
+        const userId = user?.id;
+        if (!userId) {
+          clearTimeout(timeoutId);
+          setLoadingThreads(false);
+          return;
         }
-      } else {
+        
+        console.log('[Inbox] Fetching threads for:', userId);
+        
+        // Initial Fetch: Threads + Contacts using the fixed UUID
+        const { data: contactsData, error: contactsError } = await supabase
+          .from('contacts')
+          .select('telefone, status_funil')
+          .eq('user_id', userId);
+
+        const { data, error } = await supabase
+          .from('threads')
+          .select('*')
+          .eq('user_id', userId);
+
+        if (error) throw error;
+        if (contactsError) console.warn('[Inbox] Contacts fetch warning:', contactsError);
+
+        if (data) {
+          const formatted = data.map(d => {
+            // Defensive: ensure remote_jid exists before splitting
+            const jid = d.remote_jid || '';
+            const phoneNumber = jid.includes('@') ? jid.split('@')[0] : jid;
+            
+            const contact = contactsData?.find(c => {
+              const contactPhone = c.telefone?.replace(/\D/g, '');
+              if (!contactPhone) return false;
+              
+              // Clean numbers (remove country code 55)
+              const p1 = phoneNumber.replace(/^55/, '');
+              const p2 = contactPhone.replace(/^55/, '');
+              
+              // Exact match
+              if (p1 === p2) return true;
+              
+              // Match last 8 digits (core number in Brazil)
+              if (p1.length >= 8 && p2.length >= 8) {
+                return p1.slice(-8) === p2.slice(-8);
+              }
+              
+              return false;
+            });
+            
+            return {
+              id: d.id,
+              name: d.contact_name || 'Lead WhatsApp',
+              lastMessage: d.last_message || '',
+              time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+              status: (d.status as any) || 'ia',
+              unreadCount: d.unread_count || 0,
+              remoteJid: d.remote_jid || '',
+              updatedAt: d.updated_at || new Date().toISOString(),
+              agent_name: d.agent_name || 'Robô IA',
+              funilStatus: contact?.status_funil || 'Lead'
+            };
+          });
+          const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+          setThreads(sorted);
+          
+          // Auto-select jid if present in URL
+          const params = new URLSearchParams(window.location.search);
+          const jidFromUrl = params.get('jid');
+          if (jidFromUrl) {
+            const match = sorted.find(t => t.remoteJid.includes(jidFromUrl));
+            if (match) setSelectedThreadId(match.id);
+          }
+        }
+      } catch (err) {
+        console.error('[Inbox] Error setting up threads:', err);
+        toast.error('Ocorreu uma instabilidade ao carregar as conversas.');
+      } finally {
         setLoadingThreads(false);
+        clearTimeout(timeoutId);
       }
 
       // Realtime listener — apenas re-busca dados, NÃO registra novo canal
@@ -443,56 +458,62 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
     let channel: any;
 
-    const setupMessages = async () => {
-      setLoadingMessages(true);
+      try {
+        setLoadingMessages(true);
 
-      // Initial Fetch
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('thread_id', selectedThreadId)
-        .order('created_at', { ascending: true });
+        // Initial Fetch
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('thread_id', selectedThreadId)
+          .order('created_at', { ascending: true });
 
-      if (data) {
-        const formatted = data.map(d => ({
-          id: d.id,
-          text: d.text || '',
-          sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
-          time: new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: d.created_at,
-          audio_url: d.audio_url
-        }));
-        setMessages(formatted as any);
+        if (error) throw error;
+
+        if (data) {
+          const formatted = data.map(d => ({
+            id: d.id,
+            text: d.text || '',
+            sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
+            time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+            timestamp: d.created_at,
+            audio_url: d.audio_url
+          }));
+          setMessages(formatted as any);
+        }
+
+        // Realtime listener
+        channel = supabase
+          .channel(`messages-${selectedThreadId}`)
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
+            (payload) => {
+              const d = payload.new;
+              const newMessage = {
+                id: d.id,
+                text: d.text || '',
+                sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
+                time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                timestamp: d.created_at,
+                audio_url: d.audio_url
+              };
+              setMessages(prev => [...prev, newMessage as any]);
+            }
+          )
+          .subscribe();
+
+        // Reset unread count
+        await supabase
+          .from('threads')
+          .update({ unread_count: 0 })
+          .eq('id', selectedThreadId);
+
+      } catch (err) {
+        console.error('[Inbox] Error setting up messages:', err);
+      } finally {
+        setLoadingMessages(false);
       }
-      setLoadingMessages(false);
-
-      // Realtime listener
-      channel = supabase
-        .channel(`messages-${selectedThreadId}`)
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
-          (payload) => {
-            const d = payload.new;
-            const newMessage = {
-              id: d.id,
-              text: d.text || '',
-              sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
-              time: new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-              timestamp: d.created_at,
-              audio_url: d.audio_url
-            };
-            setMessages(prev => [...prev, newMessage as any]);
-          }
-        )
-        .subscribe();
-
-      // Reset unread count
-      await supabase
-        .from('threads')
-        .update({ unread_count: 0 })
-        .eq('id', selectedThreadId);
-    };
 
     setupMessages();
 
