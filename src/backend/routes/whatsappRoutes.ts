@@ -23,4 +23,22 @@ router.post('/send-voice', upload.single('audio'), async (req, res) => {
   }
 });
 
+router.post('/send-media', upload.single('media'), async (req, res) => {
+  const { userId, remoteJid } = req.body;
+  const mediaFile = req.file;
+
+  if (!userId || !remoteJid || !mediaFile) {
+    return res.status(400).json({ error: 'Faltam parâmetros: userId, remoteJid e media são necessários.' });
+  }
+
+  try {
+    console.log(`[WhatsappRoutes] 📎 Recebido pedido de envio de mídia para ${remoteJid}`);
+    await whatsappService.sendMedia(userId, remoteJid, mediaFile.buffer, mediaFile.mimetype, mediaFile.originalname);
+    res.json({ success: true, message: 'Mídia enviada com sucesso!' });
+  } catch (err: any) {
+    console.error('[WhatsappRoutes] Erro ao enviar mídia:', err);
+    res.status(500).json({ error: err.message || 'Erro interno ao enviar mídia.' });
+  }
+});
+
 export default router;

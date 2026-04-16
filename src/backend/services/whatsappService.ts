@@ -743,6 +743,34 @@ class WhatsAppService {
     return { success: true, messageId: result.id.id };
   }
 
+  async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string) {
+    const session = this.sessions.get(userId);
+    if (!session) throw new Error('WhatsApp session not found or not connected');
+    
+    const media = new this.MessageMedia(mimetype, buffer.toString('base64'), filename);
+    const result = await session.client.sendMessage(to, media);
+
+    // PERSISTENCE: Save manual media to CRM
+    try {
+      const threadId = `${userId}_${to.split('@')[0].replace(/\D/g, '')}`;
+      await agentService.persistMessage(
+        threadId,
+        userId,
+        `[Documento/Mídia]: ${filename}`,
+        'outbound',
+        result.id.id,
+        'Cliente',
+        to,
+        to.split('@')[0].replace(/\D/g, ''),
+        'Atendente'
+      );
+    } catch (err) {
+      console.error('[WhatsAppService] Fail to persist manual media:', err);
+    }
+
+    return { success: true, messageId: result.id.id };
+  }
+
   async initializeAllSessions() {
     // DESATIVADO: A inicialização automática está causando o bug de "Já Conectado"
     // O usuário deve clicar manualmente em "Conectar" ou "Gerar QR Code".

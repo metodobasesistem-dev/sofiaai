@@ -274,6 +274,7 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle JID from URL
   useEffect(() => {
@@ -560,6 +561,43 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedThreadId || !activeThread) return;
+    
+    const userId = user?.id;
+    if (!userId) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('media', file);
+      formData.append('userId', userId);
+      formData.append('remoteJid', activeThread.remoteJid);
+
+      const response = await fetch('/api/whatsapp/send-media', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Falha ao enviar arquivo');
+      
+      toast.success('Arquivo enviado com sucesso!');
+      
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      // Alterar para modo humano ao interagir
+      await supabase
+        .from('threads')
+        .update({ status: 'human', updated_at: new Date().toISOString() })
+        .eq('id', selectedThreadId);
+
+    } catch (err) {
+      console.error('Error sending file:', err);
+      toast.error('Erro ao enviar arquivo');
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedThreadId || !activeThread) return;
 
@@ -786,8 +824,18 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
             {/* Typing Bar Premium */}
             <div className="p-6 border-t border-slate-100 bg-white shrink-0">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                onChange={handleFileUpload}
+              />
               <div className="flex items-center gap-4 mb-3">
-                <button type="button" className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all shadow-sm border border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all shadow-sm border border-slate-100"
+                >
                   <Paperclip size={20} />
                 </button>
                 <div className="flex-1" />
