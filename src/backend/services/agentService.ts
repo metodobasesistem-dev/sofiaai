@@ -466,62 +466,106 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
 
   private async handleCheckAvailability(userId: string, targetDate: string, agentData: any, professionals: any[], profName?: string) {
     try {
-      console.log(`[AgentService] 🔍 Checking availability for ${targetDate} (Professional: ${profName || 'Any'})`);
+      console.log(`[AgentService] 🔍 Checking REAL availability for ${targetDate} (Professional: ${profName || 'Any'})`);
       
-      // 1. Get all standard slots (could be from agentData in future)
-      let allSlots = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
-      
-      // 2. Resolve Professional and their Google Calendar
-      let busyTimesFromGoogle: string[] = [];
       const selectedProf = profName 
         ? professionals.find(p => p.name.toLowerCase().includes(profName.toLowerCase()))
-        : null;
+        : (professionals.length > 0 ? professionals[0] : null);
 
-      if (selectedProf?.google_calendar_id) {
-        console.log(`[AgentService] 📅 Fetching busy slots from Google Calendar: ${selectedProf.google_calendar_id}`);
-        const googleBusy = await googleCalendarService.getBusySlots(userId, selectedProf.google_calendar_id, targetDate);
+      if (!selectedProf) {
+        throw new Error('Nenhum profissional disponível para consulta.');
+      }
+
+      // 1. Fetch Availability Config for this prof
+      const { data: availData } = await supabase
+        .from('availability')
+        .select('config')
+        .eq('user_id', userId)
+        .eq('professional_id', selectedProf.id)
+        .maybeSingle();
+
+      const config = availData?.config || { weekly: [], specificDates: [] };
+      const duration = agentData.appointment_duration || 30;
+
+      // 2. Determine base slots for this specific date
+      const specific = config.specificDates?.find((sd: any) => sd.date === targetDate);
+      let baseSlotsConfigs = [];
+
+      if (specific) {
+        console.log(`[AgentService] 📌 Exception date found for ${targetDate}`);
+        baseSlotsConfigs = specific.slots || [];
+      } else {
+        const daysOfWeek = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const dayName = daysOfWeek[new Date(`${targetDate}T12:00:00`).getDay()];
+        const weekly = config.weekly?.find((w: any) => w.day === dayName);
         
-        // Convert ISO busy sessions to HH:mm slots that are "blocked"
+        if (weekly?.active) {
+          baseSlotsConfigs = weekly.slots || [];
+        } else {
+          return { slots: [], date: targetDate, professional: selectedProf.name, message: 'Profissional não atende neste dia.' };
+        }
+      }
+
+      // 3. Generate time slots based on duration
+      let allSlots: string[] = [];
+      baseSlotsConfigs.forEach((range: any) => {
+        let current = this.timeToMinutes(range.start);
+        const end = this.timeToMinutes(range.end);
+        while (current + duration <= end) {
+          allSlots.push(this.minutesToTime(current));
+          current += duration;
+        }
+      });
+
+      if (allSlots.length === 0) {
+        return { slots: [], date: targetDate, professional: selectedProf.name, message: 'Sem horários disponíveis.' };
+      }
+
+      // 4. Google Calendar Busy
+      let busyTimesFromGoogle: string[] = [];
+      if (selectedProf.google_calendar_id) {
+        const googleBusy = await googleCalendarService.getBusySlots(userId, selectedProf.google_calendar_id, targetDate);
         googleBusy.forEach((b: any) => {
-          const start = new Date(b.start);
-          const end = new Date(b.end);
-          
+          const start = new Date(b.start).getTime();
+          const end = new Date(b.end).getTime();
           allSlots.forEach(slot => {
-            const slotDate = new Date(`${targetDate}T${slot}:00`);
-            // If slot is within a busy interval, it's busy
-            if (slotDate >= start && slotDate < end) {
-              busyTimesFromGoogle.push(slot);
-            }
+            const slotTime = new Date(`${targetDate}T${slot}:00`).getTime();
+            if (slotTime >= start && slotTime < end) busyTimesFromGoogle.push(slot);
           });
         });
       }
 
-      // 3. Fetch existing appointments for this user and date from Local DB
+      // 5. DB Appointments
       const { data: existingAppts } = await supabase
         .from('appointments')
-        .select('time, professional_name')
+        .select('time')
         .eq('user_id', userId)
+        .eq('professional_id', selectedProf.id)
         .eq('data', targetDate)
         .neq('status', 'cancelled');
 
-      // 4. Filter out busy slots
-      const busyTimesFromDB = (existingAppts || [])
-        .filter(a => !profName || a.professional_name === profName)
-        .map(a => a.time.substring(0, 5));
+      const busyTimesFromDB = (existingAppts || []).map(a => a.time.substring(0, 5));
 
+      // 6. Final Filter
       const totalBusy = Array.from(new Set([...busyTimesFromGoogle, ...busyTimesFromDB]));
       const availableSlots = allSlots.filter(slot => !totalBusy.includes(slot));
 
-      return { 
-        slots: availableSlots, 
-        date: targetDate,
-        professional: selectedProf?.name || null,
-        total_available: availableSlots.length
-      }; 
-    } catch (e) {
+      return { slots: availableSlots, date: targetDate, professional: selectedProf.name, total_available: availableSlots.length }; 
+    } catch (e: any) {
       console.error('[AgentService] Check availability error:', e);
-      return { slots: ['09:00', '14:00', '16:00'], date: targetDate, is_fallback: true };
+      return { slots: [], date: targetDate, error: e.message };
     }
+  }
+
+  private timeToMinutes(time: string): number {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  private minutesToTime(minutes: number): string {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   private async handleBookAppointment(userId: string, threadId: string, contactName: string, args: any, agentData: any, professionals: any[]) {
