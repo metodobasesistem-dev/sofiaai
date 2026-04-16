@@ -590,7 +590,7 @@ class WhatsAppService {
     const session = this.sessions.get(userId);
     if (!session) throw new Error('WhatsApp session not found or not connected');
     
-    const media = new this.MessageMedia('audio/mp3', audioBuffer.toString('base64'));
+    const media = new this.MessageMedia('audio/ogg; codecs=opus', audioBuffer.toString('base64'));
     const result = await session.client.sendMessage(to, media, { sendAudioAsVoice: true });
 
     // PERSISTENCE: Save manual audio to CRM

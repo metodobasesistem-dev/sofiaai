@@ -32,7 +32,7 @@ export class AudioService {
           model: 'tts-1',
           input: text,
           voice: voice,
-          response_format: 'mp3' // whatsapp-web.js handles mp3 well
+          response_format: 'opus' // Native WhatsApp format (OGG/Opus)
         },
         {
           headers: {
