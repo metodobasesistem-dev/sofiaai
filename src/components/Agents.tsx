@@ -186,24 +186,33 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isThinking, setIsThinking] = useState(false);
 
   const fetchAgents = async () => {
+    const timeoutId = setTimeout(() => {
+      setIsLoading(false);
+      console.warn('[Agents] Safety timeout: 5s reached');
+    }, 5000);
+
     try {
-      // Serve cache immediately — user sees their agents instantly
+      // Serve cache immediately if possible
       const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
       const email = session?.user?.email;
       if (email) {
         const cached = getCachedAgents(email);
-        if (cached.length > 0) {
+        if (cached && cached.length > 0) {
           setAgents(cached);
-          setIsLoading(false); // Hide spinner right away — cache shows while we refresh
+          setIsLoading(false); 
         }
       }
 
       const data = await listAgents();
-      setAgents(data);
+      if (data && data.length > 0) {
+        setAgents(data);
+      }
     } catch (error: any) {
       console.error('[Agents] fetchAgents error:', error.message);
+      toast.error('Instabilidade ao carregar agentes. Verifique sua conexão.');
     } finally {
       setIsLoading(false);
+      clearTimeout(timeoutId);
     }
   };
 

@@ -199,26 +199,36 @@ export const listAgents = async (): Promise<Agent[]> => {
   const token = session?.access_token;
 
   if (!user || !token) {
-    console.warn('[listAgents] Sem sessão disponível');
     return [];
   }
 
-  // Serve cache immediately while we fetch
   const cachedResult = user.email ? getCachedAgents(user.email) : [];
 
   try {
-    const res = await fetch('/api/v2/agents', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const result = await res.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for the fetch itself
 
+    const res = await fetch('/api/v2/agents', {
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[listAgents] API error response:', errorText);
+      return cachedResult;
+    }
+
+    const result = await res.json();
     if (!result.success) throw new Error(result.error);
 
     const agents = mapAgents(result.data || []);
     if (user.email) setCachedAgents(user.email, agents);
     return agents;
   } catch (err: any) {
-    console.error('[listAgents] API error:', err.message);
+    console.warn('[listAgents] Fetch error or timeout, using cache:', err.message);
     return cachedResult;
   }
 };
