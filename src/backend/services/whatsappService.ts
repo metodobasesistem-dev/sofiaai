@@ -24,6 +24,7 @@ class WhatsAppService {
   private sessions: Map<string, Session> = new Map();
   private initializing: Map<string, Promise<string>> = new Map();
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
   private Client: any = null;
   private LocalAuth: any = null;
   private RemoteAuth: any = null;
@@ -39,9 +40,89 @@ class WhatsAppService {
       this.RemoteAuth = pkg.default?.RemoteAuth || pkg.RemoteAuth;
       this.MessageMedia = pkg.default?.MessageMedia || pkg.MessageMedia;
       console.log('[WhatsAppService] whatsapp-web.js loaded successfully');
+
+      // Iniciar limpeza de áudios (a cada 24h)
+      this.startAudioCleanup();
     } catch (e) {
       console.error('[WhatsAppService] Failed to load whatsapp-web.js:', e);
       throw new Error('Failed to load WhatsApp library. Please check server logs.');
+    }
+  }
+
+  private async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
+    try {
+      const path = `${userId}/${Date.now()}_${filename}`;
+      const { data, error } = await supabase.storage
+        .from('chat-audios')
+        .upload(path, buffer, {
+          contentType: 'audio/ogg',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-audios')
+        .getPublicUrl(path);
+
+      return publicUrl;
+    } catch (err) {
+      console.error('[WhatsAppService] Error uploading to storage:', err);
+      return null;
+    }
+  }
+
+  private startAudioCleanup() {
+    if (this.cleanupInterval) return;
+    
+    // Rodar imediatamente na inicialização
+    this.cleanupAudios();
+    
+    // Rodar a cada 24 horas
+    this.cleanupInterval = setInterval(() => this.cleanupAudios(), 24 * 60 * 60 * 1000);
+  }
+
+  private async cleanupAudios() {
+    console.log('[WhatsAppService] 🧹 Iniciando limpeza de áudios antigos (7 dias)...');
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      // 1. Buscar mensagens com áudio antigas
+      const { data: oldMessages } = await supabase
+        .from('messages')
+        .select('id, audio_url')
+        .not('audio_url', 'is', null)
+        .lt('created_at', sevenDaysAgo.toISOString());
+
+      if (!oldMessages || oldMessages.length === 0) {
+        console.log('[WhatsAppService] ✅ Nenhum áudio antigo para remover.');
+        return;
+      }
+
+      console.log(`[WhatsAppService] Removendo ${oldMessages.length} áudios...`);
+
+      for (const msg of oldMessages) {
+        if (msg.audio_url) {
+          try {
+            // Extrair o path do Storage a partir da URL pública
+            // Ex: https://.../chat-audios/user_id/timestamp_name.ogg -> user_id/timestamp_name.ogg
+            const parts = msg.audio_url.split('/chat-audios/');
+            if (parts.length > 1) {
+              const storagePath = parts[1];
+              await supabase.storage.from('chat-audios').remove([storagePath]);
+            }
+            
+            // Limpar URL no banco para não tentar baixar novamente
+            await supabase.from('messages').update({ audio_url: null }).eq('id', msg.id);
+          } catch (e) {
+            console.error(`[WhatsAppService] Erro ao limpar áudio ${msg.id}:`, e);
+          }
+        }
+      }
+      console.log('[WhatsAppService] ✅ Limpeza concluída.');
+    } catch (err) {
+      console.error('[WhatsAppService] Falha na limpeza de áudios:', err);
     }
   }
 
@@ -290,7 +371,30 @@ class WhatsAppService {
                 const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
                 if (transcription) {
                   console.log(`[WhatsAppService] Transcription for ${msg.from}: ${transcription}`);
-                  // [FIX] Removed forced msg.reply with transcription to prevent leak when agent is disabled
+                  
+                  // UPLOAD AUDIO TO STORAGE
+                  const audioUrl = await this.uploadToStorage(userId, buffer, `inbound_${Date.now()}.ogg`);
+                  
+                  // PERSIST WITH AUDIO URL
+                  const contactName = contact.pushname || contact.name || msg.from;
+                  const cleanNumber = msg.from.split('@')[0].replace(/\D/g, '');
+                  const realPhone = (contact.number || contact.id.user || msg.from).split('@')[0].replace(/\D/g, '');
+                  const threadId = `${userId}_${cleanNumber}`;
+
+                  await agentService.persistMessage(
+                    threadId, 
+                    userId, 
+                    `[Áudio]: ${transcription}`, 
+                    'inbound', 
+                    msg.id.id || `in-${Date.now()}`, 
+                    contactName, 
+                    msg.from, 
+                    realPhone,
+                    undefined,
+                    undefined,
+                    audioUrl || undefined
+                  );
+
                   this.triggerAIResponse(userId, msg, contact, transcription, true);
                   return;
                 } else {
@@ -427,6 +531,26 @@ class WhatsAppService {
           // Send Voice if returned
           if (audioBuffer) {
             console.log(`[WhatsAppService] 🎙️ DETECTED AUDIO BUFFER! Sending voice response to ${msg.from}...`);
+            
+            // Upload AI Voice to Storage
+            const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
+            
+            // Re-persist outbound message with audioUrl
+            const aiMsgId = `ai-${Date.now()}`;
+            await agentService.persistMessage(
+              `${userId}_${realPhone}`,
+              userId,
+              aiResponseData.text,
+              'outbound',
+              aiMsgId,
+              contactName,
+              msg.from,
+              realPhone,
+              undefined,
+              undefined,
+              aiAudioUrl || undefined
+            );
+
             await this.sendVoice(userId, msg.from, audioBuffer);
           } else {
             console.log(`[WhatsAppService] No audio buffer returned from AgentService. VoiceMode might be disabled or generation failed.`);
@@ -593,6 +717,9 @@ class WhatsAppService {
     const media = new this.MessageMedia('audio/ogg; codecs=opus', audioBuffer.toString('base64'));
     const result = await session.client.sendMessage(to, media, { sendAudioAsVoice: true });
 
+    // Upload manual audio to Storage
+    const manualAudioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
+
     // PERSISTENCE: Save manual audio to CRM
     try {
       const threadId = `${userId}_${to.split('@')[0].replace(/\D/g, '')}`;
@@ -605,7 +732,9 @@ class WhatsAppService {
         'Cliente',
         to,
         to.split('@')[0].replace(/\D/g, ''),
-        'Atendente'
+        'Atendente',
+        undefined,
+        manualAudioUrl || undefined
       );
     } catch (err) {
       console.error('[WhatsAppService] Fail to persist manual audio message:', err);

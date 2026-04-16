@@ -240,7 +240,8 @@ export class AgentService {
     remoteJid?: string,
     displayPhone?: string,
     agentName?: string,
-    usage?: any
+    usage?: any,
+    audioUrl?: string
   ) {
     const timestamp = Date.now();
     
@@ -284,7 +285,8 @@ export class AgentService {
         thread_id: threadId,
         text: text,
         direction: direction,
-        timestamp: timestamp
+        timestamp: timestamp,
+        audio_url: audioUrl
       };
 
       if (usage) {

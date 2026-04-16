@@ -14,7 +14,11 @@ import {
   Filter,
   Users,
   Trash2,
-  Trash
+  Trash,
+  Mic,
+  Play,
+  Pause,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -43,7 +47,141 @@ interface Message {
   sender: 'lead' | 'ia' | 'outbound';
   time: string;
   timestamp: any;
+  audio_url?: string;
 }
+
+const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOutbound }) => {
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onloadedmetadata = () => setDuration(audio.duration);
+    audio.ontimeupdate = () => setProgress((audio.currentTime / audio.duration) * 100);
+    audio.onended = () => setPlaying(false);
+    return () => {
+      audio.pause();
+      audioRef.current = null;
+    };
+  }, [url]);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (playing) {
+      audioRef.current?.pause();
+    } else {
+      audioRef.current?.play();
+    }
+    setPlaying(!playing);
+  };
+
+  return (
+    <div className={`flex items-center gap-3 py-1 px-2 rounded-2xl min-w-[200px] mb-1
+      ${isOutbound ? 'bg-white/10' : 'bg-blue-50/50'}`}>
+      <button 
+        onClick={togglePlay}
+        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm
+          ${isOutbound ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}
+      >
+        {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+      </button>
+      <div className="flex-1 space-y-1">
+        <div className="h-1 bg-black/10 rounded-full overflow-hidden">
+          <motion.div 
+            className={`h-full ${isOutbound ? 'bg-white' : 'bg-blue-600'}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className={`flex justify-between text-[8px] font-bold uppercase tracking-tighter
+          ${isOutbound ? 'text-blue-100' : 'text-slate-400'}`}>
+          <span>{playing ? 'Reproduzindo' : 'Mensagem de voz'}</span>
+          <span>{duration ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, '0')}` : '--:--'}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+        onStop(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+    } catch (err) {
+      toast.error('Erro ao acessar microfone. Verifique as permissões.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {isRecording && (
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-3 bg-red-50 px-4 py-2 rounded-full border border-red-100"
+        >
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+          <span className="text-red-600 text-xs font-black font-mono">
+            {Math.floor(recordingTime / 60)}:{Math.floor(recordingTime % 60).toString().padStart(2, '0')}
+          </span>
+          <div className="flex gap-0.5 items-center">
+            {[1, 2, 3, 4, 5].map(i => (
+              <motion.div 
+                key={i}
+                className="w-0.5 bg-red-300 rounded-full"
+                animate={{ height: [4, 12, 4] }}
+                transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+      <button
+        type="button"
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        className={`p-3 rounded-2xl transition-all duration-300 shadow-lg active:scale-90
+          ${isRecording 
+            ? 'bg-red-500 text-white shadow-red-200 rotate-12 scale-110' 
+            : 'bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+      >
+        <Mic size={22} className={isRecording ? 'animate-bounce' : ''} />
+      </button>
+    </div>
+  );
+};
 
 const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void }> = ({ thread, active, onClick }) => (
   <div 
@@ -94,21 +232,31 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 );
 
 const ChatBubble: React.FC<{ message: Message }> = ({ message }) => (
-  <div className={`flex flex-col mb-4 ${message.sender !== 'lead' ? 'items-end' : 'items-start'}`}>
-    <div className={`max-w-[75%] p-4 rounded-3xl text-[13px] leading-relaxed shadow-sm relative font-medium
+  <div className={`flex flex-col mb-6 ${message.sender !== 'lead' ? 'items-end' : 'items-start'} group`}>
+    <div className={`max-w-[85%] p-4 rounded-[2rem] text-[13.5px] leading-relaxed shadow-xl relative backdrop-blur-sm transition-all duration-300 hover:scale-[1.02]
       ${message.sender !== 'lead' 
-        ? 'bg-blue-600 text-white rounded-tr-none' 
-        : 'bg-white text-slate-800 border border-slate-100 shadow-sm rounded-tl-none'}`}>
-      {message.text}
-      <div className={`flex items-center gap-1 mt-2 text-[10px] font-bold opacity-70 ${message.sender !== 'lead' ? 'text-blue-100' : 'text-slate-400'}`}>
+        ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-tr-none shadow-blue-500/20' 
+        : 'bg-white/80 text-slate-800 border-2 border-white/50 rounded-tl-none shadow-slate-200/50'}`}>
+      
+      {message.audio_url ? (
+        <AudioPlayer url={message.audio_url} isOutbound={message.sender !== 'lead'} />
+      ) : (
+        <p className="font-medium whitespace-pre-wrap">{message.text}</p>
+      )}
+
+      <div className={`flex items-center gap-1.5 mt-2 text-[10px] font-black opacity-60 tracking-wider ${message.sender !== 'lead' ? 'text-blue-100 justify-end' : 'text-slate-400'}`}>
         {message.time}
-        {message.sender !== 'lead' && <CheckCheck size={12} />}
+        {message.sender !== 'lead' && <CheckCheck size={14} className="stroke-[3]" />}
       </div>
     </div>
-    {message.sender === 'ia' && (
-      <div className="flex items-center gap-1 mt-1 mr-1">
-        <Bot size={12} className="text-blue-600" />
-        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">Robô IA</span>
+    
+    {(message.sender === 'ia' || message.sender === 'outbound') && (
+      <div className="flex items-center gap-1.5 mt-2 mr-2">
+        <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm
+          ${message.sender === 'ia' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
+          {message.sender === 'ia' ? <Bot size={10} /> : <User size={10} />}
+          {message.sender === 'ia' ? 'Inteligência Artificial' : 'Atendente Real'}
+        </div>
       </div>
     )}
   </div>
@@ -310,7 +458,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           text: d.text || '',
           sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
           time: new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: d.created_at
+          timestamp: d.created_at,
+          audio_url: d.audio_url
         }));
         setMessages(formatted as any);
       }
@@ -329,7 +478,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               text: d.text || '',
               sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
               time: new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-              timestamp: d.created_at
+              timestamp: d.created_at,
+              audio_url: d.audio_url
             };
             setMessages(prev => [...prev, newMessage as any]);
           }
@@ -366,6 +516,47 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       toast.success(`Modo de atendimento alterado para ${newStatus === 'ia' ? 'IA' : 'Humano'}`);
     } catch (err) {
       toast.error('Erro ao alterar modo de atendimento');
+    }
+  };
+
+  const handleSendVoice = async (blob: Blob) => {
+    if (!selectedThreadId || !activeThread) return;
+    const userId = user?.id;
+    if (!userId) return;
+
+    try {
+      // 1. Convert to Buffer (via arrayBuffer)
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      
+      // 2. Call backend upload logic? No, let's keep it simple: 
+      // Send directly via websocket/service if available, or a new API route.
+      // Since we already have whatsappService.sendVoice in the backend, 
+      // we'll need a way for the frontend to trigger it with a buffer.
+      
+      // For now, let's use a FormData upload to our own API
+      const formData = new FormData();
+      formData.append('audio', blob);
+      formData.append('userId', userId);
+      formData.append('remoteJid', activeThread.remoteJid);
+
+      const response = await fetch('/api/whatsapp/send-voice', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Falha ao enviar áudio');
+      
+      toast.success('Mensagem de voz enviada!');
+      
+      // Alterar para modo humano ao interagir
+      await supabase
+        .from('threads')
+        .update({ status: 'human', updated_at: new Date().toISOString() })
+        .eq('id', selectedThreadId);
+
+    } catch (err) {
+      console.error('Error sending voice:', err);
+      toast.error('Erro ao enviar áudio');
     }
   };
 
@@ -473,13 +664,14 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           </div>
 
           <div className="relative group">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-2xl blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors z-10" size={18} />
             <input 
               type="text" 
               placeholder="Pesquisar leads..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-transparent rounded-xl text-xs font-semibold placeholder-slate-400 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-400 transition-all outline-none"
+              className="w-full pl-12 pr-4 py-3.5 bg-slate-100/50 border-2 border-transparent rounded-2xl text-[13px] font-bold placeholder-slate-400 focus:bg-white focus:border-blue-200/50 transition-all outline-none relative z-10 shadow-inner"
             />
           </div>
 
@@ -594,13 +786,18 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
             {/* Typing Bar Premium */}
             <div className="p-6 border-t border-slate-100 bg-white shrink-0">
-              <form 
-                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-                className="flex items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-500/5 transition-all"
-              >
-                <button type="button" className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all mb-0.5">
+              <div className="flex items-center gap-4 mb-3">
+                <button type="button" className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all shadow-sm border border-slate-100">
                   <Paperclip size={20} />
                 </button>
+                <div className="flex-1" />
+                <VoiceRecorder onStop={handleSendVoice} />
+              </div>
+              
+              <form 
+                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                className="flex items-end gap-3 bg-slate-50 p-4 rounded-[1.5rem] border-2 border-slate-100 focus-within:border-indigo-400 focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all shadow-inner"
+              >
                 <textarea 
                   rows={1}
                   value={messageText}
@@ -611,15 +808,18 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                       handleSendMessage();
                     }
                   }}
-                  placeholder="Escreva sua mensagem..." 
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-1 resize-none max-h-32 min-h-[40px] leading-relaxed placeholder-slate-400 font-medium"
+                  placeholder="Escreva sua mensagem com carinho..." 
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] py-1 px-1 resize-none max-h-32 min-h-[30px] leading-relaxed placeholder-slate-400 font-semibold text-slate-700"
                 />
                 <button 
                   type="submit"
-                  className={`p-3 rounded-xl transition-all duration-300 ${messageText.trim() ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95' : 'text-slate-300'}`}
+                  className={`p-4 rounded-2xl transition-all duration-500 flex items-center justify-center
+                    ${messageText.trim() 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-200 hover:scale-105 active:scale-95' 
+                      : 'bg-slate-200 text-white opacity-50 cursor-not-allowed'}`}
                   disabled={!messageText.trim()}
                 >
-                  <Send size={20} />
+                  <Send size={20} className={messageText.trim() ? 'animate-in fade-in zoom-in' : ''} />
                 </button>
               </form>
             </div>
