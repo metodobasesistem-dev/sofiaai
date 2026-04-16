@@ -182,6 +182,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
   const [previewMessages, setPreviewMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
   const [previewInput, setPreviewInput] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
 
   const fetchAgents = async () => {
     try {
@@ -341,16 +342,58 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!previewInput.trim()) return;
+    if (!previewInput.trim() || isThinking) return;
 
     const userMsg = previewInput;
+    const newMessages = [...previewMessages, { role: 'user', content: userMsg } as const];
+    
     setPreviewInput('');
-    setPreviewMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setPreviewMessages(newMessages);
+    setIsThinking(true);
 
-    // Mock AI response for preview
-    setTimeout(() => {
-      setPreviewMessages(prev => [...prev, { role: 'assistant', content: `Olá! Eu sou o ${formData.nome || 'seu assistente'}. Como posso ajudar você hoje?` }]);
-    }, 1000);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/v2/agents/simulate-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          agentData: {
+            ...formData,
+            // Map camelCase to snake_case for backend if necessary, 
+            // but agentService handles both or we can just send it raw.
+            company_name: formData.companyName,
+            company_description: formData.companyDescription,
+            company_products: formData.companyProducts,
+            company_faq: formData.companyFAQ,
+            company_links: formData.companyLinks,
+            knowledge_base: formData.knowledgeBase,
+            voice_mode: formData.voice_mode,
+            voice_id: formData.voice_id
+          },
+          messages: newMessages
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setPreviewMessages(prev => [...prev, { role: 'assistant', content: result.text }]);
+        
+        if (result.audio) {
+          const audio = new Audio(`data:audio/mp3;base64,${result.audio}`);
+          audio.play().catch(e => console.error('Error playing simulation audio:', e));
+        }
+      } else {
+        toast.error('Erro na simulação: ' + result.error);
+      }
+    } catch (err) {
+      console.error('Simulation fetch error:', err);
+      toast.error('Falha ao conectar com o serviço de simulação.');
+    } finally {
+      setIsThinking(false);
+    }
   };
 
   return (
@@ -911,6 +954,18 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                             </div>
                           </div>
                         ))}
+
+                        {isThinking && (
+                          <div className="flex justify-start">
+                            <div className="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm flex items-center gap-2">
+                              <div className="flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce"></span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Input */}

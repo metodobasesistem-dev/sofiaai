@@ -138,4 +138,30 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── POST /api/v2/agents/simulate-chat ─────────────────────────────────────
+router.post('/simulate-chat', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { agentData, messages } = req.body;
+
+  try {
+    const { agentService } = await import('../services/agentService.js');
+    const result = await agentService.processChatSimulation(userId, agentData, messages);
+
+    if (result.audioBuffer) {
+      // If we have audio, we could send it as base64 or separate. 
+      // For the preview, returning text + base64 audio is simple.
+      res.json({ 
+        success: true, 
+        text: result.text, 
+        audio: result.audioBuffer.toString('base64') 
+      });
+    } else {
+      res.json({ success: true, text: result.text });
+    }
+  } catch (err: any) {
+    console.error('[AgentAPI] Simulate chat error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

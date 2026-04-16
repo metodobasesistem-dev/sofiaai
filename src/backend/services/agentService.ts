@@ -587,6 +587,79 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       content: d.text
     }));
   }
+  public async processChatSimulation(userId: string, agentData: any, messages: any[]): Promise<{ text: string; audioBuffer?: Buffer }> {
+    try {
+      console.log(`[AgentService] 🧪 SIMULATION START for user ${userId}`);
+      
+      // 1. Fetch real professionals for context
+      const { data: professionals } = await supabase
+        .from('professionals')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+
+      // 2. Prepare System Prompt
+      const systemPrompt = this.buildSystemPrompt(agentData, { lead_name: 'Cliente Teste' }, professionals || []);
+      const dateContext = `\n[CONTEXTO TEMPORAL/SIMULAÇÃO]\nHOJE: ${format(new Date(), 'dd/MM/yyyy')}\nDATA ATUAL: ${format(new Date(), 'yyyy-MM-dd')}\n`;
+      const fullPrompt = systemPrompt + dateContext;
+
+      // 3. AI Execution Loop
+      const tools = this.getSchedulingTools();
+      let currentMessages = [...messages];
+      let aiFinalText: string | null = null;
+
+      while (true) {
+        console.log(`[AgentService] 🤖 Simulation IA is thinking...`);
+        const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', userId);
+        
+        if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) break;
+
+        if (response.toolCalls && response.toolCalls.length > 0) {
+          currentMessages.push({ role: 'assistant', content: response.text || '', tool_calls: response.toolCalls });
+
+          for (const toolCall of response.toolCalls) {
+            const functionName = toolCall.function.name;
+            const args = JSON.parse(toolCall.function.arguments);
+            
+            let toolResult;
+            if (functionName === 'check_availability') {
+              toolResult = await this.handleCheckAvailability(userId, args.date, agentData, professionals || [], args.professional_name);
+            } else if (functionName === 'book_appointment') {
+              // IN SIMULATION: We mock the success but don't persist in DB
+              toolResult = { success: true, id: 'sim-appt-' + Date.now(), is_simulation: true };
+            }
+
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify(toolResult)
+            });
+          }
+        } else {
+          aiFinalText = response.text;
+          break;
+        }
+      }
+
+      // 4. Handle Voice (Simulation)
+      let voiceBuffer: Buffer | undefined;
+      if (aiFinalText && agentData.voice_mode !== 'disabled') {
+        try {
+          voiceBuffer = await audioService.generateSpeech(aiFinalText, agentData.voice_id || 'alloy');
+        } catch (vErr) {}
+      }
+
+      return { 
+        text: aiFinalText || "Desculpe, não consegui processar sua mensagem no simulador.", 
+        audioBuffer: voiceBuffer 
+      };
+    } catch (error) {
+      console.error('[AgentService] Simulation error:', error);
+      throw error;
+    }
+  }
+
   public async syncContactsFromThreads(userId: string) {
      console.log(`[AgentService] 🔄 Syncing contacts for userId: ${userId}`);
      try {
