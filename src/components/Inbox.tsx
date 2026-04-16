@@ -300,6 +300,12 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   useEffect(() => {
     let channel: any;
 
+    const setupThreads = async () => {
+      const timeoutId = setTimeout(() => {
+        setLoadingThreads(false);
+        console.warn('[Inbox] Safety timeout: 5s reached');
+      }, 5000);
+
       try {
         const userId = user?.id;
         if (!userId) {
@@ -326,26 +332,16 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
         if (data) {
           const formatted = data.map(d => {
-            // Defensive: ensure remote_jid exists before splitting
             const jid = d.remote_jid || '';
             const phoneNumber = jid.includes('@') ? jid.split('@')[0] : jid;
             
             const contact = contactsData?.find(c => {
               const contactPhone = c.telefone?.replace(/\D/g, '');
               if (!contactPhone) return false;
-              
-              // Clean numbers (remove country code 55)
               const p1 = phoneNumber.replace(/^55/, '');
               const p2 = contactPhone.replace(/^55/, '');
-              
-              // Exact match
               if (p1 === p2) return true;
-              
-              // Match last 8 digits (core number in Brazil)
-              if (p1.length >= 8 && p2.length >= 8) {
-                return p1.slice(-8) === p2.slice(-8);
-              }
-              
+              if (p1.length >= 8 && p2.length >= 8) return p1.slice(-8) === p2.slice(-8);
               return false;
             });
             
@@ -365,7 +361,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
           setThreads(sorted);
           
-          // Auto-select jid if present in URL
           const params = new URLSearchParams(window.location.search);
           const jidFromUrl = params.get('jid');
           if (jidFromUrl) {
@@ -381,14 +376,16 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
         clearTimeout(timeoutId);
       }
 
-      // Realtime listener — apenas re-busca dados, NÃO registra novo canal
+      // Realtime listener
+      const userId = user?.id; // Needed for the listener below
+      if (!userId) return;
+
       channel = supabase
         .channel(`threads-${userId}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'threads', filter: `user_id=eq.${userId}` },
           async () => {
-            // Re-fetch incremental: busca apenas as threads, sem re-registrar canal
             const { data: freshData } = await supabase
               .from('threads')
               .select('*')
@@ -402,7 +399,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                 .eq('user_id', userId);
               
               const formatted = freshData.map(d => {
-                const phoneNumber = d.remote_jid.split('@')[0];
+                const jid = d.remote_jid || '';
+                const phoneNumber = jid.includes('@') ? jid.split('@')[0] : jid;
                 const contact = freshContacts?.find(c => {
                   const contactPhone = c.telefone?.replace(/\D/g, '');
                   if (!contactPhone) return false;
@@ -431,8 +429,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           }
         )
         .subscribe();
-      
-      clearTimeout(timeoutId);
     };
 
     setupThreads();
@@ -458,10 +454,10 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
     let channel: any;
 
+    const setupMessages = async () => {
       try {
         setLoadingMessages(true);
 
-        // Initial Fetch
         const { data, error } = await supabase
           .from('messages')
           .select('*')
@@ -482,7 +478,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           setMessages(formatted as any);
         }
 
-        // Realtime listener
         channel = supabase
           .channel(`messages-${selectedThreadId}`)
           .on(
@@ -503,7 +498,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           )
           .subscribe();
 
-        // Reset unread count
         await supabase
           .from('threads')
           .update({ unread_count: 0 })
@@ -514,6 +508,7 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       } finally {
         setLoadingMessages(false);
       }
+    };
 
     setupMessages();
 
@@ -547,8 +542,7 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
     if (!userId) return;
 
     try {
-      // 1. Convert to Buffer (via arrayBuffer)
-      const buffer = Buffer.from(await blob.arrayBuffer());
+      // 1. Send via API directly (no browser Buffer needed)
       
       // 2. Call backend upload logic? No, let's keep it simple: 
       // Send directly via websocket/service if available, or a new API route.
