@@ -44,6 +44,7 @@ export class EvolutionApiService {
       const { data } = await api.post('/instance/create', {
         instanceName: userId,
         token: INSTANCE_TOKEN,
+        integration: 'WHATSAPP-BAILEYS', // Required in Evolution API v2
         qrcode: true
       });
       

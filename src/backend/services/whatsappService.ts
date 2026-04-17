@@ -65,27 +65,42 @@ class WhatsAppService {
     }
   }
 
-  async createSession(userId: string): Promise<string> {
+  async createSession(userId: string): Promise<string | null> {
     console.log(`[WhatsAppService] Starting Evolution instance for ${userId}`);
     try {
+      // 1. Create instance (or connect to existing)
       await EvolutionApiService.createInstance(userId);
-      const qrData = await EvolutionApiService.getQrCode(userId);
+      
+      // 2. Try to get QR code with retries
+      let qrData = null;
+      for (let i = 0; i < 3; i++) {
+        console.log(`[WhatsAppService] Attempt ${i + 1} to get QR code...`);
+        qrData = await EvolutionApiService.getQrCode(userId);
+        if (qrData && qrData.base64) break;
+        // Wait 2 seconds between retries
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       
       if (qrData && qrData.base64) {
         await this.updateProfileStatus(userId, { status: 'connecting', qr: qrData.base64 });
         return qrData.base64;
       }
       
+      // 3. If no QR, check if already connected
       const status = await EvolutionApiService.getInstanceStatus(userId);
       if (status.state === 'open') {
         await this.updateProfileStatus(userId, { status: 'connected' });
         return 'connected';
       }
 
-      return 'connecting';
+      // 4. Default to connecting status but don't return a string that breaks images
+      await this.updateProfileStatus(userId, { status: 'connecting' });
+      return null;
     } catch (error: any) {
-      console.error('[WhatsAppService] Error creating session:', error.message);
-      throw error;
+      const errorMsg = error.response?.data?.message || error.message;
+      console.error(`[WhatsAppService] Error in createSession for ${userId}:`, errorMsg);
+      // Re-throw so the controller can handle it
+      throw new Error(`Evolution API Error: ${errorMsg}`);
     }
   }
 
