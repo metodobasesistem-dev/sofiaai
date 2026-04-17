@@ -9,6 +9,10 @@ function getApi() {
   const API_URL = process.env.EVOLUTION_API_URL;
   const GLOBAL_API_KEY = process.env.EVOLUTION_API_KEY;
 
+  console.log('[EvolutionAPI] Checking Environment Variables:');
+  console.log(` - EVOLUTION_API_URL: ${API_URL ? 'PRESENT' : 'MISSING'}`);
+  console.log(` - EVOLUTION_API_KEY: ${GLOBAL_API_KEY ? 'PRESENT' : 'MISSING'}`);
+
   if (!API_URL) {
     throw new Error('EVOLUTION_API_URL is not defined in environment variables');
   }
@@ -17,7 +21,7 @@ function getApi() {
     baseURL: API_URL,
     headers: {
       'Content-Type': 'application/json',
-      'apikey': GLOBAL_API_KEY || ''
+      'apikey': GLOBAL_API_KEY || '' // Evolution API v2 uses 'apikey'
     }
   });
 
