@@ -9,19 +9,25 @@ function getApi() {
   const API_URL = process.env.EVOLUTION_API_URL;
   const GLOBAL_API_KEY = process.env.EVOLUTION_API_KEY;
 
-  console.log('[EvolutionAPI] Checking Environment Variables:');
-  console.log(` - EVOLUTION_API_URL: ${API_URL ? 'PRESENT' : 'MISSING'}`);
-  console.log(` - EVOLUTION_API_KEY: ${GLOBAL_API_KEY ? 'PRESENT' : 'MISSING'}`);
+  console.log('[EvolutionAPI] Diagnostic Info:');
+  console.log(` - URL: ${API_URL}`);
+  console.log(` - API_KEY Present: ${!!GLOBAL_API_KEY}`);
+  if (GLOBAL_API_KEY) {
+    console.log(` - API_KEY (start/end): ${GLOBAL_API_KEY.substring(0, 3)}...${GLOBAL_API_KEY.substring(GLOBAL_API_KEY.length - 3)}`);
+  }
 
   if (!API_URL) {
     throw new Error('EVOLUTION_API_URL is not defined in environment variables');
   }
 
+  // We send the key in multiple headers to cover all possible Evolution API v2 configurations
   apiInstance = axios.create({
     baseURL: API_URL,
     headers: {
       'Content-Type': 'application/json',
-      'apikey': GLOBAL_API_KEY || '' // Evolution API v2 uses 'apikey'
+      'apikey': GLOBAL_API_KEY || '',
+      'apiKey': GLOBAL_API_KEY || '', // Variant for some proxies
+      'Authorization': GLOBAL_API_KEY ? `Bearer ${GLOBAL_API_KEY}` : '' // Global tokens often work as Bearer
     }
   });
 
@@ -44,7 +50,13 @@ export class EvolutionApiService {
       await this.setWebhook(userId);
       return data;
     } catch (error: any) {
-      console.error(`[EvolutionAPI] Error creating instance:`, error.response?.data || error.message);
+      console.error(`[EvolutionAPI] Error creating instance (Status ${error.response?.status}):`, error.response?.data || error.message);
+      
+      // If 401, it's a key issue
+      if (error.response?.status === 401) {
+        console.error('[EvolutionAPI] Authentication failed. Please verify your EVOLUTION_API_KEY in the dashboard.');
+      }
+
       if (error.response?.status === 403 || error.response?.data?.message?.includes('already exists')) {
         console.log(`[EvolutionAPI] Instance ${userId} already exists.`);
         return { instance: { instanceName: userId } };
