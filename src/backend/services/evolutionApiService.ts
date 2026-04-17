@@ -121,6 +121,20 @@ export class EvolutionApiService {
     }
   }
 
+  static async getPairingCode(instanceName: string, phoneNumber: string) {
+    const api = getApi();
+    try {
+      // Remove everything except numbers
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      console.log(`[EvolutionAPI] Requesting pairing code for ${instanceName} and number ${cleanPhone}...`);
+      const { data } = await api.get(`/instance/connect/pairing-code/${instanceName}?number=${cleanPhone}`);
+      return data; // returns { code: "ABC-DEF-GH" }
+    } catch (error: any) {
+      console.error(`[EvolutionAPI] Error getting pairing code:`, error.response?.data || error.message);
+      return null;
+    }
+  }
+
   static async getInstanceStatus(userId: string) {
     const api = getApi();
     try {

@@ -47,14 +47,15 @@ class WhatsAppService {
 
   private async updateProfileStatus(userId: string, data: { status: string; qr?: string }) {
     try {
-      console.log(`[WhatsAppService] Updating status for user ${userId}: ${data.status}`);
+      const instanceName = `wppai_${userId.substring(0, 8)}`;
+      console.log(`[WhatsAppService] Updating status for user ${userId} (${instanceName}): ${data.status}`);
 
       const { error } = await supabase
         .from('profiles')
         .update({
           whatsapp_status: data.status,
           ...(data.qr ? { whatsapp_qr: data.qr } : (data.status === 'connected' || data.status === 'disconnected' ? { whatsapp_qr: null } : {})),
-          whatsapp_instance_id: userId,
+          whatsapp_instance_id: instanceName,
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
@@ -66,16 +67,17 @@ class WhatsAppService {
   }
 
   async createSession(userId: string): Promise<string | null> {
-    console.log(`[WhatsAppService] Starting Evolution instance for ${userId}`);
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    console.log(`[WhatsAppService] Starting Evolution instance: ${instanceName}`);
     try {
       // 1. Create instance (or connect to existing)
-      await EvolutionApiService.createInstance(userId);
+      await EvolutionApiService.createInstance(instanceName);
       
       // 2. Try to get QR code with retries
       let qrData = null;
       for (let i = 0; i < 3; i++) {
-        console.log(`[WhatsAppService] Attempt ${i + 1} to get QR code...`);
-        qrData = await EvolutionApiService.getQrCode(userId);
+        console.log(`[WhatsAppService] Attempt ${i + 1} to get QR code for ${instanceName}...`);
+        qrData = await EvolutionApiService.getQrCode(instanceName);
         if (qrData && qrData.base64) break;
         // Wait 2 seconds between retries
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -87,35 +89,34 @@ class WhatsAppService {
       }
       
       // 3. If no QR, check if already connected
-      const status = await EvolutionApiService.getInstanceStatus(userId);
+      const status = await EvolutionApiService.getInstanceStatus(instanceName);
       if (status.state === 'open') {
         await this.updateProfileStatus(userId, { status: 'connected' });
         return 'connected';
       }
 
-      // 4. Default to connecting status but don't return a string that breaks images
+      // 4. Default to connecting status
       await this.updateProfileStatus(userId, { status: 'connecting' });
       return null;
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || error.message;
-      console.error(`[WhatsAppService] Error in createSession for ${userId}:`, errorMsg);
-      // Re-throw so the controller can handle it
+      console.error(`[WhatsAppService] Error in createSession for ${instanceName}:`, errorMsg);
       throw new Error(`Evolution API Error: ${errorMsg}`);
     }
   }
 
   async getSessionStatus(userId: string): Promise<{ status: string; qr?: string }> {
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
     try {
-      const status = await EvolutionApiService.getInstanceStatus(userId);
+      const status = await EvolutionApiService.getInstanceStatus(instanceName);
       let dbStatus = 'disconnected';
       
       if (status.state === 'open') dbStatus = 'connected';
       else if (status.state === 'connecting') dbStatus = 'connecting';
       
-      // Se estiver conectando, tenta pegar o QR
       let qr = undefined;
       if (dbStatus === 'connecting') {
-        const qrData = await EvolutionApiService.getQrCode(userId);
+        const qrData = await EvolutionApiService.getQrCode(instanceName);
         qr = qrData?.base64;
       }
 
@@ -126,9 +127,29 @@ class WhatsAppService {
     }
   }
 
+  async requestPairingCode(userId: string, phoneNumber: string): Promise<string> {
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    try {
+      console.log(`[WhatsAppService] Requesting pairing code for ${instanceName}`);
+      await EvolutionApiService.createInstance(instanceName);
+      
+      const data = await EvolutionApiService.getPairingCode(instanceName, phoneNumber);
+      if (!data || !data.code) {
+        throw new Error('Não foi possível gerar o código. Verifique se o servidor Evolution está estável.');
+      }
+      
+      await this.updateProfileStatus(userId, { status: 'connecting' });
+      return data.code;
+    } catch (error: any) {
+      console.error(`[WhatsAppService] Pairing code error for ${instanceName}:`, error.message);
+      throw error;
+    }
+  }
+
   async logout(userId: string) {
-    console.log(`[WhatsAppService] Logging out instance ${userId}`);
-    await EvolutionApiService.logout(userId);
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    console.log(`[WhatsAppService] Logging out instance ${instanceName}`);
+    await EvolutionApiService.logout(instanceName);
     await this.updateProfileStatus(userId, { status: 'disconnected' });
   }
 
@@ -137,8 +158,9 @@ class WhatsAppService {
   }
 
   async sendMessage(userId: string, to: string, message: string) {
-    console.log(`[WhatsAppService] Sending message via Evolution to ${to}`);
-    const result = await EvolutionApiService.sendMessage(userId, to, message);
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    console.log(`[WhatsAppService] Sending message via Evolution ${instanceName} to ${to}`);
+    const result = await EvolutionApiService.sendMessage(instanceName, to, message);
     
     // Persist manual message
     try {
@@ -161,9 +183,10 @@ class WhatsAppService {
   }
 
   async sendVoice(userId: string, to: string, audioBuffer: Buffer) {
-    console.log(`[WhatsAppService] Sending voice via Evolution to ${to}`);
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    console.log(`[WhatsAppService] Sending voice via Evolution ${instanceName} to ${to}`);
     const base64 = audioBuffer.toString('base64');
-    const result = await EvolutionApiService.sendVoice(userId, to, base64);
+    const result = await EvolutionApiService.sendVoice(instanceName, to, base64);
     
     const audioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
 
@@ -189,9 +212,10 @@ class WhatsAppService {
   }
 
   async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string) {
-    console.log(`[WhatsAppService] Sending media via Evolution to ${to}`);
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    console.log(`[WhatsAppService] Sending media via Evolution ${instanceName} to ${to}`);
     const base64 = buffer.toString('base64');
-    const result = await EvolutionApiService.sendMedia(userId, to, base64, mimetype, filename);
+    const result = await EvolutionApiService.sendMedia(instanceName, to, base64, mimetype, filename);
     
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
@@ -214,6 +238,7 @@ class WhatsAppService {
 
   // Novo método para ser chamado pelo Webhook
   async triggerAIResponseViaWebhook(userId: string, from: string, body: string, contactName: string, cleanPhone: string, messageId: string, isAudio: boolean = false) {
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
     const timerKey = `${userId}_${from}`;
 
     if (this.debounceTimers.has(timerKey)) {
@@ -236,7 +261,7 @@ class WhatsAppService {
       this.debounceTimers.delete(timerKey);
       
       try {
-        console.log(`[WhatsAppService] 🚀 Triggering AI response for ${from} (via Webhook)`);
+        console.log(`[WhatsAppService] 🚀 Triggering AI response for ${from} via ${instanceName} (via Webhook)`);
         const aiResponse = await agentService.processIncoming(userId, {
           from: from,
           body: body, 
@@ -254,7 +279,7 @@ class WhatsAppService {
         if (!finalResponseText || finalResponseText.trim().length === 0) return;
 
         // Enviar Texto via Evolution
-        await EvolutionApiService.sendMessage(userId, from, finalResponseText);
+        await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
         
         // Enviar Áudio via Evolution se houver
         if (audioBuffer) {
@@ -275,7 +300,7 @@ class WhatsAppService {
             aiAudioUrl || undefined
           );
 
-          await EvolutionApiService.sendVoice(userId, from, audioBuffer.toString('base64'));
+          await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
         }
       } catch (err) {
         console.error(`[WhatsAppService] AI trigger error:`, err);

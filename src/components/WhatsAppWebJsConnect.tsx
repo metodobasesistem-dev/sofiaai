@@ -30,6 +30,9 @@ interface Props {
 export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [qr, setQr] = useState<string | null>(null);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [method, setMethod] = useState<'qr' | 'pairing'>('qr');
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -46,6 +49,9 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     setStatus(s);
     statusRef.current = s;
     if (newQr !== undefined) setQr(newQr);
+    if (s === 'connected' || s === 'disconnected') {
+      setPairingCode(null);
+    }
   };
 
   // ─── Stop QR polling ───────────────────────────────────────────────────────
@@ -67,18 +73,16 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
 
         if (data.status === 'connected') {
           updateStatus('connected', null);
+          setPairingCode(null);
           stopPolling();
           toast.success('WhatsApp Conectado com Sucesso! 🎉');
         }
-        // 'connecting' / 'waiting' → keep polling
-        // 'disconnected' → keep showing QR (don't reset — user might still be scanning)
       } catch { /* noop */ }
     }, 4000);
   };
 
   // ─── Supabase Realtime subscription ───────────────────────────────────────
   const subscribeRealtime = (uid: string) => {
-    // Unsubscribe from any previous channel
     if (realtimeRef.current) {
       supabase.removeChannel(realtimeRef.current);
       realtimeRef.current = null;
@@ -100,6 +104,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
 
           if (newStatus === 'connected') {
             updateStatus('connected', null);
+            setPairingCode(null);
             stopPolling();
             if (statusRef.current !== 'connected') {
               toast.success('WhatsApp Conectado! 🎉');
@@ -109,10 +114,9 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
               updateStatus('connecting', null);
             }
           } else if (newStatus === 'disconnected') {
-            // Only reset if we were fully connected.
-            // If we are 'waiting' for QR, don't clear the QR just because of a status flicker to disconnected.
             if (statusRef.current === 'connected') {
               updateStatus('disconnected', null);
+              setPairingCode(null);
               stopPolling();
               toast.warning('WhatsApp desconectado.');
             }
@@ -132,24 +136,23 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     setUserId(uid);
     subscribeRealtime(uid);
 
-    // Check current status (read-only)
     const fetchCurrentStatus = async () => {
       try {
         const res = await fetch(`/api/sessions/restore/${uid}`);
         if (!res.ok) return;
         const data = await res.json();
-        console.log(`[WhatsAppConnect] 🔄 Status sync: ${data.status}`, data);
 
         if (data.status === 'connected') {
           updateStatus('connected', null);
+          setPairingCode(null);
           stopPolling();
         } else if (data.status === 'connecting') {
           updateStatus('connecting', null);
           startQrPolling(uid);
         } else if (data.status === 'disconnected') {
-           // If we were connected but now backend says disconnected, update
            if (statusRef.current === 'connected') {
              updateStatus('disconnected', null);
+             setPairingCode(null);
            }
         }
       } catch (err) {
@@ -158,9 +161,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     };
 
     fetchCurrentStatus();
-
-    // SAFETY NET: Polling the brokered API every 5s to stay in sync with actual backend state
-    const safetyPoll = setInterval(fetchCurrentStatus, 5000);
+    const safetyPoll = setInterval(fetchCurrentStatus, 8000);
 
     return () => {
       stopPolling();
@@ -172,17 +173,51 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     };
   }, [propUser?.id]);
 
+  // ─── Create Pairing Code ──────────────────────────────────────────────────
+  const handlePairingCode = async () => {
+    if (!userId || !phoneNumber) {
+      toast.error('Por favor, informe o número de telefone.');
+      return;
+    }
+
+    setLoading(true);
+    setQr(null);
+
+    try {
+      const res = await fetch('/api/sessions/pairing-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, phoneNumber }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao gerar código');
+      }
+
+      const data = await res.json();
+      setPairingCode(data.code);
+      updateStatus('waiting');
+      startQrPolling(userId);
+      toast.success('Código de pareamento gerado! Digite no seu celular.');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ─── Connect: generate QR ─────────────────────────────────────────────────
   const handleConnect = async () => {
     if (!userId) return;
 
     if (status === 'connected') {
-      // Disconnect
       try {
         setLoading(true);
         const { disconnectWhatsApp } = await import('../services/whatsappService');
         await disconnectWhatsApp();
         updateStatus('disconnected', null);
+        setPairingCode(null);
         stopPolling();
         toast.success('WhatsApp desconectado com sucesso.');
       } catch (error: any) {
@@ -193,14 +228,13 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
       return;
     }
 
-    // Already connecting — don't trigger again
     if (status === 'connecting') return;
 
     setLoading(true);
     updateStatus('connecting', null);
+    setPairingCode(null);
 
     try {
-      console.log('[WhatsAppConnect] Requesting QR code...');
       const response = await fetch('/api/sessions/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -215,23 +249,17 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
       }
 
       const data = await response.json();
-      console.log('[WhatsAppConnect] Create response:', data.status);
-
       if (data.qr) {
         updateStatus('waiting', data.qr);
-        toast.info('QR Code gerado! Escaneie no WhatsApp para conectar.');
         startQrPolling(userId);
       } else if (data.status === 'connected') {
         updateStatus('connected', null);
-        toast.success('WhatsApp já estava conectado! ✅');
+        setPairingCode(null);
       } else {
-        // No QR yet — Chrome is starting up. Poll until QR or connected.
         updateStatus('connecting', null);
         startQrPolling(userId);
-        toast.info('Iniciando WhatsApp Web...');
       }
     } catch (error: any) {
-      console.error('[WhatsAppConnect] Connect error:', error);
       updateStatus('disconnected', null);
       toast.error(error.message || 'Falha ao conectar');
     } finally {
@@ -239,7 +267,6 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   const renderBadge = () => {
     switch (status) {
       case 'connected':
@@ -251,7 +278,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
       case 'waiting':
         return (
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full border border-yellow-100">
-            <RefreshCw size={12} className="animate-spin" /> Aguardando QR
+            <RefreshCw size={12} className="animate-spin" /> Aguardando Conexão
           </span>
         );
       case 'connecting':
@@ -269,83 +296,174 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     }
   };
 
-  const renderButtonContent = () => {
-    if (loading) return <Loader2 size={16} className="animate-spin" />;
-    if (status === 'connected') return <><PhoneOff size={16} /> Desconectar</>;
-    if (status === 'connecting') return <><Loader2 size={16} className="animate-spin" /> Aguarde...</>;
-    return <><QrCode size={16} /> Gerar QR Code</>;
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-6 flex flex-col h-full"
+      className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden flex flex-col h-full"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shadow-sm">
-          <WhatsAppIcon />
-        </div>
-        {renderBadge()}
+      {/* Banner Superior com Efeito Glass */}
+      <div className="h-24 bg-gradient-to-r from-green-500 to-emerald-600 relative overflow-hidden">
+         <div className="absolute inset-0 bg-white/5 backdrop-blur-sm"></div>
+         <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+         <div className="absolute left-6 bottom-4 flex items-center gap-3">
+           <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 text-white flex items-center justify-center shadow-lg">
+             <WhatsAppIcon />
+           </div>
+           <div>
+             <h3 className="text-lg font-bold text-white leading-none">WhatsApp Provider</h3>
+             <p className="text-white/70 text-xs mt-1">Conexão via Evolution API</p>
+           </div>
+         </div>
+         <div className="absolute right-6 bottom-4">
+           {renderBadge()}
+         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1">
-        <h3 className="text-lg font-bold text-gray-900 mb-2">WhatsApp Provider</h3>
-        <p className="text-sm text-gray-500 leading-relaxed mb-4">
-          Conecte seu número de WhatsApp para que seus agentes de IA possam responder seus clientes automaticamente.
+      <div className="p-6 flex-1 flex flex-col">
+        <p className="text-sm text-gray-500 leading-relaxed mb-6">
+          Escolha o método de conexão para vincular seu dispositivo. Recomendamos o QR Code para praticidade ou Código de Pareamento se houver problemas de imagem.
         </p>
 
-        {/* QR Code */}
-        {qr && status === 'waiting' && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200"
-          >
-            <div className="bg-white p-2 rounded-xl shadow-sm mb-2">
-              <img 
-                src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`} 
-                alt="WhatsApp QR Code" 
-                className="w-48 h-48 object-contain"
-                onLoad={() => console.log('[WhatsAppConnect] QR Image loaded successfully')}
-                onError={(e) => {
-                  console.error('[WhatsAppConnect] QR Image failed to load', e);
-                  console.log('[WhatsAppConnect] Content of qr state:', qr.substring(0, 50) + '...');
-                }}
-              />
-            </div>
-            <p className="text-xs text-gray-400 text-center mt-2 px-2">
-              Abra o WhatsApp → Aparelhos Conectados → Conectar um aparelho → Escaneie o código
-            </p>
-          </motion.div>
-        )}
-
-        {/* Connecting spinner */}
-        {status === 'connecting' && !qr && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Loader2 size={36} className="animate-spin text-blue-500 mb-3" />
-            <p className="text-sm font-semibold text-gray-600">Iniciando WhatsApp Web...</p>
-            <p className="text-xs text-gray-400 mt-1">Isso pode levar até 30 segundos</p>
+        {/* Seletor de Método */}
+        {status === 'disconnected' && (
+          <div className="flex p-1 bg-gray-100 rounded-lg mb-6 self-center">
+            <button 
+              onClick={() => setMethod('qr')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all text-xs font-semibold ${method === 'qr' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <QrCode size={14} /> QR Code
+            </button>
+            <button 
+              onClick={() => setMethod('pairing')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all text-xs font-semibold ${method === 'pairing' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+               Código Numérico
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Action button */}
-      <div className="mt-6 pt-6 border-t border-gray-50">
-        <button
-          id="whatsapp-action-btn"
-          onClick={handleConnect}
-          disabled={loading || status === 'connecting'}
-          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
-            status === 'connected'
-              ? 'bg-white border border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
-              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200'
-          }`}
-        >
-          {renderButtonContent()}
-        </button>
+        <div className="flex-1 flex flex-col justify-center items-center">
+          {/* Aba QR Code */}
+          {method === 'qr' && (
+            <>
+              {qr && status === 'waiting' ? (
+                <div className="flex flex-col items-center">
+                   <div className="bg-white p-4 rounded-2xl shadow-2xl border border-gray-100 mb-4 animate-in fade-in zoom-in duration-300">
+                    <img 
+                      src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`} 
+                      alt="QR Code" 
+                      className="w-48 h-48 object-contain"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 text-center max-w-[200px]">
+                    Abra o WhatsApp e escaneie o código para conectar instantaneamente.
+                  </p>
+                </div>
+              ) : status === 'disconnected' ? (
+                <div className="text-center py-6">
+                  <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                    <QrCode size={32} />
+                  </div>
+                  <p className="text-sm text-gray-600 font-medium">Pronto para conectar</p>
+                  <p className="text-xs text-gray-400">Clique para gerar o código</p>
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {/* Aba Código de Pareamento */}
+          {method === 'pairing' && (
+            <div className="w-full flex flex-col items-center">
+              {pairingCode ? (
+                <div className="text-center animate-in slide-in-from-bottom-4 duration-500">
+                  <div className="bg-gray-900 text-white font-mono text-3xl font-bold tracking-widest px-6 py-4 rounded-xl shadow-xl mb-4 border-2 border-green-500/30">
+                    {pairingCode}
+                  </div>
+                  <p className="text-xs text-gray-500 max-w-[240px]">
+                    No WhatsApp, vá em <b>Aparelhos Conectados</b> > <b>Conectar com número</b> e digite o código acima.
+                  </p>
+                </div>
+              ) : status === 'disconnected' ? (
+                <div className="w-full max-w-[280px]">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-tighter mb-2 block">Seu Número WhatsApp</label>
+                  <div className="relative group">
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 5511999999999"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all group-hover:border-gray-300"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2">DICA: Use o formato DDI + DDD + NÚMERO (sem espaços).</p>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* Status de Carregamento Genérico */}
+          {status === 'connecting' && !qr && !pairingCode && (
+            <div className="flex flex-col items-center justify-center py-8 text-center animate-pulse">
+              <Loader2 size={36} className="animate-spin text-blue-500 mb-3" />
+              <p className="text-sm font-semibold text-gray-600">Iniciando Servidor...</p>
+              <p className="text-xs text-gray-400 mt-1">Isso pode levar alguns segundos</p>
+            </div>
+          )}
+
+          {status === 'connected' && (
+            <div className="text-center py-6 animate-in fade-in duration-700">
+              <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100 shadow-inner">
+                 <CheckCircle2 size={40} />
+              </div>
+              <h4 className="text-lg font-bold text-gray-900">Tudo Pronto!</h4>
+              <p className="text-sm text-gray-500">Sua conta está vinculada e ativa.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="mt-8">
+          {status === 'connected' ? (
+            <button
+              onClick={handleConnect}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-all hover:shadow-lg hover:shadow-red-100 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : <><PhoneOff size={18} /> Desconectar Dispositivo</>}
+            </button>
+          ) : (
+            <button
+              onClick={method === 'qr' ? handleConnect : handlePairingCode}
+              disabled={loading || status === 'connecting' || (method === 'pairing' && !phoneNumber)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : method === 'qr' ? (
+                <>
+                  {status === 'waiting' ? <RefreshCw size={18} /> : <QrCode size={18} />}
+                  {status === 'waiting' ? 'Atualizar QR Code' : 'Gerar QR Code'}
+                </>
+              ) : (
+                <>Gerar Código de Pareamento</>
+              )}
+            </button>
+          )}
+
+          {status === 'waiting' && (
+            <button 
+              onClick={() => {
+                updateStatus('disconnected', null);
+                setPairingCode(null);
+                stopPolling();
+              }}
+              className="w-full mt-3 text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors py-2"
+            >
+              CANCELAR E VOLTAR
+            </button>
+          )}
+        </div>
       </div>
     </motion.div>
   );

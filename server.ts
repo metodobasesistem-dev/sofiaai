@@ -143,6 +143,19 @@ async function startServer() {
     app.use('/api/sessions', sessionRoutes);
     app.use('/api/messages', messageRoutes);
 
+    app.post('/api/sessions/pairing-code', async (req, res) => {
+      const { userId, phoneNumber } = req.body;
+      if (!userId || !phoneNumber) return res.status(400).json({ error: 'Faltando userId ou phoneNumber' });
+
+      try {
+        const code = await whatsappService.requestPairingCode(userId, phoneNumber);
+        res.json({ success: true, code });
+      } catch (error: any) {
+        console.error('[Server] pairing-code error:', error.message);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // V2 Layered Architecture
     app.use('/api/v2/agents', agentApiRoutes);
     app.use('/api/v2/contacts', contactApiRoutes);
