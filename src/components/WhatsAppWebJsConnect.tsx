@@ -381,7 +381,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
                     {pairingCode}
                   </div>
                   <p className="text-xs text-gray-500 max-w-[240px]">
-                    No WhatsApp, vá em <b>Aparelhos Conectados</b> > <b>Conectar com número</b> e digite o código acima.
+                    No WhatsApp, vá em <b>Aparelhos Conectados</b> &gt; <b>Conectar com número</b> e digite o código acima.
                   </p>
                 </div>
               ) : status === 'disconnected' ? (
