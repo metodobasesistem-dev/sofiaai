@@ -8,23 +8,37 @@ const router = Router();
 
 router.post('/webhook', async (req, res) => {
   const body = req.body;
-  const instanceName = body.instance; // O userId é o instanceName
+  const instanceName = body.instance; // O nome da instância (ex: wppai_f8a2b1c0)
   const event = body.event;
 
   console.log(`[WhatsappWebhook] Received event "${event}" for instance "${instanceName}"`);
 
   try {
+    // RESOLUÇÃO DE USUÁRIO: Buscar o UUID real do usuário pelo whatsapp_instance_id
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('whatsapp_instance_id', instanceName)
+      .single();
+
+    if (profileErr || !profile) {
+      console.warn(`[WhatsappWebhook] ⚠️ Could not resolve user UUID for instance "${instanceName}". Skipping event.`);
+      return res.status(200).send('OK'); // Retornamos OK para a Evolution não ficar tentando reenviar algo que não achamos dono
+    }
+
+    const userId = profile.id; // O UUID real (ex: f8a2b1c0-xxxx-xxxx...)
+
     switch (event) {
       case 'MESSAGES_UPSERT':
-        await handleMessageUpsert(instanceName, body.data);
+        await handleMessageUpsert(userId, body.data);
         break;
       
       case 'CONNECTION_UPDATE':
-        await handleConnectionUpdate(instanceName, body.data);
+        await handleConnectionUpdate(userId, body.data);
         break;
       
       case 'QRCODE_UPDATED':
-        await handleQrUpdate(instanceName, body.data);
+        await handleQrUpdate(userId, body.data);
         break;
 
       default:
