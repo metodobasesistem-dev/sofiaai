@@ -305,7 +305,16 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
             className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200"
           >
             <div className="bg-white p-2 rounded-xl shadow-sm mb-2">
-              <img src={qr} alt="WhatsApp QR Code" className="w-48 h-48" />
+              <img 
+                src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`} 
+                alt="WhatsApp QR Code" 
+                className="w-48 h-48 object-contain"
+                onLoad={() => console.log('[WhatsAppConnect] QR Image loaded successfully')}
+                onError={(e) => {
+                  console.error('[WhatsAppConnect] QR Image failed to load', e);
+                  console.log('[WhatsAppConnect] Content of qr state:', qr.substring(0, 50) + '...');
+                }}
+              />
             </div>
             <p className="text-xs text-gray-400 text-center mt-2 px-2">
               Abra o WhatsApp → Aparelhos Conectados → Conectar um aparelho → Escaneie o código

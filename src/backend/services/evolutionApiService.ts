@@ -109,6 +109,10 @@ export class EvolutionApiService {
     const api = getApi();
     try {
       const { data } = await api.get(`/instance/connect/${userId}`);
+      if (data && data.base64 && !data.base64.startsWith('data:')) {
+        data.base64 = `data:image/png;base64,${data.base64}`;
+      }
+      console.log(`[EvolutionAPI] QR Code fetched for ${userId} (Length: ${data?.base64?.length || 0})`);
       return data;
     } catch (error: any) {
       console.error(`[EvolutionAPI] Error getting QR:`, error.response?.data || error.message);
