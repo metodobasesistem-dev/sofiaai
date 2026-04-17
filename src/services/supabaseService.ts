@@ -169,6 +169,68 @@ export const clearAgentFromCache = (email: string, agentId: string) => {
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/**
+ * Helper para obter sessão e token de forma centralizada
+ */
+const getAuthSession = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    return session;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Sistema de Log de Erros (Observabilidade Fase 2)
+ */
+export const logSystemError = async (module: string, message: string, metadata: any = {}) => {
+  try {
+    const session = await getAuthSession();
+    await supabase.from('sys_logs').insert({
+      user_id: session?.user?.id,
+      level: 'error',
+      module,
+      message,
+      metadata: {
+        ...metadata,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (err) {
+    // Falha silenciosa para não quebrar o app se o log falhar
+    console.error('[logSystemError] Critical Failure:', err);
+  }
+};
+
+/**
+ * Wrapper de Fetch padronizado com timeout e headers de auth
+ */
+const standardFetch = async (url: string, options: RequestInit = {}, timeoutMs = 8000) => {
+  const session = await getAuthSession();
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (err: any) {
+    clearTimeout(id);
+    throw err;
+  }
+};
+
 const mapAgents = (data: any[]): Agent[] =>
   data.map((a: any) => ({
     id: a.id,
@@ -194,30 +256,17 @@ const mapAgents = (data: any[]): Agent[] =>
   }));
 
 export const listAgents = async (): Promise<Agent[]> => {
-  const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-  const user = session?.user;
-  const token = session?.access_token;
+  const session = await getAuthSession();
+  if (!session) return [];
 
-  if (!user || !token) {
-    return [];
-  }
-
-  const cachedResult = user.email ? getCachedAgents(user.email) : [];
+  const cachedResult = session.user?.email ? getCachedAgents(session.user.email) : [];
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for the fetch itself
-
-    const res = await fetch('/api/v2/agents', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
+    const res = await standardFetch('/api/v2/agents');
     
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('[listAgents] API error response:', errorText);
+      console.warn('[listAgents] API non-ok response:', errorText);
       return cachedResult;
     }
 
@@ -225,10 +274,11 @@ export const listAgents = async (): Promise<Agent[]> => {
     if (!result.success) throw new Error(result.error);
 
     const agents = mapAgents(result.data || []);
-    if (user.email) setCachedAgents(user.email, agents);
+    if (session.user?.email) setCachedAgents(session.user.email, agents);
     return agents;
   } catch (err: any) {
-    console.warn('[listAgents] Fetch error or timeout, using cache:', err.message);
+    console.warn('[listAgents] Using cache due to error:', err.message);
+    logSystemError('frontend:agents', 'Falha ao listar agentes, usando cache.', { error: err.message });
     return cachedResult;
   }
 };
@@ -238,40 +288,27 @@ export const listAgents = async (): Promise<Agent[]> => {
  * Cria agente via INSERT direto na tabela agents
  */
 export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Usuário não autenticado');
+  try {
+    const res = await standardFetch('/api/v2/agents', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...agentData,
+        nome: agentData.nome, // Garantir mapeamento correto de campos snake_case se necessário
+        company_name: agentData.companyName,
+        company_description: agentData.companyDescription,
+        knowledge_base: agentData.knowledgeBase,
+        follow_ups: agentData.followUps,
+        reminders: agentData.reminders
+      })
+    });
 
-  const res = await fetch('/api/v2/agents', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({
-      nome: agentData.nome,
-      nicho: agentData.nicho || '',
-      prompt_base: agentData.prompt_base || '',
-      status_ativo: agentData.status_ativo ?? true,
-      company_name: agentData.companyName || '',
-      company_address: agentData.companyAddress || '',
-      professional_name: agentData.professionalName || '',
-      company_description: agentData.companyDescription || '',
-      company_products: agentData.companyProducts || '',
-      company_faq: agentData.companyFAQ || '',
-      company_links: agentData.companyLinks || '',
-      voice_mode: agentData.voice_mode || 'disabled',
-      voice_id: agentData.voice_id || 'alloy',
-      knowledge_base: agentData.knowledgeBase || [],
-      follow_ups: agentData.followUps || [],
-      reminders: agentData.reminders || [],
-      appointment_duration: agentData.appointmentDuration || 30,
-      response_delay: agentData.response_delay || 15
-    })
-  });
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.error);
-  return result.data;
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+    return result.data;
+  } catch (err: any) {
+    logSystemError('frontend:agents:create', err.message);
+    throw err;
+  }
 };
 
 /**
@@ -347,92 +384,106 @@ export const deleteAgent = async (agentId: string) => {
  * Contacts
  */
 export const listContacts = async (): Promise<Contact[]> => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return [];
-
-  const res = await fetch('/api/v2/contacts', {
-    headers: { 'Authorization': `Bearer ${session.access_token}` }
-  });
-  const result = await res.json();
-
-  if (!result.success) throw new Error(result.error);
-  
-  return (result.data || []).map((c: any) => ({
-    id: c.id,
-    userId: c.user_id,
-    nome: c.nome,
-    telefone: c.telefone,
-    status_funil: c.status_funil as any,
-    data_criacao: c.data_criacao,
-    ultimaMensagem: c.ultima_mensagem,
-    ultimaInteracao: c.ultima_interacao,
-    primeiroContato: c.primeiro_contato,
-    totalMensagens: c.total_mensagens,
-    source: c.source as any
-  }));
+  try {
+    const res = await standardFetch('/api/v2/contacts');
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+    
+    return (result.data || []).map((c: any) => ({
+      id: c.id,
+      userId: c.user_id,
+      nome: c.nome,
+      telefone: c.telefone,
+      status_funil: c.status_funil as any,
+      data_criacao: c.data_criacao,
+      ultimaMensagem: c.ultima_mensagem,
+      ultimaInteracao: c.ultima_interacao,
+      primeiroContato: c.primeiro_contato,
+      totalMensagens: c.total_mensagens,
+      source: c.source as any
+    }));
+  } catch (err: any) {
+    logSystemError('frontend:contacts', err.message);
+    return [];
+  }
 };
 
 /**
  * Professionals
  */
 export const listProfessionals = async (): Promise<Professional[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  try {
+    const session = await getAuthSession();
+    if (!session?.user) return [];
 
-  const { data, error } = await supabase
-    .from('professionals')
-    .select('*')
-    .eq('user_id', user.id);
-  
-  if (error) throw error;
-  
-  return (data || []).map(p => ({
-    id: p.id,
-    userId: p.user_id,
-    agentId: p.agent_id,
-    name: p.name,
-    specialties: p.specialties,
-    googleCalendarId: p.google_calendar_id,
-    bio: p.bio,
-    isActive: p.is_active,
-    createdAt: p.created_at
-  }));
+    const { data, error } = await supabase
+      .from('professionals')
+      .select('*')
+      .eq('user_id', session.user.id);
+    
+    if (error) throw error;
+    
+    return (data || []).map(p => ({
+      id: p.id,
+      userId: p.user_id,
+      agentId: p.agent_id,
+      name: p.name,
+      specialties: p.specialties,
+      googleCalendarId: p.google_calendar_id,
+      bio: p.bio,
+      isActive: p.is_active,
+      createdAt: p.created_at
+    }));
+  } catch (err: any) {
+    logSystemError('frontend:professionals', err.message);
+    return [];
+  }
 };
 
 export const upsertProfessional = async (pData: Partial<Professional>) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  try {
+    const session = await getAuthSession();
+    if (!session?.user) throw new Error('Not authenticated');
 
-  const payload = {
-    user_id: user.id,
-    agent_id: pData.agentId,
-    name: pData.name,
-    specialties: pData.specialties,
-    google_calendar_id: pData.googleCalendarId,
-    bio: pData.bio,
-    is_active: pData.isActive ?? true
-  };
+    const payload = {
+      user_id: session.user.id,
+      agent_id: pData.agentId,
+      name: pData.name,
+      specialties: pData.specialties,
+      google_calendar_id: pData.googleCalendarId,
+      bio: pData.bio,
+      is_active: pData.isActive ?? true
+    };
 
-  if (pData.id) {
-    const { error } = await supabase
-      .from('professionals')
-      .update(payload)
-      .eq('id', pData.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase
-      .from('professionals')
-      .insert(payload);
-    if (error) throw error;
+    if (pData.id) {
+      const { error } = await supabase
+        .from('professionals')
+        .update(payload)
+        .eq('id', pData.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('professionals')
+        .insert(payload);
+      if (error) throw error;
+    }
+  } catch (err: any) {
+    logSystemError('frontend:professionals:upsert', err.message);
+    throw err;
   }
 };
 
 export const deleteProfessional = async (id: string) => {
-  const { error } = await supabase
-    .from('professionals')
-    .delete()
-    .eq('id', id);
-  if (error) throw error;
+  try {
+    const { error } = await supabase
+      .from('professionals')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  } catch (err: any) {
+    logSystemError('frontend:professionals:delete', err.message);
+    throw err;
+  }
 };
 
 export const createContact = async (contactData: Omit<Contact, 'id' | 'userId' | 'data_criacao' | 'primeiroContato' | 'totalMensagens'>) => {
@@ -512,14 +563,10 @@ export const deleteContact = async (contactId: string) => {
  */
 export const getUserProfile = async (passedUserId?: string): Promise<UserProfile | null> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
+    const res = await standardFetch('/api/v2/profile');
+    if (!res.ok) return null;
 
-    const res = await fetch('/api/v2/profile', {
-      headers: { 'Authorization': `Bearer ${session.access_token}` }
-    });
     const result = await res.json();
-
     if (!result.success) throw new Error(result.error);
     const profile = result.data;
 
@@ -546,10 +593,10 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
         default_ai_model: profile.default_ai_model
       };
     }
-
     return null;
-  } catch (err) {
-    console.error('[getUserProfile] API Erro:', err);
+  } catch (err: any) {
+    console.error('[getUserProfile] API Erro:', err.message);
+    logSystemError('frontend:profile:get', err.message);
     return null;
   }
 };
@@ -616,47 +663,51 @@ export const saveAvailability = async (config: Omit<AvailabilityConfig, 'userId'
  * Appointments
  */
 export const listAppointments = async (): Promise<Appointment[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  try {
+    const session = await getAuthSession();
+    if (!session?.user) return [];
 
-  // Admin Bypass via role
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-  const isAdmin = profile?.role === 'admin';
+    // Admin Bypass via role
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+    const isAdmin = profile?.role === 'admin';
 
-  let query = supabase.from('appointments').select('*').eq('status', 'confirmed');
-  
-  if (!isAdmin) {
-    query = query.eq('user_id', user.id);
+    let query = supabase.from('appointments').select('*').eq('status', 'confirmed');
+    
+    if (!isAdmin) {
+      query = query.eq('user_id', session.user.id);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data || []).map(a => ({
+      id: a.id,
+      userId: a.user_id,
+      clientName: a.client_name,
+      clientPhone: a.client_phone,
+      date: a.data,
+      time: a.time,
+      duration: a.duration || 30,
+      niche: a.niche || '',
+      summary: a.summary,
+      agentId: a.agent_id,
+      agentName: a.agent_name || 'IA',
+      createdAt: a.created_at
+    }));
+  } catch (err: any) {
+    logSystemError('frontend:appointments', err.message);
+    return [];
   }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('[SupabaseService] listAppointments error:', error);
-    throw error;
-  }
-  return (data || []).map(a => ({
-    id: a.id,
-    userId: a.user_id,
-    clientName: a.client_name,
-    clientPhone: a.client_phone,
-    date: a.data,
-    time: a.time,
-    duration: a.duration || 30,
-    niche: a.niche || '',
-    summary: a.summary,
-    agentId: a.agent_id,
-    agentName: a.agent_name || 'IA',
-    createdAt: a.created_at
-  }));
 };
 
 export const deleteAppointment = async (id: string) => {
-  const { error } = await supabase
-    .from('appointments')
-    .delete()
-    .eq('id', id);
-  if (error) throw error;
+  try {
+    const { error } = await supabase.from('appointments').delete().eq('id', id);
+    if (error) throw error;
+  } catch (err: any) {
+    logSystemError('frontend:appointments:delete', err.message);
+    throw err;
+  }
 };
 
 export const updateAppointment = async (id: string, updates: Partial<Appointment>) => {
@@ -879,13 +930,8 @@ export const getGlobalRecentActivities = async () => {
  * Quick Replies
  */
 export const listQuickReplies = async (): Promise<QuickReply[]> => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return [];
-
   try {
-    const res = await fetch('/api/v2/quick-replies', {
-      headers: { 'Authorization': `Bearer ${session.access_token}` }
-    });
+    const res = await standardFetch('/api/v2/quick-replies');
     const result = await res.json();
     if (!result.success) throw new Error(result.error);
     
@@ -897,40 +943,39 @@ export const listQuickReplies = async (): Promise<QuickReply[]> => {
       createdAt: d.created_at
     }));
   } catch (err: any) {
-    console.error('[listQuickReplies] API error:', err.message);
+    logSystemError('frontend:quick-replies', err.message);
     return [];
   }
 };
 
 export const createQuickReply = async (replyData: { title: string, content: string }) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
+  try {
+    const res = await standardFetch('/api/v2/quick-replies', {
+      method: 'POST',
+      body: JSON.stringify(replyData)
+    });
 
-  const res = await fetch('/api/v2/quick-replies', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify(replyData)
-  });
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.error);
-  return result.data;
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+    return result.data;
+  } catch (err: any) {
+    logSystemError('frontend:quick-replies:create', err.message);
+    throw err;
+  }
 };
 
 export const deleteQuickReply = async (id: string) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
+  try {
+    const res = await standardFetch(`/api/v2/quick-replies/${id}`, {
+      method: 'DELETE'
+    });
 
-  const res = await fetch(`/api/v2/quick-replies/${id}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${session.access_token}` }
-  });
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.error);
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+  } catch (err: any) {
+    logSystemError('frontend:quick-replies:delete', err.message);
+    throw err;
+  }
 };
 
 export const getUpcomingAppointments = async () => {
