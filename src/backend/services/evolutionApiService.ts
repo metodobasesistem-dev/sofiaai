@@ -1,39 +1,46 @@
-import axios from 'axios';
-import dotenv from 'dotenv';
-import path from 'path';
+import axios, { AxiosInstance } from 'axios';
+import { supabase } from '../lib/supabaseClient.js';
 
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+let apiInstance: AxiosInstance | null = null;
 
-const API_URL = process.env.EVOLUTION_API_URL || '';
-const GLOBAL_API_KEY = process.env.EVOLUTION_API_KEY || '';
-const INSTANCE_TOKEN = process.env.EVOLUTION_AUTH_BASE64 || 'WppAI@2024#Secure123';
-const WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || '';
+function getApi() {
+  if (apiInstance) return apiInstance;
 
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'apikey': GLOBAL_API_KEY
+  const API_URL = process.env.EVOLUTION_API_URL;
+  const GLOBAL_API_KEY = process.env.EVOLUTION_API_KEY;
+
+  if (!API_URL) {
+    throw new Error('EVOLUTION_API_URL is not defined in environment variables');
   }
-});
+
+  apiInstance = axios.create({
+    baseURL: API_URL,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': GLOBAL_API_KEY || ''
+    }
+  });
+
+  return apiInstance;
+}
 
 export class EvolutionApiService {
   static async createInstance(userId: string) {
+    const api = getApi();
+    const INSTANCE_TOKEN = process.env.EVOLUTION_AUTH_BASE64 || 'WppAI@2024#Secure123';
+    
     console.log(`[EvolutionAPI] Creating instance for ${userId}...`);
     try {
       const { data } = await api.post('/instance/create', {
         instanceName: userId,
-        token: INSTANCE_TOKEN, // Usar token fixo para todas as instâncias por simplicidade
+        token: INSTANCE_TOKEN,
         qrcode: true
       });
       
-      // Configurar Webhook para esta instância
       await this.setWebhook(userId);
-      
       return data;
     } catch (error: any) {
       console.error(`[EvolutionAPI] Error creating instance:`, error.response?.data || error.message);
-      // Se já existir, apenas retorna sucesso ou tenta recuperar
       if (error.response?.status === 403 || error.response?.data?.message?.includes('already exists')) {
         console.log(`[EvolutionAPI] Instance ${userId} already exists.`);
         return { instance: { instanceName: userId } };
@@ -43,6 +50,9 @@ export class EvolutionApiService {
   }
 
   static async setWebhook(userId: string) {
+    const api = getApi();
+    const WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || '';
+
     if (!WEBHOOK_URL || WEBHOOK_URL.includes('your-backend-url')) {
       console.warn('[EvolutionAPI] BACKEND_WEBHOOK_URL not properly configured. Skipping webhook setup.');
       return;
@@ -69,9 +79,10 @@ export class EvolutionApiService {
   }
 
   static async getQrCode(userId: string) {
+    const api = getApi();
     try {
       const { data } = await api.get(`/instance/connect/${userId}`);
-      return data; // Retorna { base64: "...", code: "..." }
+      return data;
     } catch (error: any) {
       console.error(`[EvolutionAPI] Error getting QR:`, error.response?.data || error.message);
       return null;
@@ -79,16 +90,17 @@ export class EvolutionApiService {
   }
 
   static async getInstanceStatus(userId: string) {
+    const api = getApi();
     try {
       const { data } = await api.get(`/instance/connectionState/${userId}`);
-      return data.instance; // { state: "open" | "close" | "connecting" }
+      return data.instance;
     } catch (error: any) {
-      // Se der 404, assume que não existe
       return { state: 'disconnected' };
     }
   }
 
   static async logout(userId: string) {
+    const api = getApi();
     try {
       await api.post(`/instance/logout/${userId}`);
       await api.delete(`/instance/delete/${userId}`);
@@ -98,6 +110,7 @@ export class EvolutionApiService {
   }
 
   static async sendMessage(userId: string, to: string, text: string) {
+    const api = getApi();
     try {
       const { data } = await api.post(`/message/sendText/${userId}`, {
         number: to,
@@ -118,6 +131,7 @@ export class EvolutionApiService {
   }
 
   static async sendVoice(userId: string, to: string, base64Audio: string) {
+    const api = getApi();
     try {
       const { data } = await api.post(`/message/sendWhatsAppAudio/${userId}`, {
         number: to,
@@ -136,13 +150,11 @@ export class EvolutionApiService {
   }
 
   static async sendMedia(userId: string, to: string, base64Media: string, mimetype: string, filename: string) {
+    const api = getApi();
     try {
       const { data } = await api.post(`/message/sendMedia/${userId}`, {
         number: to,
-        options: {
-          delay: 1200,
-          presence: 'composing'
-        },
+        options: { delay: 1200, presence: 'composing' },
         media: base64Media,
         mediatype: mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document',
         mimetype: mimetype,
