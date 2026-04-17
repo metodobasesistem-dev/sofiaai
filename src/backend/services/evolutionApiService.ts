@@ -50,17 +50,28 @@ export class EvolutionApiService {
       await this.setWebhook(userId);
       return data;
     } catch (error: any) {
-      console.error(`[EvolutionAPI] Error creating instance (Status ${error.response?.status}):`, error.response?.data || error.message);
+      const errorData = error.response?.data || {};
+      const errorMessage = errorData.message || error.message || '';
       
-      // If 401, it's a key issue
+      console.error(`[EvolutionAPI] Error creating instance (Status ${error.response?.status}):`, JSON.stringify(errorData));
+      
+      // Handle 400, 403 or 409 as potential "already exists" cases
+      const isAlreadyExists = 
+        error.response?.status === 403 || 
+        error.response?.status === 400 ||
+        error.response?.status === 409 ||
+        errorMessage.toLowerCase().includes('already exists') ||
+        (errorData.error && errorData.error.toLowerCase().includes('already exists'));
+
+      if (isAlreadyExists) {
+        console.log(`[EvolutionAPI] Instance ${userId} already exists or was detected as conflict. Proceeding...`);
+        return { instance: { instanceName: userId } };
+      }
+      
       if (error.response?.status === 401) {
         console.error('[EvolutionAPI] Authentication failed. Please verify your EVOLUTION_API_KEY in the dashboard.');
       }
 
-      if (error.response?.status === 403 || error.response?.data?.message?.includes('already exists')) {
-        console.log(`[EvolutionAPI] Instance ${userId} already exists.`);
-        return { instance: { instanceName: userId } };
-      }
       throw error;
     }
   }
