@@ -23,6 +23,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
 import { listAgents, createAgent, updateAgent, toggleAgentStatus, deleteAgent, getCachedAgents, clearAgentFromCache, type Agent, type KnowledgeItem } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 /// <reference types="vite/client" />
@@ -424,9 +425,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <Loader2 size={40} className="animate-spin mb-4 text-blue-500" />
-          <p className="font-medium">Carregando seus agentes...</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -33,6 +33,7 @@ import {
 } from '../services/supabaseService';
 import { syncContacts } from '../services/whatsappService';
 import { toast } from 'sonner';
+import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -489,9 +490,8 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
         className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
       >
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <Loader2 size={40} className="animate-spin mb-4 text-blue-500" />
-            <p className="font-medium">Carregando contatos...</p>
+          <div className="p-6">
+            <ListSkeleton rows={8} />
           </div>
         ) : filteredContacts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-6 text-center">

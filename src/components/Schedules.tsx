@@ -19,6 +19,7 @@ import { format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eac
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Edit3 } from 'lucide-react';
+import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 const AppointmentCard: React.FC<{ 
@@ -256,9 +257,22 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center p-20 text-gray-400">
-           <Loader2 className="animate-spin mb-4" size={32} />
-           <p>Carregando agendamentos...</p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-6">
+                <Skeleton variant="rect" width={100} height={80} className="rounded-xl" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton variant="text" width="40%" height={20} />
+                  <Skeleton variant="text" width="60%" height={15} />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton variant="rect" width={100} height={40} className="rounded-lg" />
+                  <Skeleton variant="rect" width={100} height={40} className="rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : view === 'list' ? (
         <div className="space-y-4">

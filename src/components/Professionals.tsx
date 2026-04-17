@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { listProfessionals, upsertProfessional, deleteProfessional, type Professional } from '../services/supabaseService';
+import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
 import { toast } from 'sonner';
 
 export default function Professionals() {
@@ -131,8 +132,10 @@ export default function Professionals() {
       </div>
 
       {loading ? (
-        <div className="h-[40vh] flex items-center justify-center">
-          <Loader2 size={32} className="animate-spin text-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
         </div>
       ) : profs.length === 0 ? (
         <div className="bg-white border-2 border-dashed border-slate-100 rounded-3xl p-16 text-center max-w-2xl mx-auto">

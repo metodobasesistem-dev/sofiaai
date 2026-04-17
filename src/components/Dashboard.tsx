@@ -26,6 +26,7 @@ import {
   RefreshCw,
   ChevronRight
 } from 'lucide-react';
+import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { motion, AnimatePresence } from 'motion/react';
 import { getWhatsAppStatus, connectWhatsApp, listenToWhatsAppSession, WhatsAppStatusResponse } from '../services/whatsappService';
 import { toast } from 'sonner';
@@ -549,7 +550,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               </div>
               <div className="mt-5 relative z-10">
                 <h3 className="text-4xl font-extrabold text-slate-900 tracking-tighter">
-                  {loading ? <div className="h-10 w-20 bg-slate-100 animate-pulse rounded-xl" /> : item.value}
+                  {loading ? <Skeleton variant="text" width={80} height={40} /> : item.value}
                 </h3>
                 <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{item.label}</p>
               </div>
@@ -719,7 +720,9 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           </div>
           
           <div className="flex-1 p-6 space-y-4 overflow-y-auto max-h-[400px]">
-            {upcomingAppointments.length === 0 ? (
+            {loading ? (
+              <ListSkeleton rows={4} />
+            ) : upcomingAppointments.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300 mb-4">
                   <CalendarX size={32} />
@@ -768,7 +771,9 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           </div>
           
           <div className="p-6 space-y-4 overflow-y-auto max-h-[400px]">
-            {activities.length === 0 ? (
+            {loading ? (
+              <ListSkeleton rows={4} />
+            ) : activities.length === 0 ? (
               <div className="py-10 text-center">
                 <p className="text-xs text-gray-400">Nenhuma atividade recente.</p>
               </div>

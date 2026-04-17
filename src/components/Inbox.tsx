@@ -23,6 +23,7 @@ import {
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage } from '../services/whatsappService';
@@ -747,9 +748,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
         
         <div className="flex-1 overflow-y-auto">
           {loadingThreads ? (
-            <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-              <Loader2 size={24} className="animate-spin mb-2" />
-              <p className="text-xs">Carregando conversas...</p>
+            <div className="p-2">
+              <ListSkeleton rows={8} />
             </div>
           ) : filteredThreads.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-gray-400 p-4 text-center">
@@ -808,8 +808,19 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-6 bg-[#f8f9fa] space-y-2">
               {loadingMessages ? (
-                <div className="flex items-center justify-center h-full text-gray-400">
-                  <Loader2 size={24} className="animate-spin" />
+                <div className="space-y-6">
+                  <div className="flex flex-col items-start space-y-2">
+                    <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
+                    <Skeleton variant="text" width="20%" />
+                  </div>
+                  <div className="flex flex-col items-end space-y-2">
+                    <Skeleton variant="rect" width="40%" height={40} className="rounded-2xl rounded-tr-none bg-blue-100" />
+                    <Skeleton variant="text" width="15%" />
+                  </div>
+                  <div className="flex flex-col items-start space-y-2">
+                    <Skeleton variant="rect" width="50%" height={80} className="rounded-2xl rounded-tl-none" />
+                    <Skeleton variant="text" width="25%" />
+                  </div>
                 </div>
               ) : (
                 <>
