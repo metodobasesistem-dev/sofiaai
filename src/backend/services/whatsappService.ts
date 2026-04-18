@@ -26,6 +26,7 @@ export interface WhatsAppStatusResponse {
 class WhatsAppService {
   private sessions: Map<string, Session> = new Map();
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private lastWebhookSync: Map<string, number> = new Map();
 
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
     try {
@@ -125,8 +126,18 @@ class WhatsAppService {
       
       if (status.state === 'open') {
         dbStatus = 'connected';
-        // Auto-healing: Garantir que o webhook esteja ativo se estiver conectado
-        EvolutionApiService.setWebhook(instanceName).catch(() => {});
+        
+        // Auto-healing inteligente: Só sincroniza se passou mais de 1 hora desde a última vez
+        const now = Date.now();
+        const lastSync = this.lastWebhookSync.get(instanceName) || 0;
+        const ONE_HOUR = 3600000;
+        
+        if (now - lastSync > ONE_HOUR) {
+          console.log(`[WhatsAppService] 🔄 Scheduled webhook sync for ${instanceName}...`);
+          EvolutionApiService.setWebhook(instanceName)
+            .then(() => this.lastWebhookSync.set(instanceName, now))
+            .catch(() => {});
+        }
       } else if (status.state === 'connecting') {
         dbStatus = 'connecting';
       }
