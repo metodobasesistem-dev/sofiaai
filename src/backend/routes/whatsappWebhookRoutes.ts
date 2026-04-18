@@ -28,7 +28,10 @@ router.post('/webhook', async (req, res) => {
 
     const userId = profile.id; // O UUID real (ex: f8a2b1c0-xxxx-xxxx...)
 
-    switch (event) {
+    // Normalizar evento para suportar v1 e v2
+    const normalizedEvent = event.toUpperCase().replace(/\./g, '_');
+
+    switch (normalizedEvent) {
       case 'MESSAGES_UPSERT':
         await handleMessageUpsert(userId, body.data);
         break;
@@ -40,9 +43,14 @@ router.post('/webhook', async (req, res) => {
       case 'QRCODE_UPDATED':
         await handleQrUpdate(userId, body.data);
         break;
+      
+      case 'MESSAGES_UPDATE':
+      case 'MESSAGES_DELETE':
+        // Eventos informativos, podemos implementar no futuro
+        break;
 
       default:
-        // console.log(`[WhatsappWebhook] Unhandled event: ${event}`);
+        console.log(`[WhatsappWebhook] Unhandled normalized event: ${normalizedEvent} (Original: ${event})`);
         break;
     }
   } catch (error) {
