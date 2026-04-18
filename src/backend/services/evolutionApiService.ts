@@ -177,7 +177,8 @@ export class EvolutionApiService {
       });
       return data;
     } catch (error: any) {
-      console.error(`[EvolutionAPI] Error sending text:`, error.response?.data || error.message);
+      const errorBody = error.response?.data;
+      console.error(`[EvolutionAPI] Error sending text to ${to}:`, JSON.stringify(errorBody || error.message));
       throw error;
     }
   }
