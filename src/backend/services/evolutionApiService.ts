@@ -148,10 +148,14 @@ export class EvolutionApiService {
   static async logout(userId: string) {
     const api = getApi();
     try {
-      await api.post(`/instance/logout/${userId}`);
-      await api.delete(`/instance/delete/${userId}`);
+      // Tentamos o logout (fecha a sessão no Baileys), mas ignoramos erros se já estiver deslogado
+      await api.post(`/instance/logout/${userId}`).catch(() => {});
+      // Deletamos a instância permanentemente da Evolution
+      await api.delete(`/instance/delete/${userId}`).catch((err) => {
+         console.warn(`[EvolutionAPI] Delete failed for ${userId}:`, err.response?.data || err.message);
+      });
     } catch (error: any) {
-      console.error(`[EvolutionAPI] Error logout:`, error.response?.data || error.message);
+      console.error(`[EvolutionAPI] Critical error during logout:`, error.response?.data || error.message);
     }
   }
 

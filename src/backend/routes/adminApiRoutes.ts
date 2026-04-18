@@ -79,18 +79,23 @@ router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
 // ─── POST /api/v2/admin/users/:id/reset-whatsapp ──────────────────────────
 router.post('/users/:id/reset-whatsapp', async (req: AuthenticatedRequest, res: Response) => {
   const targetUserId = req.params.id;
+  console.log(`[AdminAPI] Force resetting WhatsApp session for user: ${targetUserId}`);
+  
   try {
     const { whatsappService } = await import('../services/whatsappService.js');
     
-    // 1. Force logout and cleanup in memory + Supabase sessions table
-    await whatsappService.logout(targetUserId);
+    // 1. Tentar logout (o novo whatsappService já é resiliente e busca o ID correto)
+    await whatsappService.logout(targetUserId).catch(err => {
+      console.warn(`[AdminAPI] Warning during logout for ${targetUserId}:`, err.message);
+    });
     
-    // 2. Clear status in profiles
+    // 2. Clear status e ID de instância no profiles (Garante a limpeza profunda)
     const { error } = await supabase
       .from('profiles')
       .update({
         whatsapp_status: 'disconnected',
         whatsapp_instance_id: null,
+        whatsapp_qr: null,
         updated_at: new Date().toISOString()
       })
       .eq('id', targetUserId);
@@ -99,9 +104,9 @@ router.post('/users/:id/reset-whatsapp', async (req: AuthenticatedRequest, res: 
 
     // 3. Clear profile cache
     const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
-    await invalidateCache(cacheKey.profile(targetUserId));
+    await invalidateCache(cacheKey.profile(targetUserId)).catch(() => {});
 
-    res.json({ success: true, message: 'WhatsApp session reset successfully' });
+    res.json({ success: true, message: 'WhatsApp session reset completely' });
   } catch (err: any) {
     console.error('[AdminAPI] WhatsApp Reset Error:', err.message);
     res.status(500).json({ success: false, error: err.message });

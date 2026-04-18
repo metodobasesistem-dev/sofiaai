@@ -105,9 +105,16 @@ class WhatsAppService {
     }
   }
 
-  async getSessionStatus(userId: string): Promise<{ status: string; qr?: string }> {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
+  async getSessionStatus(userId: string): Promise<WhatsAppStatusResponse> {
     try {
+      // 1. Buscar o ID real da instância no banco
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('whatsapp_status, whatsapp_qr, whatsapp_instance_id')
+        .eq('id', userId)
+        .single();
+      
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       const status = await EvolutionApiService.getInstanceStatus(instanceName);
       let dbStatus = 'disconnected';
       
@@ -147,10 +154,38 @@ class WhatsAppService {
   }
 
   async logout(userId: string) {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
-    console.log(`[WhatsAppService] Logging out instance ${instanceName}`);
-    await EvolutionApiService.logout(instanceName);
-    await this.updateProfileStatus(userId, { status: 'disconnected' });
+    try {
+      // 1. Buscar o ID real da instância no banco antes de apagar
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('whatsapp_instance_id')
+        .eq('id', userId)
+        .single();
+
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+      
+      console.log(`[WhatsAppService] Logging out instance ${instanceName} for user ${userId}`);
+      
+      // 2. Tentar deletar na Evolution
+      await EvolutionApiService.logout(instanceName);
+      
+      // 3. Limpar no Supabase (Importante: define ID como null para evitar loops)
+      await supabase
+        .from('profiles')
+        .update({ 
+          whatsapp_status: 'disconnected', 
+          whatsapp_qr: null, 
+          whatsapp_instance_id: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      console.log(`[WhatsAppService] Instance ${instanceName} cleared successfully.`);
+    } catch (error) {
+      console.error(`[WhatsAppService] Error during logout for ${userId}:`, error);
+      // Mesmo com erro, tentamos resetar o status local
+      await this.updateProfileStatus(userId, { status: 'disconnected' });
+    }
   }
 
   async destroySession(userId: string) {
