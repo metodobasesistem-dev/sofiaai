@@ -18,6 +18,11 @@ interface Session {
   qr?: string;
 }
 
+export interface WhatsAppStatusResponse {
+  status: string;
+  qr?: string;
+}
+
 class WhatsAppService {
   private sessions: Map<string, Session> = new Map();
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
