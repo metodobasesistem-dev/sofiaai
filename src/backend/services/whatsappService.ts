@@ -123,8 +123,13 @@ class WhatsAppService {
       const status = await EvolutionApiService.getInstanceStatus(instanceName);
       let dbStatus = 'disconnected';
       
-      if (status.state === 'open') dbStatus = 'connected';
-      else if (status.state === 'connecting') dbStatus = 'connecting';
+      if (status.state === 'open') {
+        dbStatus = 'connected';
+        // Auto-healing: Garantir que o webhook esteja ativo se estiver conectado
+        EvolutionApiService.setWebhook(instanceName).catch(() => {});
+      } else if (status.state === 'connecting') {
+        dbStatus = 'connecting';
+      }
       
       let qr = undefined;
       if (dbStatus === 'connecting') {

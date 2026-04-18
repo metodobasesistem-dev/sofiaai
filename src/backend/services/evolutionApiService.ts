@@ -88,17 +88,19 @@ export class EvolutionApiService {
     
     try {
       await api.post(`/webhook/set/${userId}`, {
-        url: WEBHOOK_URL,
-        enabled: true,
-        webhook_by_events: false,
-        events: [
-          'MESSAGES_UPSERT',
-          'CONNECTION_UPDATE',
-          'QRCODE_UPDATED',
-          'MESSAGES_UPDATE',
-          'MESSAGES_DELETE',
-          'SEND_MESSAGE'
-        ]
+        webhook: {
+          enabled: true,
+          url: WEBHOOK_URL,
+          webhookByEvents: false,
+          events: [
+            'MESSAGES_UPSERT',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+            'MESSAGES_UPDATE',
+            'MESSAGES_DELETE',
+            'SEND_MESSAGE'
+          ]
+        }
       });
       console.log(`[EvolutionAPI] Webhook set for ${userId}`);
     } catch (error: any) {
