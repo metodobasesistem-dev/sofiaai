@@ -100,7 +100,8 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
         },
         (payload) => {
           const newStatus = payload.new?.whatsapp_status as string;
-          console.log('[WhatsAppConnect] Realtime update:', newStatus);
+          const newQr = payload.new?.whatsapp_qr as string;
+          console.log('[WhatsAppConnect] Realtime update:', newStatus, newQr ? '(QR Present)' : '(No QR)');
 
           if (newStatus === 'connected') {
             updateStatus('connected', null);
@@ -110,9 +111,16 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
               toast.success('WhatsApp Conectado! 🎉');
             }
           } else if (newStatus === 'connecting') {
-            if (statusRef.current === 'disconnected') {
-              updateStatus('connecting', null);
-            }
+             // Se recebemos um QR no Realtime, mudamos para 'waiting' para mostrá-lo
+             if (newQr) {
+               updateStatus('waiting', newQr);
+               startQrPolling(uid);
+             } else if (statusRef.current === 'disconnected' || statusRef.current === 'waiting') {
+               // Se não tem QR e o status mudou, mostramos o carregamento (exceto se já estivermos conectado)
+               if (statusRef.current !== 'connected') {
+                updateStatus('connecting', null);
+               }
+             }
           } else if (newStatus === 'disconnected') {
             if (statusRef.current === 'connected') {
               updateStatus('disconnected', null);
