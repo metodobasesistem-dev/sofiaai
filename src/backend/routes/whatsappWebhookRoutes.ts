@@ -11,7 +11,9 @@ router.post('/webhook', async (req, res) => {
   const instanceName = body.instance; // O nome da instância (ex: wppai_f8a2b1c0)
   const event = body.event;
 
-  console.log(`[WhatsappWebhook] Received event "${event}" for instance "${instanceName}"`);
+  console.log(`[WhatsappWebhook] 📩 Incoming: "${event}" for "${instanceName}"`);
+  // Log completo para debug em produção
+  console.log(`[WhatsappWebhook] Body: ${JSON.stringify(body)}`);
 
   try {
     // RESOLUÇÃO DE USUÁRIO: Buscar o UUID real do usuário pelo whatsapp_instance_id
