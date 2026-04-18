@@ -61,16 +61,19 @@ router.post('/webhook', async (req, res) => {
 });
 
 async function handleMessageUpsert(userId: string, data: any) {
-  const message = data.message;
-  if (!message || data.key.fromMe) return;
+  // Evolution v2 envia um array 'messages', v1 enviava o objeto direto em 'data'
+  const messageObj = data.messages?.[0] || data;
+  const message = messageObj.message;
+  
+  if (!message || messageObj.key?.fromMe) return;
 
-  const remoteJid = data.key.remoteJid;
+  const remoteJid = messageObj.key.remoteJid;
   if (remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') return;
 
-  const pushName = data.pushName || 'Cliente';
+  const pushName = messageObj.pushName || 'Cliente';
   const cleanNumber = remoteJid.split('@')[0].replace(/\D/g, '');
   const messageContent = message.conversation || message.extendedTextMessage?.text || '';
-  const messageId = data.key.id;
+  const messageId = messageObj.key.id;
 
   console.log(`[Webhook] 📥 Message from ${remoteJid}: "${messageContent.substring(0, 30)}"`);
 
