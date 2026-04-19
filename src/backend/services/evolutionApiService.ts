@@ -220,15 +220,18 @@ export class EvolutionApiService {
     }
   }
 
-  static async fetchMessages(userId: string) {
+  static async fetchMessages(instanceName: string) {
     const api = getApi();
     try {
-      // Busca as últimas mensagens da instância para sincronização de contingência
-      // O endpoint /chat/findMessages retorna as conversas e mensagens recentes
-      const { data } = await api.get(`/chat/findMessages/${userId}`);
+      // O endpoint /chat/findMessages agora é um POST na v2
+      // Ele serve como redundância caso o webhook falhe
+      const { data } = await api.post(`/chat/findMessages/${instanceName}`, { 
+        read: false, // Opcional: apenas não lidas
+        limit: 10
+      });
       return data;
     } catch (error: any) {
-      console.error(`[EvolutionAPI] Error fetching messages for ${userId}:`, error.response?.data || error.message);
+      console.error(`[EvolutionAPI] Error fetching messages for ${instanceName}:`, error.response?.data || error.message);
       return [];
     }
   }
