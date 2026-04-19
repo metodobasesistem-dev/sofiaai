@@ -162,6 +162,7 @@ class WhatsAppService {
   }
 
   async requestPairingCode(userId: string, phoneNumber: string): Promise<string> {
+    try {
       // 1. Resolve ou gera novo ID
       const { data: prof } = await supabase
         .from('profiles')
