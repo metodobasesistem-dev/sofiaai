@@ -218,6 +218,8 @@ export class EvolutionApiService {
       console.error(`[EvolutionAPI] Error sending media:`, error.response?.data || error.message);
       throw error;
     }
+  }
+
   static async fetchMessages(userId: string) {
     const api = getApi();
     try {
