@@ -218,5 +218,16 @@ export class EvolutionApiService {
       console.error(`[EvolutionAPI] Error sending media:`, error.response?.data || error.message);
       throw error;
     }
+  static async fetchMessages(userId: string) {
+    const api = getApi();
+    try {
+      // Busca as últimas mensagens da instância para sincronização de contingência
+      // O endpoint /chat/findMessages retorna as conversas e mensagens recentes
+      const { data } = await api.get(`/chat/findMessages/${userId}`);
+      return data;
+    } catch (error: any) {
+      console.error(`[EvolutionAPI] Error fetching messages for ${userId}:`, error.response?.data || error.message);
+      return [];
+    }
   }
 }

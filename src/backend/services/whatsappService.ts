@@ -375,6 +375,62 @@ class WhatsAppService {
     // No-op (webhook driven)
     console.log('[WhatsAppService] initializeAllSessions called (No-op)');
   }
+  /**
+   * Background Polling - Rede de Segurança Anti-Falha de Webhook
+   * Busca mensagens diretamente na Evolution caso o webhook engasgue.
+   */
+  async startPolling() {
+    console.log('[WhatsAppService] 🛡️ Segurança: Polling de mensagens iniciado (2 min)');
+    setInterval(async () => {
+      try {
+        const { data: connectedProfiles } = await supabase
+          .from('profiles')
+          .select('id, whatsapp_instance_id')
+          .eq('whatsapp_status', 'connected');
+
+        if (!connectedProfiles) return;
+
+        for (const profile of connectedProfiles) {
+          if (!profile.whatsapp_instance_id) continue;
+          
+          // console.log(`[WhatsAppService] 🔍 Polling: Sincronizando ${profile.whatsapp_instance_id}...`);
+          const data = await EvolutionApiService.fetchMessages(profile.whatsapp_instance_id);
+          
+          if (data && data.length > 0) {
+             // Processar cada mensagem (o persistMessage já é idempotente agora)
+             for (const msg of data) {
+                // Adaptador de formato se necessário
+                const messageId = msg.key?.id;
+                const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                const from = msg.key?.remoteJid;
+                
+                if (messageId && body && from) {
+                   const cleanFrom = from.split('@')[0].replace(/\D/g, '');
+                   const threadId = `${profile.id}_${cleanFrom}`;
+                   
+                   if (!msg.key?.fromMe) { // Apenas inbound
+                      await agentService.persistMessage(
+                        threadId,
+                        profile.id,
+                        body,
+                        'inbound',
+                        messageId,
+                        msg.pushName || 'WhatsApp User',
+                        from,
+                        cleanFrom
+                      );
+                   }
+                }
+             }
+          }
+        }
+      } catch (err) {
+        console.error('[WhatsAppService] Polling error:', err);
+      }
+    }, 120000); // 2 minutos
+  }
 }
 
 export const whatsappService = new WhatsAppService();
+// Inicia o polling global ao carregar o serviço
+whatsappService.startPolling();

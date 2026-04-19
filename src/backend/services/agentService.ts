@@ -280,42 +280,41 @@ export class AgentService {
 
     // 2. Message Second
     try {
-       const messageData: any = {
-        user_id: userId,
-        thread_id: threadId,
-        text: text,
-        direction: direction,
-        timestamp: timestamp,
-        audio_url: audioUrl
-      };
-
-      if (usage) {
-        messageData.tokens_prompt = usage.prompt_tokens || 0;
-        messageData.tokens_completion = usage.completion_tokens || 0;
-        messageData.cost_brl = usage.cost_brl || 0;
-      }
-
-       const { error: mErr } = await supabase.from('messages').insert(messageData);
-      
-      if (mErr) {
-        console.warn('[AgentService] ⚠️ Falha na persistência completa da mensagem. Provável script SQL não executado.', mErr.message);
-        
-        // --- FALLBACK: Try minimal insert without finance columns ---
-        if (usage) {
-          console.log('[AgentService] 🔄 Tentando persistência minimalista (sem dados financeiros)...');
-          const { error: fErr } = await supabase.from('messages').insert({
-            user_id: userId,
-            thread_id: threadId,
-            text: text,
-            direction: direction,
-            timestamp: timestamp
-          });
-          if (fErr) console.error('[AgentService] ❌ Falha crítica: Nem a persistência mínima funcionou:', fErr);
-          else console.log('[AgentService] ✅ Mensagem salva com sucesso usando fallback.');
-        } else {
-           console.error('[AgentService] ❌ Erro de persistência (sem uso de IA):', mErr);
-        }
-      }
+        const messageData: any = {
+         id: messageId, // Agora incluímos o ID original do WhatsApp
+         user_id: userId,
+         thread_id: threadId,
+         text: text,
+         direction: direction,
+         timestamp: timestamp,
+         audio_url: audioUrl,
+         created_at: new Date(timestamp).toISOString() // Força consistência temporal
+       };
+ 
+       if (usage) {
+         messageData.tokens_prompt = usage.prompt_tokens || 0;
+         messageData.tokens_completion = usage.completion_tokens || 0;
+         messageData.cost_brl = usage.cost_brl || 0;
+       }
+ 
+        // Usamos upsert com onConflict: 'id' para evitar duplicatas de polling/webhook
+        const { error: mErr } = await supabase.from('messages').upsert(messageData, { onConflict: 'id' });
+       
+       if (mErr) {
+         console.warn('[AgentService] ⚠️ Falha na persistência idempotente. Tentando sem campos financeiros...', mErr.message);
+         
+         // --- FALLBACK: Try minimal upsert ---
+         const { error: fErr } = await supabase.from('messages').upsert({
+           id: messageId,
+           user_id: userId,
+           thread_id: threadId,
+           text: text,
+           direction: direction,
+           timestamp: timestamp
+         }, { onConflict: 'id' });
+         
+         if (fErr) console.error('[AgentService] ❌ Falha crítica de persistência:', fErr);
+       }
     } catch (mErr) {
        console.error('[AgentService] Message insert exception:', mErr);
     }
