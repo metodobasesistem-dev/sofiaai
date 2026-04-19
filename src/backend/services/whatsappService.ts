@@ -120,7 +120,13 @@ class WhatsAppService {
         .eq('id', userId)
         .single();
       
-      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}_${Date.now().toString().slice(-4)}`;
+      
+      // Auto-update db if we generated a fresh one
+      if (!prof?.whatsapp_instance_id) {
+         await supabase.from('profiles').update({ whatsapp_instance_id: instanceName }).eq('id', userId);
+      }
+
       const status = await EvolutionApiService.getInstanceStatus(instanceName);
       let dbStatus = 'disconnected';
       
@@ -156,10 +162,20 @@ class WhatsAppService {
   }
 
   async requestPairingCode(userId: string, phoneNumber: string): Promise<string> {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
-    try {
+      // 1. Resolve ou gera novo ID
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('whatsapp_instance_id')
+        .eq('id', userId)
+        .single();
+      
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}_${Date.now().toString().slice(-4)}`;
+      
       console.log(`[WhatsAppService] Requesting pairing code for ${instanceName}`);
       await EvolutionApiService.createInstance(instanceName);
+
+      // Save it
+      await supabase.from('profiles').update({ whatsapp_instance_id: instanceName }).eq('id', userId);
       
       const data = await EvolutionApiService.getPairingCode(instanceName, phoneNumber);
       if (!data || !data.code) {
@@ -196,7 +212,7 @@ class WhatsAppService {
         .update({ 
           whatsapp_status: 'disconnected', 
           whatsapp_qr: null, 
-          whatsapp_instance_id: null,
+          whatsapp_instance_id: null, // LIMPEZA CRÍTICA: Força nova instância no próximo scan
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
@@ -214,9 +230,24 @@ class WhatsAppService {
   }
 
   async sendMessage(userId: string, to: string, message: string) {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
-    console.log(`[WhatsAppService] Sending message via Evolution ${instanceName} to ${to}`);
-    const result = await EvolutionApiService.sendMessage(instanceName, to, message);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('whatsapp_instance_id')
+        .eq('id', userId)
+        .single();
+      
+      // Se já tiver uma instância, tentamos usar ela, ou geramos uma nova se estivermos reiniciando
+      const instanceName = profile?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}_${Date.now().toString().slice(-4)}`;
+      
+      console.log(`[WhatsAppService] Checking status for ${instanceName} (User: ${userId})`);
+      
+      // Atualizar o ID da instância no banco caso tenha mudado
+      if (instanceName !== profile?.whatsapp_instance_id) {
+         await supabase.from('profiles').update({ whatsapp_instance_id: instanceName }).eq('id', userId);
+      }
+
+      const status = await EvolutionApiService.getInstanceStatus(instanceName);
+      const result = await EvolutionApiService.sendMessage(instanceName, to, message);
     
     // Persist manual message
     try {
