@@ -120,7 +120,7 @@ class WhatsAppService {
         .eq('id', userId)
         .single();
       
-      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}_${Date.now().toString().slice(-4)}`;
+      const instanceName = `wppai_${userId.substring(0, 8)}`;
       
       // Auto-update db if we generated a fresh one
       if (!prof?.whatsapp_instance_id) {
@@ -170,7 +170,7 @@ class WhatsAppService {
         .eq('id', userId)
         .single();
       
-      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}_${Date.now().toString().slice(-4)}`;
+      const instanceName = `wppai_${userId.substring(0, 8)}`;
       
       console.log(`[WhatsAppService] Requesting pairing code for ${instanceName}`);
       await EvolutionApiService.createInstance(instanceName);
@@ -238,7 +238,7 @@ class WhatsAppService {
         .single();
       
       // Se já tiver uma instância, tentamos usar ela, ou geramos uma nova se estivermos reiniciando
-      const instanceName = profile?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}_${Date.now().toString().slice(-4)}`;
+      const instanceName = `wppai_${userId.substring(0, 8)}`;
       
       console.log(`[WhatsAppService] Checking status for ${instanceName} (User: ${userId})`);
       

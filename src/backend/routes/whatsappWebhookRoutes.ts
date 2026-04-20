@@ -25,6 +25,7 @@ router.post('/webhook', async (req, res) => {
 
     if (profileErr || !profile) {
       console.warn(`[WhatsappWebhook] ⚠️ Could not resolve user UUID for instance "${instanceName}". Skipping event.`);
+      if (profileErr) console.error(`[WhatsappWebhook] DB Error:`, profileErr);
       return res.status(200).send('OK'); // Retornamos OK para a Evolution não ficar tentando reenviar algo que não achamos dono
     }
 

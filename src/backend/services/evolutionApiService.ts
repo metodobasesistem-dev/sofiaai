@@ -66,6 +66,7 @@ export class EvolutionApiService {
 
       if (isAlreadyExists) {
         console.log(`[EvolutionAPI] Instance ${userId} already exists or was detected as conflict. Proceeding...`);
+        try { await this.setWebhook(userId); } catch (e) { } // Set webhook again just in case
         return { instance: { instanceName: userId } };
       }
       
