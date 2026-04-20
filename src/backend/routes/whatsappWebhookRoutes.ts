@@ -64,30 +64,31 @@ router.post('/webhook', async (req, res) => {
 });
 
 async function handleMessageUpsert(userId: string, data: any) {
-  // Evolution v2 envia um array 'messages', v1 enviava o objeto direto em 'data'
-  const messageObj = data.messages?.[0] || data;
-  const message = messageObj.message;
+  // Extrair o dado unificado independente de Evolution v1 ou v2
+  const messageObj = data.messages?.[0] || data.message || data;
+  const key = messageObj.key || data.key;
+  const messageContentObj = messageObj.message || messageObj;
   
-  if (!message || messageObj.key?.fromMe) return;
+  if (!messageContentObj || key?.fromMe) return;
 
-  const remoteJid = messageObj.key.remoteJid;
-  if (remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') return;
+  const remoteJid = key?.remoteJid;
+  if (!remoteJid || remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') return;
 
-  const pushName = messageObj.pushName || 'Cliente';
+  const pushName = messageObj.pushName || data.pushName || 'Cliente';
   const cleanNumber = remoteJid.split('@')[0].replace(/\D/g, '');
-  const messageContent = message.conversation || message.extendedTextMessage?.text || '';
-  const messageId = messageObj.key.id;
+  const messageContent = messageContentObj.conversation || messageContentObj.extendedTextMessage?.text || '';
+  const messageId = key.id;
 
   console.log(`[Webhook] 📥 Message from ${remoteJid}: "${messageContent.substring(0, 30)}"`);
 
   // Detectar Áudio
-  const isAudio = !!(message.audioMessage || (message.viewOnceMessageV2?.message?.audioMessage));
+  const isAudio = !!(messageContentObj.audioMessage || (messageContentObj.viewOnceMessageV2?.message?.audioMessage));
   
   if (isAudio) {
      console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid}. Processing...`);
      // Evolution API v2 envia o base64 se configurado ou precisamos baixar
      // Se não tiver base64, ignoramos ou buscamos via API
-     const base64Audio = message.audioMessage?.base64 || message.viewOnceMessageV2?.message?.audioMessage?.base64;
+     const base64Audio = messageContentObj.audioMessage?.base64 || messageContentObj.viewOnceMessageV2?.message?.audioMessage?.base64;
      
      if (base64Audio) {
         const buffer = Buffer.from(base64Audio, 'base64');
