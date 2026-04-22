@@ -1,6 +1,30 @@
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Instalar dependências necessárias para o build
+COPY package*.json ./
+RUN npm install
+
+# Pass environment variables to the build stage (Vite requires these)
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_GOOGLE_CLIENT_SECRET
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_GOOGLE_CLIENT_SECRET=$VITE_GOOGLE_CLIENT_SECRET
+
+# Copiar código e buildar o frontend
+COPY . .
+RUN npm run build
+
+
+# --- Estágio Final ---
 FROM node:20-slim
 
-# Install system dependencies for Chromium & Puppeteer
+# Instalar dependências de sistema para o Chromium/Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-liberation \
@@ -23,36 +47,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Puppeteer environment variables
+WORKDIR /app
+
+# Copiar apenas o necessário do builder
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/tsconfig.json ./
+COPY --from=builder /app/vite.config.ts ./
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.ts ./
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/node_modules ./node_modules
+
+
+# Variáveis de ambiente
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV NODE_ENV=production
 ENV PORT=3000
 
-WORKDIR /app
-
-# Install dependencies
-COPY package*.json ./
-RUN npm install
-
-# Pass environment variables to the build stage (Vite requires these)
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_GOOGLE_CLIENT_ID
-ARG VITE_GOOGLE_CLIENT_SECRET
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
-ENV VITE_GOOGLE_CLIENT_SECRET=$VITE_GOOGLE_CLIENT_SECRET
-
-# Copy source
-COPY . .
-
-# Build frontend (Vite)
-RUN npm run build
-
-# Expose port
 EXPOSE 3000
 
-# Start command
+# Comando de inicialização
 CMD ["npm", "run", "start"]
+
