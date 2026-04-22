@@ -269,16 +269,25 @@ class WhatsAppService {
 
             if (!finalResponseText || finalResponseText.trim().length === 0) continue;
 
-            // Enviar via Evolution
+            // Enviar Texto via Evolution
             await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
             
+            // Persistir Texto no Banco (Outbound)
+            const aiMsgId = `ai-${Date.now()}`;
+            await agentService.persistMessage(
+              `${userId}_${cleanPhone}`, userId, finalResponseText,
+              'outbound', aiMsgId, contactName, from, cleanPhone,
+              'Atendente'
+            );
+            
+            // Se houver áudio, envia também
             if (audioBuffer) {
               const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
-              const aiMsgId = `ai-${Date.now()}`;
+              // Atualiza a mensagem com o áudio ou cria uma nova de áudio
               await agentService.persistMessage(
-                `${userId}_${cleanPhone}`, userId, finalResponseText,
-                'outbound', aiMsgId, contactName, from, cleanPhone,
-                undefined, undefined, aiAudioUrl || undefined
+                `${userId}_${cleanPhone}`, userId, '[Áudio]',
+                'outbound', `${aiMsgId}-audio`, contactName, from, cleanPhone,
+                'Atendente', undefined, aiAudioUrl || undefined
               );
               await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
             }
