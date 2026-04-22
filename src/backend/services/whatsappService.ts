@@ -30,7 +30,9 @@ class WhatsAppService {
   private sessions: Map<string, Session> = new Map();
   private lastWebhookSync: Map<string, number> = new Map();
   private messageQueue: Queue;
+  private followUpQueue: Queue;
   private messageWorker: Worker | null = null;
+  private followUpWorker: Worker | null = null;
 
   constructor() {
     console.log('[WhatsAppService] Initializing with BullMQ...');
@@ -43,41 +45,105 @@ class WhatsAppService {
     };
 
     this.messageQueue = new Queue('whatsapp-messages', { connection });
+    this.followUpQueue = new Queue('whatsapp-followups', { connection });
+    
     this.setupWorker(connection);
+    this.setupFollowUpWorker(connection);
   }
 
   private setupWorker(connection: any) {
     this.messageWorker = new Worker('whatsapp-messages', async (job: Job) => {
-      console.log(`[BullMQ] Processing job ${job.id} for ${job.data.from}`);
+      console.log(`[BullMQ] Processing message job ${job.id} for ${job.data.from}`);
       await this.processAIResponse(job.data);
     }, { 
       connection,
-      concurrency: 5, // Processa até 5 mensagens simultâneas
-      limiter: {
-        max: 10,
-        duration: 1000 // Máximo de 10 mensagens por segundo por worker
-      }
-    });
-
-    this.messageWorker.on('completed', (job) => {
-      console.log(`[BullMQ] Job ${job.id} completed successfully`);
+      concurrency: 5,
+      limiter: { max: 10, duration: 1000 }
     });
 
     this.messageWorker.on('failed', (job, err) => {
-      console.error(`[BullMQ] Job ${job?.id} failed permanently:`, err);
+      console.error(`[BullMQ] Message job ${job?.id} failed:`, err);
+    });
+  }
+
+  private setupFollowUpWorker(connection: any) {
+    this.followUpWorker = new Worker('whatsapp-followups', async (job: Job) => {
+      console.log(`[FollowUp] ⏰ Processing level ${job.data.level + 1} for ${job.data.from}`);
+      await this.processFollowUp(job.data);
+    }, { connection, concurrency: 2 });
+
+    this.followUpWorker.on('failed', (job, err) => {
+      console.error(`[FollowUp] Job ${job?.id} failed:`, err);
     });
   }
 
   async enqueueMessage(data: any) {
     await this.messageQueue.add('process-message', data, {
       removeOnComplete: true,
-      removeOnFail: 1000, // Mantém os últimos 1000 erros para debug
       attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 2000 // Espera 2s antes do primeiro retry, depois 4s, 8s...
-      }
+      backoff: { type: 'exponential', delay: 2000 }
     });
+  }
+
+  /**
+   * Agenda um follow-up para um contato.
+   * Se já existir um agendado, ele será substituído (debounce).
+   */
+  async scheduleFollowUp(userId: string, from: string, level: number = 0) {
+    const jobId = `followup:${userId}:${from}`;
+    
+    try {
+      // 1. Buscar configuração do agente
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('followUps')
+        .eq('user_id', userId)
+        .eq('status_ativo', true)
+        .maybeSingle();
+
+      if (!agent?.followUps || !agent.followUps[level]) {
+        console.log(`[FollowUp] No configuration for level ${level} for user ${userId}`);
+        return;
+      }
+
+      const config = agent.followUps[level];
+      const delayMs = (config.delayMinutes || 60) * 60 * 1000;
+
+      // 2. Remover qualquer follow-up pendente anterior
+      const existingJob = await this.followUpQueue.getJob(jobId);
+      if (existingJob) await existingJob.remove();
+
+      // 3. Adicionar novo job com o delay configurado
+      await this.followUpQueue.add('send-followup', {
+        userId,
+        from,
+        level,
+        config
+      }, {
+        jobId,
+        delay: delayMs,
+        removeOnComplete: true,
+        attempts: 2
+      });
+
+      console.log(`[FollowUp] ✅ Level ${level + 1} scheduled for ${from} in ${config.delayMinutes}m`);
+    } catch (err) {
+      console.error('[FollowUp] Error scheduling:', err);
+    }
+  }
+
+  /**
+   * Cancela qualquer follow-up pendente para o contato (ex: quando ele responde)
+   */
+  async cancelFollowUp(userId: string, from: string) {
+    const jobId = `followup:${userId}:${from}`;
+    try {
+      const job = await this.followUpQueue.getJob(jobId);
+      if (job) {
+        await job.remove();
+        console.log(`[FollowUp] 🛑 Cancelled for ${from} (customer replied)`);
+      }
+    } catch (err) {}
   }
 
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
@@ -238,6 +304,9 @@ class WhatsAppService {
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
       await agentService.persistMessage(`${userId}_${cleanTo}`, userId, message, 'outbound', result.key?.id || `out-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente');
+      
+      // 🔄 Reseta/Agenda o Follow-up após mensagem manual do atendente
+      await this.scheduleFollowUp(userId, to, 0);
     } catch (err) {}
     return { success: true, messageId: result.key?.id };
   }
@@ -299,6 +368,9 @@ class WhatsAppService {
     // Debounce: Se já existir um job agendado para este contato, o BullMQ vai ignorar o novo se usarmos o mesmo jobId
     // Ou podemos remover o antigo para "resetar" o timer (melhor para debounce real)
     try {
+      // 🛑 Cancela follow-ups pendentes pois o cliente acabou de mandar uma mensagem
+      await this.cancelFollowUp(userId, from);
+
       const job = await this.messageQueue.getJob(jobId);
       if (job) {
         await job.remove();
@@ -367,9 +439,78 @@ class WhatsAppService {
           );
         }
       }
+
+      // 🔄 Agenda o Follow-up após o envio da resposta da IA
+      await this.scheduleFollowUp(userId, from, 0);
+
     } catch (err) {
       console.error(`[WhatsAppService] AI Processing Error for ${from}:`, err);
       throw err; // Força retry do BullMQ
+    }
+  }
+
+  /**
+   * Processa a execução do Follow-up (Níveis configurados)
+   */
+  private async processFollowUp(data: any) {
+    const { userId, from, level, config } = data;
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+
+    try {
+      // 1. Verificar se o último status da thread ainda permite follow-up
+      // (Se o cliente já respondeu ou se foi assumido por humano, paramos)
+      const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+      const threadId = `${userId}_${cleanPhone}`;
+      
+      const { data: thread } = await supabase
+        .from('threads')
+        .select('status, last_message_time')
+        .eq('id', threadId)
+        .maybeSingle();
+
+      if (!thread || thread.status !== 'ia') {
+        console.log(`[FollowUp] 🛑 Skipping for ${from}: Thread status is ${thread?.status || 'unknown'}`);
+        return;
+      }
+
+      // 2. Definir a mensagem (IA ou Fixa)
+      let finalMessage = config.message;
+
+      if (config.type === 'ai') {
+        console.log(`[FollowUp] 🧠 Generating AI message for re-engagement...`);
+        const { data: agent } = await supabase.from('agents').select('*').eq('user_id', userId).maybeSingle();
+        
+        const aiResponse = await agentService.processIncoming(userId, {
+          from,
+          body: `[SISTEMA: O cliente parou de responder. Envie um follow-up de reengajamento seguindo esta instrução: ${config.extraPrompt}]`,
+          contactName: 'Cliente',
+          messageId: `followup-gen-${Date.now()}`,
+          displayPhone: cleanPhone,
+          skipPersist: true
+        });
+
+        const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
+        finalMessage = aiResponseData?.text;
+      }
+
+      if (!finalMessage) return;
+
+      // 3. Enviar a mensagem
+      console.log(`[FollowUp] 📤 Sending follow-up to ${from}: "${finalMessage.substring(0, 30)}..."`);
+      await EvolutionApiService.sendMessage(instanceName, from, finalMessage);
+      
+      // 4. Persistir
+      const aiMsgId = `followup-${Date.now()}`;
+      await agentService.persistMessage(
+        threadId, userId, finalMessage, 'outbound', aiMsgId, 'Cliente', from, cleanPhone, 'IA (Follow-up)'
+      );
+
+      // 5. Agendar o PRÓXIMO nível, se existir
+      await this.scheduleFollowUp(userId, from, level + 1);
+
+    } catch (err) {
+      console.error(`[FollowUp] Error processing for ${from}:`, err);
+      throw err;
     }
   }
 
