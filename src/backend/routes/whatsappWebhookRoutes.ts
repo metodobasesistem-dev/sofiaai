@@ -9,12 +9,16 @@ const router = Router();
 
 router.post('/webhook', async (req, res) => {
   const body = req.body;
-  const instanceName = body.instance; // O nome da instância (ex: wppai_f8a2b1c0)
+  // Evolution v2 pode mandar em 'instance' ou 'instanceName'
+  const instanceName = body.instance || body.instanceName || (body.data?.instance) || (body.data?.instanceName);
   const event = body.event;
 
-  console.log(`[WhatsappWebhook] 📩 Incoming: "${event}" for "${instanceName}"`);
-  // Log completo para debug em produção
-  console.log(`[WhatsappWebhook] Body: ${JSON.stringify(body)}`);
+  console.log(`[WhatsappWebhook] 📩 Event: "${event}" | Instance: "${instanceName}"`);
+  
+  if (!instanceName) {
+    console.warn(`[WhatsappWebhook] ⚠️ No instanceName found in body:`, JSON.stringify(body).substring(0, 500));
+    return res.status(200).send('OK');
+  }
 
   try {
     // RESOLUÇÃO DE USUÁRIO: Buscar o UUID real do usuário pelo whatsapp_instance_id
@@ -77,7 +81,8 @@ router.post('/webhook', async (req, res) => {
 
 async function handleMessageUpsert(userId: string, instanceName: string, data: any) {
   // Extrair o dado unificado independente de Evolution v1 ou v2
-  const messageObj = data.messages?.[0] || data.message || data;
+  // v2: data.message OU data.messages[0]
+  const messageObj = data.message || (data.messages && data.messages[0]) || data;
   const key = messageObj.key || data.key;
   const messageContentObj = messageObj.message || messageObj;
   
