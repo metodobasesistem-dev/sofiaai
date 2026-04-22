@@ -467,12 +467,18 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
     try {
       console.log(`[AgentService] 🔍 Checking REAL availability for ${targetDate} (Professional: ${profName || 'Any'})`);
       
-      const selectedProf = profName 
+      let selectedProf = profName 
         ? professionals.find(p => p.name.toLowerCase().includes(profName.toLowerCase()))
         : (professionals.length > 0 ? professionals[0] : null);
 
+      // FALLBACK: Agenda Universal
       if (!selectedProf) {
-        throw new Error('Nenhum profissional disponível para consulta.');
+        console.log(`[AgentService] ℹ️ No specific professional found. Using Universal Agenda for ${userId}`);
+        selectedProf = {
+          id: userId, // Usamos o ID do usuário como ID do profissional "universal"
+          name: agentData.company_name || 'Agenda Principal',
+          google_calendar_id: null
+        };
       }
 
       // 1. Fetch Availability Config for this prof
@@ -500,9 +506,16 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         
         if (weekly?.active) {
           baseSlotsConfigs = weekly.slots || [];
-        } else {
-          return { slots: [], date: targetDate, professional: selectedProf.name, message: 'Profissional não atende neste dia.' };
         }
+      }
+
+      // EMERGENCY FALLBACK: Se não houver nenhum horário configurado, assume 09:00-12:00 e 13:00-18:00
+      if (baseSlotsConfigs.length === 0) {
+        console.log(`[AgentService] 🛠️ No availability config found for ${selectedProf.name}. Using emergency default slots (09-18h).`);
+        baseSlotsConfigs = [
+          { start: '09:00', end: '12:00' },
+          { start: '13:00', end: '18:00' }
+        ];
       }
 
       // 3. Generate time slots based on duration
@@ -520,18 +533,22 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         return { slots: [], date: targetDate, professional: selectedProf.name, message: 'Sem horários disponíveis.' };
       }
 
-      // 4. Google Calendar Busy
+      // 4. Google Calendar Busy (Resiliente)
       let busyTimesFromGoogle: string[] = [];
       if (selectedProf.google_calendar_id) {
-        const googleBusy = await googleCalendarService.getBusySlots(userId, selectedProf.google_calendar_id, targetDate);
-        googleBusy.forEach((b: any) => {
-          const start = new Date(b.start).getTime();
-          const end = new Date(b.end).getTime();
-          allSlots.forEach(slot => {
-            const slotTime = new Date(`${targetDate}T${slot}:00`).getTime();
-            if (slotTime >= start && slotTime < end) busyTimesFromGoogle.push(slot);
+        try {
+          const googleBusy = await googleCalendarService.getBusySlots(userId, selectedProf.google_calendar_id, targetDate);
+          googleBusy.forEach((b: any) => {
+            const start = new Date(b.start).getTime();
+            const end = new Date(b.end).getTime();
+            allSlots.forEach(slot => {
+              const slotTime = new Date(`${targetDate}T${slot}:00`).getTime();
+              if (slotTime >= start && slotTime < end) busyTimesFromGoogle.push(slot);
+            });
           });
-        });
+        } catch (gErr) {
+          console.warn(`[AgentService] ⚠️ Google Calendar fetch failed for ${selectedProf.name}. Continuing with local agenda only.`);
+        }
       }
 
       // 5. DB Appointments
@@ -571,9 +588,16 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
     try {
       console.log(`[AgentService] 📝 Booking appointment for ${args.clientName} on ${args.date} at ${args.time}`);
       
-      const selectedProf = args.professional_name 
+      let selectedProf = args.professional_name 
         ? professionals.find(p => p.name.toLowerCase().includes(args.professional_name.toLowerCase()))
-        : null;
+        : (professionals.length > 0 ? professionals[0] : null);
+
+      if (!selectedProf) {
+        selectedProf = {
+          id: userId,
+          name: agentData.company_name || 'Agenda Principal'
+        };
+      }
 
       // 1. Create in Google Calendar if integrated
       let googleEventId = null;
