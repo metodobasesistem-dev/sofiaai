@@ -109,6 +109,16 @@ export class EvolutionApiService {
     }
   }
 
+  static async getWebhook(userId: string) {
+    const api = getApi();
+    try {
+      const { data } = await api.get(`/webhook/find/${userId}`);
+      return data;
+    } catch (error) {
+      return null;
+    }
+  }
+
   static async getQrCode(userId: string) {
     const api = getApi();
     try {

@@ -34,6 +34,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [method, setMethod] = useState<'qr' | 'pairing'>('qr');
   const [loading, setLoading] = useState(false);
+  const [webhookOk, setWebhookOk] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
   const pollRef = useRef<NodeJS.Timeout | null>(null);
@@ -74,6 +75,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
         if (data.status === 'connected') {
           updateStatus('connected', null);
           setPairingCode(null);
+          setWebhookOk(data.webhookOk !== false);
           stopPolling();
           toast.success('WhatsApp Conectado com Sucesso! 🎉');
         }
@@ -153,6 +155,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
         if (data.status === 'connected') {
           updateStatus('connected', null);
           setPairingCode(null);
+          setWebhookOk(data.webhookOk !== false);
           stopPolling();
         } else if (data.status === 'connecting') {
           updateStatus('connecting', null);
@@ -270,6 +273,33 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     } catch (error: any) {
       updateStatus('disconnected', null);
       toast.error(error.message || 'Falha ao conectar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Sync Instance (Auto-Cura) ───────────────────────────────────────────
+  const handleSync = async () => {
+    if (!userId) return;
+    
+    setLoading(true);
+    const toastId = toast.loading('Sincronizando com a Evolution API...');
+    
+    try {
+      const response = await fetch('/api/whatsapp/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Falha na sincronização');
+      }
+
+      toast.success('Conexão sincronizada com sucesso! 🚀', { id: toastId });
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao sincronizar', { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -430,16 +460,38 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
           )}
         </div>
 
+        {status === 'connected' && !webhookOk && (
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
+            <div>
+              <p className="text-[10px] font-extrabold text-amber-800 uppercase tracking-tight">Problema de Recebimento</p>
+              <p className="text-[10px] text-amber-700 font-medium leading-tight mt-0.5">
+                Sua conexão está ativa, mas o canal de mensagens precisa ser recalibrado.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Botões de Ação */}
         <div className="mt-8">
           {status === 'connected' ? (
-            <button
-              onClick={handleConnect}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-all hover:shadow-lg hover:shadow-red-100 disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="animate-spin" size={18} /> : <><PhoneOff size={18} /> Desconectar Dispositivo</>}
-            </button>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleSync}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-100 transition-all hover:shadow-lg hover:shadow-blue-50 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <><RefreshCw size={18} /> Sincronizar Conexão</>}
+              </button>
+
+              <button
+                onClick={handleConnect}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-[10px] font-bold text-red-400 hover:text-red-600 transition-all disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="animate-spin" size={12} /> : <><PhoneOff size={12} /> Desconectar Dispositivo</>}
+              </button>
+            </div>
           ) : (
             <button
               onClick={method === 'qr' ? handleConnect : handlePairingCode}

@@ -41,4 +41,16 @@ router.post('/send-media', upload.single('media'), async (req, res) => {
   }
 });
 
+router.post('/sync', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Faltando userId' });
+
+  try {
+    const result = await whatsappService.syncInstance(userId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

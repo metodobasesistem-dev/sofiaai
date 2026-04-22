@@ -121,25 +121,41 @@ class WhatsAppService {
       }
       const status = await EvolutionApiService.getInstanceStatus(instanceName);
       let dbStatus = 'disconnected';
+      let webhookOk = true;
+
       if (status.state === 'open') {
         dbStatus = 'connected';
+        
+        // Verificação Proativa de Webhook
+        try {
+          const webhookInfo = await EvolutionApiService.getWebhook(instanceName);
+          const expectedUrl = process.env.BACKEND_WEBHOOK_URL;
+          if (webhookInfo?.url !== expectedUrl) {
+            webhookOk = false;
+            console.warn(`[WhatsAppService] Webhook mismatch for ${instanceName}. Expected: ${expectedUrl}, Found: ${webhookInfo?.url}`);
+          }
+        } catch (e) {
+          webhookOk = false;
+        }
+
         const now = Date.now();
         const lastSync = this.lastWebhookSync.get(instanceName) || 0;
-        if (now - lastSync > 3600000) {
+        if (now - lastSync > 3600000 || !webhookOk) {
           EvolutionApiService.setWebhook(instanceName).then(() => this.lastWebhookSync.set(instanceName, now)).catch(() => {});
         }
       } else if (status.state === 'connecting') {
         dbStatus = 'connecting';
       }
+
       let qr = undefined;
       if (dbStatus === 'connecting') {
         const qrData = await EvolutionApiService.getQrCode(instanceName);
         qr = qrData?.base64;
       }
       await this.updateProfileStatus(userId, { status: dbStatus, qr });
-      return { status: dbStatus, qr };
+      return { status: dbStatus, qr, webhookOk };
     } catch (error) {
-      return { status: 'disconnected' };
+      return { status: 'disconnected', webhookOk: false };
     }
   }
 
@@ -385,6 +401,50 @@ class WhatsAppService {
   async initializeAllSessions() {
     this.startMaintenanceWorker();
     console.log('[WhatsAppService] initializeAllSessions called');
+  }
+
+  async syncInstance(userId: string) {
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const webhookUrl = process.env.BACKEND_WEBHOOK_URL;
+
+    console.log(`[WhatsAppService] 🔄 Syncing instance for user ${userId}...`);
+
+    try {
+      // 1. Verificar se existe na Evolution
+      const status = await EvolutionApiService.getInstanceStatus(instanceName);
+      
+      if (status === 'not_found') {
+        throw new Error('Instância não encontrada na Evolution. Por favor, desconecte e conecte novamente.');
+      }
+
+      // 2. Forçar Webhook
+      if (webhookUrl) {
+        await EvolutionApiService.setWebhook(instanceName, webhookUrl);
+      }
+
+      // 3. Forçar Configurações (Always Online, etc)
+      const settings = {
+        rejectCall: false,
+        msgCall: "",
+        groupsIgnore: true,
+        alwaysOnline: true,
+        readMessages: true,
+        readStatus: false,
+        syncFullHistory: false
+      };
+      await EvolutionApiService.setSettings(instanceName, settings);
+
+      // 4. Garantir que o DB está com o ID correto
+      await supabase.from('profiles').update({
+        whatsapp_instance_id: instanceName,
+        updated_at: new Date().toISOString()
+      }).eq('id', userId);
+
+      return { success: true, message: 'Instância sincronizada com sucesso!' };
+    } catch (error: any) {
+      console.error(`[WhatsAppService] Sync error for ${userId}:`, error.message);
+      throw error;
+    }
   }
 }
 
