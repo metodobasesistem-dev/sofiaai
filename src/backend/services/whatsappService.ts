@@ -315,18 +315,28 @@ class WhatsAppService {
 
   async destroySession(userId: string) { await this.logout(userId); }
 
-  async sendMessage(userId: string, to: string, message: string) {
+  async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente'): Promise<any> {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
-    const result = await EvolutionApiService.sendMessage(instanceName, to, message);
+    const cleanTo = to.split('@')[0].replace(/\D/g, '');
+    
     try {
-      const cleanTo = to.split('@')[0].replace(/\D/g, '');
-      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, message, 'outbound', result.key?.id || `out-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente');
+      const result = await EvolutionApiService.sendMessage(instanceName, to, message);
+      const msgId = result.key?.id || result.messageId || `out-${Date.now()}`;
+
+      // Persiste a mensagem
+      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, message, 'outbound', msgId, senderName, to, cleanTo, senderType);
       
-      // 🔄 Reseta/Agenda o Follow-up após mensagem manual do atendente
-      console.log(`[WhatsAppService] 📤 Manual message sent to ${to}. Scheduling follow-up...`);
-      await this.scheduleFollowUp(userId, to, 0);
-    } catch (err) {}
-    return { success: true, messageId: result.key?.id };
+      // 🔄 Reseta/Agenda o Follow-up após mensagem (exceto se for o próprio follow-up enviando)
+      if (senderName !== 'IA (FOLLOW-UP)') {
+        console.log(`[WhatsAppService] 📤 Message sent to ${to}. Scheduling follow-up...`);
+        await this.scheduleFollowUp(userId, to, 0);
+      }
+      
+      return { success: true, messageId: msgId };
+    } catch (err: any) {
+      console.error(`[WhatsAppService] Error in sendMessage to ${to}:`, err.message);
+      return { success: false, error: err.message };
+    }
   }
 
   async sendVoice(userId: string, to: string, audioBuffer: Buffer) {
@@ -519,17 +529,10 @@ class WhatsAppService {
 
       if (!finalMessage) return;
 
-      // 3. Enviar a mensagem
-      console.log(`[FollowUp] 📤 Sending follow-up to ${from}: "${finalMessage.substring(0, 30)}..."`);
-      await EvolutionApiService.sendMessage(instanceName, from, finalMessage);
-      
-      // 4. Persistir
-      const aiMsgId = `followup-${Date.now()}`;
-      await agentService.persistMessage(
-        threadId, userId, finalMessage, 'outbound', aiMsgId, 'Cliente', from, cleanPhone, 'IA (Follow-up)'
-      );
+      // 3. Enviar a mensagem (O sendMessage centralizado já faz o envio e a persistência única)
+      await this.sendMessage(userId, from, finalMessage, 'IA (FOLLOW-UP)', 'IA');
 
-      // 5. Agendar o PRÓXIMO nível, se existir
+      // 4. Agendar o PRÓXIMO nível, se existir
       await this.scheduleFollowUp(userId, from, level + 1);
 
     } catch (err) {
