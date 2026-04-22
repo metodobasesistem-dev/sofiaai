@@ -778,9 +778,9 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               <ListSkeleton rows={8} />
             </div>
           ) : filteredThreads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center bg-gray-50/50 text-gray-400">
-              <MessageCircle size={48} className="mb-4 opacity-20" />
-              <p className="text-sm font-medium">Selecione uma conversa para começar</p>
+            <div className="h-full flex flex-col items-center justify-center bg-gray-50/50 text-gray-400 p-8 text-center">
+              <Search size={48} className="mb-4 opacity-20" />
+              <p className="text-sm font-medium">Nenhuma conversa encontrada com os filtros atuais.</p>
             </div>
           ) : (
             filteredThreads.map(thread => (
