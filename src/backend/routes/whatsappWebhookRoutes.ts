@@ -101,34 +101,32 @@ async function handleMessageUpsert(userId: string, data: any) {
      // Se não tiver base64, ignoramos ou buscamos via API
      const base64Audio = messageContentObj.audioMessage?.base64 || messageContentObj.viewOnceMessageV2?.message?.audioMessage?.base64;
      
-     if (base64Audio) {
-        const buffer = Buffer.from(base64Audio, 'base64');
-        const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
-        
-        if (transcription) {
-          // Upload e Persistência similar ao whatsappService antigo
-          const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `inbound_${Date.now()}.ogg`);
-          
-          const threadId = `${userId}_${cleanNumber}`;
-          await agentService.persistMessage(
-            threadId,
-            userId,
-            `[Áudio]: ${transcription}`,
-            'inbound',
-            messageId,
-            pushName,
-            remoteJid,
-            cleanNumber,
-            undefined,
-            undefined,
-            audioUrl || undefined
-          );
+      // Se não tiver base64 imediato, ainda assim salvamos o registro do áudio na tela
+      const threadId = `${userId}_${cleanNumber}`;
+      if (!base64Audio) {
+         console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid} but no base64 found. Recording as placeholder.`);
+         await agentService.persistMessage(
+            threadId, userId, '[Áudio enviado pelo cliente]',
+            'inbound', messageId, pushName, remoteJid, cleanNumber
+         );
+         return;
+      }
+      
+      const buffer = Buffer.from(base64Audio, 'base64');
+      const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
+      
+      if (transcription) {
+        const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `inbound_${Date.now()}.ogg`);
+        await agentService.persistMessage(
+          threadId, userId, `[Áudio]: ${transcription}`,
+          'inbound', messageId, pushName, remoteJid, cleanNumber,
+          undefined, undefined, audioUrl || undefined
+        );
 
-          // Disparar Resposta AI
-          await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, transcription, pushName, cleanNumber, messageId, true);
-        }
-     }
-     return;
+        // Disparar Resposta AI
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, transcription, pushName, cleanNumber, messageId, true);
+      }
+      return;
   }
 
   // Persistir Mensagem de Texto
