@@ -39,6 +39,74 @@ async function getRedisClient() {
 }
 
 export const redisService = {
+  async getClient() {
+    return await getRedisClient();
+  },
+
+  async set(key: string, value: any, ttlSeconds?: number) {
+    const client = await getRedisClient();
+    if (!client) return;
+    const val = typeof value === 'string' ? value : JSON.stringify(value);
+    if (ttlSeconds) {
+      await client.set(key, val, 'EX', ttlSeconds);
+    } else {
+      await client.set(key, val);
+    }
+  },
+
+  async get(key: string) {
+    const client = await getRedisClient();
+    if (!client) return null;
+    const data = await client.get(key);
+    try {
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return data;
+    }
+  },
+
+  async del(key: string) {
+    const client = await getRedisClient();
+    if (!client) return;
+    await client.del(key);
+  },
+
+  /**
+   * Idempotência: Verifica se uma mensagem já foi processada recentemente
+   */
+  async markAsProcessed(messageId: string, ttl = 3600): Promise<boolean> {
+    const client = await getRedisClient();
+    if (!client) return true; // Se o Redis falhar, processamos para não perder a msg
+    const key = `processed:${messageId}`;
+    const result = await client.set(key, '1', 'NX', 'EX', ttl);
+    return result === 'OK';
+  },
+
+  /**
+   * Fila de Agendamento (Delayed Queue)
+   */
+  async addToQueue(queueName: string, id: string, delaySeconds: number) {
+    const client = await getRedisClient();
+    if (!client) return;
+    const processAt = Date.now() + (delaySeconds * 1000);
+    await client.zadd(queueName, processAt, id);
+  },
+
+  async getDueJobs(queueName: string): Promise<string[]> {
+    const client = await getRedisClient();
+    if (!client) return [];
+    const now = Date.now();
+    // Pega IDs cujo tempo de processamento já passou
+    const jobs = await client.zrangebyscore(queueName, 0, now);
+    return jobs;
+  },
+
+  async removeFromQueue(queueName: string, id: string) {
+    const client = await getRedisClient();
+    if (!client) return;
+    await client.zrem(queueName, id);
+  },
+
   async pushMessage(threadId: string, role: 'user' | 'assistant', content: string) {
     const client = await getRedisClient();
     if (!client) return;
@@ -50,10 +118,9 @@ export const redisService = {
       await client.rpush(key, message);
       await client.ltrim(key, -50, -1);
       await client.expire(key, 60 * 60 * 24 * 7);
-    } catch (error) {
-      // Silently fail, Firestore fallback handles the rest
-    }
+    } catch (error) {}
   },
+
 
   async getHistory(threadId: string, limit: number = 40) {
     const client = await getRedisClient();
@@ -74,8 +141,7 @@ export const redisService = {
     const key = `messages:${threadId}`;
     try {
       await client.del(key);
-    } catch (error) {
-      console.error(`[RedisService] Error clearing history:`, error);
-    }
+    } catch (error) {}
   }
 };
+

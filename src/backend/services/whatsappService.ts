@@ -25,8 +25,12 @@ export interface WhatsAppStatusResponse {
 
 class WhatsAppService {
   private sessions: Map<string, Session> = new Map();
-  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private lastWebhookSync: Map<string, number> = new Map();
+  private isWorkerRunning = false;
+
+  constructor() {
+    this.startResponseWorker();
+  }
 
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
     try {
@@ -76,32 +80,22 @@ class WhatsAppService {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     console.log(`[WhatsAppService] Starting Evolution instance: ${instanceName}`);
     try {
-      // 1. Create instance (or connect to existing)
       await EvolutionApiService.createInstance(instanceName);
-      
-      // 2. Try to get QR code with retries
       let qrData = null;
       for (let i = 0; i < 3; i++) {
-        console.log(`[WhatsAppService] Attempt ${i + 1} to get QR code for ${instanceName}...`);
         qrData = await EvolutionApiService.getQrCode(instanceName);
         if (qrData && qrData.base64) break;
-        // Wait 2 seconds between retries
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      
       if (qrData && qrData.base64) {
         await this.updateProfileStatus(userId, { status: 'connecting', qr: qrData.base64 });
         return qrData.base64;
       }
-      
-      // 3. If no QR, check if already connected
       const status = await EvolutionApiService.getInstanceStatus(instanceName);
       if (status.state === 'open') {
         await this.updateProfileStatus(userId, { status: 'connected' });
         return 'connected';
       }
-
-      // 4. Default to connecting status
       await this.updateProfileStatus(userId, { status: 'connecting' });
       return null;
     } catch (error: any) {
@@ -113,7 +107,6 @@ class WhatsAppService {
 
   async getSessionStatus(userId: string): Promise<WhatsAppStatusResponse> {
     try {
-      // 1. Buscar o ID real da instância no banco
       const { data: prof } = await supabase
         .from('profiles')
         .select('whatsapp_status, whatsapp_qr, whatsapp_instance_id')
@@ -121,39 +114,26 @@ class WhatsAppService {
         .single();
       
       const instanceName = `wppai_${userId.substring(0, 8)}`;
-      
-      // Auto-update db if we generated a fresh one
       if (!prof?.whatsapp_instance_id) {
          await supabase.from('profiles').update({ whatsapp_instance_id: instanceName }).eq('id', userId);
       }
-
       const status = await EvolutionApiService.getInstanceStatus(instanceName);
       let dbStatus = 'disconnected';
-      
       if (status.state === 'open') {
         dbStatus = 'connected';
-        
-        // Auto-healing inteligente: Só sincroniza se passou mais de 1 hora desde a última vez
         const now = Date.now();
         const lastSync = this.lastWebhookSync.get(instanceName) || 0;
-        const ONE_HOUR = 3600000;
-        
-        if (now - lastSync > ONE_HOUR) {
-          console.log(`[WhatsAppService] 🔄 Scheduled webhook sync for ${instanceName}...`);
-          EvolutionApiService.setWebhook(instanceName)
-            .then(() => this.lastWebhookSync.set(instanceName, now))
-            .catch(() => {});
+        if (now - lastSync > 3600000) {
+          EvolutionApiService.setWebhook(instanceName).then(() => this.lastWebhookSync.set(instanceName, now)).catch(() => {});
         }
       } else if (status.state === 'connecting') {
         dbStatus = 'connecting';
       }
-      
       let qr = undefined;
       if (dbStatus === 'connecting') {
         const qrData = await EvolutionApiService.getQrCode(instanceName);
         qr = qrData?.base64;
       }
-
       await this.updateProfileStatus(userId, { status: dbStatus, qr });
       return { status: dbStatus, qr };
     } catch (error) {
@@ -163,177 +143,68 @@ class WhatsAppService {
 
   async requestPairingCode(userId: string, phoneNumber: string): Promise<string> {
     try {
-      // 1. Resolve ou gera novo ID
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('whatsapp_instance_id')
-        .eq('id', userId)
-        .single();
-      
       const instanceName = `wppai_${userId.substring(0, 8)}`;
-      
-      console.log(`[WhatsAppService] Requesting pairing code for ${instanceName}`);
       await EvolutionApiService.createInstance(instanceName);
-
-      // Save it
       await supabase.from('profiles').update({ whatsapp_instance_id: instanceName }).eq('id', userId);
-      
       const data = await EvolutionApiService.getPairingCode(instanceName, phoneNumber);
-      if (!data || !data.code) {
-        throw new Error('Não foi possível gerar o código. Verifique se o servidor Evolution está estável.');
-      }
-      
+      if (!data || !data.code) throw new Error('Não foi possível gerar o código.');
       await this.updateProfileStatus(userId, { status: 'connecting' });
       return data.code;
     } catch (error: any) {
-      console.error(`[WhatsAppService] Pairing code error for ${instanceName}:`, error.message);
       throw error;
     }
   }
 
   async logout(userId: string) {
     try {
-      // 1. Buscar o ID real da instância no banco antes de apagar
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('whatsapp_instance_id')
-        .eq('id', userId)
-        .single();
-
+      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
       const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
-      
-      console.log(`[WhatsAppService] Logging out instance ${instanceName} for user ${userId}`);
-      
-      // 2. Tentar deletar na Evolution
       await EvolutionApiService.logout(instanceName);
-      
-      // 3. Limpar no Supabase (Importante: define ID como null para evitar loops)
-      await supabase
-        .from('profiles')
-        .update({ 
-          whatsapp_status: 'disconnected', 
-          whatsapp_qr: null, 
-          whatsapp_instance_id: null, // LIMPEZA CRÍTICA: Força nova instância no próximo scan
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      console.log(`[WhatsAppService] Instance ${instanceName} cleared successfully.`);
+      await supabase.from('profiles').update({ whatsapp_status: 'disconnected', whatsapp_qr: null, whatsapp_instance_id: null, updated_at: new Date().toISOString() }).eq('id', userId);
     } catch (error) {
-      console.error(`[WhatsAppService] Error during logout for ${userId}:`, error);
-      // Mesmo com erro, tentamos resetar o status local
       await this.updateProfileStatus(userId, { status: 'disconnected' });
     }
   }
 
-  async destroySession(userId: string) {
-    await this.logout(userId);
-  }
+  async destroySession(userId: string) { await this.logout(userId); }
 
   async sendMessage(userId: string, to: string, message: string) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('whatsapp_instance_id')
-        .eq('id', userId)
-        .single();
-      
-      // Se já tiver uma instância, tentamos usar ela, ou geramos uma nova se estivermos reiniciando
-      const instanceName = `wppai_${userId.substring(0, 8)}`;
-      
-      console.log(`[WhatsAppService] Checking status for ${instanceName} (User: ${userId})`);
-      
-      // Atualizar o ID da instância no banco caso tenha mudado
-      if (instanceName !== profile?.whatsapp_instance_id) {
-         await supabase.from('profiles').update({ whatsapp_instance_id: instanceName }).eq('id', userId);
-      }
-
-      const status = await EvolutionApiService.getInstanceStatus(instanceName);
-      const result = await EvolutionApiService.sendMessage(instanceName, to, message);
-    
-    // Persist manual message
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const result = await EvolutionApiService.sendMessage(instanceName, to, message);
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
-      const threadId = `${userId}_${cleanTo}`;
-      await agentService.persistMessage(
-        threadId,
-        userId,
-        message,
-        'outbound',
-        result.key?.id || `out-${Date.now()}`,
-        'Cliente',
-        to,
-        cleanTo,
-        'Atendente'
-      );
+      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, message, 'outbound', result.key?.id || `out-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente');
     } catch (err) {}
-
     return { success: true, messageId: result.key?.id };
   }
 
   async sendVoice(userId: string, to: string, audioBuffer: Buffer) {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
-    console.log(`[WhatsAppService] Sending voice via Evolution ${instanceName} to ${to}`);
-    const base64 = audioBuffer.toString('base64');
-    const result = await EvolutionApiService.sendVoice(instanceName, to, base64);
-    
+    const result = await EvolutionApiService.sendVoice(instanceName, to, audioBuffer.toString('base64'));
     const audioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
-
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
-      const threadId = `${userId}_${cleanTo}`;
-      await agentService.persistMessage(
-        threadId,
-        userId,
-        '[Áudio enviado pelo atendente]',
-        'outbound',
-        result.key?.id || `ai-${Date.now()}`,
-        'Cliente',
-        to,
-        cleanTo,
-        'Atendente',
-        undefined,
-        audioUrl || undefined
-      );
+      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, '[Áudio]', 'outbound', result.key?.id || `ai-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente', undefined, audioUrl || undefined);
     } catch (err) {}
-
     return { success: true, messageId: result.key?.id };
   }
 
   async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string) {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
-    console.log(`[WhatsAppService] Sending media via Evolution ${instanceName} to ${to}`);
-    const base64 = buffer.toString('base64');
-    const result = await EvolutionApiService.sendMedia(instanceName, to, base64, mimetype, filename);
-    
+    const result = await EvolutionApiService.sendMedia(instanceName, to, buffer.toString('base64'), mimetype, filename);
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
-      const threadId = `${userId}_${cleanTo}`;
-      await agentService.persistMessage(
-        threadId,
-        userId,
-        `[Documento/Mídia]: ${filename}`,
-        'outbound',
-        result.key?.id || `med-${Date.now()}`,
-        'Cliente',
-        to,
-        cleanTo,
-        'Atendente'
-      );
+      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, `[Mídia]: ${filename}`, 'outbound', result.key?.id || `med-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente');
     } catch (err) {}
-
     return { success: true, messageId: result.key?.id };
   }
 
+
   // Novo método para ser chamado pelo Webhook
   async triggerAIResponseViaWebhook(userId: string, from: string, body: string, contactName: string, cleanPhone: string, messageId: string, isAudio: boolean = false) {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
-    const timerKey = `${userId}_${from}`;
-
-    if (this.debounceTimers.has(timerKey)) {
-      clearTimeout(this.debounceTimers.get(timerKey)!);
-    }
-
-    let delayMs = 15000;
+    const timerKey = `pending_ai:${userId}:${from}`;
+    
+    let delaySeconds = 15;
     try {
       const { data: agent } = await supabase
         .from('agents')
@@ -342,127 +213,163 @@ class WhatsAppService {
         .eq('status_ativo', true)
         .maybeSingle();
       
-      if (agent?.response_delay) delayMs = agent.response_delay * 1000;
+      if (agent?.response_delay) delaySeconds = agent.response_delay;
     } catch (e) {}
 
-    const timeout = setTimeout(async () => {
-      this.debounceTimers.delete(timerKey);
-      
+    // Salvar metadados da mensagem para o worker usar depois
+    await redisService.set(`metadata:${timerKey}`, {
+      userId, from, body, contactName, cleanPhone, messageId, isAudio,
+      timestamp: Date.now()
+    }, 300); // 5 min TTL
+
+    // Adicionar à fila de processamento (Sorted Set)
+    // Se o cliente mandar outra msg, o ZADD atualiza o tempo de processamento (debounce automático!)
+    await redisService.addToQueue('ai_response_queue', timerKey, delaySeconds);
+    console.log(`[WhatsAppService] ⏳ Scheduled AI response for ${from} in ${delaySeconds}s (Redis Queue)`);
+  }
+
+  private async startResponseWorker() {
+    if (this.isWorkerRunning) return;
+    this.isWorkerRunning = true;
+    console.log('[WhatsAppService] 🤖 AI Response Worker started (Redis-based)');
+
+    setInterval(async () => {
       try {
-        console.log(`[WhatsAppService] 🚀 Triggering AI response for ${from} via ${instanceName} (via Webhook)`);
-        const aiResponse = await agentService.processIncoming(userId, {
-          from: from,
-          body: body, 
-          contactName: contactName,
-          messageId: messageId,
-          displayPhone: cleanPhone,
-          skipPersist: true,
-          isAudioRequest: isAudio
-        });
-
-        const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
-        const finalResponseText = aiResponseData?.text;
-        const audioBuffer = aiResponseData?.audioBuffer;
-
-        if (!finalResponseText || finalResponseText.trim().length === 0) return;
-
-        // Enviar Texto via Evolution
-        await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
+        const dueJobs = await redisService.getDueJobs('ai_response_queue');
         
-        // Enviar Áudio via Evolution se houver
-        if (audioBuffer) {
-          const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
-          const aiMsgId = `ai-${Date.now()}`;
+        for (const timerKey of dueJobs) {
+          // 1. Remover da fila IMEDIATAMENTE para evitar processamento duplo
+          await redisService.removeFromQueue('ai_response_queue', timerKey);
           
-          await agentService.persistMessage(
-            `${userId}_${cleanPhone}`,
-            userId,
-            finalResponseText,
-            'outbound',
-            aiMsgId,
-            contactName,
-            from,
-            cleanPhone,
-            undefined,
-            undefined,
-            aiAudioUrl || undefined
-          );
+          // 2. Buscar metadados
+          const metadata = await redisService.get(`metadata:${timerKey}`);
+          if (!metadata) continue;
 
-          await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+          // 3. Verificar se é a última mensagem (Debounce check)
+          // Se o timestamp nos metadados for diferente do que agendou, ignoramos
+          // (Mas o ZADD já resolve isso naturalmente ao sobrescrever o score)
+
+          const { userId, from, body, contactName, cleanPhone, messageId, isAudio } = metadata;
+          const instanceName = `wppai_${userId.substring(0, 8)}`;
+
+          try {
+            console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (via Queue Worker)`);
+            const aiResponse = await agentService.processIncoming(userId, {
+              from, body, contactName, messageId,
+              displayPhone: cleanPhone,
+              skipPersist: true,
+              isAudioRequest: isAudio
+            });
+
+            const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
+            const finalResponseText = aiResponseData?.text;
+            const audioBuffer = aiResponseData?.audioBuffer;
+
+            if (!finalResponseText || finalResponseText.trim().length === 0) continue;
+
+            // Enviar via Evolution
+            await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
+            
+            if (audioBuffer) {
+              const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
+              const aiMsgId = `ai-${Date.now()}`;
+              await agentService.persistMessage(
+                `${userId}_${cleanPhone}`, userId, finalResponseText,
+                'outbound', aiMsgId, contactName, from, cleanPhone,
+                undefined, undefined, aiAudioUrl || undefined
+              );
+              await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+            }
+            
+            // Limpar metadados
+            await redisService.del(`metadata:${timerKey}`);
+          } catch (err) {
+            console.error(`[WhatsAppService] Worker processing error for ${from}:`, err);
+          }
         }
       } catch (err) {
-        console.error(`[WhatsAppService] AI trigger error:`, err);
+        console.error('[WhatsAppService] Worker loop error:', err);
       }
-    }, delayMs);
+    }, 3000); // Checa a cada 3 segundos
+  }
 
-    this.debounceTimers.set(timerKey, timeout);
+
+  async startMaintenanceWorker() {
+    console.log('[WhatsAppService] 🛠️ Maintenance Worker started (30 min cycle)');
+    
+    // Roda a cada 30 minutos para não sobrecarregar o sistema
+    setInterval(async () => {
+      try {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, whatsapp_instance_id, whatsapp_status')
+          .not('whatsapp_instance_id', 'is', null);
+
+        if (!profiles) return;
+
+        for (const profile of profiles) {
+          const instanceName = profile.whatsapp_instance_id;
+          
+          try {
+            // 1. Verificar Status Real vs Banco
+            const realStatus = await EvolutionApiService.getInstanceStatus(instanceName);
+            const mappedStatus = realStatus.state === 'open' ? 'connected' : (realStatus.state === 'connecting' ? 'connecting' : 'disconnected');
+            
+            if (mappedStatus !== profile.whatsapp_status) {
+              console.log(`[WhatsAppService] 🔄 Status mismatch for ${instanceName}: DB=${profile.whatsapp_status}, Real=${mappedStatus}. Syncing...`);
+              await this.updateProfileStatus(profile.id, { status: mappedStatus });
+            }
+
+            // 2. Garantir Webhook Ativo
+            // Se estiver conectado, reforçamos a configuração do webhook para evitar perda de mensagens
+            if (mappedStatus === 'connected') {
+              await EvolutionApiService.setWebhook(instanceName);
+            }
+
+            // 3. Polling de Segurança (Apenas se houver discrepância ou para instâncias ativas)
+            // Isso serve como redundância final
+            if (mappedStatus === 'connected') {
+              const messages = await EvolutionApiService.fetchMessages(instanceName);
+              if (messages && messages.length > 0) {
+                console.log(`[WhatsAppService] 🛡️ Safety Polling: Found ${messages.length} messages for ${instanceName}`);
+                // O processamento aqui já é seguro devido à idempotência do Redis
+                for (const msg of messages) {
+                  const messageId = msg.key?.id;
+                  if (messageId && !msg.key?.fromMe) {
+                    // Trigger manual do processamento via webhook logic (idempotente)
+                    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                    const from = msg.key?.remoteJid;
+                    if (body && from) {
+                       const cleanFrom = from.split('@')[0].replace(/\D/g, '');
+                       await this.triggerAIResponseViaWebhook(profile.id, from, body, msg.pushName || 'User', cleanFrom, messageId);
+                    }
+                  }
+                }
+              }
+            }
+
+          } catch (err) {
+            console.error(`[WhatsAppService] Maintenance error for ${instanceName}:`, err);
+          }
+        }
+      } catch (err) {
+        console.error('[WhatsAppService] Global Maintenance Error:', err);
+      }
+    }, 1800000); // 30 minutos
   }
 
   async destroyAll() {
-    // No-op for Evolution API (managed externally)
     console.log('[WhatsAppService] destroyAll called (No-op for Evolution)');
   }
 
   async initializeAllSessions() {
-    // No-op (webhook driven)
-    console.log('[WhatsAppService] initializeAllSessions called (No-op)');
-  }
-  /**
-   * Background Polling - Rede de Segurança Anti-Falha de Webhook
-   * Busca mensagens diretamente na Evolution caso o webhook engasgue.
-   */
-  async startPolling() {
-    console.log('[WhatsAppService] 🛡️ Segurança: Polling de mensagens iniciado (2 min)');
-    setInterval(async () => {
-      try {
-        const { data: connectedProfiles } = await supabase
-          .from('profiles')
-          .select('id, whatsapp_instance_id')
-          .eq('whatsapp_status', 'connected');
-
-        if (!connectedProfiles) return;
-
-        for (const profile of connectedProfiles) {
-          if (!profile.whatsapp_instance_id) continue;
-          
-          // console.log(`[WhatsAppService] 🔍 Polling: Sincronizando ${profile.whatsapp_instance_id}...`);
-          const data = await EvolutionApiService.fetchMessages(profile.whatsapp_instance_id);
-          
-          if (data && data.length > 0) {
-             // Processar cada mensagem (o persistMessage já é idempotente agora)
-             for (const msg of data) {
-                // Adaptador de formato se necessário
-                const messageId = msg.key?.id;
-                const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                const from = msg.key?.remoteJid;
-                
-                if (messageId && body && from) {
-                   const cleanFrom = from.split('@')[0].replace(/\D/g, '');
-                   const threadId = `${profile.id}_${cleanFrom}`;
-                   
-                   if (!msg.key?.fromMe) { // Apenas inbound
-                      await agentService.persistMessage(
-                        threadId,
-                        profile.id,
-                        body,
-                        'inbound',
-                        messageId,
-                        msg.pushName || 'WhatsApp User',
-                        from,
-                        cleanFrom
-                      );
-                   }
-                }
-             }
-          }
-        }
-      } catch (err) {
-        console.error('[WhatsAppService] Polling error:', err);
-      }
-    }, 120000); // 2 minutos
+    this.startMaintenanceWorker();
+    console.log('[WhatsAppService] initializeAllSessions called');
   }
 }
 
+
 export const whatsappService = new WhatsAppService();
-// Inicia o polling global ao carregar o serviço
-whatsappService.startPolling();
+// Inicia o worker de manutenção ao carregar o serviço
+whatsappService.startMaintenanceWorker();
+

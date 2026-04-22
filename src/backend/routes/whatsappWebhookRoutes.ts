@@ -36,10 +36,21 @@ router.post('/webhook', async (req, res) => {
 
     switch (normalizedEvent) {
       case 'MESSAGES_UPSERT':
+        const messageObj = body.data.messages?.[0] || body.data.message || body.data;
+        const msgId = messageObj.key?.id || body.data.key?.id;
+        
+        if (msgId) {
+          const isNew = await (await import('../services/redisService.js')).redisService.markAsProcessed(msgId);
+          if (!isNew) {
+            console.log(`[WhatsappWebhook] 🛡️ Duplicate message detected and ignored: ${msgId}`);
+            return res.status(200).send('OK');
+          }
+        }
         await handleMessageUpsert(userId, body.data);
         break;
       
       case 'CONNECTION_UPDATE':
+
         await handleConnectionUpdate(userId, body.data);
         break;
       
