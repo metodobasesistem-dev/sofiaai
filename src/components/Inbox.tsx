@@ -25,7 +25,8 @@ import {
   ChevronRight,
   CreditCard,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Check
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -225,12 +226,22 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       </div>
       <p className="text-xs text-slate-500 truncate mb-2 leading-relaxed">{thread.lastMessage}</p>
       <div className="flex items-center justify-between">
-        <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border
-          ${thread.status === 'ia' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
-          {thread.status === 'ia' ? (thread.agent_name || 'Robô IA') : 'Aguardando'}
-        </span>
+        <div className="flex gap-1.5 items-center flex-wrap">
+          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border
+            ${thread.status === 'ia' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
+            {thread.status === 'ia' ? (thread.agent_name || 'Robô IA') : 'Humano'}
+          </span>
+          {thread.funilStatus && (
+            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border
+              ${thread.funilStatus === 'Lead' ? 'bg-gray-50 text-gray-400 border-gray-100' : 
+                thread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 
+                'bg-emerald-50 text-emerald-500 border-emerald-100'}`}>
+              {thread.funilStatus}
+            </span>
+          )}
+        </div>
         {thread.unreadCount && thread.unreadCount > 0 && (
-          <span className="bg-blue-600 text-white text-[10px] font-black w-5 h-5 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
+          <span className="bg-blue-600 text-white text-[10px] font-black w-5 h-5 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
             {thread.unreadCount}
           </span>
         )}
@@ -921,9 +932,9 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               <h3 className="text-base font-black text-gray-900 truncate px-2">{activeThread.name}</h3>
               <div className="mt-3 flex items-center justify-center gap-2">
                 <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border
-                  ${activeThread.funilStatus === 'Lead' ? 'bg-slate-100 text-slate-600 border-slate-200' : 
-                    activeThread.funilStatus === 'Qualificado' ? 'bg-amber-100 text-amber-600 border-amber-200' : 
-                    'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
+                  ${activeThread.funilStatus === 'Lead' ? 'bg-gray-50 text-gray-400 border-gray-100' : 
+                    activeThread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 
+                    'bg-emerald-50 text-emerald-500 border-emerald-100'}`}>
                   {activeThread.funilStatus || 'Lead'}
                 </span>
               </div>
@@ -992,32 +1003,50 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                 </div>
               </div>
 
-              {/* Funil de Vendas */}
+              {/* Gestão do Funil */}
               <div>
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                  <CreditCard size={14} className="text-blue-500" /> Gestão
+                  <CreditCard size={14} className="text-blue-500" /> Gestão de Funil
                 </h4>
-                <div className="grid grid-cols-1 gap-3">
-                  <button 
-                    onClick={async () => {
-                      const { error } = await supabase.from('contacts').update({ status_funil: 'Qualificado' }).ilike('telefone', `%${activeThread.remoteJid.split('@')[0].slice(-8)}%`);
-                      if (!error) toast.success('Lead movido para Qualificado');
-                    }}
-                    className="group w-full flex items-center justify-between p-4 rounded-3xl bg-white border-2 border-gray-100 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-500/10 transition-all"
-                  >
-                    <span className="text-xs font-black text-gray-700 group-hover:text-blue-600">Qualificar Lead</span>
-                    <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500" />
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      const { error } = await supabase.from('contacts').update({ status_funil: 'Cliente' }).ilike('telefone', `%${activeThread.remoteJid.split('@')[0].slice(-8)}%`);
-                      if (!error) toast.success('Lead marcado como Cliente');
-                    }}
-                    className="group w-full flex items-center justify-between p-4 rounded-3xl bg-white border-2 border-gray-100 hover:border-emerald-500 hover:shadow-xl hover:shadow-emerald-500/10 transition-all"
-                  >
-                    <span className="text-xs font-black text-gray-700 group-hover:text-emerald-600">Marcar como Cliente</span>
-                    <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-500" />
-                  </button>
+                <div className="flex flex-col gap-2">
+                  {(['Lead', 'Qualificado', 'Cliente'] as const).map((status) => {
+                    const isActive = activeThread.funilStatus === status;
+                    return (
+                      <button 
+                        key={status}
+                        onClick={async () => {
+                          const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                          const { error } = await supabase
+                            .from('contacts')
+                            .update({ status_funil: status })
+                            .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                          
+                          if (!error) {
+                            toast.success(`Status alterado para ${status}`);
+                            // Atualização local imediata para feedback instantâneo
+                            setThreads(prev => prev.map(t => 
+                              t.id === selectedThreadId ? { ...t, funilStatus: status } : t
+                            ));
+                          } else {
+                            toast.error('Erro ao atualizar status');
+                          }
+                        }}
+                        className={`group w-full flex items-center justify-between p-4 rounded-3xl border-2 transition-all
+                          ${isActive 
+                            ? 'bg-blue-50 border-blue-500 shadow-lg shadow-blue-500/10' 
+                            : 'bg-white border-gray-100 hover:border-blue-200'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full 
+                            ${status === 'Lead' ? 'bg-gray-400' : 
+                              status === 'Qualificado' ? 'bg-blue-500' : 'bg-emerald-500'}`} 
+                          />
+                          <span className={`text-xs font-black ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>{status}</span>
+                        </div>
+                        {isActive && <Check size={16} className="text-blue-600" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
