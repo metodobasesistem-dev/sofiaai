@@ -289,17 +289,30 @@ export const listAgents = async (): Promise<Agent[]> => {
  */
 export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
   try {
+    const payload = {
+      nome: agentData.nome,
+      nicho: agentData.nicho,
+      prompt_base: agentData.prompt_base,
+      status_ativo: agentData.status_ativo,
+      company_name: agentData.companyName,
+      company_address: agentData.companyAddress,
+      professional_name: agentData.professionalName,
+      company_description: agentData.companyDescription,
+      company_products: agentData.companyProducts,
+      company_faq: agentData.companyFAQ,
+      company_links: agentData.companyLinks,
+      voice_mode: agentData.voice_mode,
+      voice_id: agentData.voice_id,
+      appointment_duration: agentData.appointmentDuration || 30,
+      response_delay: agentData.response_delay || 15,
+      knowledge_base: agentData.knowledgeBase,
+      follow_ups: agentData.followUps,
+      reminders: agentData.reminders
+    };
+
     const res = await standardFetch('/api/v2/agents', {
       method: 'POST',
-      body: JSON.stringify({
-        ...agentData,
-        nome: agentData.nome, // Garantir mapeamento correto de campos snake_case se necessário
-        company_name: agentData.companyName,
-        company_description: agentData.companyDescription,
-        knowledge_base: agentData.knowledgeBase,
-        follow_ups: agentData.followUps,
-        reminders: agentData.reminders
-      })
+      body: JSON.stringify(payload)
     });
 
     const result = await res.json();
@@ -310,6 +323,7 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
     throw err;
   }
 };
+
 
 /**
  * Atualiza agente via UPDATE direto na tabela agents
