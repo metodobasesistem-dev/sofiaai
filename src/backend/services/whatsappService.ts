@@ -372,6 +372,8 @@ class WhatsAppService {
       throw err; // Força retry do BullMQ
     }
   }
+
+  async startMaintenanceWorker() {
     console.log('[WhatsAppService] 🛠️ Maintenance Worker started (30 min cycle)');
     
     // Roda a cada 30 minutos para não sobrecarregar o sistema
