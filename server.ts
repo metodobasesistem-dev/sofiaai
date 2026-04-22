@@ -79,20 +79,20 @@ async function startServer() {
   app.get('/api/v2/public-settings', async (req, res) => {
     try {
       const { data, error } = await supabase.from('global_settings')
-        .select('maintenance_mode, allow_signups')
+        .select('allow_signups')
         .limit(1)
         .maybeSingle();
       
       if (error) throw error;
       res.json({ 
         success: true, 
-        data: data || { maintenance_mode: false, allow_signups: true } 
+        data: data || { allow_signups: true } 
       });
     } catch (err: any) {
       console.warn('[Server] Public settings fetch failed (using defaults):', err.message);
       res.json({ 
         success: true, 
-        data: { maintenance_mode: false, allow_signups: true } 
+        data: { allow_signups: true } 
       });
     }
   });

@@ -451,7 +451,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
       </div>
 
       {/* 3. Banner de Plano / Upsell - Apenas para Trial ou Sem Plano */}
-      {(!profile?.plano || profile?.plano === 'trial') && (
+      {profile && (!profile?.plano || profile?.plano?.toLowerCase() === 'trial') && (
         <div className="bg-[#f0f9f9] border border-[#d1eeee] rounded-xl p-8 relative overflow-hidden mb-8">
           <div className="absolute top-0 right-0 p-8 text-[#2d7a7a] opacity-10">
             <Sparkles size={120} />
