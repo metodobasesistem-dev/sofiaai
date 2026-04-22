@@ -19,7 +19,13 @@ import {
   Play,
   Pause,
   X,
-  ArrowLeft
+  ArrowLeft,
+  Calendar,
+  Info,
+  ChevronRight,
+  CreditCard,
+  Clock,
+  ExternalLink
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -276,6 +282,9 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [selectedContact, setSelectedContact] = useState<any>(null);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [showDetails, setShowDetails] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle JID from URL
@@ -480,6 +489,33 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
           setMessages(formatted as any);
         }
 
+        // --- BUSCA DE DADOS PARA A LATERAL DIREITA ---
+        const thread = threads.find(t => t.id === selectedThreadId);
+        if (thread) {
+          const cleanPhone = thread.remoteJid.split('@')[0].replace(/\D/g, '');
+          
+          // 1. Dados do Contato
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('*')
+            .ilike('telefone', `%${cleanPhone.slice(-8)}%`)
+            .maybeSingle();
+          setSelectedContact(contact);
+
+          // 2. Agendamentos
+          if (contact) {
+            const { data: apps } = await supabase
+              .from('appointments')
+              .select('*')
+              .eq('contact_id', contact.id)
+              .order('start_time', { ascending: false })
+              .limit(5);
+            setAppointments(apps || []);
+          } else {
+            setAppointments([]);
+          }
+        }
+
         channel = supabase
           .channel(`messages-${selectedThreadId}`)
           .on(
@@ -544,14 +580,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
     if (!userId) return;
 
     try {
-      // 1. Send via API directly (no browser Buffer needed)
-      
-      // 2. Call backend upload logic? No, let's keep it simple: 
-      // Send directly via websocket/service if available, or a new API route.
-      // Since we already have whatsappService.sendVoice in the backend, 
-      // we'll need a way for the frontend to trigger it with a buffer.
-      
-      // For now, let's use a FormData upload to our own API
       const formData = new FormData();
       formData.append('audio', blob);
       formData.append('userId', userId);
@@ -566,7 +594,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       
       toast.success('Mensagem de voz enviada!');
       
-      // Alterar para modo humano ao interagir
       await supabase
         .from('threads')
         .update({ status: 'human', updated_at: new Date().toISOString() })
@@ -600,10 +627,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       
       toast.success('Arquivo enviado com sucesso!');
       
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
 
-      // Alterar para modo humano ao interagir
       await supabase
         .from('threads')
         .update({ status: 'human', updated_at: new Date().toISOString() })
@@ -625,10 +650,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
     setMessageText('');
 
     try {
-      // Send via WhatsApp Service
       await sendMessage(activeThread.remoteJid, text);
       
-      // Update thread status to 'human' when user sends a message
       await supabase
         .from('threads')
         .update({ 
@@ -652,11 +675,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       const userId = user?.id;
       if (!userId) return;
 
-      // 1. Delete Messages
       await supabase.from('messages').delete().eq('user_id', userId);
-      // 2. Delete Threads
       await supabase.from('threads').delete().eq('user_id', userId);
-      // 3. Delete Contacts
       await supabase.from('contacts').delete().eq('user_id', userId);
 
       toast.success('Caixa de entrada limpa com sucesso!');
@@ -673,12 +693,9 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
     if (!window.confirm(`Excluir conversa com ${thread.name}?`)) return;
 
     try {
-      // 1. Delete Messages first
       await supabase.from('messages').delete().eq('thread_id', thread.id);
-      // 2. Delete Thread
       await supabase.from('threads').delete().eq('id', thread.id);
       
-      // 3. Optional: Delete Contact if it's not linked to other threads (Simplified: delete always as requested)
       const phoneNumber = thread.remoteJid.split('@')[0];
       await supabase.from('contacts').delete().ilike('telefone', `%${phoneNumber.slice(-8)}%`);
 
@@ -690,7 +707,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
     }
   };
 
-  // Expose to ContactItem
   useEffect(() => {
     (window as any).handleDeleteThread = handleDeleteThread;
   }, [threads, selectedThreadId]);
@@ -703,7 +719,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
   return (
     <div className="h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden">
-      {/* Left Column: Contact List */}
       <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
         <div className="p-4 border-b border-slate-100 bg-white space-y-4">
           <div className="flex items-center justify-between mb-2">
@@ -730,7 +745,6 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
             />
           </div>
 
-          {/* Funnel Filters */}
           <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
             {(['Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
               <button
@@ -753,8 +767,9 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               <ListSkeleton rows={8} />
             </div>
           ) : filteredThreads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-gray-400 p-4 text-center">
-              <p className="text-xs">Nenhuma conversa nesta categoria.</p>
+            <div className="flex flex-col items-center justify-center bg-gray-50/50 text-gray-400">
+              <MessageCircle size={48} className="mb-4 opacity-20" />
+              <p className="text-sm font-medium">Selecione uma conversa para começar</p>
             </div>
           ) : (
             filteredThreads.map(thread => (
@@ -770,7 +785,7 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       </div>
 
       {/* Right Column: Chat Area */}
-      <div className={`${selectedThreadId ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white`}>
+      <div className={`${selectedThreadId ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}>
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
@@ -810,9 +825,18 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                     <span className="flex items-center gap-1"><Bot size={12} /> <span className="hidden sm:inline">Robô</span></span>
                   )}
                 </button>
-                <div className="flex items-center gap-2 text-gray-400">
+
+                {/* Botão de Info (Sidebar) */}
+                <button 
+                  onClick={() => setShowDetails(!showDetails)}
+                  className={`hidden lg:flex p-2 rounded-lg transition-colors ${showDetails ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:bg-gray-50'}`}
+                  title={showDetails ? "Esconder Detalhes" : "Mostrar Detalhes"}
+                >
+                  <Info size={18} />
+                </button>
+
+                <div className="hidden sm:flex items-center gap-2 text-gray-400 border-l border-gray-100 pl-4">
                   <button className="p-2 hover:bg-gray-50 rounded-lg"><Phone size={18} /></button>
-                  <button className="p-2 hover:bg-gray-50 rounded-lg"><Video size={18} /></button>
                   <button className="p-2 hover:bg-gray-50 rounded-lg"><MoreVertical size={18} /></button>
                 </div>
               </div>
@@ -822,18 +846,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
             <div className="flex-1 overflow-y-auto p-6 bg-[#f8f9fa] space-y-2">
               {loadingMessages ? (
                 <div className="space-y-6">
-                  <div className="flex flex-col items-start space-y-2">
-                    <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
-                    <Skeleton variant="text" width="20%" />
-                  </div>
-                  <div className="flex flex-col items-end space-y-2">
-                    <Skeleton variant="rect" width="40%" height={40} className="rounded-2xl rounded-tr-none bg-blue-100" />
-                    <Skeleton variant="text" width="15%" />
-                  </div>
-                  <div className="flex flex-col items-start space-y-2">
-                    <Skeleton variant="rect" width="50%" height={80} className="rounded-2xl rounded-tl-none" />
-                    <Skeleton variant="text" width="25%" />
-                  </div>
+                  <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
+                  <Skeleton variant="rect" width="40%" height={40} className="rounded-2xl rounded-tr-none bg-blue-100 self-end" />
                 </div>
               ) : (
                 <>
@@ -863,69 +877,153 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
 
             {/* Input Area */}
             <div className="p-3 md:p-6 border-t border-gray-100 bg-white shrink-0">
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                onChange={handleFileUpload}
-              />
+              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
               <div className="flex items-center gap-4 mb-3">
-                <button 
-                  type="button" 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all shadow-sm border border-slate-100"
-                >
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all shadow-sm border border-slate-100">
                   <Paperclip size={20} />
                 </button>
                 <div className="flex-1" />
                 <VoiceRecorder onStop={handleSendVoice} />
               </div>
               
-              <form 
-                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-                className="flex items-end gap-3 bg-slate-50 p-4 rounded-[1.5rem] border-2 border-slate-100 focus-within:border-indigo-400 focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all shadow-inner"
-              >
-                <textarea 
-                  rows={1}
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Escreva sua mensagem com carinho..." 
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] py-1 px-1 resize-none max-h-32 min-h-[30px] leading-relaxed placeholder-slate-400 font-semibold text-slate-700"
-                />
-                <button 
-                  type="submit"
-                  className={`p-4 rounded-2xl transition-all duration-500 flex items-center justify-center
-                    ${messageText.trim() 
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-200 hover:scale-105 active:scale-95' 
-                      : 'bg-slate-200 text-white opacity-50 cursor-not-allowed'}`}
-                  disabled={!messageText.trim()}
-                >
-                  <Send size={20} className={messageText.trim() ? 'animate-in fade-in zoom-in' : ''} />
+              <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-end gap-3 bg-slate-50 p-4 rounded-[1.5rem] border-2 border-slate-100 focus-within:border-indigo-400 focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all shadow-inner">
+                <textarea rows={1} value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Escreva sua mensagem..." className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] py-1 px-1 resize-none max-h-32 min-h-[30px] leading-relaxed placeholder-slate-400 font-semibold text-slate-700" />
+                <button type="submit" className={`p-4 rounded-2xl transition-all duration-500 flex items-center justify-center ${messageText.trim() ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-200' : 'bg-slate-200 text-white opacity-50'}`} disabled={!messageText.trim()}>
+                  <Send size={20} />
                 </button>
               </form>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-gray-50/50">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
               <MessageCircle size={40} className="text-gray-200" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Sua Caixa de Entrada</h3>
-            <p className="max-w-xs text-sm">Selecione uma conversa ao lado para visualizar as mensagens e interagir com seus leads.</p>
+            <h3 className="text-lg font-bold text-gray-900 mb-2 font-black">Caixa de Entrada</h3>
+            <p className="max-w-xs text-xs font-bold uppercase tracking-tight">Selecione uma conversa para começar o atendimento.</p>
           </div>
         )}
       </div>
 
-      {/* Mobile Placeholder for Chat (when on mobile) */}
-      <div className="md:hidden flex-1 flex items-center justify-center p-8 text-center text-gray-400">
-        <p className="text-sm">Selecione uma conversa para visualizar no desktop ou use a versão mobile otimizada.</p>
-      </div>
+      {/* Right Column: Lead Details Sidebar */}
+      {selectedThreadId && activeThread && showDetails && (
+        <motion.div 
+          initial={{ opacity: 0, width: 0 }}
+          animate={{ opacity: 1, width: '28%' }}
+          className="hidden lg:flex border-l border-gray-100 flex-col bg-white overflow-hidden"
+        >
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {/* Perfil Header */}
+            <div className="p-8 border-b border-gray-100 text-center bg-gray-50/30">
+              <div className="w-24 h-24 rounded-[2.5rem] bg-white text-blue-600 flex items-center justify-center mx-auto mb-4 border-2 border-blue-100/50 shadow-sm">
+                <User size={48} />
+              </div>
+              <h3 className="text-base font-black text-gray-900 truncate px-2">{activeThread.name}</h3>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border
+                  ${activeThread.funilStatus === 'Lead' ? 'bg-slate-100 text-slate-600 border-slate-200' : 
+                    activeThread.funilStatus === 'Qualificado' ? 'bg-amber-100 text-amber-600 border-amber-200' : 
+                    'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
+                  {activeThread.funilStatus || 'Lead'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-8 space-y-10">
+              {/* Dados do Contato */}
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <Info size={14} className="text-blue-500" /> Informações
+                </h4>
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100">
+                      <Phone size={16} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">WhatsApp</p>
+                      <p className="text-sm font-black text-gray-800">{activeThread.remoteJid.split('@')[0]}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100">
+                      <Clock size={16} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</p>
+                      <p className="text-sm font-black text-gray-800">
+                        {selectedContact?.created_at ? new Date(selectedContact.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Agendamentos */}
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Calendar size={14} className="text-blue-500" /> Agendamentos</span>
+                  <span className="bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] font-black shadow-sm">{appointments.length}</span>
+                </h4>
+                <div className="space-y-4">
+                  {appointments.length > 0 ? (
+                    appointments.map((app, idx) => (
+                      <div key={idx} className="p-4 bg-gray-50/50 rounded-3xl border border-gray-100 hover:border-blue-300 transition-all group">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-black text-gray-900 truncate flex-1">{app.service || 'Procedimento'}</p>
+                          <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase ml-2
+                            ${app.status === 'confirmed' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                            {app.status === 'confirmed' ? 'Ok' : 'Pendente'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold">
+                          <Calendar size={12} className="text-gray-400" />
+                          {new Date(app.start_time).toLocaleDateString('pt-BR')} às {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-10 bg-gray-50/30 rounded-[2.5rem] border border-dashed border-gray-200">
+                      <Calendar size={24} className="mx-auto mb-3 opacity-10 text-blue-600" />
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sem registros</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Funil de Vendas */}
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <CreditCard size={14} className="text-blue-500" /> Gestão
+                </h4>
+                <div className="grid grid-cols-1 gap-3">
+                  <button 
+                    onClick={async () => {
+                      const { error } = await supabase.from('contacts').update({ status_funil: 'Qualificado' }).ilike('telefone', `%${activeThread.remoteJid.split('@')[0].slice(-8)}%`);
+                      if (!error) toast.success('Lead movido para Qualificado');
+                    }}
+                    className="group w-full flex items-center justify-between p-4 rounded-3xl bg-white border-2 border-gray-100 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-500/10 transition-all"
+                  >
+                    <span className="text-xs font-black text-gray-700 group-hover:text-blue-600">Qualificar Lead</span>
+                    <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500" />
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      const { error } = await supabase.from('contacts').update({ status_funil: 'Cliente' }).ilike('telefone', `%${activeThread.remoteJid.split('@')[0].slice(-8)}%`);
+                      if (!error) toast.success('Lead marcado como Cliente');
+                    }}
+                    className="group w-full flex items-center justify-between p-4 rounded-3xl bg-white border-2 border-gray-100 hover:border-emerald-500 hover:shadow-xl hover:shadow-emerald-500/10 transition-all"
+                  >
+                    <span className="text-xs font-black text-gray-700 group-hover:text-emerald-600">Marcar como Cliente</span>
+                    <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-500" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
