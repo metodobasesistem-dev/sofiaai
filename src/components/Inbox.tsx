@@ -18,7 +18,8 @@ import {
   Mic,
   Play,
   Pause,
-  X
+  X,
+  ArrowLeft
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -701,9 +702,9 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   });
 
   return (
-    <div className="h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden">
+    <div className="h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden">
       {/* Left Column: Contact List */}
-      <div className="w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex flex-col bg-gray-50/30">
+      <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
         <div className="p-4 border-b border-slate-100 bg-white space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Conversas</h2>
@@ -769,14 +770,22 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
       </div>
 
       {/* Right Column: Chat Area */}
-      <div className="hidden md:flex flex-1 flex-col bg-white">
+      <div className={`${selectedThreadId ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white`}>
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
-            <div className="h-16 px-6 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                  <User size={20} />
+            <div className="h-16 px-4 md:px-6 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2 md:gap-3">
+                {/* Back Button for Mobile */}
+                <button 
+                  onClick={() => setSelectedThreadId(null)}
+                  className="md:hidden p-2 -ml-2 text-slate-500 hover:text-blue-600 transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <User size={18} />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">{activeThread.name}</h3>
@@ -790,12 +799,16 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               <div className="flex items-center gap-4">
                 <button 
                   onClick={toggleThreadStatus}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors border
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border
                     ${activeThread.status === 'ia' 
                       ? 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100' 
                       : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
                 >
-                  {activeThread.status === 'ia' ? 'Assumir Atendimento' : 'Ativar Robô IA'}
+                  {activeThread.status === 'ia' ? (
+                    <span className="flex items-center gap-1"><User size={12} /> <span className="hidden sm:inline">Assumir</span></span>
+                  ) : (
+                    <span className="flex items-center gap-1"><Bot size={12} /> <span className="hidden sm:inline">Robô</span></span>
+                  )}
                 </button>
                 <div className="flex items-center gap-2 text-gray-400">
                   <button className="p-2 hover:bg-gray-50 rounded-lg"><Phone size={18} /></button>
@@ -848,8 +861,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               </div>
             )}
 
-            {/* Typing Bar Premium */}
-            <div className="p-6 border-t border-slate-100 bg-white shrink-0">
+            {/* Input Area */}
+            <div className="p-3 md:p-6 border-t border-gray-100 bg-white shrink-0">
               <input 
                 type="file" 
                 ref={fileInputRef} 
