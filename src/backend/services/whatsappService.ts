@@ -267,6 +267,7 @@ class WhatsAppService {
               const finalResponseText = aiResponseData?.text;
               const audioBuffer = aiResponseData?.audioBuffer;
               const usedVoiceMode = (aiResponseData as any).voiceMode || 'disabled';
+              const aiMsgId = (aiResponseData as any).aiMsgId;
 
               if (!finalResponseText || finalResponseText.trim().length === 0) continue;
 
@@ -274,13 +275,29 @@ class WhatsAppService {
               if (audioBuffer && usedVoiceMode === 'audio_only') {
                 // Modo Dinâmico: Cliente mandou áudio -> Respondemos APENAS com áudio no WhatsApp
                 await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+                
+                // Salvar o áudio no histórico para o atendente ouvir
+                const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
+                await agentService.persistMessage(
+                   `${userId}_${cleanPhone}`, userId, '[Áudio]',
+                   'outbound', `${aiMsgId}-audio`, contactName, from, cleanPhone,
+                   'Atendente', undefined, aiAudioUrl || undefined
+                );
               } else {
                 // Modos Texto ou Texto + Áudio: Envia o texto primeiro
                 await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
                 
                 // Se estiver no modo 'always', envia o áudio em seguida
                 if (audioBuffer && usedVoiceMode === 'always') {
+                  const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
                   await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+                  
+                  // Salvar o áudio no histórico para o atendente ouvir
+                  await agentService.persistMessage(
+                    `${userId}_${cleanPhone}`, userId, '[Áudio]',
+                    'outbound', `${aiMsgId}-audio`, contactName, from, cleanPhone,
+                    'Atendente', undefined, aiAudioUrl || undefined
+                  );
                 }
               }
               

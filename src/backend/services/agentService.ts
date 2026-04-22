@@ -221,7 +221,7 @@ export class AgentService {
         const aiMsgId = `ai-${Date.now()}`;
         await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome, finalUsage);
         await redisService.pushMessage(threadId, 'assistant', aiFinalText);
-        return { text: aiFinalText, audioBuffer: voiceBuffer, voiceMode };
+        return { text: aiFinalText, audioBuffer: voiceBuffer, voiceMode, aiMsgId };
       }
       return null;
     } catch (error) {
