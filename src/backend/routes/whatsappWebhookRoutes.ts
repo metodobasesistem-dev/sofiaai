@@ -3,6 +3,7 @@ import { agentService } from '../services/agentService.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
+import { EvolutionApiService } from '../services/evolutionApiService.js';
 
 const router = Router();
 
@@ -46,7 +47,7 @@ router.post('/webhook', async (req, res) => {
             return res.status(200).send('OK');
           }
         }
-        await handleMessageUpsert(userId, body.data);
+        await handleMessageUpsert(userId, instanceName, body.data);
         break;
       
       case 'CONNECTION_UPDATE':
@@ -74,7 +75,7 @@ router.post('/webhook', async (req, res) => {
   res.status(200).send('OK');
 });
 
-async function handleMessageUpsert(userId: string, data: any) {
+async function handleMessageUpsert(userId: string, instanceName: string, data: any) {
   // Extrair o dado unificado independente de Evolution v1 ou v2
   const messageObj = data.messages?.[0] || data.message || data;
   const key = messageObj.key || data.key;
@@ -96,12 +97,20 @@ async function handleMessageUpsert(userId: string, data: any) {
   const isAudio = !!(messageContentObj.audioMessage || (messageContentObj.viewOnceMessageV2?.message?.audioMessage));
   
   if (isAudio) {
-     console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid}. Processing...`);
-     // Evolution API v2 envia o base64 se configurado ou precisamos baixar
-     // Se não tiver base64, ignoramos ou buscamos via API
-     const base64Audio = messageContentObj.audioMessage?.base64 || messageContentObj.viewOnceMessageV2?.message?.audioMessage?.base64;
-     
-      // Se não tiver base64 imediato, ainda assim salvamos o registro do áudio na tela
+      console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid}. Processing...`);
+      
+      // Tentar pegar base64 (pode vir no webhook ou precisamos buscar na API)
+      let base64Audio = messageContentObj.audioMessage?.base64 || messageContentObj.viewOnceMessageV2?.message?.audioMessage?.base64;
+      
+      if (!base64Audio) {
+         console.log(`[Webhook] 🎙️ Audio detected but no base64. Attempting to fetch from Evolution API...`);
+         const fetchedBase64 = await EvolutionApiService.getMediaBase64(instanceName, key, messageContentObj);
+         if (fetchedBase64) {
+            base64Audio = fetchedBase64;
+            console.log(`[Webhook] ✅ Successfully fetched audio base64 from API.`);
+         }
+      }
+
       const threadId = `${userId}_${cleanNumber}`;
       if (!base64Audio) {
          console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid} but no base64 found. Recording as placeholder.`);

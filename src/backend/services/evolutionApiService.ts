@@ -219,6 +219,22 @@ export class EvolutionApiService {
     }
   }
 
+  static async getMediaBase64(instanceName: string, messageKey: any, messageContent: any) {
+    const api = getApi();
+    try {
+      const { data } = await api.post(`/chat/getBase64FromMediaMessage/${instanceName}`, {
+        message: {
+          key: messageKey,
+          message: messageContent
+        }
+      });
+      return data.base64 || data;
+    } catch (error: any) {
+      console.error(`[EvolutionAPI] Error fetching media base64 for ${instanceName}:`, error.response?.data || error.message);
+      return null;
+    }
+  }
+
   static async fetchMessages(instanceName: string) {
     const api = getApi();
     try {
