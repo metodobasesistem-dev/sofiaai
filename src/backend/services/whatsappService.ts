@@ -109,17 +109,17 @@ class WhatsAppService {
       // 1. Buscar configuração do agente
       const { data: agent } = await supabase
         .from('agents')
-        .select('followUps')
+        .select('follow_ups')
         .eq('user_id', dbUserId)
         .eq('status_ativo', true)
         .maybeSingle();
 
-      if (!agent?.followUps || !agent.followUps[level]) {
+      if (!agent?.follow_ups || !agent.follow_ups[level]) {
         console.log(`[FollowUp] 🛑 No configuration found for level ${level}`);
         return;
       }
 
-      const config = agent.followUps[level];
+      const config = agent.follow_ups[level];
       const delayMinutes = config.delayMinutes || 60;
       const delayMs = delayMinutes * 60 * 1000;
 
