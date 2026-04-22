@@ -4,6 +4,8 @@ import fs from 'fs';
 import { supabase } from '../lib/supabaseClient.js';
 import { agentService } from './agentService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
+import { redisService } from './redisService.js';
+
 
 const DEBUG_LOG = path.join(process.cwd(), 'audio_debug.log');
 function logDebug(msg: string) {
