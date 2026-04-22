@@ -12,6 +12,7 @@ if (fs.existsSync('.env.local')) {
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = parseInt(process.env.REDIS_PORT || '6379');
 const redisPassword = process.env.REDIS_PASSWORD;
+const redisUsername = process.env.REDIS_USERNAME || 'default';
 
 console.log(`[RedisService] Init with ${redisHost}:${redisPort}...`);
 
@@ -26,6 +27,7 @@ async function getRedisClient() {
       host: redisHost,
       port: redisPort,
       password: redisPassword,
+      username: redisUsername,
       lazyConnect: true,
       retryStrategy: (times) => Math.min(times * 50, 2000)
     });
