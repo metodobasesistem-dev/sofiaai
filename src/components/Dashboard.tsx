@@ -450,73 +450,75 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
         />
       </div>
 
-      {/* 3. Banner de Plano / Upsell */}
-      <div className="bg-[#f0f9f9] border border-[#d1eeee] rounded-xl p-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 text-[#2d7a7a] opacity-10">
-          <Sparkles size={120} />
-        </div>
-        
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="px-2 py-0.5 bg-[#2d7a7a] text-white text-[10px] font-bold uppercase rounded flex items-center gap-1">
-              <Zap size={10} fill="currentColor" /> Teste Grátis
-            </span>
+      {/* 3. Banner de Plano / Upsell - Apenas para Trial ou Sem Plano */}
+      {(!profile?.plano || profile?.plano === 'trial') && (
+        <div className="bg-[#f0f9f9] border border-[#d1eeee] rounded-xl p-8 relative overflow-hidden mb-8">
+          <div className="absolute top-0 right-0 p-8 text-[#2d7a7a] opacity-10">
+            <Sparkles size={120} />
           </div>
-          <h2 className="text-2xl font-black text-[#1a4d4d] mb-1">Escolha o melhor plano para você</h2>
-          <p className="text-sm text-[#2d7a7a] opacity-80 mb-8">Escolha um plano e comece a transformar seu atendimento com nossa IA hoje mesmo</p>
-
-          <div className="flex flex-col items-center justify-center mb-8">
-            <p className="text-[10px] font-bold text-[#2d7a7a] uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Clock size={12} /> Tempo restante do teste grátis:
-            </p>
-            <div className="flex gap-4">
-              {[
-                { val: String(timeLeft.days), label: 'dias' },
-                { val: String(timeLeft.hours).padStart(2, '0'), label: 'horas' },
-                { val: String(timeLeft.mins).padStart(2, '0'), label: 'min' },
-                { val: String(timeLeft.secs).padStart(2, '0'), label: 'seg' }
-              ].map((t, i) => (
-                <div key={i} className="flex flex-col items-center">
-                  <div className="w-14 h-14 bg-white rounded-lg border border-[#d1eeee] flex items-center justify-center text-xl font-black text-[#1a4d4d] shadow-sm">
-                    {t.val}
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-0.5 bg-[#2d7a7a] text-white text-[10px] font-bold uppercase rounded flex items-center gap-1">
+                <Zap size={10} fill="currentColor" /> Teste Grátis
+              </span>
+            </div>
+            <h2 className="text-2xl font-black text-[#1a4d4d] mb-1">Escolha o melhor plano para você</h2>
+            <p className="text-sm text-[#2d7a7a] opacity-80 mb-8">Escolha um plano e comece a transformar seu atendimento com nossa IA hoje mesmo</p>
+  
+            <div className="flex flex-col items-center justify-center mb-8">
+              <p className="text-[10px] font-bold text-[#2d7a7a] uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Clock size={12} /> Tempo restante do teste grátis:
+              </p>
+              <div className="flex gap-4">
+                {[
+                  { val: String(timeLeft.days), label: 'dias' },
+                  { val: String(timeLeft.hours).padStart(2, '0'), label: 'horas' },
+                  { val: String(timeLeft.mins).padStart(2, '0'), label: 'min' },
+                  { val: String(timeLeft.secs).padStart(2, '0'), label: 'seg' }
+                ].map((t, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <div className="w-14 h-14 bg-white rounded-lg border border-[#d1eeee] flex items-center justify-center text-xl font-black text-[#1a4d4d] shadow-sm">
+                      {t.val}
+                    </div>
+                    <span className="text-[10px] font-bold text-[#2d7a7a] mt-1 uppercase">{t.label}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-[#2d7a7a] mt-1 uppercase">{t.label}</span>
+                ))}
+              </div>
+            </div>
+  
+            <div className="space-y-2 mb-8 max-w-md">
+              {[
+                "Agenda automatizada com IA",
+                "Agente personalizado para seu negócio",
+                "Integração com WhatsApp"
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-[#1a4d4d] font-medium">
+                  <CheckCircle2 size={16} className="text-green-500" />
+                  {item}
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="space-y-2 mb-8 max-w-md">
-            {[
-              "Agenda automatizada com IA",
-              "Agente personalizado para seu negócio",
-              "Integração com WhatsApp"
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm text-[#1a4d4d] font-medium">
-                <CheckCircle2 size={16} className="text-green-500" />
-                {item}
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-3">
-            <button 
-              onClick={() => onTabChange?.('settings', 'subscription')}
-              className="w-full py-3 bg-[#2d7a7a] hover:bg-[#235e5e] text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-[#2d7a7a]/20"
-            >
-              <LayoutGrid size={18} />
-              Escolher Plano
-            </button>
-            <button 
-              onClick={() => window.open('https://wa.me/5532984963439?text=Olá! Vim pelo sistema e gostaria de falar com um consultor.', '_blank')}
-              className="w-full py-3 bg-white border border-[#2d7a7a] text-[#2d7a7a] hover:bg-[#f0f9f9] rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
-            >
-              <MessageCircle size={18} />
-              Chamar consultor
-            </button>
+  
+            <div className="space-y-3">
+              <button 
+                onClick={() => onTabChange?.('settings', 'subscription')}
+                className="w-full py-3 bg-[#2d7a7a] hover:bg-[#235e5e] text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-[#2d7a7a]/20"
+              >
+                <LayoutGrid size={18} />
+                Escolher Plano
+              </button>
+              <button 
+                onClick={() => window.open('https://wa.me/5532984963439?text=Olá! Vim pelo sistema e gostaria de falar com um consultor.', '_blank')}
+                className="w-full py-3 bg-white border border-[#2d7a7a] text-[#2d7a7a] hover:bg-[#f0f9f9] rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <MessageCircle size={18} />
+                Chamar consultor
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
