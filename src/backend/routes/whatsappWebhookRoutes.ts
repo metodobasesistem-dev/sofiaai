@@ -45,9 +45,11 @@ router.post('/webhook', async (req, res) => {
         const msgId = messageObj.key?.id || body.data.key?.id;
         
         if (msgId) {
-          const isNew = await (await import('../services/redisService.js')).redisService.markAsProcessed(msgId);
+          // A trava de duplicidade deve ser única por instância
+          const lockKey = `${instanceName}:${msgId}`;
+          const isNew = await (await import('../services/redisService.js')).redisService.markAsProcessed(lockKey);
           if (!isNew) {
-            console.log(`[WhatsappWebhook] 🛡️ Duplicate message detected and ignored: ${msgId}`);
+            console.log(`[WhatsappWebhook] 🛡️ Duplicate message detected and ignored: ${lockKey}`);
             return res.status(200).send('OK');
           }
         }
