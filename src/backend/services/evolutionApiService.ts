@@ -167,13 +167,11 @@ export class EvolutionApiService {
     try {
       const { data } = await api.post(`/message/sendText/${userId}`, {
         number: to,
+        text: text,
         options: {
           delay: 1200,
           presence: 'composing',
           linkPreview: false
-        },
-        textMessage: {
-          text: text
         }
       });
       return data;
