@@ -251,34 +251,41 @@ class WhatsAppService {
           // Se o timestamp nos metadados for diferente do que agendou, ignoramos
           // (Mas o ZADD já resolve isso naturalmente ao sobrescrever o score)
 
-          const { userId, from, body, contactName, cleanPhone, messageId, isAudio } = metadata;
-          const instanceName = `wppai_${userId.substring(0, 8)}`;
+            const { userId, from, body, contactName, cleanPhone, messageId, isAudio } = metadata;
+            const instanceName = `wppai_${userId.substring(0, 8)}`;
 
-          try {
-            console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (via Queue Worker)`);
-            const aiResponse = await agentService.processIncoming(userId, {
-              from, body, contactName, messageId,
-              displayPhone: cleanPhone,
-              skipPersist: true,
-              isAudioRequest: isAudio
-            });
+            try {
+              console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (via Queue Worker)`);
+              const aiResponse = await agentService.processIncoming(userId, {
+                from, body, contactName, messageId,
+                displayPhone: cleanPhone,
+                skipPersist: true,
+                isAudioRequest: isAudio
+              });
 
-            const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
-            const finalResponseText = aiResponseData?.text;
-            const audioBuffer = aiResponseData?.audioBuffer;
+              const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
+              const finalResponseText = aiResponseData?.text;
+              const audioBuffer = aiResponseData?.audioBuffer;
+              const usedVoiceMode = (aiResponseData as any).voiceMode || 'disabled';
 
-            if (!finalResponseText || finalResponseText.trim().length === 0) continue;
+              if (!finalResponseText || finalResponseText.trim().length === 0) continue;
 
-            // Enviar Texto via Evolution
-            await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
-            
-            // Se houver áudio, envia também
-            if (audioBuffer) {
-              await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
-            }
-            
-            // Limpar metadados
-            await redisService.del(`metadata:${timerKey}`);
+              // LÓGICA DE ENVIO INTELIGENTE
+              if (audioBuffer && usedVoiceMode === 'audio_only') {
+                // Modo Dinâmico: Cliente mandou áudio -> Respondemos APENAS com áudio no WhatsApp
+                await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+              } else {
+                // Modos Texto ou Texto + Áudio: Envia o texto primeiro
+                await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
+                
+                // Se estiver no modo 'always', envia o áudio em seguida
+                if (audioBuffer && usedVoiceMode === 'always') {
+                  await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+                }
+              }
+              
+              // Limpar metadados
+              await redisService.del(`metadata:${timerKey}`);
           } catch (err) {
             console.error(`[WhatsAppService] Worker processing error for ${from}:`, err);
           }
