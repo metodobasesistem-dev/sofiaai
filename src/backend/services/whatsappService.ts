@@ -4,6 +4,7 @@ import fs from 'fs';
 import { supabase } from '../lib/supabaseClient.js';
 import { agentService } from './agentService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
+import { Queue, Worker, Job } from 'bullmq';
 import { redisService } from './redisService.js';
 
 
@@ -28,10 +29,55 @@ export interface WhatsAppStatusResponse {
 class WhatsAppService {
   private sessions: Map<string, Session> = new Map();
   private lastWebhookSync: Map<string, number> = new Map();
-  private isWorkerRunning = false;
+  private messageQueue: Queue;
+  private messageWorker: Worker | null = null;
 
   constructor() {
-    this.startResponseWorker();
+    console.log('[WhatsAppService] Initializing with BullMQ...');
+    
+    // Configuração do Redis para BullMQ
+    const connection = {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD
+    };
+
+    this.messageQueue = new Queue('whatsapp-messages', { connection });
+    this.setupWorker(connection);
+  }
+
+  private setupWorker(connection: any) {
+    this.messageWorker = new Worker('whatsapp-messages', async (job: Job) => {
+      console.log(`[BullMQ] Processing job ${job.id} for ${job.data.from}`);
+      await this.processAIResponse(job.data);
+    }, { 
+      connection,
+      concurrency: 5, // Processa até 5 mensagens simultâneas
+      limiter: {
+        max: 10,
+        duration: 1000 // Máximo de 10 mensagens por segundo por worker
+      }
+    });
+
+    this.messageWorker.on('completed', (job) => {
+      console.log(`[BullMQ] Job ${job.id} completed successfully`);
+    });
+
+    this.messageWorker.on('failed', (job, err) => {
+      console.error(`[BullMQ] Job ${job?.id} failed permanently:`, err);
+    });
+  }
+
+  async enqueueMessage(data: any) {
+    await this.messageQueue.add('process-message', data, {
+      removeOnComplete: true,
+      removeOnFail: 1000, // Mantém os últimos 1000 erros para debug
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2000 // Espera 2s antes do primeiro retry, depois 4s, 8s...
+      }
+    });
   }
 
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
@@ -218,119 +264,114 @@ class WhatsAppService {
   }
 
 
-  // Novo método para ser chamado pelo Webhook
+  // Novo método para ser chamado pelo Webhook (Agora via BullMQ)
   async triggerAIResponseViaWebhook(userId: string, from: string, body: string, contactName: string, cleanPhone: string, messageId: string, isAudio: boolean = false) {
-    const timerKey = `pending_ai:${userId}:${from}`;
+    const jobId = `pending_ai:${userId}:${from}`;
     
+    const cacheKey = `agent_config:${userId}`;
     let delaySeconds = 15;
+    
     try {
-      const { data: agent } = await supabase
-        .from('agents')
-        .select('response_delay')
-        .eq('user_id', userId)
-        .eq('status_ativo', true)
-        .maybeSingle();
-      
-      if (agent?.response_delay) delaySeconds = agent.response_delay;
+      // Tentar buscar do Cache primeiro
+      const cached = await redisService.get(cacheKey);
+      if (cached) {
+        delaySeconds = cached.response_delay || 15;
+      } else {
+        const { data: agent } = await supabase
+          .from('agents')
+          .select('response_delay')
+          .eq('user_id', userId)
+          .eq('status_ativo', true)
+          .maybeSingle();
+        
+        if (agent) {
+          delaySeconds = agent.response_delay || 15;
+          // Cache por 10 minutos
+          await redisService.set(cacheKey, { response_delay: delaySeconds }, 600);
+        }
+      }
+    } catch (e) {
+      console.warn(`[WhatsAppService] Cache/DB error for agent config:`, e);
+    }
+
+    console.log(`[WhatsAppService] ⏳ Scheduling AI response for ${from} in ${delaySeconds}s (BullMQ)`);
+
+    // Debounce: Se já existir um job agendado para este contato, o BullMQ vai ignorar o novo se usarmos o mesmo jobId
+    // Ou podemos remover o antigo para "resetar" o timer (melhor para debounce real)
+    try {
+      const job = await this.messageQueue.getJob(jobId);
+      if (job) {
+        await job.remove();
+        console.log(`[WhatsAppService] 🔄 Debounce: Removed previous job for ${from}`);
+      }
     } catch (e) {}
 
-    // Salvar metadados da mensagem para o worker usar depois
-    await redisService.set(`metadata:${timerKey}`, {
-      userId, from, body, contactName, cleanPhone, messageId, isAudio,
-      timestamp: Date.now()
-    }, 300); // 5 min TTL
-
-    // Adicionar à fila de processamento (Sorted Set)
-    // Se o cliente mandar outra msg, o ZADD atualiza o tempo de processamento (debounce automático!)
-    await redisService.addToQueue('ai_response_queue', timerKey, delaySeconds);
-    console.log(`[WhatsAppService] ⏳ Scheduled AI response for ${from} in ${delaySeconds}s (Redis Queue)`);
+    await this.messageQueue.add('process-message', {
+      profileId: userId,
+      userId, // para compatibilidade
+      from,
+      body,
+      contactName,
+      displayPhone: cleanPhone,
+      messageId,
+      isAudio
+    }, {
+      jobId,
+      delay: delaySeconds * 1000,
+      removeOnComplete: true,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 }
+    });
   }
 
-  private async startResponseWorker() {
-    if (this.isWorkerRunning) return;
-    this.isWorkerRunning = true;
-    console.log('[WhatsAppService] 🤖 AI Response Worker started (Redis-based)');
+  // Método interno que processa a lógica de IA (chamado pelo Worker do BullMQ)
+  private async processAIResponse(data: any) {
+    const { userId, from, body, contactName, displayPhone, messageId, isAudio } = data;
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
 
-    setInterval(async () => {
-      try {
-        const dueJobs = await redisService.getDueJobs('ai_response_queue');
-        
-        for (const timerKey of dueJobs) {
-          // 1. Remover da fila IMEDIATAMENTE para evitar processamento duplo
-          await redisService.removeFromQueue('ai_response_queue', timerKey);
-          
-          // 2. Buscar metadados
-          const metadata = await redisService.get(`metadata:${timerKey}`);
-          if (!metadata) continue;
+    try {
+      console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (BullMQ Worker)`);
+      const aiResponse = await agentService.processIncoming(userId, {
+        from, body, contactName, messageId,
+        displayPhone: displayPhone,
+        skipPersist: true,
+        isAudioRequest: isAudio
+      });
 
-          // 3. Verificar se é a última mensagem (Debounce check)
-          // Se o timestamp nos metadados for diferente do que agendou, ignoramos
-          // (Mas o ZADD já resolve isso naturalmente ao sobrescrever o score)
+      const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
+      const finalResponseText = aiResponseData?.text;
+      const audioBuffer = aiResponseData?.audioBuffer;
+      const usedVoiceMode = (aiResponseData as any).voiceMode || 'disabled';
+      const aiMsgId = (aiResponseData as any).aiMsgId;
 
-            const { userId, from, body, contactName, cleanPhone, messageId, isAudio } = metadata;
-            const instanceName = `wppai_${userId.substring(0, 8)}`;
+      if (!finalResponseText || finalResponseText.trim().length === 0) return;
 
-            try {
-              console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (via Queue Worker)`);
-              const aiResponse = await agentService.processIncoming(userId, {
-                from, body, contactName, messageId,
-                displayPhone: cleanPhone,
-                skipPersist: true,
-                isAudioRequest: isAudio
-              });
-
-              const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
-              const finalResponseText = aiResponseData?.text;
-              const audioBuffer = aiResponseData?.audioBuffer;
-              const usedVoiceMode = (aiResponseData as any).voiceMode || 'disabled';
-              const aiMsgId = (aiResponseData as any).aiMsgId;
-
-              if (!finalResponseText || finalResponseText.trim().length === 0) continue;
-
-              // LÓGICA DE ENVIO INTELIGENTE
-              if (audioBuffer && usedVoiceMode === 'audio_only') {
-                // Modo Dinâmico: Cliente mandou áudio -> Respondemos APENAS com áudio no WhatsApp
-                await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
-                
-                // Salvar o áudio no histórico para o atendente ouvir
-                const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
-                await agentService.persistMessage(
-                   `${userId}_${cleanPhone}`, userId, '[Áudio]',
-                   'outbound', `${aiMsgId}-audio`, contactName, from, cleanPhone,
-                   'Atendente', undefined, aiAudioUrl || undefined
-                );
-              } else {
-                // Modos Texto ou Texto + Áudio: Envia o texto primeiro
-                await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
-                
-                // Se estiver no modo 'always', envia o áudio em seguida
-                if (audioBuffer && usedVoiceMode === 'always') {
-                  const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
-                  await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
-                  
-                  // Salvar o áudio no histórico para o atendente ouvir
-                  await agentService.persistMessage(
-                    `${userId}_${cleanPhone}`, userId, '[Áudio]',
-                    'outbound', `${aiMsgId}-audio`, contactName, from, cleanPhone,
-                    'Atendente', undefined, aiAudioUrl || undefined
-                  );
-                }
-              }
-              
-              // Limpar metadados
-              await redisService.del(`metadata:${timerKey}`);
-          } catch (err) {
-            console.error(`[WhatsAppService] Worker processing error for ${from}:`, err);
-          }
+      // LÓGICA DE ENVIO INTELIGENTE
+      if (audioBuffer && usedVoiceMode === 'audio_only') {
+        await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+        const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
+        await agentService.persistMessage(
+           `${userId}_${displayPhone}`, userId, '[Áudio]',
+           'outbound', `${aiMsgId}-audio`, contactName, from, displayPhone,
+           'Atendente', undefined, aiAudioUrl || undefined
+        );
+      } else {
+        await EvolutionApiService.sendMessage(instanceName, from, finalResponseText);
+        if (audioBuffer && usedVoiceMode === 'always') {
+          const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
+          await EvolutionApiService.sendVoice(instanceName, from, audioBuffer.toString('base64'));
+          await agentService.persistMessage(
+            `${userId}_${displayPhone}`, userId, '[Áudio]',
+            'outbound', `${aiMsgId}-audio`, contactName, from, displayPhone,
+            'Atendente', undefined, aiAudioUrl || undefined
+          );
         }
-      } catch (err) {
-        console.error('[WhatsAppService] Worker loop error:', err);
       }
-    }, 3000); // Checa a cada 3 segundos
+    } catch (err) {
+      console.error(`[WhatsAppService] AI Processing Error for ${from}:`, err);
+      throw err; // Força retry do BullMQ
+    }
   }
-
-
-  async startMaintenanceWorker() {
     console.log('[WhatsAppService] 🛠️ Maintenance Worker started (30 min cycle)');
     
     // Roda a cada 30 minutos para não sobrecarregar o sistema
@@ -400,6 +441,10 @@ class WhatsAppService {
 
   async initializeAllSessions() {
     this.startMaintenanceWorker();
+    // Rodar limpeza de storage uma vez ao dia (ou a cada 24h)
+    setInterval(() => this.cleanupOldStorageFiles(), 86400000);
+    // Rodar uma vez agora no boot
+    this.cleanupOldStorageFiles();
     console.log('[WhatsAppService] initializeAllSessions called');
   }
 
@@ -444,6 +489,34 @@ class WhatsAppService {
     } catch (error: any) {
       console.error(`[WhatsAppService] Sync error for ${userId}:`, error.message);
       throw error;
+    }
+  }
+
+  async cleanupOldStorageFiles() {
+    console.log('[WhatsAppService] 🧹 Starting storage cleanup (files > 7 days)...');
+    try {
+      const { data: buckets } = await supabase.storage.listBuckets();
+      if (!buckets) return;
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      for (const bucket of buckets) {
+        // Listar arquivos no bucket (limitado a 1000 por vez para segurança)
+        const { data: files } = await supabase.storage.from(bucket.name).list();
+        if (!files) continue;
+
+        const filesToDelete = files
+          .filter(f => new Date(f.created_at) < sevenDaysAgo)
+          .map(f => f.name);
+
+        if (filesToDelete.length > 0) {
+          console.log(`[WhatsAppService] 🧹 Deleting ${filesToDelete.length} old files from bucket ${bucket.name}`);
+          await supabase.storage.from(bucket.name).remove(filesToDelete);
+        }
+      }
+    } catch (err) {
+      console.error('[WhatsAppService] Storage cleanup error:', err);
     }
   }
 }
