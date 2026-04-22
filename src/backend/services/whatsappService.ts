@@ -91,31 +91,48 @@ class WhatsAppService {
    */
   async scheduleFollowUp(userId: string, from: string, level: number = 0) {
     const jobId = `followup:${userId}:${from}`;
+    let dbUserId = userId;
     
     try {
+      // [CRITICAL] Resolv e UUID se o userId for um email (Hostinger compatibility)
+      if (userId.includes('@')) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', userId)
+          .maybeSingle();
+        if (prof?.id) dbUserId = prof.id;
+      }
+
+      console.log(`[FollowUp] 🔍 Searching config for level ${level} (User: ${dbUserId}, From: ${from})`);
+
       // 1. Buscar configuração do agente
       const { data: agent } = await supabase
         .from('agents')
         .select('followUps')
-        .eq('user_id', userId)
+        .eq('user_id', dbUserId)
         .eq('status_ativo', true)
         .maybeSingle();
 
       if (!agent?.followUps || !agent.followUps[level]) {
-        console.log(`[FollowUp] No configuration for level ${level} for user ${userId}`);
+        console.log(`[FollowUp] 🛑 No configuration found for level ${level}`);
         return;
       }
 
       const config = agent.followUps[level];
-      const delayMs = (config.delayMinutes || 60) * 60 * 1000;
+      const delayMinutes = config.delayMinutes || 60;
+      const delayMs = delayMinutes * 60 * 1000;
 
       // 2. Remover qualquer follow-up pendente anterior
       const existingJob = await this.followUpQueue.getJob(jobId);
-      if (existingJob) await existingJob.remove();
+      if (existingJob) {
+        await existingJob.remove();
+        console.log(`[FollowUp] 🔄 Resetting previous job for ${from}`);
+      }
 
       // 3. Adicionar novo job com o delay configurado
       await this.followUpQueue.add('send-followup', {
-        userId,
+        userId: dbUserId,
         from,
         level,
         config
@@ -126,7 +143,7 @@ class WhatsAppService {
         attempts: 2
       });
 
-      console.log(`[FollowUp] ✅ Level ${level + 1} scheduled for ${from} in ${config.delayMinutes}m`);
+      console.log(`[FollowUp] ✅ Level ${level + 1} scheduled for ${from} in ${delayMinutes}m`);
     } catch (err) {
       console.error('[FollowUp] Error scheduling:', err);
     }
