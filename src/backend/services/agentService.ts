@@ -475,7 +475,7 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       if (!selectedProf) {
         console.log(`[AgentService] ℹ️ No specific professional found. Using Universal Agenda for ${userId}`);
         selectedProf = {
-          id: userId, // Usamos o ID do usuário como ID do profissional "universal"
+          id: null, // Deixamos null para buscar disponibilidade universal
           name: agentData.company_name || 'Agenda Principal',
           google_calendar_id: null
         };
@@ -592,9 +592,11 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         ? professionals.find(p => p.name.toLowerCase().includes(args.professional_name.toLowerCase()))
         : (professionals.length > 0 ? professionals[0] : null);
 
+      let isUniversal = false;
       if (!selectedProf) {
+        isUniversal = true;
         selectedProf = {
-          id: userId,
+          id: null, // Deixamos null para evitar erro de chave estrangeira
           name: agentData.company_name || 'Agenda Principal'
         };
       }
