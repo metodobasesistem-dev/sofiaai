@@ -323,6 +323,7 @@ class WhatsAppService {
       await agentService.persistMessage(`${userId}_${cleanTo}`, userId, message, 'outbound', result.key?.id || `out-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente');
       
       // 🔄 Reseta/Agenda o Follow-up após mensagem manual do atendente
+      console.log(`[WhatsAppService] 📤 Manual message sent to ${to}. Scheduling follow-up...`);
       await this.scheduleFollowUp(userId, to, 0);
     } catch (err) {}
     return { success: true, messageId: result.key?.id };
@@ -427,11 +428,17 @@ class WhatsAppService {
         isAudioRequest: isAudio
       });
 
+      // 🛡️ PROTEÇÃO: Se a IA não retornou resposta (ex: modo humano ou ignorado), para por aqui sem quebrar
+      if (!aiResponse) {
+        console.log(`[WhatsAppService] ℹ️ AI skipped response for ${from} (Possibly human mode or no active agent)`);
+        return;
+      }
+
       const aiResponseData = typeof aiResponse === 'string' ? { text: aiResponse } : aiResponse;
-      const finalResponseText = aiResponseData?.text;
-      const audioBuffer = aiResponseData?.audioBuffer;
-      const usedVoiceMode = (aiResponseData as any).voiceMode || 'disabled';
-      const aiMsgId = (aiResponseData as any).aiMsgId;
+      const finalResponseText = (aiResponseData as any)?.text;
+      const audioBuffer = (aiResponseData as any)?.audioBuffer;
+      const usedVoiceMode = (aiResponseData as any)?.voiceMode || 'disabled';
+      const aiMsgId = (aiResponseData as any)?.aiMsgId;
 
       if (!finalResponseText || finalResponseText.trim().length === 0) return;
 
