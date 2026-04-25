@@ -740,6 +740,8 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
        console.error('[AgentService] Sync error:', err);
        throw err;
      }
+  }
+
   private async handleSearchCatalog(userId: string, query: string) {
     try {
       const { data, error } = await supabase
