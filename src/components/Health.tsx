@@ -27,13 +27,41 @@ interface HealthStatus {
 export default function Health() {
   const [stats, setStats] = useState<HealthStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbLatency, setDbLatency] = useState<number>(0);
+  const [wppStatus, setWppStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [redisOk, setRedisOk] = useState<boolean>(false);
 
   const fetchHealth = async () => {
     try {
       setLoading(true);
+      const start = Date.now();
       const { data, error } = await supabase.from('sys_health').select('*');
+      const duration = Date.now() - start;
+      setDbLatency(duration);
+
       if (error) throw error;
       setStats(data || []);
+
+      // Fetch real WhatsApp status for current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('whatsapp_status')
+          .eq('id', user.id)
+          .single();
+        if (profile) setWppStatus(profile.whatsapp_status || 'disconnected');
+      }
+
+      // Check Backend & Redis
+      try {
+        const resp = await fetch('/api/health-check');
+        const hData = await resp.json();
+        setRedisOk(hData.redis === 'ok');
+      } catch (e) {
+        setRedisOk(false);
+      }
+
     } catch (error) {
       console.error('Failed to fetch health stats:', error);
     } finally {
@@ -46,6 +74,12 @@ export default function Health() {
     const interval = setInterval(fetchHealth, 30000); // 30s refresh
     return () => clearInterval(interval);
   }, []);
+
+  const getStatusColor = (status: string) => {
+     if (status === 'connected' || status === 'healthy') return 'emerald';
+     if (status === 'connecting') return 'amber';
+     return 'red';
+  };
 
   return (
     <div className="space-y-8 max-w-6xl">
@@ -64,22 +98,22 @@ export default function Health() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* API Status (Mocked as healthy since it's the UI) */}
+        {/* API Status */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
           <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+            <div className={`p-3 rounded-2xl ${redisOk ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
               <Zap size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Interface Web</p>
-              <h3 className="text-lg font-black text-slate-900">Online</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filas de Mensagens</p>
+              <h3 className="text-lg font-black text-slate-900">{redisOk ? 'Operacional' : 'Instável'}</h3>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 mb-4">
-            <ShieldCheck size={14} /> Sistema operacional
+          <div className={`flex items-center gap-2 text-xs font-bold mb-4 ${redisOk ? 'text-emerald-600' : 'text-red-500'}`}>
+            <ShieldCheck size={14} /> {redisOk ? 'Redis Conectado' : 'Erro de Conexão Redis'}
           </div>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 w-[100%]" />
+            <div className={`h-full transition-all duration-1000 ${redisOk ? 'bg-emerald-500 w-[100%]' : 'bg-red-400 w-[10%]'}`} />
           </div>
         </div>
 
@@ -95,29 +129,29 @@ export default function Health() {
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs font-bold text-blue-600 mb-4">
-            <CheckCircle2 size={14} /> Latência otimizada
+            <CheckCircle2 size={14} /> Latência: {dbLatency}ms
           </div>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 w-[98%]" />
+            <div className={`h-full bg-blue-500 transition-all duration-1000`} style={{ width: `${Math.max(10, 100 - (dbLatency / 10))}%` }} />
           </div>
         </div>
 
         {/* WhatsApp Status (Real-time connection) */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
           <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl">
+            <div className={`p-3 rounded-2xl ${wppStatus === 'connected' ? 'bg-teal-50 text-teal-600' : 'bg-red-50 text-red-600'}`}>
               <Activity size={24} />
             </div>
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">IA & Mensageria</p>
-              <h3 className="text-lg font-black text-slate-900">Ativo</h3>
+              <h3 className="text-lg font-black text-slate-900 capitalize">{wppStatus === 'connected' ? 'Ativo' : wppStatus}</h3>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-teal-600 mb-4">
-            <CheckCircle2 size={14} /> OpenAI & LLM Prontos
+          <div className={`flex items-center gap-2 text-xs font-bold mb-4 ${wppStatus === 'connected' ? 'text-teal-600' : 'text-red-500'}`}>
+            <CheckCircle2 size={14} /> {wppStatus === 'connected' ? 'OpenAI & WhatsApp Prontos' : 'Aguardando conexão'}
           </div>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-teal-500 w-[100%]" />
+            <div className={`h-full transition-all duration-1000 ${wppStatus === 'connected' ? 'bg-teal-500 w-[100%]' : 'bg-red-400 w-[30%]'}`} />
           </div>
         </div>
       </div>
