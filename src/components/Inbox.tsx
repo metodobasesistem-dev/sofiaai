@@ -195,44 +195,41 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
 const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void }> = ({ thread, active, onClick }) => (
   <div 
     onClick={onClick}
-    className={`p-4 flex items-start gap-4 cursor-pointer transition-all duration-300 border-b border-slate-100 last:border-0 relative group
-      ${active ? 'bg-white shadow-md z-10' : 'hover:bg-slate-50 border-l-4 border-l-transparent'}`}
+    className={`p-3.5 flex items-start gap-3 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
+      ${active ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}
   >
     {active && (
       <motion.div 
-        layoutId="activeContact"
-        className="absolute inset-y-0 left-0 w-1.5 bg-blue-600 rounded-r-lg"
+        layoutId="activeContactIndicator"
+        className="absolute inset-y-0 left-0 w-1 bg-blue-600 rounded-r-full"
       />
     )}
-    <div className="w-13 h-13 rounded-2xl bg-slate-200 shrink-0 flex items-center justify-center text-slate-500 overflow-hidden relative border border-slate-50 group-hover:scale-105 transition-transform">
+    <div className="w-11 h-11 rounded-xl bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 overflow-hidden relative border border-slate-200/50 group-hover:border-blue-200 transition-colors">
       {thread.status === 'ia' && (
-        <div className="absolute top-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full z-10 animate-pulse" />
+        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-blue-500 border-2 border-white rounded-full z-10" />
       )}
-      <User size={24} />
+      <User size={20} />
     </div>
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-1">
-        <h4 className={`text-sm font-black truncate tracking-tight ${active ? 'text-blue-600' : 'text-slate-900 group-hover:text-blue-500 transition-colors'}`}>{thread.name}</h4>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{thread.time}</span>
-          <button 
-            onClick={(e) => { e.stopPropagation(); (window as any).handleDeleteThread(thread); }}
-            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
-            title="Excluir conversa"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+      <div className="flex items-center justify-between mb-0.5">
+        <h4 className={`text-[13px] font-semibold truncate tracking-tight ${active ? 'text-blue-700' : 'text-slate-900 group-hover:text-blue-600 transition-colors'}`}>
+          {thread.name}
+        </h4>
+        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap ml-2">
+          {thread.time}
+        </span>
       </div>
-      <p className="text-xs text-slate-500 truncate mb-2 leading-relaxed">{thread.lastMessage}</p>
-      <div className="flex items-center justify-between">
+      <p className={`text-[12px] truncate leading-tight ${active ? 'text-blue-600/70' : 'text-slate-500'}`}>
+        {thread.lastMessage || 'Inicie uma conversa'}
+      </p>
+      <div className="flex items-center justify-between mt-2">
         <div className="flex gap-1.5 items-center flex-wrap">
-          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border
-            ${thread.status === 'ia' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
+          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider border
+            ${thread.status === 'ia' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
             {thread.status === 'ia' ? (thread.agent_name || 'Robô IA') : 'Humano'}
           </span>
           {thread.funilStatus && (
-            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border
+            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider border
               ${thread.funilStatus === 'Lead' ? 'bg-gray-50 text-gray-400 border-gray-100' : 
                 thread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 
                 'bg-emerald-50 text-emerald-500 border-emerald-100'}`}>
@@ -240,46 +237,59 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
             </span>
           )}
         </div>
-        {thread.unreadCount && thread.unreadCount > 0 && (
-          <span className="bg-blue-600 text-white text-[10px] font-black w-5 h-5 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
-            {thread.unreadCount}
-          </span>
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-const ChatBubble: React.FC<{ message: Message }> = ({ message }) => (
-  <div className={`flex flex-col mb-6 ${message.sender !== 'lead' ? 'items-end' : 'items-start'} group`}>
-    <div className={`max-w-[85%] p-4 rounded-[2rem] text-[13.5px] leading-relaxed shadow-xl relative backdrop-blur-sm transition-all duration-300 hover:scale-[1.02]
-      ${message.sender !== 'lead' 
-        ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-tr-none shadow-blue-500/20' 
-        : 'bg-white/80 text-slate-800 border-2 border-white/50 rounded-tl-none shadow-slate-200/50'}`}>
-      
-      {message.audio_url ? (
-        <AudioPlayer url={message.audio_url} isOutbound={message.sender !== 'lead'} />
-      ) : (
-        <p className="font-medium whitespace-pre-wrap">{message.text}</p>
-      )}
-
-      <div className={`flex items-center gap-1.5 mt-2 text-[10px] font-black opacity-60 tracking-wider ${message.sender !== 'lead' ? 'text-blue-100 justify-end' : 'text-slate-400'}`}>
-        {message.time}
-        {message.sender !== 'lead' && <CheckCheck size={14} className="stroke-[3]" />}
-      </div>
-    </div>
-    
-    {(message.sender === 'ia' || message.sender === 'outbound') && (
-      <div className="flex items-center gap-1.5 mt-2 mr-2">
-        <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm
-          ${message.sender === 'ia' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-          {message.sender === 'ia' ? <Bot size={10} /> : <User size={10} />}
-          {message.sender === 'ia' ? 'Inteligência Artificial' : 'Atendente Real'}
+        <div className="flex items-center gap-2">
+          {thread.unreadCount && thread.unreadCount > 0 && (
+            <span className="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+              {thread.unreadCount}
+            </span>
+          )}
+          <button 
+            onClick={(e) => { e.stopPropagation(); (window as any).handleDeleteThread(thread); }}
+            className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all rounded-md hover:bg-red-50"
+            title="Excluir conversa"
+          >
+            <Trash2 size={12} />
+          </button>
         </div>
       </div>
-    )}
+    </div>
   </div>
 );
+
+const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
+  const isLead = message.sender === 'lead';
+  
+  return (
+    <div className={`flex flex-col mb-4 ${!isLead ? 'items-end' : 'items-start'} group`}>
+      <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-[13px] leading-relaxed shadow-sm relative transition-all duration-200
+        ${!isLead 
+          ? 'bg-blue-600 text-white rounded-tr-none' 
+          : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
+        
+        {message.audio_url ? (
+          <AudioPlayer url={message.audio_url} isOutbound={!isLead} />
+        ) : (
+          <p className="whitespace-pre-wrap font-medium">{message.text}</p>
+        )}
+
+        <div className={`flex items-center gap-1.5 mt-1.5 text-[9px] font-bold opacity-70 tracking-tight ${!isLead ? 'text-blue-50 justify-end' : 'text-slate-500'}`}>
+          {message.time}
+          {!isLead && <CheckCheck size={12} className="stroke-[2.5]" />}
+        </div>
+      </div>
+      
+      {!isLead && (
+        <div className="flex items-center gap-1 mt-1 mr-1">
+          <div className={`px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider flex items-center gap-1
+            ${message.sender === 'ia' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
+            {message.sender === 'ia' ? <Bot size={9} /> : <User size={9} />}
+            {message.sender === 'ia' ? 'IA Automática' : 'Atendente Real'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function Inbox({ user, role }: { user: SupabaseUser | null, role: string | null }) {
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -731,28 +741,30 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   return (
     <div className="h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden">
       <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
-        <div className="p-4 border-b border-slate-100 bg-white space-y-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Conversas</h2>
+        <div className="p-4 border-b border-slate-100 bg-white space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+              <MessageCircle size={14} className="text-blue-600" />
+              Conversas
+            </h2>
             <button 
               onClick={handleClearAll}
               disabled={isCleaning || threads.length === 0}
-              className="text-[10px] font-bold text-red-500 hover:text-red-700 disabled:opacity-30 disabled:grayscale transition-all flex items-center gap-1"
+              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              title="Limpar tudo"
             >
-              {isCleaning ? <Loader2 size={12} className="animate-spin" /> : <Trash size={12} />}
-              Limpar Tudo
+              {isCleaning ? <Loader2 size={14} className="animate-spin" /> : <Trash size={14} />}
             </button>
           </div>
 
-          <div className="relative group">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-2xl blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity" />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors z-10" size={18} />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
-              placeholder="Pesquisar leads..." 
+              placeholder="Pesquisar..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 bg-slate-100/50 border-2 border-transparent rounded-2xl text-[13px] font-bold placeholder-slate-400 focus:bg-white focus:border-blue-200/50 transition-all outline-none relative z-10 shadow-inner"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] placeholder-slate-400 focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
             />
           </div>
 
@@ -761,10 +773,10 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all border
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all
                   ${filterStatus === f 
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-200' 
-                    : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-600'}`}
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
               >
                 {f}
               </button>
@@ -800,9 +812,8 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
-            <div className="h-16 px-4 md:px-6 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-2 md:gap-3">
-                {/* Back Button for Mobile */}
+            <div className="h-16 px-4 md:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setSelectedThreadId(null)}
                   className="md:hidden p-2 -ml-2 text-slate-500 hover:text-blue-600 transition-colors"
@@ -810,51 +821,52 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                   <ArrowLeft size={20} />
                 </button>
 
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                  <User size={18} />
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200/50">
+                  <User size={20} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">{activeThread.name}</h3>
-                  <div className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-[10px] text-gray-500 font-medium">Online</span>
+                  <h3 className="text-[14px] font-bold text-slate-900 leading-tight">{activeThread.name}</h3>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Online via WhatsApp</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 md:gap-3">
                 <button 
                   onClick={toggleThreadStatus}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-2
                     ${activeThread.status === 'ia' 
-                      ? 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100' 
-                      : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
+                      ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}
                 >
                   {activeThread.status === 'ia' ? (
-                    <span className="flex items-center gap-1"><User size={12} /> <span className="hidden sm:inline">Assumir</span></span>
+                    <><User size={14} /> <span className="hidden sm:inline">Assumir Atendimento</span></>
                   ) : (
-                    <span className="flex items-center gap-1"><Bot size={12} /> <span className="hidden sm:inline">Robô</span></span>
+                    <><Bot size={14} /> <span className="hidden sm:inline">Ativar Robô IA</span></>
                   )}
                 </button>
 
-                {/* Botão de Info (Sidebar) */}
+                <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block"></div>
+
                 <button 
                   onClick={() => setShowDetails(!showDetails)}
-                  className={`hidden lg:flex p-2 rounded-lg transition-colors ${showDetails ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:bg-gray-50'}`}
+                  className={`p-2 rounded-lg transition-all ${showDetails ? 'text-blue-600 bg-blue-50 border border-blue-100' : 'text-slate-400 hover:bg-slate-50 border border-transparent'}`}
                   title={showDetails ? "Esconder Detalhes" : "Mostrar Detalhes"}
                 >
                   <Info size={18} />
                 </button>
 
-                <div className="hidden sm:flex items-center gap-2 text-gray-400 border-l border-gray-100 pl-4">
-                  <button className="p-2 hover:bg-gray-50 rounded-lg"><Phone size={18} /></button>
-                  <button className="p-2 hover:bg-gray-50 rounded-lg"><MoreVertical size={18} /></button>
+                <div className="hidden sm:flex items-center gap-1">
+                  <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Phone size={18} /></button>
+                  <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"><MoreVertical size={18} /></button>
                 </div>
               </div>
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 bg-[#f8f9fa] space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 space-y-4">
               {loadingMessages ? (
                 <div className="space-y-6">
                   <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
@@ -887,31 +899,70 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
             )}
 
             {/* Input Area */}
-            <div className="p-3 md:p-6 border-t border-gray-100 bg-white shrink-0">
+            <div className="p-4 border-t border-slate-100 bg-white shrink-0">
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-              <div className="flex items-center gap-4 mb-3">
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all shadow-sm border border-slate-100">
-                  <Paperclip size={20} />
-                </button>
-                <div className="flex-1" />
-                <VoiceRecorder onStop={handleSendVoice} />
-              </div>
               
-              <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-end gap-3 bg-slate-50 p-4 rounded-[1.5rem] border-2 border-slate-100 focus-within:border-indigo-400 focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all shadow-inner">
-                <textarea rows={1} value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Escreva sua mensagem..." className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] py-1 px-1 resize-none max-h-32 min-h-[30px] leading-relaxed placeholder-slate-400 font-semibold text-slate-700" />
-                <button type="submit" className={`p-4 rounded-2xl transition-all duration-500 flex items-center justify-center ${messageText.trim() ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-200' : 'bg-slate-200 text-white opacity-50'}`} disabled={!messageText.trim()}>
-                  <Send size={20} />
-                </button>
-              </form>
+              <div className="flex items-end gap-3">
+                <div className="flex flex-col gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()} 
+                    className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-slate-200 shadow-sm bg-white"
+                    title="Anexar arquivo"
+                  >
+                    <Paperclip size={18} />
+                  </button>
+                  <VoiceRecorder onStop={handleSendVoice} />
+                </div>
+
+                <form 
+                  onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
+                  className="flex-1 flex items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50 transition-all shadow-sm"
+                >
+                  <textarea 
+                    rows={1} 
+                    value={messageText} 
+                    onChange={(e) => setMessageText(e.target.value)} 
+                    onKeyDown={(e) => { 
+                      if (e.key === 'Enter' && !e.shiftKey) { 
+                        e.preventDefault(); 
+                        handleSendMessage(); 
+                      } 
+                    }} 
+                    placeholder="Escreva sua mensagem..." 
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-1.5 px-1 resize-none max-h-32 min-h-[24px] leading-relaxed placeholder-slate-400 font-medium text-slate-700" 
+                  />
+                  <button 
+                    type="submit" 
+                    className={`p-2.5 rounded-xl transition-all duration-300 flex items-center justify-center
+                      ${messageText.trim() 
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-200 scale-100' 
+                        : 'bg-slate-200 text-white opacity-50 cursor-not-allowed'}`} 
+                    disabled={!messageText.trim()}
+                  >
+                    <Send size={18} />
+                  </button>
+                </form>
+              </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-gray-50/50">
-            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
-              <MessageCircle size={40} className="text-gray-200" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/20">
+            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/5 border border-slate-100 rotate-3">
+              <MessageCircle size={48} className="text-blue-500/20" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2 font-black">Caixa de Entrada</h3>
-            <p className="max-w-xs text-xs font-bold uppercase tracking-tight">Selecione uma conversa para começar o atendimento.</p>
+            <h3 className="text-[18px] font-bold text-slate-900 mb-2">Sua Caixa de Entrada</h3>
+            <p className="max-w-xs text-[13px] font-medium text-slate-500 leading-relaxed">
+              Selecione uma conversa na lista ao lado para iniciar o atendimento profissional.
+            </p>
+            <div className="mt-8 flex gap-3">
+               <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-bold text-slate-400 flex items-center gap-2">
+                  <Bot size={14} /> IA Ativa
+               </div>
+               <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-bold text-slate-400 flex items-center gap-2">
+                  <Users size={14} /> CRM Integrado
+               </div>
+            </div>
           </div>
         )}
       </div>
@@ -925,16 +976,16 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
         >
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {/* Perfil Header */}
-            <div className="p-8 border-b border-gray-100 text-center bg-gray-50/30">
-              <div className="w-24 h-24 rounded-[2.5rem] bg-white text-blue-600 flex items-center justify-center mx-auto mb-4 border-2 border-blue-100/50 shadow-sm">
-                <User size={48} />
+            <div className="p-6 border-b border-slate-100 text-center bg-slate-50/30">
+              <div className="w-20 h-20 rounded-2xl bg-white text-slate-400 flex items-center justify-center mx-auto mb-4 border border-slate-200/50 shadow-sm">
+                <User size={36} />
               </div>
-              <h3 className="text-base font-black text-gray-900 truncate px-2">{activeThread.name}</h3>
-              <div className="mt-3 flex items-center justify-center gap-2">
-                <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border
-                  ${activeThread.funilStatus === 'Lead' ? 'bg-gray-50 text-gray-400 border-gray-100' : 
-                    activeThread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 
-                    'bg-emerald-50 text-emerald-500 border-emerald-100'}`}>
+              <h3 className="text-[15px] font-bold text-slate-900 truncate px-2">{activeThread.name}</h3>
+              <div className="mt-2 flex items-center justify-center">
+                <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border
+                  ${activeThread.funilStatus === 'Lead' ? 'bg-slate-50 text-slate-500 border-slate-200' : 
+                    activeThread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
+                    'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
                   {activeThread.funilStatus || 'Lead'}
                 </span>
               </div>
@@ -980,24 +1031,29 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                 <div className="space-y-4">
                   {appointments.length > 0 ? (
                     appointments.map((app, idx) => (
-                      <div key={idx} className="p-4 bg-gray-50/50 rounded-3xl border border-gray-100 hover:border-blue-300 transition-all group">
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="text-xs font-black text-gray-900 truncate flex-1">{app.service || 'Procedimento'}</p>
-                          <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase ml-2
-                            ${app.status === 'confirmed' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
-                            {app.status === 'confirmed' ? 'Ok' : 'Pendente'}
+                      <div key={idx} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-blue-200 transition-all group relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-2">
+                           <Calendar size={32} className="text-blue-500/5 -mr-2 -mt-2 rotate-12" />
+                        </div>
+                        <div className="flex justify-between items-start mb-2 relative z-10">
+                          <p className="text-[13px] font-bold text-slate-900 truncate flex-1">{app.service || 'Procedimento'}</p>
+                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase ml-2 border
+                            ${app.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                            {app.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold">
-                          <Calendar size={12} className="text-gray-400" />
-                          {new Date(app.start_time).toLocaleDateString('pt-BR')} às {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold relative z-10">
+                          <Clock size={12} className="text-slate-400" />
+                          {new Date(app.start_time).toLocaleDateString('pt-BR')} • {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-10 bg-gray-50/30 rounded-[2.5rem] border border-dashed border-gray-200">
-                      <Calendar size={24} className="mx-auto mb-3 opacity-10 text-blue-600" />
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sem registros</p>
+                    <div className="text-center py-10 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
+                        <Calendar size={20} className="text-slate-300" />
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nenhum agendamento</p>
                     </div>
                   )}
                 </div>
@@ -1038,12 +1094,12 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full 
-                            ${status === 'Lead' ? 'bg-gray-400' : 
-                              status === 'Qualificado' ? 'bg-blue-500' : 'bg-emerald-500'}`} 
+                            ${status === 'Lead' ? 'bg-slate-400' : 
+                              status === 'Qualificado' ? 'bg-indigo-500' : 'bg-emerald-500'}`} 
                           />
-                          <span className={`text-xs font-black ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>{status}</span>
+                          <span className={`text-[13px] font-semibold ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>{status}</span>
                         </div>
-                        {isActive && <Check size={16} className="text-blue-600" />}
+                        {isActive && <Check size={16} className="text-blue-600" strokeWidth={3} />}
                       </button>
                     );
                   })}
