@@ -138,7 +138,8 @@ export class AgentService {
       const now = new Date();
       const dateContext = `\n[CONTEXTO TEMPORAL]\nHOJE: ${format(now, 'dd/MM/yyyy')}\nDATA ATUAL: ${format(now, 'yyyy-MM-dd')}\n`;
       const fullPrompt = systemPrompt + dateContext;
-      const tools = this.getSchedulingTools();
+      const tools = this.getAgentTools();
+
 
       let currentMessages: any[] = [
         ...history
@@ -184,6 +185,10 @@ export class AgentService {
               if (toolResult.success && args.clientName) {
                 await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
               }
+            } else if (functionName === 'search_catalog') {
+              toolResult = await this.handleSearchCatalog(dbUserId, args.query);
+            } else if (functionName === 'send_catalog_item') {
+              toolResult = await this.handleSendCatalogItem(dbUserId, from, args.item_id);
             }
 
             console.log(`[AgentService] ✅ TOOL RESULT: ${functionName}`, toolResult);
@@ -434,42 +439,6 @@ PROMPT BASE (CUSTOMIZADO PELO USUÁRIO):
 ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
   }
 
-  private getSchedulingTools() {
-    return [
-      {
-        type: 'function',
-        function: {
-          name: 'check_availability',
-          description: 'Consulta horários disponíveis para uma data (ex: 2026-04-15).',
-          parameters: {
-            type: 'object',
-            properties: {
-              date: { type: 'string', description: 'Data YYYY-MM-DD' },
-              professional_name: { type: 'string' }
-            },
-            required: ['date']
-          }
-        }
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'book_appointment',
-          description: 'Realiza o agendamento de uma consulta.',
-          parameters: {
-            type: 'object',
-            properties: {
-              date: { type: 'string' },
-              time: { type: 'string' },
-              clientName: { type: 'string' },
-              professional_name: { type: 'string' }
-            },
-            required: ['date', 'time', 'clientName']
-          }
-        }
-      }
-    ];
-  }
 
   private async asyncFilter(arr: any[], predicate: any) {
     const results = await Promise.all(arr.map(predicate));
@@ -771,6 +740,111 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
        console.error('[AgentService] Sync error:', err);
        throw err;
      }
+  private async handleSearchCatalog(userId: string, query: string) {
+    try {
+      const { data, error } = await supabase
+        .from('agent_catalog')
+        .select('*')
+        .eq('user_id', userId)
+        .ilike('name', `%${query}%`);
+      
+      if (error) throw error;
+      if (!data || data.length === 0) return { message: 'Nenhum item encontrado no catálogo com essa busca.' };
+
+      return {
+        results: data.map(item => ({
+          id: item.id,
+          name: item.name,
+          description: item.description
+        }))
+      };
+    } catch (err: any) {
+      return { error: 'Falha ao buscar catálogo', details: err.message };
+    }
+  }
+
+  private async handleSendCatalogItem(userId: string, to: string, itemId: string) {
+    try {
+      const { data: item, error } = await supabase
+        .from('agent_catalog')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+      
+      if (error || !item) return { error: 'Item não encontrado.' };
+
+      const { whatsappService } = await import('./whatsappService.js');
+      await whatsappService.sendMedia(userId, to, item.media_url, item.media_type || 'image', item.name);
+
+      return { success: true, message: `O item ${item.name} foi enviado para o cliente.` };
+    } catch (err: any) {
+      return { error: 'Falha ao enviar item', details: err.message };
+    }
+  }
+
+  private getAgentTools() {
+    return [
+      {
+        type: 'function',
+        function: {
+          name: 'check_availability',
+          description: 'Consulta horários disponíveis para uma data (ex: 2026-04-15).',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'Data YYYY-MM-DD' },
+              professional_name: { type: 'string' }
+            },
+            required: ['date']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'book_appointment',
+          description: 'Realiza o agendamento de uma consulta.',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string' },
+              time: { type: 'string' },
+              clientName: { type: 'string' },
+              professional_name: { type: 'string' }
+            },
+            required: ['date', 'time', 'clientName']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'search_catalog',
+          description: 'Busca fotos, kits ou documentos no catálogo de produtos.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Palavra-chave para busca (ex: kit frozen)' }
+            },
+            required: ['query']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'send_catalog_item',
+          description: 'Envia uma foto ou arquivo do catálogo para o cliente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              item_id: { type: 'string', description: 'O ID do item retornado pela busca' }
+            },
+            required: ['item_id']
+          }
+        }
+      }
+    ];
   }
 }
 
