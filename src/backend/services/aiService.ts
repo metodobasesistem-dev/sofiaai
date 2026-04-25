@@ -104,6 +104,7 @@ export async function generateAIResponse(
     console.log(`[AIService] 🔑 Utilizando chave OpenAI: ${maskedKey}`);
 
     try {
+      const startTime = Date.now();
       const client = new OpenAI({ apiKey: key });
       const completion = await client.chat.completions.create({
         model: model,
@@ -114,13 +115,14 @@ export async function generateAIResponse(
         tool_choice: tools?.length ? toolChoice : undefined,
       });
 
+      const duration = Date.now() - startTime;
       const choice = completion.choices[0];
       const usage = completion.usage;
       
       const pricing = PRICING[model] || PRICING['gpt-4o'];
       const costUsd = ((usage?.prompt_tokens || 0) / 1000 * pricing.in) + ((usage?.completion_tokens || 0) / 1000 * pricing.out);
       
-      console.log(`[AIService] ✅ Sucesso OpenAI (${usage?.total_tokens} tokens)`);
+      console.log(`[AIService] ✅ Sucesso OpenAI (${usage?.total_tokens} tokens) em ${duration}ms`);
 
       return {
         text: choice.message.content,
@@ -152,6 +154,7 @@ export async function generateAIResponse(
     console.log(`[AIService] 🔑 Utilizando chave Gemini: ${maskedKey}`);
     
     try {
+      const startTime = Date.now();
       const genAI = new GoogleGenerativeAI(key);
       const geminiModel = genAI.getGenerativeModel({ model: model });
       
@@ -170,6 +173,7 @@ export async function generateAIResponse(
 
       const response = await result.response;
       const text = response.text();
+      const duration = Date.now() - startTime;
     
     // Gemini usage info
     const usageMetadata = (response as any).usageMetadata;
@@ -179,7 +183,7 @@ export async function generateAIResponse(
     const pricing = PRICING[model] || PRICING['gemini-1.5-flash'];
     const costUsd = (promptTokens / 1000 * pricing.in) + (completionTokens / 1000 * pricing.out);
 
-    console.log(`[AIService] ✅ Sucesso Gemini (${promptTokens + completionTokens} tokens)`);
+    console.log(`[AIService] ✅ Sucesso Gemini (${promptTokens + completionTokens} tokens) em ${duration}ms`);
 
       return {
         text: text,

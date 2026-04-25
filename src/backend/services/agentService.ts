@@ -121,10 +121,10 @@ export class AgentService {
       console.log(`[AgentService] 🧠 Agent found: "${agentData.nome}". Proceeding with AI loop.`);
       activeProfessionals = profsRes || [];
 
-      // 3. Persistent History - Limit to last 10 messages to avoid AI confusion
-      let history = await redisService.getHistory(threadId, 10);
+      // 3. Persistent History - Improved Context (Last 20 messages)
+      let history = await redisService.getHistory(threadId, 20);
       if (history.length === 0) {
-        history = await this.getHistoryFromSupabase(threadId, 10);
+        history = await this.getHistoryFromSupabase(threadId, 20);
       }
 
       // 4. Save Inbound Message
@@ -225,8 +225,11 @@ export class AgentService {
       }
       return null;
     } catch (error) {
-      console.error('[AgentService] Fatal error:', error);
-      throw error;
+      console.error('[AgentService] Fatal error in processIncoming:', error);
+      
+      // FALLBACK DE SEGURANÇA: Se tudo falhar, tenta enviar uma mensagem amigável para não deixar o cliente no vácuo
+      const fallbackMsg = "Peço desculpas, tive uma pequena instabilidade técnica para processar sua solicitação agora. Poderia repetir por favor? Estarei aqui para te ajudar!";
+      return { text: fallbackMsg };
     }
   }
 
