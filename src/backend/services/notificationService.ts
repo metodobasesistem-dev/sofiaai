@@ -44,9 +44,13 @@ export class NotificationService {
       .eq('reminder_sent', false)
       .gte('data', format(now, 'yyyy-MM-dd'));
 
-    if (error || !appts) return;
+    if (error) {
+      console.error('[NotificationService] Error fetching appointments:', error);
+      return;
+    }
 
-    for (const appt of appts) {
+    const appointmentsToProcess = appts || [];
+    for (const appt of appointmentsToProcess) {
       try {
         // Construct full date-time
         const apptDateTime = parseISO(`${appt.data}T${appt.time}:00`);
@@ -84,12 +88,16 @@ export class NotificationService {
       .select('*, profiles(id)')
       .eq('status', 'ia');
 
-    if (error || !threads) return;
+    if (error) {
+      console.error('[NotificationService] Error fetching threads for follow-up:', error);
+      return;
+    }
 
+    const threadsToProcess = threads || [];
     // To avoid redundant DB calls, we cache agent configs per user in this run
     const agentCache: Record<string, any> = {};
 
-    for (const thread of threads) {
+    for (const thread of threadsToProcess) {
       try {
         const userId = thread.user_id;
         
