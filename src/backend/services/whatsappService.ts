@@ -323,8 +323,20 @@ class WhatsAppService {
       const result = await EvolutionApiService.sendMessage(instanceName, to, message);
       const msgId = result.key?.id || result.messageId || `out-${Date.now()}`;
 
-      // Persiste a mensagem
-      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, message, 'outbound', msgId, senderName, to, cleanTo, senderType);
+      // Persiste a mensagem - CORRIGIDO: senderName vai para agentName (9º param), não para contactName
+      await agentService.persistMessage(
+        `${userId}_${cleanTo}`, 
+        userId, 
+        message, 
+        'outbound', 
+        msgId, 
+        undefined, // contactName (não sobrescrever o lead)
+        to, 
+        cleanTo, 
+        senderName, // agentName
+        undefined, 
+        undefined
+      );
       
       // 🔄 Reseta/Agenda o Follow-up após mensagem (exceto se for o próprio follow-up enviando)
       if (senderName !== 'IA (FOLLOW-UP)') {
@@ -345,7 +357,19 @@ class WhatsAppService {
     const audioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
-      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, '[Áudio]', 'outbound', result.key?.id || `ai-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente', undefined, audioUrl || undefined);
+      await agentService.persistMessage(
+        `${userId}_${cleanTo}`, 
+        userId, 
+        '[Áudio]', 
+        'outbound', 
+        result.key?.id || `ai-${Date.now()}`, 
+        undefined, // contactName
+        to, 
+        cleanTo, 
+        'Atendente', // agentName
+        undefined, 
+        audioUrl || undefined
+      );
     } catch (err) {}
     return { success: true, messageId: result.key?.id };
   }

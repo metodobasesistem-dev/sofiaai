@@ -251,17 +251,23 @@ export class AgentService {
     // 1. Thread UPSERT FIRST
     try {
       const cleanPhone = (displayPhone || threadId.split('_')[1] || '').replace(/\D/g, '');
+      const { data: existingThread } = await supabase.from('threads').select('contact_name').eq('id', threadId).maybeSingle();
+      
       const threadData: any = {
         id: threadId,
         user_id: userId,
         last_message: text.substring(0, 1000),
         last_message_time: new Date(timestamp).toISOString(),
-        status: direction === 'outbound' ? 'ia' : 'ia', 
-        contact_name: contactName || 'Cliente',
+        status: 'ia', // Mantemos 'ia' como padrão ou o que vier do DB
         remote_jid: remoteJid || `${cleanPhone}@c.us`,
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia'
       };
+
+      // Só atualiza o nome do contato se for mensagem recebida OU se o nome atual estiver vazio/padrão
+      if (direction === 'inbound' || !existingThread?.contact_name || existingThread.contact_name === 'Cliente' || existingThread.contact_name === 'Lead WhatsApp') {
+        threadData.contact_name = contactName || existingThread?.contact_name || 'Cliente';
+      }
       
       const { error: tErr } = await supabase.from('threads').upsert(threadData);
       
@@ -355,7 +361,11 @@ export class AgentService {
         });
         if (insErr) console.error('[DEBUG-CONTACTS] ERRO AO INSERIR CONTATO:', JSON.stringify(insErr, null, 2));
       } else {
-        if (contactName) contactData.nome = contactName;
+        // Só atualiza o nome se for inbound OU se o nome atual for genérico
+        const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp';
+        if (contactName && (incrementCount || isGeneric)) {
+           contactData.nome = contactName;
+        }
         if (incrementCount) contactData.total_mensagens = (existing.total_mensagens || 0) + 1;
         const { error: updErr } = await supabase.from('contacts').update(contactData).eq('id', contactId);
         if (updErr) console.error('[DEBUG-CONTACTS] ERRO AO ATUALIZAR CONTATO:', JSON.stringify(updErr, null, 2));
