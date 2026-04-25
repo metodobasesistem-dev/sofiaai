@@ -73,7 +73,7 @@ export class NotificationService {
 
     // Record success heartbeat
     await monitoringService.recordHeartbeat('reminders', 'healthy', {
-      total_checked: appts.length,
+      total_checked: appointmentsToProcess.length,
       timestamp: new Date().toISOString()
     });
   }
