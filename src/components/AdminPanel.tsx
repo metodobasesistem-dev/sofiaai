@@ -249,7 +249,7 @@ export default function AdminPanel() {
                                       {user.photo_url ? <img src={user.photo_url} alt="" className="w-full h-full object-cover rounded-2xl" /> : user.email[0].toUpperCase()}
                                    </div>
                                    <div>
-                                      <p className="text-sm font-black text-slate-900">{user.name || 'Sem nome'}</p>
+                                      <p className="text-sm font-black text-slate-900">{user.nome_completo || user.full_name || user.name || 'Sem nome'}</p>
                                       <p className="text-[11px] text-slate-400 font-medium">{user.email}</p>
                                    </div>
                                 </div>
@@ -506,7 +506,8 @@ export default function AdminPanel() {
                            <div key={i} className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-black text-[10px]">{u.email[0].toUpperCase()}</div>
-                                 <span className="text-xs font-bold">{u.name || user.email.split('@')[0]}</span>
+                                  <span className="text-xs font-bold">{u.nome_completo || u.full_name || u.name || u.email.split('@')[0]}</span>
+
                               </div>
                               <span className="text-sm font-black text-indigo-100">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR')}</span>
                            </div>
@@ -526,7 +527,8 @@ export default function AdminPanel() {
                             {u.email[0].toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-sm font-black text-slate-900">{u.name || 'Sem nome'}</p>
+                             <p className="text-sm font-black text-slate-900">{u.nome_completo || u.full_name || u.name || 'Sem nome'}</p>
+
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{u.plano || 'Starter'}</p>
                           </div>
                         </div>
