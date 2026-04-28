@@ -333,6 +333,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [showDetails, setShowDetails] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashFilter, setSlashFilter] = useState('');
+  const [slashIndex, setSlashIndex] = useState(0);
+
   // Handle JID from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -938,7 +942,49 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             )}
 
             {/* Input Area */}
-            <div className="p-4 border-t border-slate-100 bg-white shrink-0">
+            <div className="p-4 border-t border-slate-100 bg-white shrink-0 relative">
+              {showSlashMenu && (
+                <div className="absolute bottom-[calc(100%+8px)] left-4 w-80 bg-white rounded-xl shadow-[0_0_40px_-10px_rgba(0,0,0,0.15)] border border-slate-200 overflow-hidden z-50">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Bot size={12}/> Comandos Rápidos</span>
+                    <span className="text-[9px] font-medium text-slate-400">Use ↑ ↓ para navegar</span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    {(() => {
+                      const filtered = quickReplies.filter(r => 
+                        r.title.toLowerCase().includes(slashFilter) || r.content.toLowerCase().includes(slashFilter)
+                      ).slice(0, 6);
+                      
+                      if (filtered.length === 0) {
+                        return <div className="p-4 text-center text-xs text-slate-500">Nenhum atalho encontrado</div>;
+                      }
+
+                      return filtered.map((reply, idx) => (
+                        <button
+                          key={reply.id}
+                          type="button"
+                          onClick={() => {
+                            setMessageText(prev => prev.replace(/(?:\s|^)\/[^\s]*$/, ` ${reply.content} `).trimStart());
+                            setShowSlashMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 border-b border-slate-50 last:border-0 transition-all
+                            ${slashIndex === idx ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                          onMouseEnter={() => setSlashIndex(idx)}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-[13px] font-bold ${slashIndex === idx ? 'text-blue-700' : 'text-slate-800'}`}>
+                              {reply.title}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Enter ↵</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 line-clamp-1">{reply.content}</p>
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
               
               <div className="flex items-end gap-3">
@@ -961,14 +1007,54 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <textarea 
                     rows={1} 
                     value={messageText} 
-                    onChange={(e) => setMessageText(e.target.value)} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMessageText(val);
+                      const match = val.match(/(?:\s|^)\/([^\s]*)$/);
+                      if (match && quickReplies.length > 0) {
+                        setShowSlashMenu(true);
+                        setSlashFilter(match[1].toLowerCase());
+                        setSlashIndex(0);
+                      } else {
+                        setShowSlashMenu(false);
+                      }
+                    }} 
                     onKeyDown={(e) => { 
+                      if (showSlashMenu) {
+                        const filtered = quickReplies.filter(r => r.title.toLowerCase().includes(slashFilter) || r.content.toLowerCase().includes(slashFilter)).slice(0, 6);
+                        if (filtered.length > 0) {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setSlashIndex(prev => (prev + 1) % filtered.length);
+                            return;
+                          }
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setSlashIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+                            return;
+                          }
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const selected = filtered[slashIndex];
+                            if (selected) {
+                              setMessageText(prev => prev.replace(/(?:\s|^)\/[^\s]*$/, ` ${selected.content} `).trimStart());
+                              setShowSlashMenu(false);
+                            }
+                            return;
+                          }
+                          if (e.key === 'Escape') {
+                            setShowSlashMenu(false);
+                            return;
+                          }
+                        }
+                      }
+
                       if (e.key === 'Enter' && !e.shiftKey) { 
                         e.preventDefault(); 
-                        handleSendMessage(); 
+                        if (!showSlashMenu) handleSendMessage(); 
                       } 
                     }} 
-                    placeholder="Escreva sua mensagem..." 
+                    placeholder="Escreva sua mensagem... (Digite / para respostas rápidas)" 
                     className="flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-1.5 px-1 resize-none max-h-32 min-h-[24px] leading-relaxed placeholder-slate-400 font-medium text-slate-700" 
                   />
                   <button 
