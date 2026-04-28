@@ -270,6 +270,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       followUps: agent.followUps?.length ? agent.followUps : [{ delayMinutes: 60, extraPrompt: '' }],
       reminders: agent.reminders?.length ? agent.reminders : [{ mode: 'Tempo antes', hoursBefore: 24, message: '', sendAfterTime: false }],
       appointmentDuration: agent.appointmentDuration || 30,
+      response_delay: agent.response_delay || 15,
       voice_mode: agent.voice_mode || 'disabled',
       voice_id: agent.voice_id || 'alloy'
     });
