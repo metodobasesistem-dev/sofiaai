@@ -389,13 +389,21 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
   }, [threads]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    // Usamos um pequeno timeout para garantir que o DOM atualizou
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }, 100);
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Se as mensagens mudarem e não estivermos carregando, rola para o fim
+    if (!loadingMessages && messages.length > 0) {
+      // Se for a primeira carga de uma conversa selecionada, pulamos direto (instant)
+      // Se for uma mensagem nova chegando, fazemos o smooth
+      scrollToBottom(messages.length <= 1 ? "auto" : "smooth");
+    }
+  }, [messages, loadingMessages]);
 
   // Listen to threads
   useEffect(() => {

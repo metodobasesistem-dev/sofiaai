@@ -83,22 +83,22 @@ router.post('/webhook', async (req, res) => {
 
 async function handleMessageUpsert(userId: string, instanceName: string, data: any) {
   // Extrair o dado unificado independente de Evolution v1 ou v2
-  // v2: data.message OU data.messages[0]
   const messageObj = data.message || (data.messages && data.messages[0]) || data;
   const key = messageObj.key || data.key;
   const messageContentObj = messageObj.message || messageObj;
   
-  if (!messageContentObj || key?.fromMe) return;
+  if (!messageContentObj) return;
 
+  const fromMe = !!key?.fromMe;
   const remoteJid = key?.remoteJid;
   if (!remoteJid || remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') return;
 
-  const pushName = messageObj.pushName || data.pushName || 'Cliente';
+  const pushName = fromMe ? 'Você' : (messageObj.pushName || data.pushName || 'Cliente');
   const cleanNumber = remoteJid.split('@')[0].replace(/\D/g, '');
   const messageContent = messageContentObj.conversation || messageContentObj.extendedTextMessage?.text || '';
   const messageId = key.id;
 
-  console.log(`[Webhook] 📥 Message from ${remoteJid}: "${messageContent.substring(0, 30)}"`);
+  console.log(`[Webhook] 📥 Message from ${remoteJid} (fromMe: ${fromMe}): "${messageContent.substring(0, 30)}"`);
 
   // Detectar Áudio
   const isAudio = !!(messageContentObj.audioMessage || (messageContentObj.viewOnceMessageV2?.message?.audioMessage));
@@ -106,7 +106,6 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
   if (isAudio) {
       console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid}. Processing...`);
       
-      // Tentar pegar base64 (pode vir no webhook ou precisamos buscar na API)
       let base64Audio = messageContentObj.audioMessage?.base64 || messageContentObj.viewOnceMessageV2?.message?.audioMessage?.base64;
       
       if (!base64Audio) {
@@ -114,16 +113,14 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
          const fetchedBase64 = await EvolutionApiService.getMediaBase64(instanceName, key, messageContentObj);
          if (fetchedBase64) {
             base64Audio = fetchedBase64;
-            console.log(`[Webhook] ✅ Successfully fetched audio base64 from API.`);
          }
       }
 
       const threadId = `${userId}_${cleanNumber}`;
       if (!base64Audio) {
-         console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid} but no base64 found. Recording as placeholder.`);
          await agentService.persistMessage(
-            threadId, userId, '[Áudio enviado pelo cliente]',
-            'inbound', messageId, pushName, remoteJid, cleanNumber
+            threadId, userId, fromMe ? '[Áudio enviado por você]' : '[Áudio enviado pelo cliente]',
+            fromMe ? 'outbound' : 'inbound', messageId, pushName, remoteJid, cleanNumber
          );
          return;
       }
@@ -132,15 +129,17 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
       const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
       
       if (transcription) {
-        const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `inbound_${Date.now()}.ogg`);
+        const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `${fromMe ? 'outbound' : 'inbound'}_${Date.now()}.ogg`);
         await agentService.persistMessage(
           threadId, userId, `[Áudio]: ${transcription}`,
-          'inbound', messageId, pushName, remoteJid, cleanNumber,
+          fromMe ? 'outbound' : 'inbound', messageId, pushName, remoteJid, cleanNumber,
           undefined, undefined, audioUrl || undefined
         );
 
-        // Disparar Resposta AI
-        await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, transcription, pushName, cleanNumber, messageId, true);
+        // Disparar Resposta AI APENAS se NÃO for enviado por mim (fromMe: false)
+        if (!fromMe) {
+          await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, transcription, pushName, cleanNumber, messageId, true);
+        }
       }
       return;
   }
@@ -151,15 +150,17 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
     threadId,
     userId,
     messageContent,
-    'inbound',
+    fromMe ? 'outbound' : 'inbound',
     messageId,
     pushName,
     remoteJid,
     cleanNumber
   );
 
-  // Disparar Resposta AI
-  await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, messageContent, pushName, cleanNumber, messageId, false);
+  // Disparar Resposta AI APENAS se NÃO for enviado por mim (fromMe: false)
+  if (!fromMe) {
+    await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, messageContent, pushName, cleanNumber, messageId, false);
+  }
 }
 
 async function handleConnectionUpdate(userId: string, data: any) {
