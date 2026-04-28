@@ -146,6 +146,22 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
 
   // Persistir Mensagem de Texto
   const threadId = `${userId}_${cleanNumber}`;
+  
+  // Se for uma mensagem enviada por mim (fromMe), verificamos se ela já não foi persistida
+  // (evita duplicar mensagens que o próprio sistema enviou, como o Follow-up)
+  if (fromMe) {
+    const { data: existing } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('id', messageId)
+      .maybeSingle();
+    
+    if (existing) {
+      console.log(`[Webhook] 🛡️ Ignored echo for already persisted outbound message: ${messageId}`);
+      return;
+    }
+  }
+
   await agentService.persistMessage(
     threadId,
     userId,
