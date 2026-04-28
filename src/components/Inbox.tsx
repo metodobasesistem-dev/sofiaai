@@ -291,7 +291,7 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
   );
 };
 
-export default function Inbox({ user, role }: { user: SupabaseUser | null, role: string | null }) {
+export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser | null, role: string | null, isFullscreen?: boolean }) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -739,7 +739,10 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
   });
 
   return (
-    <div className="h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden">
+    <div className={isFullscreen 
+      ? "h-screen w-full bg-white flex overflow-hidden" 
+      : "h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
+    }>
       <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
         <div className="p-4 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center justify-between">
@@ -747,14 +750,25 @@ export default function Inbox({ user, role }: { user: SupabaseUser | null, role:
               <MessageCircle size={14} className="text-blue-600" />
               Conversas
             </h2>
-            <button 
-              onClick={handleClearAll}
-              disabled={isCleaning || threads.length === 0}
-              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-              title="Limpar tudo"
-            >
-              {isCleaning ? <Loader2 size={14} className="animate-spin" /> : <Trash size={14} />}
-            </button>
+            <div className="flex items-center gap-1">
+              {!isFullscreen && (
+                <button
+                  onClick={() => window.open('/?fullscreen=true', '_blank')}
+                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                  title="Abrir em Nova Janela"
+                >
+                  <ExternalLink size={14} />
+                </button>
+              )}
+              <button 
+                onClick={handleClearAll}
+                disabled={isCleaning || threads.length === 0}
+                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                title="Limpar tudo"
+              >
+                {isCleaning ? <Loader2 size={14} className="animate-spin" /> : <Trash size={14} />}
+              </button>
+            </div>
           </div>
 
           <div className="relative">

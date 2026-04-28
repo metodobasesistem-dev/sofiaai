@@ -35,7 +35,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const path = window.location.pathname;
     
-    if (params.has('jid')) {
+    if (params.has('jid') || params.has('fullscreen')) {
       setActiveTab('inbox');
     } else if (path.includes('/integrations') || localStorage.getItem('connecting_google') === 'true') {
       setActiveTab('integrations');
@@ -242,6 +242,10 @@ export default function App() {
         <Login />
       ) : maintenanceMode && role !== 'admin' ? (
         <MaintenancePage />
+      ) : window.location.search.includes('fullscreen=true') && activeTab === 'inbox' ? (
+        <div className="w-screen h-screen bg-white">
+          <Inbox user={user} role={role} isFullscreen={true} />
+        </div>
       ) : (
         <Layout activeTab={activeTab} onTabChange={handleTabChange} user={user} role={role}>
           {renderContent()}
