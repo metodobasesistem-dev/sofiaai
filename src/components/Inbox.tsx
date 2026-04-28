@@ -59,6 +59,28 @@ interface Message {
   audio_url?: string;
 }
 
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+const getAvatarColor = (name: string) => {
+  if (!name) return '#94a3b8';
+  const colors = [
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
+    '#ec4899', '#06b6d4', '#14b8a6', '#f43f5e', '#6366f1'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOutbound }) => {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -204,11 +226,14 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
         className="absolute inset-y-0 left-0 w-1 bg-blue-600 rounded-r-full"
       />
     )}
-    <div className="w-11 h-11 rounded-xl bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 overflow-hidden relative border border-slate-200/50 group-hover:border-blue-200 transition-colors">
+    <div className={`w-11 h-11 rounded-full shrink-0 flex items-center justify-center text-white font-bold text-sm overflow-hidden relative shadow-sm transition-colors
+      ${thread.status === 'ia' ? 'ring-2 ring-blue-100' : ''}`}
+      style={{ backgroundColor: getAvatarColor(thread.name) }}
+    >
       {thread.status === 'ia' && (
-        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-blue-500 border-2 border-white rounded-full z-10" />
+        <div className="absolute top-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full z-10" />
       )}
-      <User size={20} />
+      {getInitials(thread.name)}
     </div>
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-0.5">
@@ -224,22 +249,22 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       </p>
       <div className="flex items-center justify-between mt-2">
         <div className="flex gap-1.5 items-center flex-wrap">
-          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider border
-            ${thread.status === 'ia' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider
+            ${thread.status === 'ia' ? 'bg-blue-100/50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
             {thread.status === 'ia' ? (thread.agent_name || 'Robô IA') : 'Humano'}
           </span>
           {thread.funilStatus && (
-            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider border
-              ${thread.funilStatus === 'Lead' ? 'bg-gray-50 text-gray-400 border-gray-100' : 
-                thread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 
-                'bg-emerald-50 text-emerald-500 border-emerald-100'}`}>
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider
+              ${thread.funilStatus === 'Lead' ? 'bg-gray-100 text-gray-600' : 
+                thread.funilStatus === 'Qualificado' ? 'bg-indigo-100/50 text-indigo-700' : 
+                'bg-emerald-100/50 text-emerald-700'}`}>
               {thread.funilStatus}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {thread.unreadCount && thread.unreadCount > 0 && (
-            <span className="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+          {(thread.unreadCount ?? 0) > 0 && (
+            <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center">
               {thread.unreadCount}
             </span>
           )}
@@ -961,21 +986,26 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/20">
-            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/5 border border-slate-100 rotate-3">
-              <MessageCircle size={48} className="text-blue-500/20" />
-            </div>
-            <h3 className="text-[18px] font-bold text-slate-900 mb-2">Sua Caixa de Entrada</h3>
-            <p className="max-w-xs text-[13px] font-medium text-slate-500 leading-relaxed">
-              Selecione uma conversa na lista ao lado para iniciar o atendimento profissional.
-            </p>
-            <div className="mt-8 flex gap-3">
-               <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-bold text-slate-400 flex items-center gap-2">
-                  <Bot size={14} /> IA Ativa
-               </div>
-               <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-bold text-slate-400 flex items-center gap-2">
-                  <Users size={14} /> CRM Integrado
-               </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50 relative">
+            {/* Soft decorative background pattern */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+            
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mb-6 shadow-xl shadow-blue-500/10 border border-slate-100/50">
+                <MessageCircle size={56} className="text-blue-500/80" />
+              </div>
+              <h3 className="text-[22px] font-bold text-slate-800 mb-3 tracking-tight">Sua Caixa de Entrada</h3>
+              <p className="max-w-sm text-[14px] text-slate-500 leading-relaxed">
+                Selecione uma conversa na lista ao lado para visualizar as mensagens e gerenciar o atendimento de forma centralizada.
+              </p>
+              <div className="mt-10 flex gap-4">
+                 <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200/60 shadow-sm text-[12px] font-semibold text-slate-500 flex items-center gap-2">
+                    <Bot size={16} className="text-blue-500" /> IA Ativa
+                 </div>
+                 <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200/60 shadow-sm text-[12px] font-semibold text-slate-500 flex items-center gap-2">
+                    <Users size={16} className="text-emerald-500" /> CRM Integrado
+                 </div>
+              </div>
             </div>
           </div>
         )}
