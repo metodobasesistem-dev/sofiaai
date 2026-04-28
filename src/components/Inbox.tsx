@@ -53,7 +53,7 @@ interface Thread {
 interface Message {
   id: string;
   text: string;
-  sender: 'lead' | 'ia' | 'outbound';
+  sender: 'lead' | 'ia' | 'outbound' | 'private';
   time: string;
   timestamp: any;
   audio_url?: string;
@@ -283,13 +283,23 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 
 const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
   const isLead = message.sender === 'lead';
+  const isPrivate = message.sender === 'private';
   
   return (
     <div className={`flex flex-col mb-4 ${!isLead ? 'items-end' : 'items-start'} group`}>
       <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-[13px] leading-relaxed shadow-sm relative transition-all duration-200
-        ${!isLead 
-          ? 'bg-blue-600 text-white rounded-tr-none' 
-          : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
+        ${isPrivate 
+          ? 'bg-amber-50 text-amber-900 border border-amber-200/60 rounded-tr-none' 
+          : !isLead 
+            ? 'bg-blue-600 text-white rounded-tr-none' 
+            : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
+        
+        {isPrivate && (
+          <div className="flex items-center gap-1.5 mb-1.5 text-amber-600 font-bold text-[10px] uppercase tracking-widest">
+            <Lock size={10} />
+            Nota Privada (Apenas Equipe)
+          </div>
+        )}
         
         {message.audio_url ? (
           <AudioPlayer url={message.audio_url} isOutbound={!isLead} />
@@ -297,13 +307,13 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
           <p className="whitespace-pre-wrap font-medium">{message.text}</p>
         )}
 
-        <div className={`flex items-center gap-1.5 mt-1.5 text-[9px] font-bold opacity-70 tracking-tight ${!isLead ? 'text-blue-50 justify-end' : 'text-slate-500'}`}>
+        <div className={`flex items-center gap-1.5 mt-1.5 text-[9px] font-bold opacity-70 tracking-tight ${isPrivate ? 'text-amber-600/70 justify-end' : (!isLead ? 'text-blue-50 justify-end' : 'text-slate-500')}`}>
           {message.time}
-          {!isLead && <CheckCheck size={12} className="stroke-[2.5]" />}
+          {!isLead && !isPrivate && <CheckCheck size={12} className="stroke-[2.5]" />}
         </div>
       </div>
       
-      {!isLead && (
+      {!isLead && !isPrivate && (
         <div className="flex items-center gap-1 mt-1 mr-1">
           <div className={`px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider flex items-center gap-1
             ${message.sender === 'ia' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
@@ -336,6 +346,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
+  const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
 
   // Handle JID from URL
   useEffect(() => {
@@ -531,7 +542,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           const formatted = data.map(d => ({
             id: d.id,
             text: d.text || '',
-            sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
+            sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound')),
             time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
             timestamp: d.created_at,
             audio_url: d.audio_url
@@ -576,7 +587,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               const newMessage = {
                 id: d.id,
                 text: d.text || '',
-                sender: d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound'),
+                sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound')),
                 time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
                 timestamp: d.created_at,
                 audio_url: d.audio_url
@@ -698,6 +709,32 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
     const text = messageText;
     setMessageText('');
+
+    const isPrivate = isPrivateNoteMode || text.trim().startsWith('/nota ');
+    const finalMessageText = text.trim().startsWith('/nota ') ? text.trim().substring(6).trim() : text.trim();
+    if (!finalMessageText) return;
+
+    if (isPrivate) {
+      try {
+        const privateId = `private-${Date.now()}`;
+        const { error } = await supabase.from('messages').insert({
+           id: privateId,
+           user_id: userId,
+           thread_id: selectedThreadId,
+           text: finalMessageText,
+           direction: 'outbound',
+           timestamp: Date.now()
+        });
+        if (error) throw error;
+        
+        setIsPrivateNoteMode(false);
+        // O Realtime listener do messages vai capturar e atualizar a lista
+      } catch (err) {
+        console.error('Error adding private note:', err);
+        toast.error('Erro ao adicionar nota privada');
+      }
+      return;
+    }
 
     try {
       await sendMessage(activeThread.remoteJid, text);
@@ -997,12 +1034,24 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   >
                     <Paperclip size={18} />
                   </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)} 
+                    className={`p-2.5 rounded-xl transition-all shadow-sm
+                      ${isPrivateNoteMode ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white text-slate-400 hover:text-amber-600 hover:bg-amber-50 border border-slate-200'}`}
+                    title="Nota Privada (Apenas para equipe)"
+                  >
+                    <Lock size={18} />
+                  </button>
                   <VoiceRecorder onStop={handleSendVoice} />
                 </div>
 
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-                  className="flex-1 flex items-end gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50 transition-all shadow-sm"
+                  className={`flex-1 flex items-end gap-3 p-3 rounded-2xl border transition-all shadow-sm
+                    ${isPrivateNoteMode 
+                      ? 'bg-amber-50 border-amber-200 focus-within:border-amber-400 focus-within:bg-amber-50 focus-within:ring-4 focus-within:ring-amber-100' 
+                      : 'bg-slate-50 border-slate-200 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50'}`}
                 >
                   <textarea 
                     rows={1} 
@@ -1054,14 +1103,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                         if (!showSlashMenu) handleSendMessage(); 
                       } 
                     }} 
-                    placeholder="Escreva sua mensagem... (Digite / para respostas rápidas)" 
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-1.5 px-1 resize-none max-h-32 min-h-[24px] leading-relaxed placeholder-slate-400 font-medium text-slate-700" 
+                    placeholder={isPrivateNoteMode ? "Escreva uma nota privada... (o cliente não verá isso)" : "Escreva sua mensagem... (Digite / para respostas rápidas)"}
+                    className={`flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-1.5 px-1 resize-none max-h-32 min-h-[24px] leading-relaxed font-medium 
+                      ${isPrivateNoteMode ? 'placeholder-amber-600/50 text-amber-900' : 'placeholder-slate-400 text-slate-700'}`} 
                   />
                   <button 
                     type="submit" 
                     className={`p-2.5 rounded-xl transition-all duration-300 flex items-center justify-center
                       ${messageText.trim() 
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-200 scale-100' 
+                        ? (isPrivateNoteMode ? 'bg-amber-600 text-white shadow-md shadow-amber-200' : 'bg-blue-600 text-white shadow-md shadow-blue-200') 
                         : 'bg-slate-200 text-white opacity-50 cursor-not-allowed'}`} 
                     disabled={!messageText.trim()}
                   >
