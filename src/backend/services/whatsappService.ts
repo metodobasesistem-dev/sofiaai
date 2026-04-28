@@ -393,26 +393,23 @@ class WhatsAppService {
     let delaySeconds = 15;
     
     try {
-      // Tentar buscar do Cache primeiro
-      const cached = await redisService.get(cacheKey);
-      if (cached) {
-        delaySeconds = cached.response_delay || 15;
+      // 1. Sempre buscar do banco para garantir tempo real (ou cache curto)
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('response_delay, config')
+        .eq('user_id', userId)
+        .eq('status_ativo', true)
+        .maybeSingle();
+      
+      if (agent) {
+        // Tenta pegar do campo direto ou de dentro do JSON config
+        delaySeconds = agent.response_delay || agent.config?.response_delay || 15;
+        console.log(`[WhatsAppService] ⚙️ Config found for ${userId}: delay=${delaySeconds}s`);
       } else {
-        const { data: agent } = await supabase
-          .from('agents')
-          .select('response_delay')
-          .eq('user_id', userId)
-          .eq('status_ativo', true)
-          .maybeSingle();
-        
-        if (agent) {
-          delaySeconds = agent.response_delay || 15;
-          // Cache por 10 minutos
-          await redisService.set(cacheKey, { response_delay: delaySeconds }, 600);
-        }
+        console.warn(`[WhatsAppService] ⚠️ No active agent found for ${userId}, using default 15s delay.`);
       }
     } catch (e) {
-      console.warn(`[WhatsAppService] Cache/DB error for agent config:`, e);
+      console.warn(`[WhatsAppService] DB error for agent config:`, e);
     }
 
     console.log(`[WhatsAppService] ⏳ Scheduling AI response for ${from} in ${delaySeconds}s (BullMQ)`);
