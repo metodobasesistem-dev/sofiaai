@@ -37,7 +37,7 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage } from '../services/whatsappService';
 import { listQuickReplies, type QuickReply } from '../services/supabaseService';
-import Clients from './Clients';
+import Contacts from './Contacts';
 
 interface Thread {
   id: string;
@@ -844,7 +844,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
       {activeTab === 'contacts' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10 p-4 md:p-6 lg:p-8">
-          <Clients user={user} role={user?.role || null} onTabChange={(tab) => {
+          <Contacts user={user} role={user?.role || null} onTabChange={(tab) => {
             if (tab === 'inbox') setActiveTab('conversations');
           }} />
         </div>
