@@ -1142,7 +1142,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       : 'bg-slate-50 border-slate-200 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50'}`}
                 >
                   <textarea 
-                    rows={1} 
+                    rows={2} 
                     value={messageText} 
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1192,7 +1192,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       } 
                     }} 
                     placeholder={isPrivateNoteMode ? "Escreva uma nota privada... (o cliente não verá isso)" : "Escreva sua mensagem... (Digite / para respostas rápidas)"}
-                    className={`flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-1.5 px-1 resize-none max-h-32 min-h-[24px] leading-relaxed font-medium 
+                    className={`flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-2 px-1 resize-none max-h-32 min-h-[48px] leading-relaxed font-medium 
                       ${isPrivateNoteMode ? 'placeholder-amber-600/50 text-amber-900' : 'placeholder-slate-400 text-slate-700'}`} 
                   />
                   <button 
