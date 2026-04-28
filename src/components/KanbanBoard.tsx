@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Search, Filter, LayoutGrid, Ticket, User, MessageCircle, ArrowRight } from 'lucide-react';
-import { Thread } from './Inbox'; // Assuming we export or reuse types, wait let's just make it generic or use any for now
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner'; // Assuming we export or reuse types, wait let's just make it generic or use any for now
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface KanbanBoardProps {
   user: SupabaseUser | null;
-  threads: any[]; // We can pass threads from Inbox later
+  threads: any[];
+  onThreadsChange: (updater: (prev: any[]) => any[]) => void;
 }
 
-export default function KanbanBoard({ user, threads }: KanbanBoardProps) {
+export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBoardProps) {
   const [viewMode, setViewMode] = useState<'funil' | 'ticket'>('funil');
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Estrutura das colunas baseadas no modo de visualização
@@ -38,6 +41,62 @@ export default function KanbanBoard({ user, threads }: KanbanBoardProps) {
         return (t.ticketStatus || 'open') === columnId;
       }
     });
+  };
+
+  const handleDragStart = (e: React.DragEvent, cardId: string) => {
+    setDraggedCardId(cardId);
+    // To allow nice drag effect:
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetColumnId: string) => {
+    e.preventDefault();
+    if (!draggedCardId) return;
+
+    const card = threads.find(t => t.id === draggedCardId);
+    if (!card) return;
+
+    // Prevent unnecessary updates
+    if (viewMode === 'funil' && card.funilStatus === targetColumnId) return;
+    if (viewMode === 'ticket' && card.ticketStatus === targetColumnId) return;
+
+    // Update optimistically
+    onThreadsChange(prev => prev.map(t => {
+      if (t.id === draggedCardId) {
+        return viewMode === 'funil'
+          ? { ...t, funilStatus: targetColumnId }
+          : { ...t, ticketStatus: targetColumnId };
+      }
+      return t;
+    }));
+
+    // Send to Supabase
+    try {
+      if (viewMode === 'funil') {
+        // Need to update contacts table via cleanPhone
+        const cleanPhone = card.remoteJid.split('@')[0].replace(/\D/g, '');
+        const { error } = await supabase
+          .from('contacts')
+          .update({ status_funil: targetColumnId })
+          .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('threads')
+          .update({ ticket_status: targetColumnId })
+          .eq('id', draggedCardId);
+        if (error) throw error;
+      }
+      toast.success(`Movido para ${targetColumnId}`);
+    } catch (err) {
+      toast.error('Erro ao mover card');
+    }
+    setDraggedCardId(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
   };
 
   return (
@@ -95,7 +154,12 @@ export default function KanbanBoard({ user, threads }: KanbanBoardProps) {
                   </span>
                 </div>
                 
-                <div className={`flex-1 overflow-y-auto p-3 rounded-2xl border ${col.color} ${col.borderColor} space-y-3 custom-scrollbar`}>
+                <div 
+                  onDrop={(e) => handleDrop(e, col.id)}
+                  onDragOver={handleDragOver}
+                  className={`flex-1 overflow-y-auto p-3 rounded-2xl border ${col.color} ${col.borderColor} space-y-3 custom-scrollbar transition-all duration-200
+                    ${draggedCardId ? 'border-dashed border-2' : ''}`}
+                >
                   {cards.length === 0 ? (
                     <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-200/50 rounded-xl opacity-50">
                       <p className="text-xs font-bold text-gray-400">Nenhum card</p>
@@ -105,7 +169,10 @@ export default function KanbanBoard({ user, threads }: KanbanBoardProps) {
                       <motion.div 
                         layoutId={`card-${card.id}`}
                         key={card.id}
-                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, card.id)}
+                        className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all cursor-grab active:cursor-grabbing group
+                          ${draggedCardId === card.id ? 'opacity-50 scale-95' : ''}`}
                       >
                         <div className="flex justify-between items-start mb-3">
                           <h4 className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">{card.name}</h4>

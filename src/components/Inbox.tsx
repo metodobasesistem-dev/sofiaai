@@ -23,6 +23,7 @@ import {
   Calendar,
   Info,
   ChevronRight,
+  ChevronLeft,
   CreditCard,
   Clock,
   ExternalLink,
@@ -374,6 +375,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports'>('conversations');
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   // Handle JID from URL
   useEffect(() => {
@@ -848,7 +850,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       : "h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
     }>
       {isFullscreen && (
-        <div className="w-[70px] bg-slate-900 flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20">
+        <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold mb-8 shadow-lg shadow-blue-500/20">
             W
           </div>
@@ -856,49 +858,60 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           <div className="flex flex-col gap-4 w-full px-2">
             <button 
               onClick={() => setActiveTab('conversations')}
-              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
                 ${activeTab === 'conversations' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Conversas"
             >
-              <MessageCircle size={22} className={activeTab === 'conversations' ? 'fill-blue-400/20' : ''} />
+              <MessageCircle size={22} className={activeTab === 'conversations' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Conversas</span>}
               {activeTab === 'conversations' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
             </button>
             
             <button 
               onClick={() => setActiveTab('contacts')}
-              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
                 ${activeTab === 'contacts' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Contatos"
             >
-              <Users size={22} className={activeTab === 'contacts' ? 'fill-blue-400/20' : ''} />
+              <Users size={22} className={activeTab === 'contacts' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Contatos</span>}
               {activeTab === 'contacts' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
             </button>
 
             <button 
               onClick={() => setActiveTab('kanban')}
-              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
                 ${activeTab === 'kanban' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Kanban"
             >
-              <LayoutDashboard size={22} className={activeTab === 'kanban' ? 'fill-blue-400/20' : ''} />
+              <LayoutDashboard size={22} className={activeTab === 'kanban' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Kanban</span>}
               {activeTab === 'kanban' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
             </button>
 
             <button 
               onClick={() => setActiveTab('reports')}
-              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
                 ${activeTab === 'reports' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Relatórios"
             >
-              <BarChart3 size={22} className={activeTab === 'reports' ? 'fill-blue-400/20' : ''} />
+              <BarChart3 size={22} className={activeTab === 'reports' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Relatórios</span>}
               {activeTab === 'reports' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
             </button>
           </div>
+
+          <button 
+            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            className="absolute -right-3 top-8 bg-slate-800 text-slate-400 p-1.5 rounded-full border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors z-30 shadow-lg"
+          >
+            {isSidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
         </div>
       )}
 
       {activeTab === 'kanban' ? (
-        <KanbanBoard user={user} threads={threads} />
+        <KanbanBoard user={user} threads={threads} onThreadsChange={setThreads} />
       ) : activeTab === 'reports' ? (
         <ReportsDashboard />
       ) : activeTab === 'contacts' ? (
