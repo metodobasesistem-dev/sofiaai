@@ -31,7 +31,9 @@ import {
   Tag,
   AlertCircle,
   CheckCircle2,
-  Bookmark
+  Bookmark,
+  LayoutDashboard,
+  BarChart3
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -42,6 +44,8 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 import { sendMessage } from '../services/whatsappService';
 import { listQuickReplies, type QuickReply } from '../services/supabaseService';
 import Contacts from './Contacts';
+import KanbanBoard from './KanbanBoard';
+import ReportsDashboard from './ReportsDashboard';
 
 interface Thread {
   id: string;
@@ -369,7 +373,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports'>('conversations');
 
   // Handle JID from URL
   useEffect(() => {
@@ -869,11 +873,35 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               <Users size={22} className={activeTab === 'contacts' ? 'fill-blue-400/20' : ''} />
               {activeTab === 'contacts' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
             </button>
+
+            <button 
+              onClick={() => setActiveTab('kanban')}
+              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+                ${activeTab === 'kanban' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Kanban"
+            >
+              <LayoutDashboard size={22} className={activeTab === 'kanban' ? 'fill-blue-400/20' : ''} />
+              {activeTab === 'kanban' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+            </button>
+
+            <button 
+              onClick={() => setActiveTab('reports')}
+              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+                ${activeTab === 'reports' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Relatórios"
+            >
+              <BarChart3 size={22} className={activeTab === 'reports' ? 'fill-blue-400/20' : ''} />
+              {activeTab === 'reports' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+            </button>
           </div>
         </div>
       )}
 
-      {activeTab === 'contacts' ? (
+      {activeTab === 'kanban' ? (
+        <KanbanBoard user={user} threads={threads} />
+      ) : activeTab === 'reports' ? (
+        <ReportsDashboard />
+      ) : activeTab === 'contacts' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10 p-4 md:p-6 lg:p-8">
           <Contacts user={user} role={user?.role || null} onTabChange={(tab, passedPhone) => {
             if (tab === 'inbox') {
