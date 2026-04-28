@@ -875,8 +875,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
       {activeTab === 'contacts' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10 p-4 md:p-6 lg:p-8">
-          <Contacts user={user} role={user?.role || null} onTabChange={(tab) => {
-            if (tab === 'inbox') setActiveTab('conversations');
+          <Contacts user={user} role={user?.role || null} onTabChange={(tab, passedPhone) => {
+            if (tab === 'inbox') {
+              setActiveTab('conversations');
+              if (passedPhone) {
+                const thread = threads.find(t => t.remoteJid.includes(passedPhone));
+                if (thread) {
+                   setSelectedThreadId(thread.id);
+                } else {
+                   toast.error('Nenhuma conversa encontrada para este contato.');
+                }
+              }
+            }
           }} />
         </div>
       ) : (

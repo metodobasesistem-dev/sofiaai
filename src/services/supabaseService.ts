@@ -562,6 +562,19 @@ export const updateContactFunilStatus = async (contactId: string, status: Contac
   if (error) throw error;
 };
 
+export const updateContact = async (contactId: string, data: Partial<Contact>) => {
+  const payload: any = {};
+  if (data.nome) payload.nome = data.nome;
+  if (data.telefone) payload.telefone = data.telefone.replace(/\D/g, '');
+  
+  const { error } = await supabase
+    .from('contacts')
+    .update(payload)
+    .eq('id', contactId);
+  
+  if (error) throw error;
+};
+
 export const deleteContact = async (contactId: string) => {
   // Note: threads would need to be deleted too if we want parity
   const { error } = await supabase

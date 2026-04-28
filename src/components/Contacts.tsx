@@ -19,7 +19,8 @@ import {
   Star,
   ArrowUpRight,
   RefreshCw,
-  Trash2
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -28,6 +29,7 @@ import {
   listContactAppointments,
   updateContactFunilStatus,
   deleteContact,
+  updateContact,
   type Contact,
   type Appointment
 } from '../services/supabaseService';
@@ -108,11 +110,12 @@ const StatusBadge = ({ status, onClick }: { status: Contact['status_funil']; onC
 interface SidePanelProps {
   contact: Contact;
   onClose: () => void;
-  onTabChange?: (tab: string) => void;
+  onTabChange?: (tab: string, jid?: string) => void;
   onStatusChange: (contactId: string, status: Contact['status_funil']) => void;
+  onEdit: (contact: Contact) => void;
 }
 
-const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelProps) => {
+const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, onStatusChange, onEdit }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -141,11 +144,9 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
   };
 
   const openInbox = () => {
-    const jid = `${contact.telefone.replace(/\D/g, '')}@c.us`;
-    const url = new URL(window.location.href);
-    url.searchParams.set('jid', jid);
-    window.history.pushState({}, '', url);
-    if (onTabChange) onTabChange('inbox');
+    const cleanPhone = contact.telefone.replace(/\D/g, '');
+    const jid = `${cleanPhone}@s.whatsapp.net`;
+    if (onTabChange) onTabChange('inbox', jid);
   };
 
   const color = getAvatarColor(contact.id || contact.telefone);
@@ -177,9 +178,14 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
               />
           </div>
         </div>
-        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
-          <X size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onEdit(contact)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+            <Edit2 size={18} />
+          </button>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -294,7 +300,7 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function Contacts({ onTabChange, user, role }: { onTabChange?: (tab: string) => void, user: SupabaseUser | null, role: string | null }) {
+export default function Contacts({ onTabChange, user, role }: { onTabChange?: (tab: string, jid?: string) => void, user: SupabaseUser | null, role: string | null }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -304,6 +310,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
   const [filterStatus, setFilterStatus] = useState<Contact['status_funil'] | 'Todos'>('Todos');
   const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({ nome: '', telefone: '' });
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
 
   const handleSync = async () => {
     try {
@@ -373,12 +380,21 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
     if (!formData.nome || !formData.telefone) return;
     try {
       setIsSaving(true);
-      await createContact({ nome: formData.nome, telefone: formData.telefone, status_funil: 'Lead' });
+      if (editingContactId) {
+        await updateContact(editingContactId, { nome: formData.nome, telefone: formData.telefone });
+        toast.success('Contato atualizado!');
+        setSelectedContact(prev => prev && prev.id === editingContactId ? { ...prev, nome: formData.nome, telefone: formData.telefone } : prev);
+      } else {
+        await createContact({ nome: formData.nome, telefone: formData.telefone, status_funil: 'Lead' });
+        toast.success('Contato criado!');
+      }
       setIsModalOpen(false);
       setFormData({ nome: '', telefone: '' });
+      setEditingContactId(null);
       await fetchContacts();
     } catch (error) {
-      console.error('Failed to create contact:', error);
+      console.error('Failed to save contact:', error);
+      toast.error('Erro ao salvar contato');
     } finally {
       setIsSaving(false);
     }
@@ -423,7 +439,11 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             <RefreshCw size={18} />
           </button>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { 
+              setEditingContactId(null); 
+              setFormData({ nome: '', telefone: '' }); 
+              setIsModalOpen(true); 
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
           >
             <Plus size={18} /> Novo Contato
@@ -633,6 +653,11 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
               onClose={() => setSelectedContact(null)} 
               onTabChange={onTabChange}
               onStatusChange={handleStatusChange}
+              onEdit={(c) => {
+                setEditingContactId(c.id || null);
+                setFormData({ nome: c.nome, telefone: c.telefone });
+                setIsModalOpen(true);
+              }}
             />
           </>
         )}
@@ -656,9 +681,9 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
               <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-200">
-                    <UserPlus size={20} />
+                    {editingContactId ? <Edit2 size={20} /> : <UserPlus size={20} />}
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900">Novo Contato</h3>
+                  <h3 className="text-lg font-bold text-gray-900">{editingContactId ? 'Editar Contato' : 'Novo Contato'}</h3>
                 </div>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
                   <X size={20} />
