@@ -26,7 +26,8 @@ import {
   CreditCard,
   Clock,
   ExternalLink,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
