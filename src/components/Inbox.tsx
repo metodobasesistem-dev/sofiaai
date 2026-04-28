@@ -37,6 +37,7 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage } from '../services/whatsappService';
 import { listQuickReplies, type QuickReply } from '../services/supabaseService';
+import Clients from './Clients';
 
 interface Thread {
   id: string;
@@ -316,7 +317,7 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
       
       {!isLead && !isPrivate && (
         <div className="flex items-center gap-1 mt-1 mr-1">
-          <div className={`px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider flex items-center gap-1
+        <div className={`px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider flex items-center gap-1
             ${message.sender === 'ia' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
             {message.sender === 'ia' ? <Bot size={9} /> : <User size={9} />}
             {message.sender === 'ia' ? 'IA Automática' : 'Atendente Real'}
@@ -348,6 +349,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts'>('conversations');
 
   // Handle JID from URL
   useEffect(() => {
@@ -810,7 +812,45 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       ? "h-screen w-full bg-white flex overflow-hidden" 
       : "h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
     }>
-      <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
+      {isFullscreen && (
+        <div className="w-[70px] bg-slate-900 flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold mb-8 shadow-lg shadow-blue-500/20">
+            W
+          </div>
+          
+          <div className="flex flex-col gap-4 w-full px-2">
+            <button 
+              onClick={() => setActiveTab('conversations')}
+              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+                ${activeTab === 'conversations' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Conversas"
+            >
+              <MessageCircle size={22} className={activeTab === 'conversations' ? 'fill-blue-400/20' : ''} />
+              {activeTab === 'conversations' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+            </button>
+            
+            <button 
+              onClick={() => setActiveTab('contacts')}
+              className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all group relative
+                ${activeTab === 'contacts' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Contatos"
+            >
+              <Users size={22} className={activeTab === 'contacts' ? 'fill-blue-400/20' : ''} />
+              {activeTab === 'contacts' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'contacts' ? (
+        <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10 p-4 md:p-6 lg:p-8">
+          <Clients user={user} role={user?.role || null} onTabChange={(tab) => {
+            if (tab === 'inbox') setActiveTab('conversations');
+          }} />
+        </div>
+      ) : (
+        <>
+          <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
         <div className="p-4 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
@@ -1289,6 +1329,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             </div>
           </div>
         </motion.div>
+      )}
+      </>
       )}
     </div>
   );
