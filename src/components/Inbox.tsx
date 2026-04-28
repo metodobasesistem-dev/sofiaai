@@ -27,7 +27,11 @@ import {
   Clock,
   ExternalLink,
   Check,
-  Lock
+  Lock,
+  Tag,
+  AlertCircle,
+  CheckCircle2,
+  Bookmark
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -50,6 +54,10 @@ interface Thread {
   updatedAt: any;
   agent_name?: string;
   funilStatus?: 'Lead' | 'Qualificado' | 'Cliente';
+  ticketStatus?: 'open' | 'pending' | 'resolved';
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  assignedTo?: string | null;
+  labels?: string[];
 }
 
 interface Message {
@@ -263,6 +271,18 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
               {thread.funilStatus}
             </span>
           )}
+          {thread.priority && thread.priority !== 'normal' && (
+            <span className="text-[10px]" title={`Prioridade: ${thread.priority}`}>
+              {thread.priority === 'urgent' ? '🔥' : thread.priority === 'high' ? '🔴' : '🟢'}
+            </span>
+          )}
+          {thread.labels && thread.labels.length > 0 && (
+            <div className="flex gap-0.5 items-center ml-1">
+              {thread.labels.slice(0, 3).map((l, i) => (
+                 <span key={i} className="w-1.5 h-1.5 rounded-full bg-blue-500" title={l} />
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {(thread.unreadCount ?? 0) > 0 && (
@@ -336,7 +356,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'Todos' | 'Lead' | 'Qualificado' | 'Cliente'>('Todos');
+  const [filterStatus, setFilterStatus] = useState<'Abertos' | 'Resolvidos' | 'Todos' | 'Lead' | 'Qualificado' | 'Cliente'>('Abertos');
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -430,7 +450,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               remoteJid: d.remote_jid || '',
               updatedAt: d.updated_at || new Date().toISOString(),
               agent_name: d.agent_name || 'Robô IA',
-              funilStatus: contact?.status_funil || 'Lead'
+              funilStatus: contact?.status_funil || 'Lead',
+              ticketStatus: d.ticket_status || 'open',
+              priority: d.priority || 'normal',
+              assignedTo: d.assigned_to || null,
+              labels: Array.isArray(d.labels) ? d.labels : []
             };
           });
           const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -495,7 +519,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   remoteJid: d.remote_jid,
                   updatedAt: d.updated_at,
                   agent_name: d.agent_name || 'Robô IA',
-                  funilStatus: contact?.status_funil || 'Lead'
+                  funilStatus: contact?.status_funil || 'Lead',
+                  ticketStatus: d.ticket_status || 'open',
+                  priority: d.priority || 'normal',
+                  assignedTo: d.assigned_to || null,
+                  labels: Array.isArray(d.labels) ? d.labels : []
                 };
               });
               const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -803,7 +831,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
   const filteredThreads = threads.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.remoteJid.includes(searchTerm);
-    const matchesFilter = filterStatus === 'Todos' || t.funilStatus === filterStatus;
+    let matchesFilter = true;
+    if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved';
+    else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved';
+    else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -890,7 +921,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
 
           <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
-            {(['Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+            {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}
@@ -955,6 +986,24 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
 
               <div className="flex items-center gap-2 md:gap-3">
+                <button
+                  onClick={async () => {
+                    const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
+                    await supabase.from('threads').update({ ticket_status: newStatus }).eq('id', activeThread.id);
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, ticketStatus: newStatus } : t));
+                    if (newStatus === 'resolved') toast.success('Conversa marcada como resolvida!');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-1.5
+                    ${activeThread.ticketStatus === 'resolved' 
+                      ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700' 
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                >
+                  <CheckCircle2 size={14} className={activeThread.ticketStatus === 'resolved' ? "text-white" : "text-emerald-500"} />
+                  <span className="hidden sm:inline">{activeThread.ticketStatus === 'resolved' ? 'Resolvido' : 'Marcar Resolvido'}</span>
+                </button>
+
+                <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block"></div>
+
                 <button 
                   onClick={toggleThreadStatus}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-2
@@ -963,13 +1012,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}
                 >
                   {activeThread.status === 'ia' ? (
-                    <><User size={14} /> <span className="hidden sm:inline">Assumir Atendimento</span></>
+                    <><User size={14} /> <span className="hidden lg:inline">Assumir</span></>
                   ) : (
-                    <><Bot size={14} /> <span className="hidden sm:inline">Ativar Robô IA</span></>
+                    <><Bot size={14} /> <span className="hidden lg:inline">Robô IA</span></>
                   )}
                 </button>
-
-                <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block"></div>
 
                 <button 
                   onClick={() => setShowDetails(!showDetails)}
@@ -1213,6 +1260,95 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             </div>
 
             <div className="p-8 space-y-10">
+              
+              {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <Bookmark size={14} className="text-blue-500" /> Contexto do Ticket
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
+                    <select 
+                      value={activeThread.priority || 'normal'}
+                      onChange={async (e) => {
+                        const val = e.target.value as any;
+                        await supabase.from('threads').update({ priority: val }).eq('id', activeThread.id);
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, priority: val } : t));
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg text-[13px] px-3 py-2 font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    >
+                      <option value="low">Baixa 🟢</option>
+                      <option value="normal">Normal ⚪</option>
+                      <option value="high">Alta 🔴</option>
+                      <option value="urgent">Urgente 🔥</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Atribuído a</label>
+                    <select 
+                      value={activeThread.assignedTo || ''}
+                      onChange={async (e) => {
+                        const val = e.target.value || null;
+                        await supabase.from('threads').update({ assigned_to: val }).eq('id', activeThread.id);
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, assignedTo: val } : t));
+                        toast.success(val ? 'Conversa atribuída!' : 'Atribuição removida.');
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg text-[13px] px-3 py-2 font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    >
+                      <option value="">Não atribuído</option>
+                      <option value={user?.id || 'me'}>Você ({user?.email?.split('@')[0]})</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Etiquetas (Labels) */}
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <Tag size={14} className="text-blue-500" /> Etiquetas
+                </h4>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {activeThread.labels && activeThread.labels.length > 0 ? (
+                    activeThread.labels.map((label, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[11px] font-bold text-blue-700 group">
+                        {label}
+                        <button 
+                          onClick={async () => {
+                            const newLabels = activeThread.labels!.filter(l => l !== label);
+                            await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                          }}
+                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-slate-400 font-medium">Nenhuma etiqueta</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Adicionar..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-[12px] px-3 py-1.5 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        const val = e.currentTarget.value.trim();
+                        if (val && (!activeThread.labels || !activeThread.labels.includes(val))) {
+                          const newLabels = [...(activeThread.labels || []), val];
+                          await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                          setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                          e.currentTarget.value = '';
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* Dados do Contato */}
               <div>
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
