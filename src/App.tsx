@@ -30,6 +30,8 @@ export default function App() {
   // Track current user ID to prevent unnecessary re-renders from onAuthStateChange
   const currentUserIdRef = useRef<string | null>(null);
 
+  const [isInitializingProfile, setIsInitializingProfile] = useState(false);
+
   useEffect(() => {
     // Check for JID in URL to auto-select Inbox
     const params = new URLSearchParams(window.location.search);
@@ -40,9 +42,6 @@ export default function App() {
     } else if (path.includes('/integrations') || localStorage.getItem('connecting_google') === 'true') {
       setActiveTab('integrations');
     }
-
-    // Supabase Auth listener
-    const [isInitializingProfile, setIsInitializingProfile] = useState(false);
 
     // Check public settings (maintenance/signups)
     const checkSafety = async () => {
