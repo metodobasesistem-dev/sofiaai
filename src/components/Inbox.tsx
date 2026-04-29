@@ -660,16 +660,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           .maybeSingle();
         setSelectedContact(contact);
 
-        if (contact?.id) {
-          const { data: apps } = await supabase
-            .from('appointments')
-            .select('*')
-            .eq('contact_id', contact.id)
-            .order('start_time', { ascending: false })
-            .limit(5);
-          setAppointments(apps || []);
-        } else {
+        // Appointments são linkados por client_phone, não por contact_id
+        const { data: apps, error: appsError } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('user_id', user?.id)
+          .ilike('client_phone', `%${cleanPhone.slice(-8)}%`)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (appsError) {
+          console.warn('[Inbox] Appointments query warning:', appsError.message);
           setAppointments([]);
+        } else {
+          setAppointments(apps || []);
         }
       } catch (sidebarErr) {
         console.warn('[Inbox] Erro não-crítico na barra lateral:', sidebarErr);
