@@ -63,6 +63,7 @@ interface Thread {
   priority?: 'low' | 'normal' | 'high' | 'urgent';
   assignedTo?: string | null;
   labels?: string[];
+  photo_url?: string;
 }
 
 interface Message {
@@ -243,12 +244,16 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
     )}
     <div className={`w-11 h-11 rounded-full shrink-0 flex items-center justify-center text-white font-bold text-sm overflow-hidden relative shadow-sm transition-colors
       ${thread.status === 'ia' ? 'ring-2 ring-blue-100' : ''}`}
-      style={{ backgroundColor: getAvatarColor(thread.name) }}
+      style={{ backgroundColor: !thread.photo_url ? getAvatarColor(thread.name) : 'transparent' }}
     >
+      {thread.photo_url ? (
+        <img src={thread.photo_url} alt={thread.name} className="w-full h-full object-cover" />
+      ) : (
+        getInitials(thread.name)
+      )}
       {thread.status === 'ia' && (
         <div className="absolute top-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full z-10" />
       )}
-      {getInitials(thread.name)}
     </div>
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-0.5">
@@ -468,7 +473,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               ticketStatus: d.ticket_status || 'open',
               priority: d.priority || 'normal',
               assignedTo: d.assigned_to || null,
-              labels: Array.isArray(d.labels) ? d.labels : []
+              labels: Array.isArray(d.labels) ? d.labels : [],
+              photo_url: d.photo_url
             };
           });
           const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -1032,8 +1038,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <ArrowLeft size={20} />
                 </button>
 
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200/50">
-                  <User size={20} />
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200/50 overflow-hidden">
+                  {activeThread.photo_url ? (
+                    <img src={activeThread.photo_url} alt={activeThread.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={20} />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-[14px] font-bold text-slate-900 leading-tight">{activeThread.name}</h3>

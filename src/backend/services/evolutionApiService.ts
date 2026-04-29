@@ -260,4 +260,19 @@ export class EvolutionApiService {
       return [];
     }
   }
+
+  static async fetchProfilePictureUrl(instanceName: string, number: string) {
+    const api = getApi();
+    try {
+      const cleanNumber = number.split('@')[0].replace(/\D/g, '');
+      const { data } = await api.post(`/chat/fetchProfilePictureUrl/${instanceName}`, { 
+        number: cleanNumber
+      });
+      // Retorna { profilePictureUrl: "https://..." }
+      return data.profilePictureUrl || null;
+    } catch (error: any) {
+      // Se não tiver foto, a API costuma retornar 404 ou erro, tratamos como nulo
+      return null;
+    }
+  }
 }

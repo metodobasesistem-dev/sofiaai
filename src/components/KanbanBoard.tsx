@@ -186,8 +186,12 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                         </div>
                         <div className="flex items-center justify-between pt-3 border-t border-gray-50">
                           <div className="flex items-center gap-1.5">
-                             <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold">
-                               {card.name.charAt(0).toUpperCase()}
+                             <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold overflow-hidden">
+                               {card.photo_url ? (
+                                 <img src={card.photo_url} alt={card.name} className="w-full h-full object-cover" />
+                               ) : (
+                                 card.name.charAt(0).toUpperCase()
+                               )}
                              </div>
                              <span className="text-[10px] font-semibold text-gray-400">{card.agent_name || 'Robô'}</span>
                           </div>

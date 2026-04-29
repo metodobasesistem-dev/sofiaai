@@ -256,7 +256,7 @@ export class AgentService {
     // 1. Thread UPSERT FIRST
     try {
       const cleanPhone = (displayPhone || threadId.split('_')[1] || '').replace(/\D/g, '');
-      const { data: existingThread } = await supabase.from('threads').select('contact_name').eq('id', threadId).maybeSingle();
+      const { data: existingThread } = await supabase.from('threads').select('contact_name, photo_url').eq('id', threadId).maybeSingle();
       
       const threadData: any = {
         id: threadId,
@@ -275,6 +275,11 @@ export class AgentService {
       }
       
       const { error: tErr } = await supabase.from('threads').upsert(threadData);
+      
+      // Sincronizar foto de perfil se for novo ou não tiver foto
+      if (!existingThread?.photo_url && threadData.remote_jid) {
+        this.syncProfilePicture(userId, threadId, threadData.remote_jid).catch(() => {});
+      }
       
       if (tErr) {
         console.warn('[AgentService] Initial thread upsert failed, retrying minimal set...', tErr.message);
@@ -847,6 +852,32 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         }
       }
     ];
+  }
+  public async syncProfilePicture(userId: string, threadId: string, remoteJid: string, photoUrl?: string) {
+    try {
+      let finalPhotoUrl = photoUrl;
+      
+      // Se não veio foto no parâmetro, tentamos buscar na Evolution
+      if (!finalPhotoUrl) {
+        const { whatsappService } = await import('./whatsappService.js');
+        const instanceName = `wppai_${userId.substring(0, 8)}`;
+        finalPhotoUrl = await EvolutionApiService.fetchProfilePictureUrl(instanceName, remoteJid);
+      }
+
+      if (finalPhotoUrl) {
+        const cleanPhone = remoteJid.split('@')[0].replace(/\D/g, '');
+        
+        // Atualiza na thread
+        await supabase.from('threads').update({ photo_url: finalPhotoUrl }).eq('id', threadId);
+        
+        // Atualiza no contato
+        await supabase.from('contacts').update({ photo_url: finalPhotoUrl }).eq('telefone', cleanPhone).eq('user_id', userId);
+        
+        console.log(`[AgentService] 🖼️ Photo synced for ${remoteJid}`);
+      }
+    } catch (err) {
+      console.error('[AgentService] Error syncing profile picture:', err);
+    }
   }
 }
 
