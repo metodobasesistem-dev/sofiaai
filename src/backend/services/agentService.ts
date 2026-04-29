@@ -335,33 +335,21 @@ export class AgentService {
          messageData.cost_brl = usage.cost_brl || 0;
        }
  
-        // Usamos upsert com onConflict: 'id' para evitar duplicatas de polling/webhook
+        // Upsert: onConflict em 'id' para mensagens com ID do WhatsApp
+        // ATENÇÃO: whatsapp_id também tem unique constraint, então precisamos tratar ambos
         const { error: mErr } = await supabase.from('messages').upsert(messageData, { onConflict: 'id' });
         
         if (mErr) {
-          console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
-          await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
+          if (mErr.code === '23505' && mErr.details?.includes('whatsapp_id')) {
+            // Conflito no whatsapp_id (race condition): a mensagem já existe, só atualiza
+            console.warn(`[AgentService] ⚠️ whatsapp_id conflict for ${messageId} - updating existing record`);
+            await supabase.from('messages').update({ text, direction, audio_url: audioUrl }).eq('whatsapp_id', messageId);
+          } else {
+            console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
+            await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
+          }
         }
        
-       if (mErr) {
-         console.warn('[AgentService] ⚠️ Falha na persistência idempotente. Tentando sem campos financeiros...', mErr.message);
-         
-         // --- FALLBACK: Try minimal upsert ---
-         const { error: fErr } = await supabase.from('messages').upsert({
-           id: messageId,
-           user_id: userId,
-           thread_id: threadId,
-           text: text,
-           direction: direction,
-           whatsapp_id: messageId,
-           timestamp: timestamp
-         }, { onConflict: 'id' });
-         
-         if (fErr) {
-           console.error('[AgentService] ❌ Falha crítica de persistência:', fErr);
-           await logToDB(userId, 'critical', 'persistence', `Critical message persistence failure: ${messageId}`, fErr);
-         }
-       }
     } catch (mErr) {
        console.error('[AgentService] Message insert exception:', mErr);
     }
