@@ -42,6 +42,8 @@ export default function App() {
     }
 
     // Supabase Auth listener
+    const [isInitializingProfile, setIsInitializingProfile] = useState(false);
+
     // Check public settings (maintenance/signups)
     const checkSafety = async () => {
       try {
@@ -53,90 +55,89 @@ export default function App() {
       } catch (e) {}
     };
 
-    checkSafety();
+    useEffect(() => {
+      checkSafety();
+    }, []);
 
     // Safety timeout: ensure loading screen disappears after 10s regardless
-    const safetyTimeout = setTimeout(() => {
-      setLoading(loading => {
-        if (loading) {
-          console.warn('[App] System recovery: Loading forced after 10s safety timeout');
-          return false;
-        }
-        return loading;
-      });
-    }, 10000);
+    useEffect(() => {
+      const safetyTimeout = setTimeout(() => {
+        setLoading(loading => {
+          if (loading) {
+            console.warn('[App] System recovery: Loading forced after 10s safety timeout');
+            return false;
+          }
+          return loading;
+        });
+      }, 10000);
+      return () => clearTimeout(safetyTimeout);
+    }, []);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[App] Auth event:', event, 'User ID:', session?.user?.id);
-      
-      const currentUser = session?.user ?? null;
-      const incomingId = currentUser?.id ?? null;
-
-      // TOKEN_REFRESHED: JWT renovado automaticamente
-      if (event === 'TOKEN_REFRESHED') {
-        if (currentUser) setUser(currentUser);
-        setLoading(false);
-        return;
-      }
-
-      // SIGNED_OUT: limpar estado
-      if (event === 'SIGNED_OUT' || !currentUser) {
-        console.log('[App] Signed out or no user');
-        currentUserIdRef.current = null;
-        setUser(null);
-        setRole(null);
-        setLoading(false);
-        return;
-      }
-
-      // Evita re-inicialização se o ID for o mesmo (exceto se role for null)
-      if (incomingId && incomingId === currentUserIdRef.current && role) {
-        setLoading(false);
-        return;
-      }
-
-      // Usuário novo ou primeira autenticação
-      currentUserIdRef.current = incomingId;
-      setUser(currentUser);
-
-      // ADMIN BYPASS
-      const ADMIN_EMAILS = ['ieqmur@gmail.com'];
-      if (ADMIN_EMAILS.includes(currentUser.email || '')) {
-        console.log('[App] Admin detectado');
-        setRole('admin');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log('[App] Fetching profile for role...');
-        // Buscar role por id ou email
-        const { data: userRows, error: profileError } = await supabase
-          .from('profiles')
-          .select('role, id')
-          .or(`id.eq.${currentUser.id},email.eq.${currentUser.email}`)
-          .limit(1);
+    // 1. Auth Listener: Only manages the USER object
+    useEffect(() => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log('[App] Auth event:', event, 'User ID:', session?.user?.id);
         
-        if (profileError) {
-          console.error('[App] Profile fetch error:', profileError);
-          setRole('client');
+        const currentUser = session?.user ?? null;
+        
+        if (event === 'SIGNED_OUT' || !currentUser) {
+          setUser(null);
+          setRole(null);
+          setLoading(false);
+          currentUserIdRef.current = null;
         } else {
-          const profileRole = userRows?.[0]?.role;
-          console.log('[App] Profile role found:', profileRole);
-          setRole(profileRole || 'client');
+          setUser(currentUser);
+          currentUserIdRef.current = currentUser.id;
+          if (event === 'TOKEN_REFRESHED') setLoading(false);
         }
-      } catch (err) {
-        console.error('[App] Role fetch exception:', err);
-        setRole('client');
-      } finally {
-        setLoading(false);
-      }
-    });
+      });
 
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(safetyTimeout);
-    };
+      return () => subscription.unsubscribe();
+    }, []);
+
+    // 2. Role Fetcher: Responds to USER changes
+    useEffect(() => {
+      if (!user || role || isInitializingProfile) return;
+
+      const fetchRole = async () => {
+        setIsInitializingProfile(true);
+        console.log('[App] Initializing role for user:', user.email);
+
+        const ADMIN_EMAILS = ['ieqmur@gmail.com'];
+        if (ADMIN_EMAILS.includes(user.email || '')) {
+          setRole('admin');
+          setLoading(false);
+          setIsInitializingProfile(false);
+          return;
+        }
+
+        try {
+          // Small delay to let Supabase internal state settle
+          await new Promise(r => setTimeout(r, 500));
+          
+          const { data: userRows, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (profileError) {
+            console.error('[App] Profile fetch error:', profileError);
+            setRole('client');
+          } else {
+            setRole(userRows?.role || 'client');
+          }
+        } catch (err) {
+          console.error('[App] Role fetch exception:', err);
+          setRole('client');
+        } finally {
+          setLoading(false);
+          setIsInitializingProfile(false);
+        }
+      };
+
+      fetchRole();
+    }, [user, role, isInitializingProfile]);
   }, []);
 
   const handleSignOut = async () => {
