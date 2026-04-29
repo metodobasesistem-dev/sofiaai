@@ -58,6 +58,7 @@ class SessionController {
 
   async sendMessage(req: Request, res: Response) {
     let { userId, to, message } = req.body;
+    console.log(`[SessionController] 📩 sendMessage request: User=${userId}, To=${to}, Msg=${message.substring(0, 20)}...`);
     if (!userId || !to || !message) {
       return res.status(400).json({ error: 'Missing userId, to, or message' });
     }

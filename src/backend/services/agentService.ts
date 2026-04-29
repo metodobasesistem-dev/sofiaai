@@ -4,6 +4,23 @@ import { generateAIResponse } from './aiService.js';
 import { redisService } from './redisService.js';
 import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fns';
 import { googleCalendarService } from './googleCalendarService.js';
+import { EvolutionApiService } from './evolutionApiService.js';
+
+
+async function logToDB(userId: string, level: string, category: string, message: string, metadata: any = {}) {
+  try {
+    await supabase.from('sys_logs').insert({
+      user_id: userId,
+      level,
+      category,
+      message,
+      metadata,
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('Failed to log to DB:', e);
+  }
+}
 
 /**
  * AgentService - Unifies the AI Intelligence and Automation logic.
@@ -252,6 +269,7 @@ export class AgentService {
     audioUrl?: string
   ) {
     const timestamp = Date.now();
+    console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction}`);
     
     // 1. Thread UPSERT FIRST
     try {
@@ -318,6 +336,11 @@ export class AgentService {
  
         // Usamos upsert com onConflict: 'id' para evitar duplicatas de polling/webhook
         const { error: mErr } = await supabase.from('messages').upsert(messageData, { onConflict: 'id' });
+        
+        if (mErr) {
+          console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
+          await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
+        }
        
        if (mErr) {
          console.warn('[AgentService] ⚠️ Falha na persistência idempotente. Tentando sem campos financeiros...', mErr.message);
@@ -332,7 +355,10 @@ export class AgentService {
            timestamp: timestamp
          }, { onConflict: 'id' });
          
-         if (fErr) console.error('[AgentService] ❌ Falha crítica de persistência:', fErr);
+         if (fErr) {
+           console.error('[AgentService] ❌ Falha crítica de persistência:', fErr);
+           await logToDB(userId, 'critical', 'persistence', `Critical message persistence failure: ${messageId}`, fErr);
+         }
        }
     } catch (mErr) {
        console.error('[AgentService] Message insert exception:', mErr);

@@ -322,7 +322,7 @@ class WhatsAppService {
     try {
       const result = await EvolutionApiService.sendMessage(instanceName, to, message);
       const msgId = result.key?.id || result.messageId || `out-${Date.now()}`;
-
+      console.log(`[WhatsAppService] 💾 Calling persistMessage for ${userId} to ${cleanTo} with msgId ${msgId}`);
       // Persiste a mensagem - CORRIGIDO: senderName vai para agentName (9º param), não para contactName
       await agentService.persistMessage(
         `${userId}_${cleanTo}`, 
