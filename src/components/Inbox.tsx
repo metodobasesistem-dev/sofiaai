@@ -592,6 +592,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     const setupMessages = async () => {
       try {
         setLoadingMessages(true);
+        setMessages([]); // Clear previous messages immediately to avoid stale UI
 
         const { data, error } = await supabase
           .from('messages')
@@ -605,7 +606,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           const formatted = data.map(d => ({
             id: d.id,
             text: d.text || '',
-            sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+            sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
             time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
             timestamp: d.created_at,
             audio_url: d.audio_url
@@ -1062,6 +1063,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Online via WhatsApp</span>
+                    <span className="text-[9px] text-slate-300 font-mono opacity-50 ml-2">ID: {selectedThreadId.split('_').pop()}</span>
                   </div>
                 </div>
               </div>

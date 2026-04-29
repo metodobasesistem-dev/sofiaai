@@ -49,7 +49,7 @@ class SessionController {
     let { userId } = req.params;
     try {
       const data = await whatsappService.getSessionStatus(userId);
-      res.json(data);
+      res.json({ ...data, debug_version: 'v2-logging-active' });
     } catch (error: any) {
       console.error('Error getting status:', error);
       res.status(500).json({ error: error.message || 'Failed to get status' });

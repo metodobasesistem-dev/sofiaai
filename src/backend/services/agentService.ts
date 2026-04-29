@@ -7,12 +7,12 @@ import { googleCalendarService } from './googleCalendarService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 
 
-async function logToDB(userId: string, level: string, category: string, message: string, metadata: any = {}) {
+async function logToDB(userId: string, level: string, module: string, message: string, metadata: any = {}) {
   try {
     await supabase.from('sys_logs').insert({
       user_id: userId,
       level,
-      category,
+      module,
       message,
       metadata,
       created_at: new Date().toISOString()
@@ -325,6 +325,7 @@ export class AgentService {
          direction: direction,
          timestamp: timestamp,
          audio_url: audioUrl,
+         whatsapp_id: messageId,
          created_at: new Date(timestamp).toISOString() // Força consistência temporal
        };
  
@@ -352,6 +353,7 @@ export class AgentService {
            thread_id: threadId,
            text: text,
            direction: direction,
+           whatsapp_id: messageId,
            timestamp: timestamp
          }, { onConflict: 'id' });
          
