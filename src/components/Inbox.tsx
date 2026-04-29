@@ -590,19 +590,22 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     let channel: any;
 
     const setupMessages = async () => {
-      try {
-        setLoadingMessages(true);
-        setMessages([]); // Clear previous messages immediately to avoid stale UI
+      // ── BLOCO 1: Mensagens (crítico) ──────────────────────────────────
+      // Este bloco é totalmente independente. Erros nos dados da barra lateral
+      // NÃO vão interferir no carregamento das mensagens.
+      setLoadingMessages(true);
+      setMessages([]);
 
+      try {
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .eq('thread_id', selectedThreadId)
           .order('created_at', { ascending: true });
 
-        if (error) throw error;
-
-        if (data) {
+        if (error) {
+          console.error('[Inbox] Erro ao buscar mensagens:', error);
+        } else if (data) {
           const formatted = data.map(d => ({
             id: d.id,
             text: d.text || '',
@@ -613,68 +616,64 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           }));
           setMessages(formatted as any);
         }
-
-        // --- BUSCA DE DADOS PARA A LATERAL DIREITA ---
-        const thread = threads.find(t => t.id === selectedThreadId);
-        if (thread) {
-          const cleanPhone = thread.remoteJid.split('@')[0].replace(/\D/g, '');
-          
-          // 1. Dados do Contato
-          const { data: contact } = await supabase
-            .from('contacts')
-            .select('*')
-            .ilike('telefone', `%${cleanPhone.slice(-8)}%`)
-            .maybeSingle();
-          setSelectedContact(contact);
-
-          // 2. Agendamentos
-          if (contact && contact.id) {
-            try {
-              const { data: apps } = await supabase
-                .from('appointments')
-                .select('*')
-                .eq('contact_id', contact.id)
-                .order('start_time', { ascending: false })
-                .limit(5);
-              setAppointments(apps || []);
-            } catch (appErr) {
-              console.warn('[Inbox] Failed to fetch appointments:', appErr);
-              setAppointments([]);
-            }
-          } else {
-            setAppointments([]);
-          }
-        }
-
-        channel = supabase
-          .channel(`messages-${selectedThreadId}`)
-          .on(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
-            (payload) => {
-              const d = payload.new;
-              const newMessage = {
-                id: d.id,
-                text: d.text || '',
-                sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.message_id?.startsWith('ai-') ? 'ia' : 'outbound')),
-                time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-                timestamp: d.created_at,
-                audio_url: d.audio_url
-              };
-              setMessages(prev => [...prev, newMessage as any]);
-            }
-          )
-          .subscribe();
-
-        await supabase
-          .from('threads')
-          .update({ unread_count: 0 })
-          .eq('id', selectedThreadId);
-
-      } catch (err) {
-        console.error('[Inbox] Error setting up messages:', err);
+      } catch (msgErr) {
+        console.error('[Inbox] Falha crítica ao carregar mensagens:', msgErr);
       } finally {
         setLoadingMessages(false);
+      }
+
+      // ── BLOCO 2: Realtime listener ────────────────────────────────────
+      channel = supabase
+        .channel(`messages-${selectedThreadId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
+          (payload) => {
+            const d = payload.new;
+            const newMessage = {
+              id: d.id,
+              text: d.text || '',
+              sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+              time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+              timestamp: d.created_at,
+              audio_url: d.audio_url
+            };
+            setMessages(prev => [...prev, newMessage as any]);
+          }
+        )
+        .subscribe();
+
+      // Zerar não-lidas
+      supabase.from('threads').update({ unread_count: 0 }).eq('id', selectedThreadId).then(() => {});
+
+      // ── BLOCO 3: Dados da barra lateral (não-crítico, isolado) ────────
+      // Erros aqui NÃO afetam as mensagens.
+      const thread = threads.find(t => t.id === selectedThreadId);
+      if (!thread) return;
+
+      try {
+        const cleanPhone = thread.remoteJid.split('@')[0].replace(/\D/g, '');
+        const { data: contact } = await supabase
+          .from('contacts')
+          .select('*')
+          .ilike('telefone', `%${cleanPhone.slice(-8)}%`)
+          .maybeSingle();
+        setSelectedContact(contact);
+
+        if (contact?.id) {
+          const { data: apps } = await supabase
+            .from('appointments')
+            .select('*')
+            .eq('contact_id', contact.id)
+            .order('start_time', { ascending: false })
+            .limit(5);
+          setAppointments(apps || []);
+        } else {
+          setAppointments([]);
+        }
+      } catch (sidebarErr) {
+        console.warn('[Inbox] Erro não-crítico na barra lateral:', sidebarErr);
+        setAppointments([]);
       }
     };
 
