@@ -7,4 +7,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('[SupabaseFrontend] Warning: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not found.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storageKey: 'wppai-auth-token-v2' // Unique key to avoid collisions
+  }
+});

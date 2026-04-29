@@ -55,15 +55,25 @@ export default function App() {
 
     checkSafety();
 
+    // Safety timeout: ensure loading screen disappears after 10s regardless
+    const safetyTimeout = setTimeout(() => {
+      setLoading(loading => {
+        if (loading) {
+          console.warn('[App] System recovery: Loading forced after 10s safety timeout');
+          return false;
+        }
+        return loading;
+      });
+    }, 10000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[App] Auth event:', event);
+      console.log('[App] Auth event:', event, 'User ID:', session?.user?.id);
       
       const currentUser = session?.user ?? null;
       const incomingId = currentUser?.id ?? null;
 
       // TOKEN_REFRESHED: JWT renovado automaticamente
       if (event === 'TOKEN_REFRESHED') {
-        console.log('[App] Token refreshed — atualizando user');
         if (currentUser) setUser(currentUser);
         setLoading(false);
         return;
@@ -71,6 +81,7 @@ export default function App() {
 
       // SIGNED_OUT: limpar estado
       if (event === 'SIGNED_OUT' || !currentUser) {
+        console.log('[App] Signed out or no user');
         currentUserIdRef.current = null;
         setUser(null);
         setRole(null);
@@ -80,7 +91,6 @@ export default function App() {
 
       // Evita re-inicialização se o ID for o mesmo (exceto se role for null)
       if (incomingId && incomingId === currentUserIdRef.current && role) {
-        console.log('[App] Mesmo usuário e role já definido — ignorando');
         setLoading(false);
         return;
       }
@@ -92,30 +102,41 @@ export default function App() {
       // ADMIN BYPASS
       const ADMIN_EMAILS = ['ieqmur@gmail.com'];
       if (ADMIN_EMAILS.includes(currentUser.email || '')) {
+        console.log('[App] Admin detectado');
         setRole('admin');
         setLoading(false);
         return;
       }
 
       try {
+        console.log('[App] Fetching profile for role...');
         // Buscar role por id ou email
-        const { data: userRows } = await supabase
+        const { data: userRows, error: profileError } = await supabase
           .from('profiles')
           .select('role, id')
           .or(`id.eq.${currentUser.id},email.eq.${currentUser.email}`)
           .limit(1);
         
-        const profileRole = userRows?.[0]?.role;
-        setRole(profileRole || 'client');
+        if (profileError) {
+          console.error('[App] Profile fetch error:', profileError);
+          setRole('client');
+        } else {
+          const profileRole = userRows?.[0]?.role;
+          console.log('[App] Profile role found:', profileRole);
+          setRole(profileRole || 'client');
+        }
       } catch (err) {
-        console.error('[App] Role refresh error:', err);
+        console.error('[App] Role fetch exception:', err);
         setRole('client');
       } finally {
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const handleSignOut = async () => {
