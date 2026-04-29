@@ -423,11 +423,21 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       try {
         const userId = user?.id;
         if (!userId) {
+          console.warn('[Inbox] setupThreads aborted: No user ID available');
           clearTimeout(timeoutId);
           setLoadingThreads(false);
           return;
         }
         
+        // Ensure we have a session before proceeding
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+           console.warn('[Inbox] No session found, waiting for auth...');
+           // If we don't have a session yet, don't fail immediately, just wait for next trigger
+           clearTimeout(timeoutId);
+           return;
+        }
+
         console.log('[Inbox] Fetching threads for:', userId);
         
         // Initial Fetch: Threads + Contacts using the fixed UUID
@@ -488,9 +498,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             if (match) setSelectedThreadId(match.id);
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('[Inbox] Error setting up threads:', err);
-        toast.error('Ocorreu uma instabilidade ao carregar as conversas.');
+        const detail = err?.message || err?.error_description || 'Erro desconhecido';
+        toast.error(`Falha ao carregar conversas: ${detail}`);
       } finally {
         setLoadingThreads(false);
         clearTimeout(timeoutId);

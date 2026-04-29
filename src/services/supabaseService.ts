@@ -174,9 +174,19 @@ const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
  */
 const getAuthSession = async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    // Try to get the session. If it fails, retry once after a short delay.
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      // Small delay and retry to handle transient lock issues
+      await new Promise(r => setTimeout(r, 500));
+      const retry = await supabase.auth.getSession();
+      session = retry.data.session;
+    }
+    
     return session;
-  } catch {
+  } catch (err) {
+    console.error('[getAuthSession] Failed to get session:', err);
     return null;
   }
 };

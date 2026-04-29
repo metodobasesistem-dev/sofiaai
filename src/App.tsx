@@ -42,64 +42,6 @@ export default function App() {
     }
 
     // Supabase Auth listener
-    const getSession = async () => {
-      console.log('[App] Initializing session...');
-      // Safety timeout: only as a last resort
-      const timeoutId = setTimeout(() => {
-        setLoading(false);
-        console.warn('[App] System recovery: Loading forced after 10s');
-      }, 10000);
-
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('[App] Session error:', sessionError);
-          setLoading(false);
-          return;
-        }
-
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        // Registra o ID do usuário para evitar re-render no onAuthStateChange
-        currentUserIdRef.current = currentUser?.id ?? null;
-        
-        if (currentUser) {
-          console.log('[App] Auth: Initializing session for', currentUser.email);
-
-          // ADMIN BYPASS: email de administrador sempre tem role admin (não consulta banco)
-          const ADMIN_EMAILS = ['ieqmur@gmail.com'];
-          if (ADMIN_EMAILS.includes(currentUser.email || '')) {
-            console.log('[App] Admin detectado — role forçado: admin');
-            setRole('admin');
-          } else {
-            try {
-              const { data: profile, error: profileError } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', currentUser.id)
-                .maybeSingle();
-
-              if (profileError) {
-                console.warn('[App] Profile fetch error (non-fatal):', profileError);
-              }
-              
-              setRole(profile?.role || 'client');
-            } catch (profileErr) {
-              console.error('[App] Critical profile fetch error:', profileErr);
-              setRole('client');
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[App] Critical initialization error:', error);
-      } finally {
-        clearTimeout(timeoutId);
-        setLoading(false);
-        console.log('[App] Initialization finished.');
-      }
-    };
-
     // Check public settings (maintenance/signups)
     const checkSafety = async () => {
       try {
@@ -112,7 +54,6 @@ export default function App() {
     };
 
     checkSafety();
-    getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[App] Auth event:', event);
@@ -121,10 +62,10 @@ export default function App() {
       const incomingId = currentUser?.id ?? null;
 
       // TOKEN_REFRESHED: JWT renovado automaticamente
-      // Apenas atualiza o objeto user sem re-disparar lógica de role
       if (event === 'TOKEN_REFRESHED') {
-        console.log('[App] Token refreshed — atualizando user sem re-fetch de role');
+        console.log('[App] Token refreshed — atualizando user');
         if (currentUser) setUser(currentUser);
+        setLoading(false);
         return;
       }
 
@@ -133,14 +74,14 @@ export default function App() {
         currentUserIdRef.current = null;
         setUser(null);
         setRole(null);
+        setLoading(false);
         return;
       }
 
-      // SIGNED_IN / INITIAL_SESSION: só atualiza role se for um usuário DIFERENTE
-      // Isso evita re-renders em cascata quando onAuthStateChange dispara
-      // logo após getSession() com o mesmo usuário (novo objeto, mesmo ID)
-      if (incomingId && incomingId === currentUserIdRef.current) {
-        console.log('[App] Mesmo usuário — ignorando re-render de auth state change');
+      // Evita re-inicialização se o ID for o mesmo (exceto se role for null)
+      if (incomingId && incomingId === currentUserIdRef.current && role) {
+        console.log('[App] Mesmo usuário e role já definido — ignorando');
+        setLoading(false);
         return;
       }
 
@@ -148,16 +89,16 @@ export default function App() {
       currentUserIdRef.current = incomingId;
       setUser(currentUser);
 
-      // ADMIN BYPASS: email de administrador sempre tem role admin
+      // ADMIN BYPASS
       const ADMIN_EMAILS = ['ieqmur@gmail.com'];
       if (ADMIN_EMAILS.includes(currentUser.email || '')) {
-        console.log('[App] Admin detectado no event — role forçado: admin');
         setRole('admin');
+        setLoading(false);
         return;
       }
 
       try {
-        // Buscar role por email (resiliente a user_id mismatch pós-OAuth)
+        // Buscar role por id ou email
         const { data: userRows } = await supabase
           .from('profiles')
           .select('role, id')
@@ -169,6 +110,8 @@ export default function App() {
       } catch (err) {
         console.error('[App] Role refresh error:', err);
         setRole('client');
+      } finally {
+        setLoading(false);
       }
     });
 
