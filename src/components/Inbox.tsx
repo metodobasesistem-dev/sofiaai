@@ -443,7 +443,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         // Initial Fetch: Threads + Contacts using the fixed UUID
         const { data: contactsData, error: contactsError } = await supabase
           .from('contacts')
-          .select('telefone, status_funil')
+          .select('*')
           .eq('user_id', userId);
 
         const { data, error } = await supabase
@@ -628,14 +628,19 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           setSelectedContact(contact);
 
           // 2. Agendamentos
-          if (contact) {
-            const { data: apps } = await supabase
-              .from('appointments')
-              .select('*')
-              .eq('contact_id', contact.id)
-              .order('start_time', { ascending: false })
-              .limit(5);
-            setAppointments(apps || []);
+          if (contact && contact.id) {
+            try {
+              const { data: apps } = await supabase
+                .from('appointments')
+                .select('*')
+                .eq('contact_id', contact.id)
+                .order('start_time', { ascending: false })
+                .limit(5);
+              setAppointments(apps || []);
+            } catch (appErr) {
+              console.warn('[Inbox] Failed to fetch appointments:', appErr);
+              setAppointments([]);
+            }
           } else {
             setAppointments([]);
           }
