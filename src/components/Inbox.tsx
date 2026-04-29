@@ -474,7 +474,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               priority: d.priority || 'normal',
               assignedTo: d.assigned_to || null,
               labels: Array.isArray(d.labels) ? d.labels : [],
-              photo_url: d.photo_url
+              photo_url: d.photo_url,
+              createdAt: d.created_at || d.updated_at || new Date().toISOString()
             };
           });
           const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());

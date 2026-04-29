@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, Filter, LayoutGrid, Ticket, User, MessageCircle, ArrowRight } from 'lucide-react';
+import { Search, Filter, LayoutGrid, Ticket, User, MessageCircle, ArrowRight, Calendar, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toast } from 'sonner'; // Assuming we export or reuse types, wait let's just make it generic or use any for now
+import { toast } from 'sonner';
 import { User as SupabaseUser } from '@supabase/supabase-js';
+import { 
+  format, 
+  subDays, 
+  isWithinInterval, 
+  startOfDay, 
+  endOfDay, 
+  parseISO,
+  isAfter,
+  isBefore
+} from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface KanbanBoardProps {
   user: SupabaseUser | null;
@@ -15,6 +26,10 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
   const [viewMode, setViewMode] = useState<'funil' | 'ticket'>('funil');
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom'>('all');
+  const [dateType, setDateType] = useState<'created' | 'updated'>('updated');
+  const [customRange, setCustomRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Estrutura das colunas baseadas no modo de visualização
   const columns = viewMode === 'funil' 
@@ -32,14 +47,45 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
   // Agrupamento estático para mockup (na próxima fase ligaremos aos threads reais)
   const getCards = (columnId: string) => {
     return threads.filter(t => {
+      // 1. Filtro de Busca
       const matchSearch = t.name?.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchSearch) return false;
       
-      if (viewMode === 'funil') {
-        return (t.funilStatus || 'Lead') === columnId;
-      } else {
-        return (t.ticketStatus || 'open') === columnId;
+      // 2. Filtro de Modo (Funil vs Ticket)
+      const matchMode = viewMode === 'funil' 
+        ? (t.funilStatus || 'Lead') === columnId
+        : (t.ticketStatus || 'open') === columnId;
+      if (!matchMode) return false;
+
+      // 3. Filtro de Data
+      if (dateFilter !== 'all') {
+        const dateToCompare = dateType === 'created' ? parseISO(t.createdAt) : parseISO(t.updatedAt);
+        const now = new Date();
+        
+        let start = startOfDay(now);
+        let end = endOfDay(now);
+
+        if (dateFilter === 'today') {
+          // Já definido
+        } else if (dateFilter === 'yesterday') {
+          start = startOfDay(subDays(now, 1));
+          end = endOfDay(subDays(now, 1));
+        } else if (dateFilter === '7days') {
+          start = startOfDay(subDays(now, 7));
+        } else if (dateFilter === '30days') {
+          start = startOfDay(subDays(now, 30));
+        } else if (dateFilter === 'custom') {
+          if (customRange.start) start = startOfDay(parseISO(customRange.start));
+          else start = new Date(0); // início dos tempos
+          if (customRange.end) end = endOfDay(parseISO(customRange.end));
+          else end = new Date(2100, 0, 1); // futuro distante
+        }
+
+        const isInRange = isWithinInterval(dateToCompare, { start, end });
+        if (!isInRange) return false;
       }
+      
+      return true;
     });
   };
 
@@ -111,30 +157,113 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
           <p className="text-gray-500 text-sm mt-1">Gerencie seus contatos e tickets de forma visual.</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-col lg:flex-row items-center gap-4">
+          {/* Busca */}
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
               type="text" 
               placeholder="Buscar card..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full sm:w-64"
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
           </div>
 
-          <div className="flex bg-gray-100 p-1 rounded-xl">
+          {/* Filtros de Data */}
+          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-full sm:w-auto">
+            <div className="flex bg-white rounded-lg shadow-sm p-0.5 border border-gray-100">
+              <button 
+                onClick={() => setDateType('updated')}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'updated' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Atualização
+              </button>
+              <button 
+                onClick={() => setDateType('created')}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'created' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Criação
+              </button>
+            </div>
+
+            <div className="relative">
+              <button 
+                onClick={() => setShowDatePicker(!showDatePicker)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-blue-300 transition-all shadow-sm"
+              >
+                <Calendar size={14} className="text-blue-500" />
+                {dateFilter === 'all' ? 'Todo o período' : 
+                 dateFilter === 'today' ? 'Hoje' :
+                 dateFilter === 'yesterday' ? 'Ontem' :
+                 dateFilter === '7days' ? 'Últimos 7 dias' :
+                 dateFilter === '30days' ? 'Últimos 30 dias' : 'Personalizado'}
+                <ChevronDown size={14} className={`transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showDatePicker && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowDatePicker(false)} />
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-30 animate-in fade-in zoom-in duration-200">
+                    {(['all', 'today', 'yesterday', '7days', '30days', 'custom'] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => {
+                          setDateFilter(f);
+                          if (f !== 'custom') setShowDatePicker(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors
+                          ${dateFilter === f ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {f === 'all' ? 'Todo o período' : 
+                         f === 'today' ? 'Hoje' :
+                         f === 'yesterday' ? 'Ontem' :
+                         f === '7days' ? 'Últimos 7 dias' :
+                         f === '30days' ? 'Últimos 30 dias' : 'Personalizado...'}
+                      </button>
+                    ))}
+                    
+                    {dateFilter === 'custom' && (
+                      <div className="mt-2 p-2 border-t border-gray-50 space-y-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase text-gray-400">Início</label>
+                          <input 
+                            type="date" 
+                            value={customRange.start}
+                            onChange={e => setCustomRange(prev => ({ ...prev, start: e.target.value }))}
+                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-blue-300"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase text-gray-400">Fim</label>
+                          <input 
+                            type="date" 
+                            value={customRange.end}
+                            onChange={e => setCustomRange(prev => ({ ...prev, end: e.target.value }))}
+                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-blue-300"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Modo de Visualização */}
+          <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
             <button 
               onClick={() => setViewMode('funil')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'funil' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'funil' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              <Filter size={16} /> Por Funil
+              <Filter size={16} /> <span className="whitespace-nowrap">Por Funil</span>
             </button>
             <button 
               onClick={() => setViewMode('ticket')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'ticket' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'ticket' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              <Ticket size={16} /> Por Ticket
+              <Ticket size={16} /> <span className="whitespace-nowrap">Por Ticket</span>
             </button>
           </div>
         </div>
