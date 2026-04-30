@@ -137,6 +137,10 @@ export const redisService = {
     }
   },
 
+  async clearHistory(threadId: string) {
+    const client = await getRedisClient();
+    if (!client) return;
+    const key = `messages:${threadId}`;
     try {
       await client.del(key);
     } catch (error) {}
