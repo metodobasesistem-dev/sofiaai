@@ -653,8 +653,25 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
           (payload) => {
             setMessages(prev => {
-              // Evita duplicata se a mensagem já existe (ex: optimista temp)
+              // 1. Deduplicação por ID
               if (prev.some(m => m.id === payload.new.id)) return prev;
+
+              // 2. Substituição Defensiva:
+              // Se a nova mensagem NÃO for temporária (não começa com 'sending-')
+              // e existe uma temporária no estado com o mesmo timestamp/created_at, substituímos.
+              if (!payload.new.id.toString().startsWith('sending-')) {
+                const tempIdx = prev.findIndex(m => 
+                  m.id.toString().startsWith('sending-') && 
+                  (m.timestamp === payload.new.created_at || m.text === payload.new.text)
+                );
+                
+                if (tempIdx !== -1) {
+                  const updated = [...prev];
+                  updated[tempIdx] = formatMsg(payload.new) as any;
+                  return updated;
+                }
+              }
+
               return [...prev, formatMsg(payload.new) as any];
             });
           }
@@ -667,6 +684,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             setMessages(prev => prev.map(m =>
               m.id === payload.new.id ? { ...m, ...formatMsg(payload.new) } : m
             ));
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
+          (payload) => {
+            // Remove a mensagem do estado local (ex: mensagem temporária removida pelo backend)
+            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
           }
         )
         .subscribe();
@@ -1163,9 +1188,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               ) : (
                 <>
-                  {messages.map(msg => (
-                    <ChatBubble key={msg.id} message={msg} />
-                  ))}
+                  {messages
+                    .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
+                    .map(msg => (
+                      <ChatBubble key={msg.id} message={msg} />
+                    ))}
                   <div ref={messagesEndRef} />
                 </>
               )}
