@@ -89,7 +89,13 @@ async function startServer() {
         data: data || { allow_signups: true } 
       });
     } catch (err: any) {
-      console.warn('[Server] Public settings fetch failed (using defaults):', err.message);
+      // Suprimir log para o erro esperado de coluna ausente (migration pendente).
+      // A coluna allow_signups precisa ser adicionada via: 
+      //   ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS allow_signups BOOLEAN NOT NULL DEFAULT true;
+      const isMissingColumn = err.code === '42703' || err.message?.includes('allow_signups');
+      if (!isMissingColumn) {
+        console.warn('[Server] Public settings fetch failed (using defaults):', err.message);
+      }
       res.json({ 
         success: true, 
         data: { allow_signups: true } 
