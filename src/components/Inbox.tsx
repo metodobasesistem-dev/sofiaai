@@ -809,20 +809,41 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
 
     try {
-      await sendMessage(activeThread.remoteJid, text);
-      
+      // 1. Envia via backend (WhatsApp + persistência primária)
+      const sendResult = await sendMessage(activeThread.remoteJid, text);
+
+      // 2. Safety net: insere diretamente no banco do frontend
+      // Garante persistência mesmo se o backend falhar por race condition no whatsapp_id
+      const frontendMsgId = sendResult?.messageId || sendResult?.key?.id || `front-${Date.now()}`;
+      const { error: msgInsertError } = await supabase.from('messages').upsert({
+        id: frontendMsgId,
+        user_id: userId,
+        thread_id: selectedThreadId,
+        text: finalMessageText,
+        direction: 'outbound',
+        timestamp: Date.now(),
+        created_at: new Date().toISOString(),
+        whatsapp_id: frontendMsgId
+      }, { onConflict: 'id' });
+
+      if (msgInsertError && msgInsertError.code !== '23505') {
+        console.warn('[Inbox] Frontend message persist warning:', msgInsertError.message);
+      }
+
+      // 3. Atualiza thread
       await supabase
         .from('threads')
         .update({ 
           status: 'human',
-          last_message: text,
+          last_message: finalMessageText,
+          last_message_time: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedThreadId);
       
-      console.log('Message sent successfully');
     } catch (error) {
       console.error('Error sending message:', error);
+      toast.error('Erro ao enviar mensagem');
     }
   };
 
