@@ -74,34 +74,8 @@ export class AgentService {
 
       const currentStatus = threadData?.status || 'ia';
 
-      // ================= HUMAN HAND-OFF CHECK =================
-      const handoffKeywords = ['atendente', 'humano', 'falar com alguém', 'pessoa', 'suporte humano', 'quero falar com um atendente'];
-      const needsHandoff = handoffKeywords.some(kw => body.toLowerCase().includes(kw));
-
-      if (currentStatus === 'human' || needsHandoff) {
-        if (needsHandoff && currentStatus !== 'human') {
-          console.log(`[AgentService] Switching thread ${threadId} to HUMAN mode.`);
-          await supabase.from('threads').update({ status: 'human' }).eq('id', threadId);
-          
-          if (!skipPersist) {
-            await this.persistMessage(threadId, dbUserId, body, 'inbound', messageId, contactName, from, displayPhone);
-          }
-          
-          const handoffMsg = "Entendido. Vou encerrar meu atendimento por aqui e um de nossos atendentes entrará em contato com você o mais breve possível. Até logo!";
-          await this.persistMessage(threadId, dbUserId, handoffMsg, 'outbound', 'handoff-' + Date.now(), 'IA', 'system', '');
-
-          try {
-            const { data: prof } = await supabase.from('profiles').select('notification_phone').eq('id', dbUserId).single();
-            if (prof?.notification_phone) {
-              const { whatsappService } = await import('./whatsappService.js');
-              await whatsappService.sendMessage(dbUserId, prof.notification_phone, 
-                `⚠️ *ATENÇÃO: TRANSBORDO HUMANO*\n\nO cliente *${contactName}* (${displayPhone}) solicitou falar com um atendente.\n\nA IA encerrou o atendimento.`);
-            }
-          } catch (notifErr) {}
-
-          return { text: handoffMsg };
-        }
-
+      // ================= HUMAN MODE CHECK =================
+      if (currentStatus === 'human') {
         if (!skipPersist) {
           await this.persistMessage(threadId, dbUserId, body, 'inbound', messageId, contactName, from, displayPhone);
         }
