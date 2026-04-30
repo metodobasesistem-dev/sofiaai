@@ -206,6 +206,7 @@ export default function AdminPanel() {
                   </ResponsiveContainer>
                 </div>
               </div>
+            </div>
 
               <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform"><CheckCircle2 size={120} /></div>
