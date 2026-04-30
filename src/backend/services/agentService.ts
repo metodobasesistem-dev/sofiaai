@@ -335,13 +335,13 @@ export class AgentService {
          messageData.cost_brl = usage.cost_brl || 0;
        }
  
-        // Upsert atômico usando whatsapp_id como coluna de conflito.
-        // whatsapp_id possui UNIQUE CONSTRAINT (idx_messages_whatsapp_id), então
-        // qualquer race condition entre webhook echo e persistMessage direto é
-        // resolvida atomicamente pelo PostgreSQL — sem risco de 23505.
+        // Upsert atômico usando 'id' (primary key) como coluna de conflito.
+        // Nota: whatsapp_id possui um índice parcial em produção (WHERE whatsapp_id IS NOT NULL)
+        // que NÃO pode ser usado como ON CONFLICT target (erro 42P10). Como id === whatsapp_id
+        // sempre neste sistema, usar 'id' resolve race conditions igualmente bem.
         const { error: mErr } = await supabase
           .from('messages')
-          .upsert(messageData, { onConflict: 'whatsapp_id' });
+          .upsert(messageData, { onConflict: 'id' });
 
         if (mErr) {
           console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
