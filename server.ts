@@ -219,6 +219,19 @@ async function startServer() {
         timestamp: new Date().toISOString()
       });
     });
+
+    // System Monitoring Cycle (BullMQ/Redis/DB)
+    console.log('[Server] Starting System Health Monitor (60s cycle)...');
+    setInterval(async () => {
+      try {
+        const { monitoringService } = await import('./src/backend/services/monitoringService.js');
+        monitoringService.runSystemDiagnostics().catch(() => {});
+      } catch (e) {}
+    }, 60 * 1000);
+    // Run first time
+    const { monitoringService: ms } = await import('./src/backend/services/monitoringService.js');
+    ms.runSystemDiagnostics().catch(() => {});
+
   } catch (err: any) {
     console.error('[Server] Error during background initialization:', err);
     try {

@@ -17,7 +17,6 @@ router.use(requireAdmin as any);
 // ─── GET /api/v2/admin/stats ──────────────────────────────────────────────
 router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // Note: In a huge system, these should be pre-calculated or use RPC
     const [profilesRes, agentsRes, messagesRes] = await Promise.all([
       supabase.from('profiles').select('id, whatsapp_status', { count: 'exact' }),
       supabase.from('agents').select('id', { count: 'exact', head: true }),
@@ -65,7 +64,6 @@ router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     if (error) throw error;
     
-    // Invalidate profile cache for the target user
     const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
     await invalidateCache(cacheKey.profile(targetUserId));
     
@@ -79,17 +77,10 @@ router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
 // ─── POST /api/v2/admin/users/:id/reset-whatsapp ──────────────────────────
 router.post('/users/:id/reset-whatsapp', async (req: AuthenticatedRequest, res: Response) => {
   const targetUserId = req.params.id;
-  console.log(`[AdminAPI] Force resetting WhatsApp session for user: ${targetUserId}`);
-  
   try {
     const { whatsappService } = await import('../services/whatsappService.js');
+    await whatsappService.logout(targetUserId).catch(() => {});
     
-    // 1. Tentar logout (o novo whatsappService já é resiliente e busca o ID correto)
-    await whatsappService.logout(targetUserId).catch(err => {
-      console.warn(`[AdminAPI] Warning during logout for ${targetUserId}:`, err.message);
-    });
-    
-    // 2. Clear status e ID de instância no profiles (Garante a limpeza profunda)
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -102,13 +93,11 @@ router.post('/users/:id/reset-whatsapp', async (req: AuthenticatedRequest, res: 
 
     if (error) throw error;
 
-    // 3. Clear profile cache
     const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
     await invalidateCache(cacheKey.profile(targetUserId)).catch(() => {});
 
-    res.json({ success: true, message: 'WhatsApp session reset completely' });
+    res.json({ success: true });
   } catch (err: any) {
-    console.error('[AdminAPI] WhatsApp Reset Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -127,7 +116,6 @@ router.get('/users/:id/activity', async (req: AuthenticatedRequest, res: Respons
     if (error) throw error;
     res.json({ success: true, data: data || [] });
   } catch (err: any) {
-    console.error('[AdminAPI] Activity Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -147,14 +135,12 @@ router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
 router.patch('/settings', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { data: existing } = await supabase.from('global_settings').select('id').limit(1).maybeSingle();
-    
     let result;
     if (existing) {
       result = await supabase.from('global_settings').update(req.body).eq('id', existing.id);
     } else {
       result = await supabase.from('global_settings').insert(req.body);
     }
-
     if (result.error) throw result.error;
     res.json({ success: true });
   } catch (err: any) {
@@ -165,18 +151,14 @@ router.patch('/settings', async (req: AuthenticatedRequest, res: Response) => {
 // ─── GET /api/v2/admin/finance/stats ─────────────────────────────────────
 router.get('/finance/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // 1. Total cost
     const { data: totalData, error: totalErr } = await supabase
       .from('messages')
-      .select('cost_brl, tokens_prompt, tokens_completion');
+      .select('user_id, cost_brl, tokens_prompt, tokens_completion');
     
     if (totalErr) throw totalErr;
     
     const totalCost = (totalData || []).reduce((acc, curr) => acc + (Number(curr.cost_brl) || 0), 0);
-    const totalTokensPrompt = (totalData || []).reduce((acc, curr) => acc + (curr.tokens_prompt || 0), 0);
-    const totalTokensCompletion = (totalData || []).reduce((acc, curr) => acc + (curr.tokens_completion || 0), 0);
-
-    // 2. Cost by user
+    const totalTokens = (totalData || []).reduce((acc, curr) => acc + (curr.tokens_prompt || 0) + (curr.tokens_completion || 0), 0);
     const userCostsMap = (totalData || []).reduce((acc: any, curr: any) => {
       acc[curr.user_id] = (acc[curr.user_id] || 0) + (Number(curr.cost_brl) || 0);
       return acc;
@@ -186,10 +168,73 @@ router.get('/finance/stats', async (req: AuthenticatedRequest, res: Response) =>
       success: true, 
       data: {
         totalCostBrl: totalCost,
-        totalTokens: totalTokensPrompt + totalTokensCompletion,
+        totalTokens: totalTokens,
         userCosts: userCostsMap
       } 
     });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/v2/admin/activity ──────────────────────────────────────────
+router.get('/activity', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('messages')
+      .select('created_at, role')
+      .gt('created_at', yesterday);
+
+    if (error) throw error;
+
+    const hourlyData: Record<string, { hour: string, ia: number, human: number }> = {};
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(Date.now() - i * 60 * 60 * 1000);
+      const h = d.getHours() + ':00';
+      hourlyData[h] = { hour: h, ia: 0, human: 0 };
+    }
+
+    (data || []).forEach(m => {
+      const h = new Date(m.created_at).getHours() + ':00';
+      if (hourlyData[h]) {
+        if (m.role === 'assistant') hourlyData[h].ia++;
+        else hourlyData[h].human++;
+      }
+    });
+
+    res.json({ success: true, data: Object.values(hourlyData).reverse() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/v2/admin/dashboard/growth ─────────────────────────────────────
+router.get('/dashboard/growth', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [leads, appts] = await Promise.all([
+      supabase.from('contacts').select('created_at').gt('created_at', sevenDaysAgo),
+      supabase.from('appointments').select('created_at').gt('created_at', sevenDaysAgo)
+    ]);
+
+    const dailyData: Record<string, any> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      dailyData[d] = { date: d, leads: 0, agendamentos: 0 };
+    }
+
+    (leads.data || []).forEach(l => {
+      const d = l.created_at.split('T')[0];
+      if (dailyData[d]) dailyData[d].leads++;
+    });
+
+    (appts.data || []).forEach(a => {
+      const d = a.created_at.split('T')[0];
+      if (dailyData[d]) dailyData[d].agendamentos++;
+    });
+
+    res.json({ success: true, data: Object.values(dailyData).reverse() });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

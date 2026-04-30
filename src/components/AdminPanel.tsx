@@ -29,9 +29,10 @@ import {
   Info
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity } from '../services/supabaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type AdminTab = 'overview' | 'users' | 'config' | 'billing';
 
@@ -70,21 +71,24 @@ export default function AdminPanel() {
     totalTokens: 0,
     userCosts: {}
   });
+  const [activityData, setActivityData] = useState<any[]>([]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [statsData, usersData, settingsData, financeData] = await Promise.all([
+      const [statsData, usersData, settingsData, financeData, activityData] = await Promise.all([
         getAdminStats(),
         listAdminUsers(),
         getGlobalSettings(),
-        getAdminFinanceStats()
+        getAdminFinanceStats(),
+        getAdminActivity()
       ]);
 
       setStats(statsData);
       setProfiles(usersData);
       if (settingsData) setGlobalSettings(settingsData);
       if (financeData) setFinanceStats(financeData);
+      if (activityData) setActivityData(activityData);
     } catch (error: any) {
       console.error('Admin Fetch Error:', error);
       toast.error('Erro ao carregar dados administrativos.');
@@ -175,10 +179,31 @@ export default function AdminPanel() {
                     <h3 className="text-xl font-black text-slate-900">Atividade Global</h3>
                     <p className="text-sm text-slate-500">Monitoramento de interações em tempo real.</p>
                   </div>
-                  <div className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">Últimos 30 dias</div>
-                </div>
-                <div className="h-64 bg-slate-50 rounded-2xl flex items-center justify-center border border-dashed border-slate-200">
-                  <Activity size={40} className="text-slate-200 animate-pulse" />
+                  <div className="h-64 bg-white rounded-2xl">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={activityData}>
+                      <defs>
+                        <linearGradient id="colorAdminIA" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="hour" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                        interval={4}
+                      />
+                      <YAxis hide />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
+                      />
+                      <Area type="monotone" dataKey="ia" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorAdminIA)" />
+                      <Area type="monotone" dataKey="human" stroke="#10b981" strokeWidth={3} fillOpacity={0.1} fill="#10b981" />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 

@@ -122,7 +122,7 @@ export default function Layout({
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { id: 'admin', icon: <Shield size={20} />, label: 'Painel Admin', adminOnly: true },
     { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', adminOnly: true },
-    { id: 'health', icon: <Activity size={20} />, label: 'Monitor', adminOnly: true },
+    { id: 'overview', icon: <Activity size={20} />, label: 'Visão Geral', adminOnly: true },
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
@@ -231,25 +231,7 @@ export default function Layout({
 
         {role === 'admin' && !collapsed && (
           <div className="px-4 py-4 mt-auto">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-slate-50 rounded-2xl p-4 border border-slate-100"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status do Sistema</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-[10px] font-black text-emerald-600 uppercase">Operacional</span>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium leading-tight">
-                Todos os serviços (IA, Redis, Supabase) estão respondendo normalmente.
-              </p>
-            </motion.div>
+            <SystemHealthStatus />
           </div>
         )}
 
@@ -605,3 +587,53 @@ export default function Layout({
     </div>
   );
 }
+const SystemHealthStatus = () => {
+  const [health, setHealth] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHealth = async () => {
+      const { data } = await supabase.from('sys_health').select('status');
+      setHealth(data || []);
+      setLoading(false);
+    };
+    fetchHealth();
+
+    const channel = supabase
+      .channel('sidebar_health')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sys_health' }, () => {
+        fetchHealth();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const isDegraded = health.some(h => h.status === 'error');
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className={`rounded-2xl p-4 border transition-colors ${isDegraded ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status do Sistema</span>
+        <div className="flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDegraded ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${isDegraded ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+          </span>
+          <span className={`text-[10px] font-black uppercase ${isDegraded ? 'text-amber-600' : 'text-emerald-600'}`}>
+            {isDegraded ? 'Degradado' : 'Operacional'}
+          </span>
+        </div>
+      </div>
+      <p className="text-[10px] text-slate-500 font-medium leading-tight">
+        {isDegraded 
+          ? 'Alguns serviços estão apresentando instabilidade. Verifique a Visão Geral.' 
+          : 'Todos os serviços (IA, Redis, Supabase) estão respondendo normalmente.'}
+      </p>
+    </motion.div>
+  );
+};

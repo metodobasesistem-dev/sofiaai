@@ -1238,3 +1238,29 @@ export const getAdminFinanceStats = async () => {
   if (!result.success) throw new Error(result.error);
   return result.data;
 };
+
+export const getAdminActivity = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/activity', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
+
+export const getDashboardGrowth = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/v2/admin/dashboard/growth', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
+
+

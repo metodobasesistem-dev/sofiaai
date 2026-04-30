@@ -137,13 +137,39 @@ export const redisService = {
     }
   },
 
-  async clearHistory(threadId: string) {
-    const client = await getRedisClient();
-    if (!client) return;
-    const key = `messages:${threadId}`;
     try {
       await client.del(key);
     } catch (error) {}
+  },
+
+  /**
+   * Metrics for monitoring
+   */
+  async getQueueMetrics(queueNames: string[]) {
+    const client = await getRedisClient();
+    if (!client) return {};
+    
+    const metrics: Record<string, number> = {};
+    for (const name of queueNames) {
+      try {
+        metrics[name] = await client.zcard(name);
+      } catch (e) {
+        metrics[name] = 0;
+      }
+    }
+    return metrics;
+  },
+
+  async getRedisInfo() {
+    const client = await getRedisClient();
+    if (!client) return { status: 'disconnected' };
+    try {
+      const info = await client.info('memory');
+      const usedMemory = info.match(/used_memory_human:(.*)/)?.[1] || 'unknown';
+      return { status: 'connected', usedMemory };
+    } catch (e) {
+      return { status: 'error', message: (e as any).message };
+    }
   }
 };
 

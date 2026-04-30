@@ -11,8 +11,9 @@ import Integrations from './components/Integrations';
 import Settings from './components/Settings';
 import Reports from './components/Reports';
 import Professionals from './components/Professionals';
-import Health from './components/Health';
- import AdminPanel from './components/AdminPanel';
+import Professionals from './components/Professionals';
+import Overview from './components/Overview';
+import AdminPanel from './components/AdminPanel';
  import Login from './components/Login';
  import MaintenancePage from './components/MaintenancePage';
 import { supabase } from './lib/supabase';
@@ -171,7 +172,8 @@ export default function App() {
       case 'reports':
         return <Reports />;
       case 'health':
-        return <Health />;
+      case 'overview':
+        return <Overview />;
       case 'professionals':
         return <Professionals />;
       case 'agents':

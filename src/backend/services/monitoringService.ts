@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient.js';
+import { redisService } from './redisService.js';
 
 export class MonitoringService {
   /**
@@ -131,6 +132,38 @@ export class MonitoringService {
     const { data, error } = await supabase.from('sys_health').select('*');
     if (error) throw error;
     return data || [];
+  }
+
+  /**
+   * Performs a full system health check, including Redis queues and DB latency.
+   * This is designed to be called by a background worker (heartbeat cycle).
+   */
+  async runSystemDiagnostics() {
+    try {
+      // 1. Check Redis
+      const redisInfo = await redisService.getRedisInfo();
+      const queueMetrics = await redisService.getQueueMetrics(['reminder_queue', 'follow_up_queue', 'whatsapp_outbound']);
+      
+      await this.recordHeartbeat('redis', redisInfo.status === 'connected' ? 'healthy' : 'error', {
+        ...redisInfo,
+        queues: queueMetrics,
+        timestamp: new Date().toISOString()
+      });
+
+      // 2. Check Database Latency
+      const start = Date.now();
+      await supabase.from('sys_health').select('count').limit(1);
+      const latency = Date.now() - start;
+
+      await this.recordHeartbeat('database', 'healthy', {
+        latency_ms: latency,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[Monitoring] System diagnostics completed. Latency: ${latency}ms`);
+    } catch (err: any) {
+      console.error('[Monitoring] Error during system diagnostics:', err);
+    }
   }
 }
 

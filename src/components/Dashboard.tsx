@@ -38,6 +38,7 @@ import {
   getRecentActivities, 
   getGlobalRecentActivities,
   getUpcomingAppointments, 
+  getDashboardGrowth,
   getUserProfile, 
   type UserProfile 
 } from '../services/supabaseService';
@@ -198,15 +199,19 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
         if (statsResult.status === 'fulfilled' && statsResult.value) {
           const s = statsResult.value;
           setStats(s);
-          const data: any[] = Array.from({ length: 7 }).map((_, i) => {
-            const date = subDays(new Date(), 6 - i);
-            return {
-              name: format(date, 'dd MMM', { locale: ptBR }),
-              leads: Math.floor(Math.random() * ((s.contacts || 0) / 3 + 1)),
-              agendamentos: Math.floor(Math.random() * ((s.appointments || 0) / 3 + 1))
-            };
+          
+          // Fetch real growth data instead of random mock
+          getDashboardGrowth().then(growthData => {
+            const formatted = growthData.map((d: any) => ({
+              name: format(new Date(d.date + 'T12:00:00'), 'dd MMM', { locale: ptBR }),
+              leads: d.leads,
+              agendamentos: d.agendamentos
+            }));
+            setChartData(formatted);
+          }).catch(() => {
+            // Fallback empty data if fails
+            setChartData([]);
           });
-          setChartData(data);
         }
 
         if (activitiesResult.status === 'fulfilled') {
