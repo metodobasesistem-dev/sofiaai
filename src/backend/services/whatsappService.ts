@@ -362,7 +362,7 @@ class WhatsAppService {
       // 4. Substitui o registro temporário pelo definitivo com o ID real do WhatsApp
       if (msgId !== tempId) {
         // Insere o definitivo (pode conflitar com webhook echo — tratado por onConflict)
-        await supabase.from('messages').insert({
+        const { error } = await supabase.from('messages').insert({
           id: msgId,
           whatsapp_id: msgId,
           user_id: userId,
@@ -372,16 +372,22 @@ class WhatsAppService {
           status: 'sent',
           timestamp: sendTimestamp,
           created_at: new Date(sendTimestamp).toISOString(),
-        }).then(async ({ error }) => {
-          if (error?.code === '23505') {
-            // Webhook chegou primeiro — só atualiza o status
-            await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId);
-          } else if (error) {
-            console.warn('[WhatsAppService] Definitive persist warning:', error.message);
-          }
         });
-        // Remove o registro temporário
-        await supabase.from('messages').delete().eq('id', tempId);
+
+        if (error) {
+          if (error.code === '23505') {
+            // Webhook chegou primeiro — só atualiza o status do registro que já existe
+            await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId);
+            // Neste caso de conflito positivo, podemos deletar a temporária
+            await supabase.from('messages').delete().eq('id', tempId);
+          } else {
+            console.error('[WhatsAppService] Definitive persist failed, keeping temp as fallback:', error.message);
+            // NÃO DELETA A TEMPORÁRIA SE FALHAR — mantém como rastro
+          }
+        } else {
+          // Sucesso no insert definitivo: remove o registro temporário com segurança
+          await supabase.from('messages').delete().eq('id', tempId);
+        }
       } else {
         // API não retornou ID diferente — só atualiza o status do temp
         await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
