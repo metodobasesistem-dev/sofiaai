@@ -43,7 +43,7 @@ import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage } from '../services/whatsappService';
-import { listQuickReplies, type QuickReply } from '../services/supabaseService';
+import { listQuickReplies, type QuickReply, listProfessionals, type Professional } from '../services/supabaseService';
 import Contacts from './Contacts';
 import KanbanBoard from './KanbanBoard';
 import ReportsDashboard from './ReportsDashboard';
@@ -368,6 +368,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'Abertos' | 'Resolvidos' | 'Todos' | 'Lead' | 'Qualificado' | 'Cliente'>('Abertos');
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedContact, setSelectedContact] = useState<any>(null);
@@ -574,6 +575,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       setQuickReplies(qrs);
     };
     fetchQuickReplies();
+
+    // Fetch Team (Professionals)
+    const fetchTeam = async () => {
+      try {
+        const profs = await listProfessionals();
+        setProfessionals(profs || []);
+      } catch (err) {
+        console.warn('[Inbox] Error fetching professionals:', err);
+      }
+    };
+    fetchTeam();
 
     return () => {
       if (channel) supabase.removeChannel(channel);
@@ -1407,6 +1419,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     >
                       <option value="">Não atribuído</option>
                       <option value={user?.id || 'me'}>Você ({user?.email?.split('@')[0]})</option>
+                      {professionals.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} (Equipe)</option>
+                      ))}
                     </select>
                   </div>
                 </div>
