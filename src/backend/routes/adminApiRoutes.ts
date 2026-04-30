@@ -183,7 +183,7 @@ router.get('/activity', async (req: AuthenticatedRequest, res: Response) => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('messages')
-      .select('created_at, role')
+      .select('created_at, direction')
       .gt('created_at', yesterday);
 
     if (error) throw error;
@@ -198,7 +198,7 @@ router.get('/activity', async (req: AuthenticatedRequest, res: Response) => {
     (data || []).forEach(m => {
       const h = new Date(m.created_at).getHours() + ':00';
       if (hourlyData[h]) {
-        if (m.role === 'assistant') hourlyData[h].ia++;
+        if (m.direction === 'outbound') hourlyData[h].ia++;
         else hourlyData[h].human++;
       }
     });

@@ -109,8 +109,9 @@ export default function Overview() {
         const yesterday = subHours(new Date(), 24).toISOString();
         
         const { count: totalMsg } = await supabase.from('messages').select('*', { count: 'exact', head: true }).gt('created_at', yesterday);
-        const { count: iaMsg } = await supabase.from('messages').select('*', { count: 'exact', head: true }).gt('created_at', yesterday).eq('role', 'assistant');
-        const { count: humanMsg } = await supabase.from('messages').select('*', { count: 'exact', head: true }).gt('created_at', yesterday).eq('role', 'user');
+        const { count: iaMsg } = await supabase.from('messages').select('*', { count: 'exact', head: true }).gt('created_at', yesterday).eq('direction', 'outbound');
+        const { count: humanMsg } = await supabase.from('messages').select('*', { count: 'exact', head: true }).gt('created_at', yesterday).eq('direction', 'inbound');
+
 
         setMetrics({
           total24h: totalMsg || 0,
@@ -243,8 +244,8 @@ export default function Overview() {
             </div>
           </div>
 
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorIA" x1="0" y1="0" x2="0" y2="1">

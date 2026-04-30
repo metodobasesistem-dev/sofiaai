@@ -160,6 +160,20 @@ export class MonitoringService {
         timestamp: new Date().toISOString()
       });
 
+      // 3. Record Server Core heartbeat
+      await this.recordHeartbeat('server_core', 'healthy', {
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage().rss / 1024 / 1024 + ' MB',
+        timestamp: new Date().toISOString()
+      });
+
+      // 4. Record WhatsApp Service heartbeat (assuming healthy if this loop runs)
+      const { whatsappService } = await import('./whatsappService.js');
+      await this.recordHeartbeat('whatsapp', 'healthy', {
+        sessions_active: whatsappService.getActiveSessionsCount ? whatsappService.getActiveSessionsCount() : 'unknown',
+        timestamp: new Date().toISOString()
+      });
+
       console.log(`[Monitoring] System diagnostics completed. Latency: ${latency}ms`);
     } catch (err: any) {
       console.error('[Monitoring] Error during system diagnostics:', err);
