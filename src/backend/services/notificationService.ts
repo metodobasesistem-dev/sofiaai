@@ -18,8 +18,13 @@ export class NotificationService {
       try {
         await this.checkReminders();
         await this.checkFollowUps();
-      } catch (err) {
+      } catch (err: any) {
         console.error('[NotificationService] Error in background jobs:', err);
+        await monitoringService.recordHeartbeat('system_worker', 'error', {
+          message: err.message,
+          stack: err.stack,
+          timestamp: new Date().toISOString()
+        });
       } finally {
         this.isProcessing = false;
       }
@@ -46,6 +51,11 @@ export class NotificationService {
 
     if (error) {
       console.error('[NotificationService] Error fetching appointments:', error);
+      await monitoringService.recordHeartbeat('reminders', 'error', {
+        message: 'Failed to fetch appointments from Supabase',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
@@ -90,6 +100,11 @@ export class NotificationService {
 
     if (error) {
       console.error('[NotificationService] Error fetching threads for follow-up:', error);
+      await monitoringService.recordHeartbeat('follow_ups', 'error', {
+        message: 'Failed to fetch threads from Supabase',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 

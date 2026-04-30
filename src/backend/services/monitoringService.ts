@@ -45,7 +45,7 @@ export class MonitoringService {
         // Trigger WhatsApp alert for critical changes
         // Alert if it goes to 'error' OR if it recovers from 'error' to 'healthy'
         if (status === 'error' || (previousStatus === 'error' && status === 'healthy')) {
-          await this.sendAdminAlert(serviceId, status, previousStatus);
+          await this.sendAdminAlert(serviceId, status, previousStatus, metadata);
         }
       }
     } catch (err) {
@@ -56,13 +56,15 @@ export class MonitoringService {
   /**
    * Sends a WhatsApp alert to the configured admin.
    */
-  private async sendAdminAlert(serviceId: string, newStatus: string, oldStatus?: string) {
+  private async sendAdminAlert(serviceId: string, newStatus: string, oldStatus?: string, metadata?: any) {
     try {
       // 1. Fetch global settings for admin notification
-      const { data: settings } = await supabase
+      const { data: settingsList } = await supabase
         .from('global_settings')
         .select('admin_notification_phone, admin_notification_user_id')
-        .maybeSingle();
+        .limit(1);
+
+      const settings = settingsList?.[0];
 
       if (!settings?.admin_notification_phone || !settings?.admin_notification_user_id) {
         console.warn('[Monitoring] Skipping alert: admin_notification_phone or admin_notification_user_id not configured in global_settings.');
@@ -76,23 +78,47 @@ export class MonitoringService {
       const statusText = newStatus === 'healthy' ? 'RECUPERADO' : 'FALHA DETECTADA';
       const oldStatusText = oldStatus === 'healthy' ? 'Saudável' : (oldStatus === 'error' ? 'Erro' : 'Nenhum');
 
+      // Deep Diagnostics: Extract error details from metadata
+      let diagnosticInfo = '';
+      if (newStatus === 'error' && metadata) {
+        const errorMsg = metadata.error || metadata.message || '';
+        const errorStack = metadata.stack ? `\n*Stack:* _${metadata.stack.substring(0, 100)}..._` : '';
+        const context = metadata.context ? `\n*Contexto:* ${JSON.stringify(metadata.context)}` : '';
+        
+        if (errorMsg || errorStack || context) {
+          diagnosticInfo = `\n\n🔍 *Diagnóstico:* \n${errorMsg}${errorStack}${context}`;
+        }
+      }
+
       const message = `${statusEmoji} *ALERTA DE MONITORAMENTO*\n\n` +
                       `*Serviço:* ${serviceName}\n` +
                       `*Status:* ${statusText}\n` +
                       `*Anterior:* ${oldStatusText}\n` +
-                      `*Horário:* ${new Date().toLocaleTimeString('pt-BR')}\n\n` +
+                      `*Horário:* ${new Date().toLocaleTimeString('pt-BR')}${diagnosticInfo}\n\n` +
                       `_Verifique o painel administrativo para mais detalhes._`;
 
-      // 2. Send via WhatsAppService (dynamic import to avoid circular dependencies)
-      const { whatsappService } = await import('./whatsappService.js');
-      await whatsappService.sendMessage(
-        settings.admin_notification_user_id,
-        settings.admin_notification_phone,
-        message,
-        'Sistema de Monitoramento'
+      // 2. Send via EvolutionApiService directly to bypass Redis dependency
+      const { EvolutionApiService } = await import('./evolutionApiService.js');
+      
+      // 3. Fetch the REAL instance ID from the profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('whatsapp_instance_id')
+        .eq('id', settings.admin_notification_user_id)
+        .maybeSingle();
+
+      const instanceName = profile?.whatsapp_instance_id || `wppai_${settings.admin_notification_user_id.substring(0, 8)}`;
+      
+      // Ensure phone is clean before sending
+      const cleanPhone = settings.admin_notification_phone.replace(/\D/g, '');
+      
+      await EvolutionApiService.sendMessage(
+        instanceName,
+        cleanPhone,
+        message
       );
 
-      console.log(`[Monitoring] Alert sent to ${settings.admin_notification_phone} for ${serviceId}`);
+      console.log(`[Monitoring] Alert sent via instance ${instanceName} to ${cleanPhone}`);
     } catch (err) {
       console.error(`[Monitoring] Failed to send admin alert:`, err);
     }

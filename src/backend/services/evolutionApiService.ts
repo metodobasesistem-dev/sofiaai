@@ -175,8 +175,11 @@ export class EvolutionApiService {
   static async sendMessage(userId: string, to: string, text: string) {
     const api = getApi();
     try {
+      // Clean number: keep only digits and ensure it's a string
+      const cleanNumber = to.replace(/\D/g, '');
+      
       const { data } = await api.post(`/message/sendText/${userId}`, {
-        number: to,
+        number: cleanNumber,
         text: text,
         options: {
           delay: 1200,
@@ -187,7 +190,7 @@ export class EvolutionApiService {
       return data;
     } catch (error: any) {
       const errorBody = error.response?.data;
-      console.error(`[EvolutionAPI] Error sending text to ${to}:`, JSON.stringify(errorBody || error.message));
+      console.error(`[EvolutionAPI] Error sending text to ${to} (Instance: ${userId}):`, JSON.stringify(errorBody || error.message));
       throw error;
     }
   }

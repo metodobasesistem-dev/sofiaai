@@ -14,11 +14,29 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
 // Global error handlers to prevent process crashes from background dependencies
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', async (err) => {
   console.error('[Server] CRITICAL: Uncaught Exception:', err);
+  try {
+    const { monitoringService } = await import('./src/backend/services/monitoringService.js');
+    await monitoringService.recordHeartbeat('server_core', 'error', {
+      message: 'Uncaught Exception (Process Crash)',
+      error: err.message,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {}
 });
-process.on('unhandledRejection', (reason, promise) => {
+
+process.on('unhandledRejection', async (reason, promise) => {
   console.error('[Server] CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+  try {
+    const { monitoringService } = await import('./src/backend/services/monitoringService.js');
+    await monitoringService.recordHeartbeat('server_core', 'error', {
+      message: 'Unhandled Promise Rejection',
+      error: String(reason),
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {}
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -192,11 +210,25 @@ async function startServer() {
     }
 
     console.log('[Server] Starting Notification Background Jobs...');
-    notificationService.startBackgroundJobs().catch(err => {
+    notificationService.startBackgroundJobs().catch(async (err) => {
       console.error('[Server] Notification service start error:', err);
+      const { monitoringService } = await import('./src/backend/services/monitoringService.js');
+      await monitoringService.recordHeartbeat('system_worker', 'error', {
+        message: 'Notification Service failed to start',
+        error: err.message,
+        timestamp: new Date().toISOString()
+      });
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[Server] Error during background initialization:', err);
+    try {
+      const { monitoringService } = await import('./src/backend/services/monitoringService.js');
+      await monitoringService.recordHeartbeat('server_core', 'error', {
+        message: 'Background initialization failed',
+        error: err.message,
+        timestamp: new Date().toISOString()
+      });
+    } catch (e) {}
   }
 
   // Catch-all for undefined API routes
