@@ -262,7 +262,7 @@ export class AgentService {
       };
 
       // Só atualiza o nome do contato se for mensagem recebida OU se o nome atual estiver vazio/padrão
-      if (direction === 'inbound' || !existingThread?.contact_name || existingThread.contact_name === 'Cliente' || existingThread.contact_name === 'Lead WhatsApp') {
+      if (direction === 'inbound' || !existingThread?.contact_name || existingThread.contact_name === 'Cliente' || existingThread.contact_name === 'Lead WhatsApp' || existingThread.contact_name === 'Você') {
         threadData.contact_name = contactName || existingThread?.contact_name || 'Cliente';
       }
       
@@ -360,7 +360,7 @@ export class AgentService {
         if (insErr) console.error('[DEBUG-CONTACTS] ERRO AO INSERIR CONTATO:', JSON.stringify(insErr, null, 2));
       } else {
         // Só atualiza o nome se for inbound OU se o nome atual for genérico
-        const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp';
+        const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp' || existing.nome === 'Você';
         if (contactName && (incrementCount || isGeneric)) {
            contactData.nome = contactName;
         }

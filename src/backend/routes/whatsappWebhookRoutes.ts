@@ -93,7 +93,7 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
   const remoteJid = key?.remoteJid;
   if (!remoteJid || remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') return;
 
-  const pushName = fromMe ? 'Você' : (messageObj.pushName || data.pushName || 'Cliente');
+  const pushName = fromMe ? undefined : (messageObj.pushName || data.pushName || 'Cliente');
   const cleanNumber = remoteJid.split('@')[0].replace(/\D/g, '');
   const messageContent = messageContentObj.conversation || messageContentObj.extendedTextMessage?.text || '';
   const messageId = key.id;
