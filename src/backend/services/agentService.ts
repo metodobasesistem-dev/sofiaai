@@ -335,21 +335,19 @@ export class AgentService {
          messageData.cost_brl = usage.cost_brl || 0;
        }
  
-        // Upsert: onConflict em 'id' para mensagens com ID do WhatsApp
-        // ATENÇÃO: whatsapp_id também tem unique constraint, então precisamos tratar ambos
-        const { error: mErr } = await supabase.from('messages').upsert(messageData, { onConflict: 'id' });
-        
+        // Upsert atômico usando whatsapp_id como coluna de conflito.
+        // whatsapp_id possui UNIQUE CONSTRAINT (idx_messages_whatsapp_id), então
+        // qualquer race condition entre webhook echo e persistMessage direto é
+        // resolvida atomicamente pelo PostgreSQL — sem risco de 23505.
+        const { error: mErr } = await supabase
+          .from('messages')
+          .upsert(messageData, { onConflict: 'whatsapp_id' });
+
         if (mErr) {
-          if (mErr.code === '23505' && mErr.details?.includes('whatsapp_id')) {
-            // Conflito no whatsapp_id (race condition): a mensagem já existe, só atualiza
-            console.warn(`[AgentService] ⚠️ whatsapp_id conflict for ${messageId} - updating existing record`);
-            await supabase.from('messages').update({ text, direction, audio_url: audioUrl }).eq('whatsapp_id', messageId);
-          } else {
-            console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
-            await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
-          }
+          console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
+          await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
         }
-       
+
     } catch (mErr) {
        console.error('[AgentService] Message insert exception:', mErr);
     }
