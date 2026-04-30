@@ -517,50 +517,47 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'threads', filter: `user_id=eq.${userId}` },
-          async () => {
-            const { data: freshData } = await supabase
-              .from('threads')
-              .select('*')
-              .eq('user_id', userId)
-              .order('updated_at', { ascending: false });
-            
-            if (freshData) {
-              const { data: freshContacts } = await supabase
-                .from('contacts')
-                .select('telefone, status_funil')
-                .eq('user_id', userId);
-              
-              const formatted = freshData.map(d => {
-                const jid = d.remote_jid || '';
-                const phoneNumber = jid.includes('@') ? jid.split('@')[0] : jid;
-                const contact = freshContacts?.find(c => {
-                  const contactPhone = c.telefone?.replace(/\D/g, '');
-                  if (!contactPhone) return false;
-                  const p1 = phoneNumber.replace(/^55/, '');
-                  const p2 = contactPhone.replace(/^55/, '');
-                  if (p1 === p2) return true;
-                  if (p1.length >= 8 && p2.length >= 8) return p1.slice(-8) === p2.slice(-8);
-                  return false;
-                });
-                return {
-                  id: d.id,
-                  name: d.contact_name || 'Lead WhatsApp',
-                  lastMessage: d.last_message || '',
-                  time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-                  status: d.status as any,
-                  unreadCount: d.unread_count || 0,
-                  remoteJid: d.remote_jid,
-                  updatedAt: d.updated_at,
-                  agent_name: d.agent_name || 'Robô IA',
-                  funilStatus: contact?.status_funil || 'Lead',
-                  ticketStatus: d.ticket_status || 'open',
-                  priority: d.priority || 'normal',
-                  assignedTo: d.assigned_to || null,
-                  labels: Array.isArray(d.labels) ? d.labels : []
+          async (payload) => {
+            if (payload.eventType === 'INSERT') {
+              // Adiciona novo thread se não existir
+              setThreads(prev => {
+                if (prev.some(t => t.id === payload.new.id)) return prev;
+                const newThread = {
+                  id: payload.new.id,
+                  name: payload.new.contact_name || 'Lead WhatsApp',
+                  lastMessage: payload.new.last_message || '',
+                  time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                  status: payload.new.status,
+                  unreadCount: payload.new.unread_count || 0,
+                  remoteJid: payload.new.remote_jid,
+                  updatedAt: payload.new.updated_at,
+                  agent_name: payload.new.agent_name || 'Robô IA',
+                  ticketStatus: payload.new.ticket_status || 'open',
+                  photo_url: payload.new.photo_url,
+                  assignedTo: payload.new.assigned_to
                 };
+                return [newThread as any, ...prev].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
               });
-              const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-              setThreads(sorted);
+            } else if (payload.eventType === 'UPDATE') {
+              // Atualiza apenas o thread específico no estado para manter consistência Header/Sidebar
+              setThreads(prev => prev.map(t => {
+                if (t.id === payload.new.id) {
+                  return {
+                    ...t,
+                    name: payload.new.contact_name || t.name,
+                    lastMessage: payload.new.last_message || t.lastMessage,
+                    status: payload.new.status,
+                    unreadCount: payload.new.unread_count ?? t.unreadCount,
+                    updatedAt: payload.new.updated_at,
+                    ticketStatus: payload.new.ticket_status || t.ticketStatus,
+                    assignedTo: payload.new.assigned_to ?? t.assignedTo,
+                    time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : t.time
+                  };
+                }
+                return t;
+              }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+            } else if (payload.eventType === 'DELETE') {
+              setThreads(prev => prev.filter(t => t.id !== payload.old.id));
             }
           }
         )
@@ -653,26 +650,38 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
           (payload) => {
             setMessages(prev => {
-              // 1. Deduplicação por ID
-              if (prev.some(m => m.id === payload.new.id)) return prev;
+              const newMsg = formatMsg(payload.new);
+              
+              // 1. Deduplicação por ID (ID idêntico já está no estado)
+              if (prev.some(m => m.id === newMsg.id)) return prev;
 
-              // 2. Substituição Defensiva:
-              // Se a nova mensagem NÃO for temporária (não começa com 'sending-')
-              // e existe uma temporária no estado com o mesmo timestamp/created_at, substituímos.
-              if (!payload.new.id.toString().startsWith('sending-')) {
+              const isTemp = newMsg.id.toString().startsWith('sending-');
+              const newTime = new Date(newMsg.timestamp).getTime();
+
+              // 2. Se for uma mensagem DEFINITIVA chegando:
+              if (!isTemp) {
+                // Procura se já existe uma temporária correspondente
                 const tempIdx = prev.findIndex(m => 
                   m.id.toString().startsWith('sending-') && 
-                  (m.timestamp === payload.new.created_at || m.text === payload.new.text)
+                  (Math.abs(new Date(m.timestamp).getTime() - newTime) < 2000 || m.text === newMsg.text)
                 );
                 
                 if (tempIdx !== -1) {
                   const updated = [...prev];
-                  updated[tempIdx] = formatMsg(payload.new) as any;
+                  updated[tempIdx] = newMsg as any;
                   return updated;
                 }
+              } else {
+                // 3. Se for uma mensagem TEMPORÁRIA chegando:
+                // Verifica se a definitiva já não chegou antes por algum atraso de rede
+                const hasDefinitive = prev.some(m => 
+                  !m.id.toString().startsWith('sending-') && 
+                  (Math.abs(new Date(m.timestamp).getTime() - newTime) < 2000 || m.text === newMsg.text)
+                );
+                if (hasDefinitive) return prev; // Ignora a temporária se a real já está lá
               }
 
-              return [...prev, formatMsg(payload.new) as any];
+              return [...prev, newMsg as any];
             });
           }
         )
