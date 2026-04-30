@@ -147,36 +147,37 @@ async function handleMessageUpsert(userId: string, instanceName: string, data: a
   // Persistir Mensagem de Texto
   const threadId = `${userId}_${cleanNumber}`;
   
-  // Se for uma mensagem enviada por mim (fromMe), verificamos se ela já não foi persistida
-  // (evita duplicar mensagens que o próprio sistema enviou, como o Follow-up)
+  // Mensagens enviadas por mim (fromMe): o webhook é o echo de confirmação.
+  // Fazemos upsert com status='sent' — se já existir (inserido pelo sendMessage),
+  // apenas atualiza o status. Se não existir, insere como nova mensagem.
   if (fromMe) {
-    const { data: existing } = await supabase
-      .from('messages')
-      .select('id')
-      .eq('id', messageId)
-      .maybeSingle();
-    
-    if (existing) {
-      console.log(`[Webhook] 🛡️ Ignored echo for already persisted outbound message: ${messageId}`);
-      return;
-    }
+    await agentService.persistMessage(
+      threadId,
+      userId,
+      messageContent,
+      'outbound',
+      messageId,
+      pushName,
+      remoteJid,
+      cleanNumber
+    );
+    // Echo do WhatsApp: não dispara IA
+    return;
   }
 
   await agentService.persistMessage(
     threadId,
     userId,
     messageContent,
-    fromMe ? 'outbound' : 'inbound',
+    'inbound',
     messageId,
     pushName,
     remoteJid,
     cleanNumber
   );
 
-  // Disparar Resposta AI APENAS se NÃO for enviado por mim (fromMe: false)
-  if (!fromMe) {
-    await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, messageContent, pushName, cleanNumber, messageId, false);
-  }
+  // Disparar Resposta AI APENAS para mensagens recebidas
+  await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, messageContent, pushName, cleanNumber, messageId, false);
 }
 
 async function handleConnectionUpdate(userId: string, data: any) {

@@ -318,34 +318,86 @@ class WhatsAppService {
   async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente'): Promise<any> {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     const cleanTo = to.split('@')[0].replace(/\D/g, '');
-    
+    const threadId = `${userId}_${cleanTo}`;
+
+    // ── FASE 2: Banco PRIMEIRO, API depois ─────────────────────────────
+    // Gera um ID temporário para persistir com status 'sending' imediatamente.
+    // Quando a API confirmar o messageId real, faremos upsert com o ID correto.
+    const tempId = `sending-${Date.now()}-${cleanTo}`;
+    const sendTimestamp = Date.now();
+
+    // 1. Persiste com status='sending' ANTES de chamar a API
+    await supabase.from('messages').insert({
+      id: tempId,
+      whatsapp_id: tempId,
+      user_id: userId,
+      thread_id: threadId,
+      text: message,
+      direction: 'outbound',
+      status: 'sending',
+      timestamp: sendTimestamp,
+      created_at: new Date(sendTimestamp).toISOString(),
+    }).then(({ error }) => {
+      if (error) console.warn('[WhatsAppService] Pre-persist (sending) warning:', error.message);
+    });
+
+    // 2. Atualiza thread com preview da mensagem (sidebar)
+    await supabase.from('threads').upsert({
+      id: threadId,
+      user_id: userId,
+      last_message: message.substring(0, 1000),
+      last_message_time: new Date(sendTimestamp).toISOString(),
+      remote_jid: to,
+      display_phone: cleanTo,
+      agent_name: senderName,
+    }).then(({ error }) => {
+      if (error) console.warn('[WhatsAppService] Thread preview update warning:', error.message);
+    });
+
     try {
+      // 3. Chama a Evolution API
       const result = await EvolutionApiService.sendMessage(instanceName, to, message);
-      const msgId = result.key?.id || result.messageId || `out-${Date.now()}`;
-      console.log(`[WhatsAppService] 💾 Calling persistMessage for ${userId} to ${cleanTo} with msgId ${msgId}`);
-      // Persiste a mensagem - CORRIGIDO: senderName vai para agentName (9º param), não para contactName
-      await agentService.persistMessage(
-        `${userId}_${cleanTo}`, 
-        userId, 
-        message, 
-        'outbound', 
-        msgId, 
-        undefined, // contactName (não sobrescrever o lead)
-        to, 
-        cleanTo, 
-        senderName, // agentName
-        undefined, 
-        undefined
-      );
-      
-      // 🔄 Reseta/Agenda o Follow-up após mensagem (exceto se for o próprio follow-up enviando)
+      const msgId = result.key?.id || result.messageId || tempId;
+
+      // 4. Substitui o registro temporário pelo definitivo com o ID real do WhatsApp
+      if (msgId !== tempId) {
+        // Insere o definitivo (pode conflitar com webhook echo — tratado por onConflict)
+        await supabase.from('messages').insert({
+          id: msgId,
+          whatsapp_id: msgId,
+          user_id: userId,
+          thread_id: threadId,
+          text: message,
+          direction: 'outbound',
+          status: 'sent',
+          timestamp: sendTimestamp,
+          created_at: new Date(sendTimestamp).toISOString(),
+        }).then(async ({ error }) => {
+          if (error?.code === '23505') {
+            // Webhook chegou primeiro — só atualiza o status
+            await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId);
+          } else if (error) {
+            console.warn('[WhatsAppService] Definitive persist warning:', error.message);
+          }
+        });
+        // Remove o registro temporário
+        await supabase.from('messages').delete().eq('id', tempId);
+      } else {
+        // API não retornou ID diferente — só atualiza o status do temp
+        await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
+      }
+
+      console.log(`[WhatsAppService] ✅ Message sent and persisted: ${msgId}`);
+
+      // 5. Agenda follow-up
       if (senderName !== 'IA (FOLLOW-UP)') {
-        console.log(`[WhatsAppService] 📤 Message sent to ${to}. Scheduling follow-up...`);
         await this.scheduleFollowUp(userId, to, 0);
       }
-      
+
       return { success: true, messageId: msgId };
     } catch (err: any) {
+      // API falhou — marca a mensagem temporária como 'failed'
+      await supabase.from('messages').update({ status: 'failed' }).eq('id', tempId);
       console.error(`[WhatsAppService] Error in sendMessage to ${to}:`, err.message);
       return { success: false, error: err.message };
     }

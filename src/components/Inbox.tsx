@@ -623,22 +623,38 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       }
 
       // ── BLOCO 2: Realtime listener ────────────────────────────────────
+      // Fase 4: escuta INSERT (novas mensagens) e UPDATE (mudança de status)
+      const formatMsg = (d: any) => ({
+        id: d.id,
+        text: d.text || '',
+        sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+        time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+        timestamp: d.created_at,
+        audio_url: d.audio_url,
+        status: d.status
+      });
+
       channel = supabase
         .channel(`messages-${selectedThreadId}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
           (payload) => {
-            const d = payload.new;
-            const newMessage = {
-              id: d.id,
-              text: d.text || '',
-              sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
-              time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-              timestamp: d.created_at,
-              audio_url: d.audio_url
-            };
-            setMessages(prev => [...prev, newMessage as any]);
+            setMessages(prev => {
+              // Evita duplicata se a mensagem já existe (ex: optimista temp)
+              if (prev.some(m => m.id === payload.new.id)) return prev;
+              return [...prev, formatMsg(payload.new) as any];
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
+          (payload) => {
+            // Atualiza a mensagem existente (ex: status sending → sent)
+            setMessages(prev => prev.map(m =>
+              m.id === payload.new.id ? { ...m, ...formatMsg(payload.new) } : m
+            ));
           }
         )
         .subscribe();
@@ -809,34 +825,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
 
     try {
-      // 1. Envia via backend (WhatsApp + persistência primária)
-      const sendResult = await sendMessage(activeThread.remoteJid, text);
+      // Fase 4: apenas envia — o banco é atualizado pelo backend (Fase 2)
+      // e o Realtime listener reflete a mensagem assim que for inserida.
+      await sendMessage(activeThread.remoteJid, finalMessageText);
 
-      // 2. Safety net: insere diretamente no banco do frontend
-      // Garante persistência mesmo se o backend falhar por race condition no whatsapp_id
-      const frontendMsgId = sendResult?.messageId || sendResult?.key?.id || `front-${Date.now()}`;
-      const { error: msgInsertError } = await supabase.from('messages').upsert({
-        id: frontendMsgId,
-        user_id: userId,
-        thread_id: selectedThreadId,
-        text: finalMessageText,
-        direction: 'outbound',
-        timestamp: Date.now(),
-        created_at: new Date().toISOString(),
-        whatsapp_id: frontendMsgId
-      }, { onConflict: 'id' });
-
-      if (msgInsertError && msgInsertError.code !== '23505') {
-        console.warn('[Inbox] Frontend message persist warning:', msgInsertError.message);
-      }
-
-      // 3. Atualiza thread
+      // Atualiza status da thread para 'human'
       await supabase
         .from('threads')
         .update({ 
           status: 'human',
-          last_message: finalMessageText,
-          last_message_time: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedThreadId);

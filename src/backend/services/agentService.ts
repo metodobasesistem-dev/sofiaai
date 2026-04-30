@@ -318,15 +318,16 @@ export class AgentService {
     // 2. Message Second
     try {
         const messageData: any = {
-         id: messageId, // Agora incluímos o ID original do WhatsApp
+         id: messageId,
          user_id: userId,
          thread_id: threadId,
          text: text,
          direction: direction,
+         status: 'sent',        // ← Fase 3: campo status obrigatório
          timestamp: timestamp,
          audio_url: audioUrl,
-         whatsapp_id: messageId,
-         created_at: new Date(timestamp).toISOString() // Força consistência temporal
+         whatsapp_id: messageId, // id === whatsapp_id sempre neste sistema
+         created_at: new Date(timestamp).toISOString()
        };
  
        if (usage) {
@@ -335,13 +336,12 @@ export class AgentService {
          messageData.cost_brl = usage.cost_brl || 0;
        }
  
-        // Upsert atômico usando 'id' (primary key) como coluna de conflito.
-        // Nota: whatsapp_id possui um índice parcial em produção (WHERE whatsapp_id IS NOT NULL)
-        // que NÃO pode ser usado como ON CONFLICT target (erro 42P10). Como id === whatsapp_id
-        // sempre neste sistema, usar 'id' resolve race conditions igualmente bem.
+        // Upsert atômico usando whatsapp_id — agora seguro pois é UNIQUE CONSTRAINT completo
+        // (Fase 1 converteu o índice parcial em constraint completa).
+        // Race condition entre webhook echo e persistMessage direto é resolvida aqui.
         const { error: mErr } = await supabase
           .from('messages')
-          .upsert(messageData, { onConflict: 'id' });
+          .upsert(messageData, { onConflict: 'whatsapp_id' });
 
         if (mErr) {
           console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
