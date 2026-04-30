@@ -39,7 +39,7 @@ export class NotificationService {
     // Fetch confirmed appointments not yet reminded
     const { data: appts, error } = await supabase
       .from('appointments')
-      .select('*, profiles(notification_phone)')
+      .select('*')
       .eq('status', 'confirmed')
       .eq('reminder_sent', false)
       .gte('data', format(now, 'yyyy-MM-dd'));
@@ -85,7 +85,7 @@ export class NotificationService {
     // 1. Fetch threads in IA mode 
     const { data: threads, error } = await supabase
       .from('threads')
-      .select('*, profiles(id)')
+      .select('*')
       .eq('status', 'ia');
 
     if (error) {
