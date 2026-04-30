@@ -71,8 +71,38 @@ export default function Health() {
 
   useEffect(() => {
     fetchHealth();
-    const interval = setInterval(fetchHealth, 30000); // 30s refresh
-    return () => clearInterval(interval);
+
+    // ── REALTIME SUBSCRIPTION ──────────────────────────────────────────────
+    // Escuta mudanças na tabela sys_health em tempo real
+    const channel = supabase
+      .channel('sys_health_changes')
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'sys_health' }, 
+        (payload) => {
+          console.log('[Health] Realtime update received:', payload);
+          // Atualiza a lista de stats localmente sem precisar de refetch total
+          setStats(prev => {
+            const index = prev.findIndex(s => s.id === (payload.new as any).id);
+            if (index !== -1) {
+              const newStats = [...prev];
+              newStats[index] = payload.new as HealthStatus;
+              return newStats;
+            } else {
+              return [...prev, payload.new as HealthStatus];
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    // Fallback polling (aumentado para 60s)
+    const interval = setInterval(fetchHealth, 60000); 
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, []);
 
   const getStatusColor = (status: string) => {

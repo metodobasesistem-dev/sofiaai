@@ -61,7 +61,9 @@ export default function AdminPanel() {
     llm_provider: 'openai',
     usd_brl_rate: 5.30,
     maintenance_mode: false,
-    allow_signups: true
+    allow_signups: true,
+    admin_notification_phone: '',
+    admin_notification_user_id: ''
   });
   const [financeStats, setFinanceStats] = useState<any>({
     totalCostBrl: 0,
@@ -419,18 +421,63 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    <button 
-                      onClick={handleSaveSettings}
-                      disabled={isActionLoading}
-                      className="w-full py-5 bg-white text-slate-900 rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 group"
-                    >
-                      {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
-                        <>
-                          <CheckCircle2 size={18} /> Salvar Alterações Mestras
-                        </>
-                      )}
-                    </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Monitoring Alerts Card */}
+              <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-sm border border-amber-100">
+                      <Activity size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">Alertas de Monitoramento</h3>
+                      <p className="text-slate-500 text-xs">Configure quem recebe e quem envia os alertas de saúde do sistema.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">WhatsApp de Destino (Admin)</label>
+                      <div className="relative">
+                        <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="Ex: 5511999999999" 
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all"
+                          value={globalSettings.admin_notification_phone || ''}
+                          onChange={(e) => setGlobalSettings({...globalSettings, admin_notification_phone: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">ID do Usuário Remetente (UUID)</label>
+                      <div className="relative">
+                        <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="UUID do usuário que enviará o alerta" 
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all"
+                          value={globalSettings.admin_notification_user_id || ''}
+                          onChange={(e) => setGlobalSettings({...globalSettings, admin_notification_user_id: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={isActionLoading}
+                    className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group"
+                  >
+                    {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
+                      <>
+                        <Shield size={18} /> Salvar Configurações de Alerta
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
