@@ -586,7 +586,8 @@ export default function Layout({
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-50 px-2">
+      <div className={`md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 items-center justify-around z-50 px-2
+        ${(activeTab === 'inbox' && (window.location.search.includes('jid') || window.location.hash.includes('jid'))) ? 'hidden' : 'flex'}`}>
         <button 
           onClick={() => onTabChange('inbox')}
           className={`flex flex-col items-center gap-1 ${activeTab === 'inbox' ? 'text-blue-600' : 'text-slate-400'}`}
