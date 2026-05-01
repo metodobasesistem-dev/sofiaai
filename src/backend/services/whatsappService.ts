@@ -307,9 +307,36 @@ class WhatsAppService {
       const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
       const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       await EvolutionApiService.logout(instanceName);
-      await supabase.from('profiles').update({ whatsapp_status: 'disconnected', whatsapp_qr: null, whatsapp_instance_id: null, updated_at: new Date().toISOString() }).eq('id', userId);
+      // Mantemos o whatsapp_instance_id no banco para permitir reconexão rápida
+      await supabase.from('profiles').update({ 
+        whatsapp_status: 'disconnected', 
+        whatsapp_qr: null, 
+        updated_at: new Date().toISOString() 
+      }).eq('id', userId);
     } catch (error) {
       await this.updateProfileStatus(userId, { status: 'disconnected' });
+    }
+  }
+
+  async deleteInstance(userId: string) {
+    try {
+      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+      
+      // Logout e Deleção na Evolution
+      await EvolutionApiService.logout(instanceName).catch(() => {});
+      await EvolutionApiService.deleteInstance(instanceName).catch(() => {});
+      
+      // Limpeza total no banco
+      await supabase.from('profiles').update({ 
+        whatsapp_status: 'disconnected', 
+        whatsapp_qr: null, 
+        whatsapp_instance_id: null,
+        updated_at: new Date().toISOString() 
+      }).eq('id', userId);
+    } catch (error) {
+      console.error('[WhatsAppService] Error deleting instance:', error);
+      throw error;
     }
   }
 
@@ -342,6 +369,8 @@ class WhatsAppService {
     });
 
     // 2. Atualiza thread com preview da mensagem (sidebar)
+    const { data: contact } = await supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle();
+    
     await supabase.from('threads').upsert({
       id: threadId,
       user_id: userId,
@@ -350,6 +379,7 @@ class WhatsAppService {
       remote_jid: to,
       display_phone: cleanTo,
       agent_name: senderName,
+      contact_name: contact?.nome || 'Cliente'
     }).then(({ error }) => {
       if (error) console.warn('[WhatsAppService] Thread preview update warning:', error.message);
     });
@@ -633,49 +663,35 @@ class WhatsAppService {
 
         if (!profiles) return;
 
+        // --- PARTE A: Sincronização de Status (Instâncias Ativas) ---
         for (const profile of profiles) {
-          const instanceName = profile.whatsapp_instance_id;
-          
+          const instanceName = profile.whatsapp_instance_id!;
           try {
-            // 1. Verificar Status Real vs Banco
             const realStatus = await EvolutionApiService.getInstanceStatus(instanceName);
             const mappedStatus = realStatus.state === 'open' ? 'connected' : (realStatus.state === 'connecting' ? 'connecting' : 'disconnected');
-            
             if (mappedStatus !== profile.whatsapp_status) {
-              console.log(`[WhatsAppService] 🔄 Status mismatch for ${instanceName}: DB=${profile.whatsapp_status}, Real=${mappedStatus}. Syncing...`);
               await this.updateProfileStatus(profile.id, { status: mappedStatus });
             }
-
-            // 2. Garantir Webhook Ativo
-            // Se estiver conectado, reforçamos a configuração do webhook para evitar perda de mensagens
             if (mappedStatus === 'connected') {
-              await EvolutionApiService.setWebhook(instanceName);
+              await EvolutionApiService.setWebhook(instanceName).catch(() => {});
             }
+          } catch (err) {}
+        }
 
-            // 3. Polling de Segurança (Apenas se houver discrepância ou para instâncias ativas)
-            // Isso serve como redundância final
-            if (mappedStatus === 'connected') {
-              const messages = await EvolutionApiService.fetchMessages(instanceName);
-              if (messages && messages.length > 0) {
-                console.log(`[WhatsAppService] 🛡️ Safety Polling: Found ${messages.length} messages for ${instanceName}`);
-                // O processamento aqui já é seguro devido à idempotência do Redis
-                for (const msg of messages) {
-                  const messageId = msg.key?.id;
-                  if (messageId && !msg.key?.fromMe) {
-                    // Trigger manual do processamento via webhook logic (idempotente)
-                    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                    const from = msg.key?.remoteJid;
-                    if (body && from) {
-                       const cleanFrom = from.split('@')[0].replace(/\D/g, '');
-                       await this.triggerAIResponseViaWebhook(profile.id, from, body, msg.pushName || 'User', cleanFrom, messageId);
-                    }
-                  }
-                }
+        // --- PARTE B: Limpeza de Órfãos (Zeladoria) ---
+        // Busca todas as instâncias que existem na Evolution
+        const allEvolutionInstances = await EvolutionApiService.listInstances();
+        if (allEvolutionInstances && Array.isArray(allEvolutionInstances)) {
+          for (const instance of allEvolutionInstances) {
+            const name = instance.instanceName;
+            if (name && name.startsWith('wppai_')) {
+              // Verifica se essa instância pertence a algum usuário no nosso banco
+              const isLinked = profiles.some(p => p.whatsapp_instance_id === name);
+              if (!isLinked) {
+                console.log(`[Maintenance] 🧹 Deleting orphaned instance: ${name}`);
+                await EvolutionApiService.deleteInstance(name).catch(() => {});
               }
             }
-
-          } catch (err) {
-            console.error(`[WhatsAppService] Maintenance error for ${instanceName}:`, err);
           }
         }
       } catch (err) {

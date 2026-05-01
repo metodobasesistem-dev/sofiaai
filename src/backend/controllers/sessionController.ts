@@ -95,12 +95,28 @@ class SessionController {
     }
 
     try {
-      console.log(`[SessionController] Disconnecting session for ${userId}`);
+      console.log(`[SessionController] Disconnecting session (logout) for ${userId}`);
       await whatsappService.logout(userId);
-      res.json({ success: true, message: 'Session disconnected successfully' });
+      res.json({ success: true, message: 'Session logged out successfully (instance kept)' });
     } catch (error: any) {
       console.error('Error disconnecting session:', error);
       res.status(500).json({ error: error.message || 'Failed to disconnect session' });
+    }
+  }
+
+  async deleteSession(req: Request, res: Response) {
+    let { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    try {
+      console.log(`[SessionController] PERMANENTLY DELETING session and instance for ${userId}`);
+      await whatsappService.deleteInstance(userId);
+      res.json({ success: true, message: 'Session and instance deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting session:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete session' });
     }
   }
 }

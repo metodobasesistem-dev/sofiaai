@@ -248,7 +248,10 @@ export class AgentService {
     // 1. Thread UPSERT FIRST
     try {
       const cleanPhone = (displayPhone || threadId.split('_')[1] || '').replace(/\D/g, '');
-      const { data: existingThread } = await supabase.from('threads').select('contact_name, photo_url').eq('id', threadId).maybeSingle();
+      const [{ data: existingThread }, { data: contact }] = await Promise.all([
+        supabase.from('threads').select('contact_name, photo_url').eq('id', threadId).maybeSingle(),
+        supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
+      ]);
       
       const threadData: any = {
         id: threadId,
@@ -258,14 +261,10 @@ export class AgentService {
         status: 'ia', // Mantemos 'ia' como padrão ou o que vier do DB
         remote_jid: remoteJid || `${cleanPhone}@c.us`,
         display_phone: cleanPhone,
-        agent_name: agentName || 'Sofia'
+        agent_name: agentName || 'Sofia',
+        contact_name: contact?.nome || contactName || existingThread?.contact_name || 'Cliente'
       };
 
-      // Só atualiza o nome do contato se for mensagem recebida OU se o nome atual estiver vazio/padrão
-      if (direction === 'inbound' || !existingThread?.contact_name || existingThread.contact_name === 'Cliente' || existingThread.contact_name === 'Lead WhatsApp' || existingThread.contact_name === 'Você') {
-        threadData.contact_name = contactName || existingThread?.contact_name || 'Cliente';
-      }
-      
       const { error: tErr } = await supabase.from('threads').upsert(threadData);
       
       // Sincronizar foto de perfil se for novo ou não tiver foto

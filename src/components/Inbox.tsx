@@ -370,6 +370,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [contacts, setContacts] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -455,6 +456,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         if (error) throw error;
         if (contactsError) console.warn('[Inbox] Contacts fetch warning:', contactsError);
 
+        if (contactsData) {
+          setContacts(contactsData);
+        }
+
         if (data) {
           const formatted = data.map(d => {
             const jid = d.remote_jid || '';
@@ -472,7 +477,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             
             return {
               id: d.id,
-              name: d.contact_name || 'Lead WhatsApp',
+              name: contact?.nome || d.contact_name || 'Lead WhatsApp',
               lastMessage: d.last_message || '',
               time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
               status: (d.status as any) || 'ia',

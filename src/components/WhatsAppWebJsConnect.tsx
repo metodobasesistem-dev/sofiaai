@@ -225,12 +225,17 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     if (status === 'connected') {
       try {
         setLoading(true);
-        const { disconnectWhatsApp } = await import('../services/whatsappService');
-        await disconnectWhatsApp();
+        const res = await fetch('/api/sessions/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        });
+        if (!res.ok) throw new Error('Falha ao desconectar');
+
         updateStatus('disconnected', null);
         setPairingCode(null);
         stopPolling();
-        toast.success('WhatsApp desconectado com sucesso.');
+        toast.success('WhatsApp desconectado (Instância mantida).');
       } catch (error: any) {
         toast.error(error.message || 'Erro ao desconectar');
       } finally {
@@ -273,6 +278,34 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     } catch (error: any) {
       updateStatus('disconnected', null);
       toast.error(error.message || 'Falha ao conectar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Permanent Removal ───────────────────────────────────────────────────
+  const handleRemoveInstance = async () => {
+    if (!userId) return;
+    if (!window.confirm('ATENÇÃO: Isso irá deletar permanentemente a instância na Evolution API. Você precisará reconfigurar tudo se quiser voltar. Deseja continuar?')) return;
+
+    setLoading(true);
+    const toastId = toast.loading('Removendo instância definitivamente...');
+
+    try {
+      const res = await fetch('/api/sessions/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!res.ok) throw new Error('Falha ao remover instância');
+
+      updateStatus('disconnected', null);
+      setPairingCode(null);
+      stopPolling();
+      toast.success('Conexão e Instância removidas com sucesso! 🧹', { id: toastId });
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao remover', { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -484,14 +517,24 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <><RefreshCw size={18} /> Sincronizar Conexão</>}
               </button>
 
-              <button
-                onClick={handleConnect}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-[10px] font-bold text-red-400 hover:text-red-600 transition-all disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="animate-spin" size={12} /> : <><PhoneOff size={12} /> Desconectar Dispositivo</>}
-              </button>
-            </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <button
+                    onClick={handleConnect}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[10px] font-bold bg-gray-50 text-gray-500 hover:bg-gray-100 transition-all disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 className="animate-spin" size={12} /> : <><PhoneOff size={12} /> Desconectar</>}
+                  </button>
+
+                  <button
+                    onClick={handleRemoveInstance}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[10px] font-bold text-red-400 hover:bg-red-50 transition-all disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 className="animate-spin" size={12} /> : <><XCircle size={12} /> Remover Tudo</>}
+                  </button>
+                </div>
+              </div>
           ) : (
             <button
               onClick={method === 'qr' ? handleConnect : handlePairingCode}
