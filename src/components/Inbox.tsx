@@ -34,7 +34,8 @@ import {
   CheckCircle2,
   Bookmark,
   LayoutDashboard,
-  BarChart3
+  BarChart3,
+  Layers
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -47,6 +48,7 @@ import { listQuickReplies, type QuickReply, listProfessionals, type Professional
 import Contacts from './Contacts';
 import KanbanBoard from './KanbanBoard';
 import ReportsDashboard from './ReportsDashboard';
+import Integrations from './Integrations';
 
 interface Thread {
   id: string;
@@ -233,81 +235,43 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
 const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void }> = ({ thread, active, onClick }) => (
   <div 
     onClick={onClick}
-    className={`p-3.5 flex items-start gap-3 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
-      ${active ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}
+    className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative
+      ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
   >
-    {active && (
-      <motion.div 
-        layoutId="activeContactIndicator"
-        className="absolute inset-y-0 left-0 w-1 bg-blue-600 rounded-r-full"
-      />
-    )}
-    <div className={`w-11 h-11 rounded-full shrink-0 flex items-center justify-center text-white font-bold text-sm overflow-hidden relative shadow-sm transition-colors
-      ${thread.status === 'ia' ? 'ring-2 ring-blue-100' : ''}`}
-      style={{ backgroundColor: !thread.photo_url ? getAvatarColor(thread.name) : 'transparent' }}
-    >
-      {thread.photo_url ? (
-        <img src={thread.photo_url} alt={thread.name} className="w-full h-full object-cover" />
-      ) : (
-        getInitials(thread.name)
-      )}
+    <div className="relative shrink-0">
+      <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden shadow-sm"
+        style={{ backgroundColor: !thread.photo_url ? getAvatarColor(thread.name) : 'transparent' }}
+      >
+        {thread.photo_url ? (
+          <img src={thread.photo_url} alt={thread.name} className="w-full h-full object-cover" />
+        ) : (
+          getInitials(thread.name)
+        )}
+      </div>
       {thread.status === 'ia' && (
-        <div className="absolute top-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full z-10" />
+        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full z-10" />
       )}
     </div>
+
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-0.5">
-        <h4 className={`text-[13px] font-semibold truncate tracking-tight ${active ? 'text-blue-700' : 'text-slate-900 group-hover:text-blue-600 transition-colors'}`}>
+      <div className="flex items-center justify-between mb-1">
+        <h4 className="text-[15px] font-bold text-slate-900 truncate">
           {thread.name}
         </h4>
-        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap ml-2">
+        <span className={`text-[11px] font-medium ${thread.unreadCount ? 'text-emerald-500' : 'text-slate-400'}`}>
           {thread.time}
         </span>
       </div>
-      <p className={`text-[12px] truncate leading-tight ${active ? 'text-blue-600/70' : 'text-slate-500'}`}>
-        {thread.lastMessage || 'Inicie uma conversa'}
-      </p>
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex gap-1.5 items-center flex-wrap">
-          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider
-            ${thread.status === 'ia' ? 'bg-blue-100/50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-            {thread.status === 'ia' ? (thread.agent_name || 'Robô IA') : 'Humano'}
+      
+      <div className="flex items-center justify-between">
+        <p className="text-[13px] text-slate-500 truncate leading-tight flex-1 mr-2">
+          {thread.lastMessage || 'Inicie uma conversa'}
+        </p>
+        {Boolean(thread.unreadCount) && (
+          <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+            {thread.unreadCount}
           </span>
-          {thread.funilStatus && (
-            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider
-              ${thread.funilStatus === 'Lead' ? 'bg-gray-100 text-gray-600' : 
-                thread.funilStatus === 'Qualificado' ? 'bg-indigo-100/50 text-indigo-700' : 
-                'bg-emerald-100/50 text-emerald-700'}`}>
-              {thread.funilStatus}
-            </span>
-          )}
-          {thread.priority && thread.priority !== 'normal' && (
-            <span className="text-[10px]" title={`Prioridade: ${thread.priority}`}>
-              {thread.priority === 'urgent' ? '🔥' : thread.priority === 'high' ? '🔴' : '🟢'}
-            </span>
-          )}
-          {thread.labels && thread.labels.length > 0 && (
-            <div className="flex gap-0.5 items-center ml-1">
-              {thread.labels.slice(0, 3).map((l, i) => (
-                 <span key={i} className="w-1.5 h-1.5 rounded-full bg-blue-500" title={l} />
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {(thread.unreadCount ?? 0) > 0 && (
-            <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center">
-              {thread.unreadCount}
-            </span>
-          )}
-          <button 
-            onClick={(e) => { e.stopPropagation(); (window as any).handleDeleteThread(thread); }}
-            className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all rounded-md hover:bg-red-50"
-            title="Excluir conversa"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
+        )}
       </div>
     </div>
   </div>
@@ -318,42 +282,31 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
   const isPrivate = message.sender === 'private';
   
   return (
-    <div className={`flex flex-col mb-4 ${!isLead ? 'items-end' : 'items-start'} group`}>
-      <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-[13px] leading-relaxed shadow-sm relative transition-all duration-200
+    <div className={`flex flex-col mb-3 ${!isLead ? 'items-end' : 'items-start'}`}>
+      <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[14px] leading-tight shadow-sm relative
         ${isPrivate 
-          ? 'bg-amber-50 text-amber-900 border border-amber-200/60 rounded-tr-none' 
+          ? 'bg-amber-100 text-amber-900 border border-amber-200' 
           : !isLead 
-            ? 'bg-blue-600 text-white rounded-tr-none' 
-            : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
+            ? 'bg-[#dcf8c6] text-[#075e54] rounded-tr-none' 
+            : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'}`}>
         
         {isPrivate && (
-          <div className="flex items-center gap-1.5 mb-1.5 text-amber-600 font-bold text-[10px] uppercase tracking-widest">
-            <Lock size={10} />
-            Nota Privada (Apenas Equipe)
+          <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase">
+            <Lock size={9} /> Nota Privada
           </div>
         )}
         
         {message.audio_url ? (
           <AudioPlayer url={message.audio_url} isOutbound={!isLead} />
         ) : (
-          <p className="whitespace-pre-wrap font-medium">{message.text}</p>
+          <p className="whitespace-pre-wrap">{message.text}</p>
         )}
 
-        <div className={`flex items-center gap-1.5 mt-1.5 text-[9px] font-bold opacity-70 tracking-tight ${isPrivate ? 'text-amber-600/70 justify-end' : (!isLead ? 'text-blue-50 justify-end' : 'text-slate-500')}`}>
+        <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-60 justify-end ${!isLead ? 'text-[#075e54]' : 'text-slate-400'}`}>
           {message.time}
-          {!isLead && !isPrivate && <CheckCheck size={12} className="stroke-[2.5]" />}
+          {!isLead && !isPrivate && <CheckCheck size={14} className="ml-1" />}
         </div>
       </div>
-      
-      {!isLead && !isPrivate && (
-        <div className="flex items-center gap-1 mt-1 mr-1">
-        <div className={`px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider flex items-center gap-1
-            ${message.sender === 'ia' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
-            {message.sender === 'ia' ? <Bot size={9} /> : <User size={9} />}
-            {message.sender === 'ia' ? 'IA Automática' : 'Atendente Real'}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -381,7 +334,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   // Handle JID from URL
@@ -950,11 +903,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
   return (
     <div className={isFullscreen 
-      ? "h-screen w-full bg-white flex overflow-hidden" 
+      ? "h-screen w-full bg-[#f0f2f5] flex overflow-hidden relative" 
       : "h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
     }>
       {isFullscreen && (
-        <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>
+        <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 hidden md:flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold mb-8 shadow-lg shadow-blue-500/20">
             W
           </div>
@@ -1018,6 +971,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         <KanbanBoard user={user} threads={threads} onThreadsChange={setThreads} />
       ) : activeTab === 'reports' ? (
         <ReportsDashboard />
+      ) : activeTab === 'integrations' ? (
+        <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10">
+          <Integrations user={user} role={user?.role || null} />
+        </div>
       ) : activeTab === 'contacts' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10 p-4 md:p-6 lg:p-8">
           <Contacts user={user} role={user?.role || null} onTabChange={(tab, passedPhone) => {
@@ -1128,19 +1085,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <ArrowLeft size={20} />
                 </button>
 
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200/50 overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200/50 overflow-hidden shrink-0">
                   {activeThread.photo_url ? (
                     <img src={activeThread.photo_url} alt={activeThread.name} className="w-full h-full object-cover" />
                   ) : (
-                    <User size={20} />
+                    <div className="w-full h-full flex items-center justify-center text-white" style={{ backgroundColor: getAvatarColor(activeThread.name) }}>
+                      {getInitials(activeThread.name)}
+                    </div>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-[14px] font-bold text-slate-900 leading-tight">{activeThread.name}</h3>
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-bold text-slate-900 leading-tight truncate">{activeThread.name}</h3>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Online via WhatsApp</span>
-                    <span className="text-[9px] text-slate-300 font-mono opacity-50 ml-2">ID: {selectedThreadId.split('_').pop()}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span className="text-[11px] text-slate-500 font-medium truncate">Online via WhatsApp</span>
                   </div>
                 </div>
               </div>
@@ -1229,82 +1187,54 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             )}
 
             {/* Input Area */}
-            <div className="p-4 border-t border-slate-100 bg-white shrink-0 relative">
+            <div className="p-2 border-t border-slate-200 bg-[#f0f2f5] shrink-0 relative">
               {showSlashMenu && (
-                <div className="absolute bottom-[calc(100%+8px)] left-4 w-80 bg-white rounded-xl shadow-[0_0_40px_-10px_rgba(0,0,0,0.15)] border border-slate-200 overflow-hidden z-50">
+                <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[60]">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Bot size={12}/> Comandos Rápidos</span>
-                    <span className="text-[9px] font-medium text-slate-400">Use ↑ ↓ para navegar</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Bot size={12}/> Respostas Rápidas</span>
                   </div>
                   <div className="max-h-56 overflow-y-auto">
-                    {(() => {
-                      const filtered = quickReplies.filter(r => 
-                        r.title.toLowerCase().includes(slashFilter) || r.content.toLowerCase().includes(slashFilter)
-                      ).slice(0, 6);
-                      
-                      if (filtered.length === 0) {
-                        return <div className="p-4 text-center text-xs text-slate-500">Nenhum atalho encontrado</div>;
-                      }
-
-                      return filtered.map((reply, idx) => (
-                        <button
-                          key={reply.id}
-                          type="button"
-                          onClick={() => {
-                            setMessageText(prev => prev.replace(/(?:\s|^)\/[^\s]*$/, ` ${reply.content} `).trimStart());
-                            setShowSlashMenu(false);
-                          }}
-                          className={`w-full text-left px-4 py-3 border-b border-slate-50 last:border-0 transition-all
-                            ${slashIndex === idx ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
-                          onMouseEnter={() => setSlashIndex(idx)}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-[13px] font-bold ${slashIndex === idx ? 'text-blue-700' : 'text-slate-800'}`}>
-                              {reply.title}
-                            </span>
-                            <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Enter ↵</span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 line-clamp-1">{reply.content}</p>
-                        </button>
-                      ));
-                    })()}
+                    {quickReplies.filter(r => 
+                      r.title.toLowerCase().includes(slashFilter) || r.content.toLowerCase().includes(slashFilter)
+                    ).slice(0, 6).map((reply, idx) => (
+                      <button
+                        key={reply.id}
+                        type="button"
+                        onClick={() => {
+                          setMessageText(prev => prev.replace(/(?:\s|^)\/[^\s]*$/, ` ${reply.content} `).trimStart());
+                          setShowSlashMenu(false);
+                        }}
+                        className={`w-full text-left px-4 py-3 border-b border-slate-50 last:border-0 transition-all
+                          ${slashIndex === idx ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                        onMouseEnter={() => setSlashIndex(idx)}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[13px] font-bold ${slashIndex === idx ? 'text-blue-700' : 'text-slate-800'}`}>
+                            {reply.title}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 line-clamp-1">{reply.content}</p>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
-
-              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-              
-              <div className="flex items-end gap-3">
-                <div className="flex flex-col gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()} 
-                    className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-slate-200 shadow-sm bg-white"
-                    title="Anexar arquivo"
-                  >
-                    <Paperclip size={18} />
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)} 
-                    className={`p-2.5 rounded-xl transition-all shadow-sm
-                      ${isPrivateNoteMode ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white text-slate-400 hover:text-amber-600 hover:bg-amber-50 border border-slate-200'}`}
-                    title="Nota Privada (Apenas para equipe)"
-                  >
-                    <Lock size={18} />
-                  </button>
-                  <VoiceRecorder onStop={handleSendVoice} />
-                </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="p-2 text-slate-500 hover:text-blue-600 transition-all"
+                  title="Anexar"
+                >
+                  <Paperclip size={22} />
+                </button>
 
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-                  className={`flex-1 flex items-end gap-3 p-3 rounded-2xl border transition-all shadow-sm
-                    ${isPrivateNoteMode 
-                      ? 'bg-amber-50 border-amber-200 focus-within:border-amber-400 focus-within:bg-amber-50 focus-within:ring-4 focus-within:ring-amber-100' 
-                      : 'bg-slate-50 border-slate-200 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50'}`}
+                  className="flex-1 flex items-center gap-2 bg-white rounded-full px-4 py-1 border border-slate-200"
                 >
                   <textarea 
-                    rows={2} 
+                    rows={1} 
                     value={messageText} 
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1319,55 +1249,36 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       }
                     }} 
                     onKeyDown={(e) => { 
-                      if (showSlashMenu) {
-                        const filtered = quickReplies.filter(r => r.title.toLowerCase().includes(slashFilter) || r.content.toLowerCase().includes(slashFilter)).slice(0, 6);
-                        if (filtered.length > 0) {
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            setSlashIndex(prev => (prev + 1) % filtered.length);
-                            return;
-                          }
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            setSlashIndex(prev => (prev - 1 + filtered.length) % filtered.length);
-                            return;
-                          }
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const selected = filtered[slashIndex];
-                            if (selected) {
-                              setMessageText(prev => prev.replace(/(?:\s|^)\/[^\s]*$/, ` ${selected.content} `).trimStart());
-                              setShowSlashMenu(false);
-                            }
-                            return;
-                          }
-                          if (e.key === 'Escape') {
-                            setShowSlashMenu(false);
-                            return;
-                          }
-                        }
-                      }
-
                       if (e.key === 'Enter' && !e.shiftKey) { 
                         e.preventDefault(); 
-                        if (!showSlashMenu) handleSendMessage(); 
+                        handleSendMessage(); 
                       } 
                     }} 
-                    placeholder={isPrivateNoteMode ? "Escreva uma nota privada... (o cliente não verá isso)" : "Escreva sua mensagem... (Digite / para respostas rápidas)"}
-                    className={`flex-1 bg-transparent border-none focus:ring-0 text-[13px] py-2 px-1 resize-none max-h-32 min-h-[48px] leading-relaxed font-medium 
-                      ${isPrivateNoteMode ? 'placeholder-amber-600/50 text-amber-900' : 'placeholder-slate-400 text-slate-700'}`} 
+                    placeholder="Mensagem"
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] py-2 resize-none max-h-32 min-h-[40px]" 
                   />
+                  <div className="flex items-center gap-1">
+                    <button 
+                      type="button" 
+                      onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)} 
+                      className={`p-1.5 transition-all ${isPrivateNoteMode ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <Lock size={18} />
+                    </button>
+                  </div>
+                </form>
+
+                {messageText.trim() ? (
                   <button 
                     type="submit" 
-                    className={`p-2.5 rounded-xl transition-all duration-300 flex items-center justify-center
-                      ${messageText.trim() 
-                        ? (isPrivateNoteMode ? 'bg-amber-600 text-white shadow-md shadow-amber-200' : 'bg-blue-600 text-white shadow-md shadow-blue-200') 
-                        : 'bg-slate-200 text-white opacity-50 cursor-not-allowed'}`} 
-                    disabled={!messageText.trim()}
+                    onClick={handleSendMessage}
+                    className="w-11 h-11 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-md shrink-0"
                   >
-                    <Send size={18} />
+                    <Send size={18} className="ml-0.5" />
                   </button>
-                </form>
+                ) : (
+                  <VoiceRecorder onStop={handleSendVoice} />
+                )}
               </div>
             </div>
           </>
@@ -1632,6 +1543,43 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         </motion.div>
       )}
       </>
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      {isFullscreen && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-50 px-2">
+          <button 
+            onClick={() => { setActiveTab('conversations'); setSelectedThreadId(null); }}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'conversations' ? 'text-blue-600' : 'text-slate-400'}`}
+          >
+            <MessageCircle size={24} fill={activeTab === 'conversations' ? 'currentColor' : 'none'} className={activeTab === 'conversations' ? 'opacity-20' : ''} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Conversas</span>
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('contacts')}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-blue-600' : 'text-slate-400'}`}
+          >
+            <Users size={24} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Contatos</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('integrations')}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-blue-600' : 'text-slate-400'}`}
+          >
+            <Layers size={24} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Integrações</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('reports')}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-blue-600' : 'text-slate-400'}`}
+          >
+            <BarChart3 size={24} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Analytics</span>
+          </button>
+        </div>
       )}
     </div>
   );

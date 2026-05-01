@@ -396,7 +396,7 @@ export default function Layout({
                   </div>
                   <span>WppAI</span>
                 </div>
-                <button onClick={() => setMobileMenuOpen(false)} className="text-gray-400 hover:text-gray-900">
+                <button onClick={() => setMobileMenuOpen(false)} className="hidden">
                   <X size={24} />
                 </button>
               </div>
@@ -583,6 +583,41 @@ export default function Layout({
             {children}
           </div>
         </main>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-50 px-2">
+        <button 
+          onClick={() => onTabChange('inbox')}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'inbox' ? 'text-blue-600' : 'text-slate-400'}`}
+        >
+          <MessageSquare size={22} fill={activeTab === 'inbox' ? 'currentColor' : 'none'} className={activeTab === 'inbox' ? 'opacity-20' : ''} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Conversas</span>
+        </button>
+        
+        <button 
+          onClick={() => onTabChange('contacts')}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-blue-600' : 'text-slate-400'}`}
+        >
+          <Users size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Contatos</span>
+        </button>
+
+        <button 
+          onClick={() => onTabChange('integrations')}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-blue-600' : 'text-slate-400'}`}
+        >
+          <Layers size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Integrações</span>
+        </button>
+
+        <button 
+          onClick={() => onTabChange('overview')}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'overview' ? 'text-blue-600' : 'text-slate-400'}`}
+        >
+          <BarChart3 size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Analytics</span>
+        </button>
       </div>
     </div>
   );
