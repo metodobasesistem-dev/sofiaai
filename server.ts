@@ -97,7 +97,7 @@ async function startServer() {
   app.get('/api/v2/public-settings', async (req, res) => {
     try {
       const { data, error } = await supabase.from('global_settings')
-        .select('allow_signups')
+        .select('allow_signups, support_whatsapp')
         .limit(1)
         .maybeSingle();
       

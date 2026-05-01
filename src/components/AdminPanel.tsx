@@ -26,7 +26,9 @@ import {
   Server,
   Lock,
   ArrowRight,
-  Info
+  Info,
+  Smartphone,
+  Save
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity } from '../services/supabaseService';
@@ -64,7 +66,8 @@ export default function AdminPanel() {
     maintenance_mode: false,
     allow_signups: true,
     admin_notification_phone: '',
-    admin_notification_user_id: ''
+    admin_notification_user_id: '',
+    support_whatsapp: ''
   });
   const [financeStats, setFinanceStats] = useState<any>({
     totalCostBrl: 0,
@@ -448,6 +451,50 @@ export default function AdminPanel() {
                     </div>
 
                   </div>
+                </div>
+              </div>
+
+              {/* Support Settings Card */}
+              <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm border border-blue-100">
+                      <Smartphone size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">Suporte Técnico</h3>
+                      <p className="text-slate-500 text-xs">Configure o número de WhatsApp para ajudar usuários com dificuldade de login.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 mb-8">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">WhatsApp de Suporte</label>
+                      <div className="relative">
+                        <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="Ex: 5511999999999" 
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all"
+                          value={globalSettings.support_whatsapp || ''}
+                          onChange={(e) => setGlobalSettings({...globalSettings, support_whatsapp: e.target.value})}
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-medium px-1">Este número será usado no link "Falar com o suporte" na tela de login.</p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={isActionLoading}
+                    className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-blue-500/10"
+                  >
+                    {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
+                      <>
+                        <Save size={18} /> Salvar Configuração de Suporte
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 

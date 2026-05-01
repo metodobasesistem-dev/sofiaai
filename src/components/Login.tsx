@@ -37,6 +37,7 @@ export default function Login() {
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [allowSignups, setAllowSignups] = useState(true);
+  const [supportWhatsapp, setSupportWhatsapp] = useState('');
 
   React.useEffect(() => {
     const fetchSettings = async () => {
@@ -44,7 +45,10 @@ export default function Login() {
         const res = await fetch('/api/v2/public-settings');
         const result = await res.json();
         if (result.success) {
-          setAllowSignups(result.data.allow_signups);
+          setAllowSignups(result.data.allow_signups !== false);
+          if (result.data.support_whatsapp) {
+            setSupportWhatsapp(result.data.support_whatsapp);
+          }
         }
       } catch (e) {}
     };
@@ -457,7 +461,20 @@ export default function Login() {
 
         {/* Support Link */}
         <p className="mt-8 text-center text-slate-500 text-xs font-medium">
-          Precisa de ajuda? <button className="text-slate-300 hover:text-white transition-colors underline underline-offset-4">Fale com o suporte</button>
+          Precisa de ajuda? {supportWhatsapp ? (
+            <a 
+              href={`https://wa.me/${supportWhatsapp.replace(/\D/g, '')}?text=Olá, preciso de ajuda com meu login no WppAI.`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-300 hover:text-white transition-colors underline underline-offset-4"
+            >
+              Fale com o suporte
+            </a>
+          ) : (
+            <button className="text-slate-300 hover:text-white transition-colors underline underline-offset-4">
+              Fale com o suporte
+            </button>
+          )}
         </p>
       </motion.div>
     </div>
