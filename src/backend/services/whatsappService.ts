@@ -376,8 +376,8 @@ class WhatsAppService {
 
         if (error) {
           if (error.code === '23505') {
-            // Webhook chegou primeiro — só atualiza o status do registro que já existe
-            await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId);
+            // Webhook chegou primeiro — só atualiza o status do registro que já existe para este usuário
+            await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId).eq('user_id', userId);
             // Neste caso de conflito positivo, podemos deletar a temporária
             await supabase.from('messages').delete().eq('id', tempId);
           } else {

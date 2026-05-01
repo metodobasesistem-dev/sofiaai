@@ -315,7 +315,7 @@ export class AgentService {
         // Race condition entre webhook echo e persistMessage direto é resolvida aqui.
         const { error: mErr } = await supabase
           .from('messages')
-          .upsert(messageData, { onConflict: 'whatsapp_id' });
+          .upsert(messageData, { onConflict: 'whatsapp_id,user_id' });
 
         if (mErr) {
           console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
