@@ -20,6 +20,7 @@ import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'sonner';
+import { useFeatureContext } from './contexts/FeatureFlagContext';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -154,7 +155,9 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  const { isLoading: flagsLoading } = useFeatureContext();
+
+  if (loading || flagsLoading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-50 text-blue-600">
         <Loader2 size={48} className="animate-spin mb-4" />

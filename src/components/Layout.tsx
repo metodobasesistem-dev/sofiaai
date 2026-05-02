@@ -28,8 +28,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
-import { useRef, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
+import { useFeature } from '../contexts/FeatureFlagContext';
+import { useRef, useEffect } from 'react';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -170,13 +171,14 @@ export default function Layout({
       ]
     }] : []),
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
-    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
-    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada', flag: 'chat_basic' },
+    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos', flag: 'crm' },
     { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
     { 
       id: 'agendas', 
       icon: <Calendar size={20} />, 
       label: 'Agendas',
+      flag: 'scheduling',
       subItems: [
         { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
@@ -184,7 +186,7 @@ export default function Layout({
     },
     { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
-  ];
+  ].filter(item => !item.flag || useFeature(item.flag));
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
@@ -703,13 +705,15 @@ export default function Layout({
           <span className="text-[10px] font-bold uppercase tracking-wider">Conversas</span>
         </button>
         
-        <button 
-          onClick={() => onTabChange('contacts')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-blue-600' : 'text-slate-400'}`}
-        >
-          <Users size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Contatos</span>
-        </button>
+        {useFeature('crm') && (
+          <button 
+            onClick={() => onTabChange('contacts')}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-blue-600' : 'text-slate-400'}`}
+          >
+            <Users size={22} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Contatos</span>
+          </button>
+        )}
 
         <button 
           onClick={() => onTabChange('integrations')}

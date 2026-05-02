@@ -29,7 +29,9 @@ import {
   Info,
   Smartphone,
   Save,
-  Star
+  Star,
+  ToggleLeft,
+  ChevronLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity } from '../services/supabaseService';
@@ -37,7 +39,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type AdminTab = 'overview' | 'users' | 'config' | 'billing';
+type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags';
 
 interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
@@ -84,6 +86,44 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     userCosts: {}
   });
   const [activityData, setActivityData] = useState<any[]>([]);
+  const [featureFlags, setFeatureFlags] = useState<any[]>([]);
+
+  const fetchFeatureFlags = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('feature_flags')
+        .select(`
+          *,
+          profiles:updated_by (email)
+        `)
+        .order('label');
+      if (error) throw error;
+      setFeatureFlags(data || []);
+    } catch (err) {
+      console.error('Error fetching flags:', err);
+    }
+  };
+
+  const toggleFeatureFlag = async (key: string, enabled: boolean) => {
+    try {
+      const { data: { user } } = await supabase.auth.getSession();
+      const { error } = await supabase
+        .from('feature_flags')
+        .update({ 
+          enabled: !enabled,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id
+        })
+        .eq('key', key);
+
+      if (error) throw error;
+      toast.success(`Funcionalidade ${!enabled ? 'ativada' : 'desativada'}!`);
+      fetchFeatureFlags();
+    } catch (err) {
+      console.error('Error toggling flag:', err);
+      toast.error('Erro ao atualizar funcionalidade.');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -101,6 +141,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
       if (settingsData) setGlobalSettings(settingsData);
       if (financeData) setFinanceStats(financeData);
       if (activityData) setActivityData(activityData);
+      await fetchFeatureFlags();
     } catch (error: any) {
       console.error('Admin Fetch Error:', error);
       toast.error('Erro ao carregar dados administrativos.');
@@ -150,10 +191,69 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     { id: 'users', label: 'Inquilinos', icon: <Users size={20} /> },
     { id: 'config', label: 'Configurações', icon: <Server size={20} /> },
     { id: 'billing', label: 'Financeiro', icon: <CreditCard size={20} /> },
+    { id: 'flags', label: 'Features', icon: <ToggleLeft size={20} /> },
   ];
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'flags':
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featureFlags.map(flag => (
+                <motion.div 
+                  key={flag.key}
+                  whileHover={{ y: -4 }}
+                  className="bg-white rounded-[2rem] p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:border-teal-100 transition-all flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="flex items-start justify-between mb-6">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
+                        flag.enabled ? 'bg-teal-500 text-white shadow-lg shadow-teal-100' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        <Zap size={24} className={flag.enabled ? 'animate-pulse' : ''} />
+                      </div>
+                      <button 
+                        onClick={() => toggleFeatureFlag(flag.key, flag.enabled)}
+                        className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
+                          flag.enabled ? 'bg-teal-500 shadow-inner' : 'bg-slate-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                          flag.enabled ? 'translate-x-8' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    <h3 className="text-lg font-black text-slate-900 leading-tight mb-2">{flag.label}</h3>
+                    <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6">{flag.description}</p>
+                  </div>
+                  
+                  <div className="pt-6 border-t border-slate-50 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</span>
+                       <span className={`text-[10px] font-black uppercase tracking-widest ${flag.enabled ? 'text-teal-600' : 'text-slate-400'}`}>
+                          {flag.enabled ? 'Ativo' : 'Inativo'}
+                       </span>
+                    </div>
+                    {flag.updated_at && (
+                      <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold italic">
+                        <Activity size={10} />
+                        Modificado {new Date(flag.updated_at).toLocaleDateString('pt-BR')} por {flag.profiles?.email || 'Sistema'}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 text-center relative overflow-hidden">
+               <div className="absolute right-0 top-0 w-32 h-32 bg-teal-500/10 rounded-full blur-3xl"></div>
+               <Shield size={40} className="mx-auto text-teal-500 mb-6" />
+               <h4 className="text-xl font-black text-white mb-2">Controle de Engenharia</h4>
+               <p className="text-sm text-slate-400 max-w-md mx-auto">As Feature Flags permitem habilitar funcionalidades em tempo real para todos os usuários. Use com responsabilidade durante lançamentos faseados.</p>
+            </div>
+          </div>
+        );
       case 'overview':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
@@ -743,6 +843,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
           { id: 'reports', label: 'Relatórios de Uso', icon: <BarChart3 size={24} />, desc: 'Analytics e performance da rede', color: 'bg-indigo-600', tab: 'reports', type: 'external' },
           { id: 'config', label: 'Configurações Globais', icon: <Settings size={24} />, desc: 'API Keys, Modelos e Prompts', color: 'bg-amber-500', tab: 'config', type: 'internal' },
           { id: 'clients', label: 'Carteira Master', icon: <Star size={24} />, desc: 'Visão CRM de toda a base', color: 'bg-pink-500', tab: 'clients', type: 'external' },
+          { id: 'flags_hub', label: 'Funcionalidades', icon: <ToggleLeft size={24} />, desc: 'Feature Flags & Releases', color: 'bg-teal-500', tab: 'flags', type: 'internal' },
           { id: 'billing', label: 'Consumo & Billing', icon: <CreditCard size={24} />, desc: 'Tokens, custos e faturamento', color: 'bg-slate-900', tab: 'billing', type: 'internal' },
         ].map((item) => (
           <motion.div

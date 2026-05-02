@@ -4,10 +4,14 @@ import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
+import { FeatureFlagProvider } from './contexts/FeatureFlagContext.tsx';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <FeatureFlagProvider>
+        <App />
+      </FeatureFlagProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

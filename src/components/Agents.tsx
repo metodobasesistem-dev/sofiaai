@@ -36,6 +36,7 @@ import { supabase } from '../lib/supabase';
 /// <reference types="vite/client" />
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { useFeature } from '../contexts/FeatureFlagContext';
 
 interface AgentCardProps {
   agent: Agent;
@@ -219,6 +220,9 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
 
+  // Feature Flags
+  const hasFollowUpEnabled = useFeature('ai_followup_questions');
+
   const TypingIndicator = () => (
     <div className="flex gap-1.5 p-3 px-4 bg-white border border-slate-200 rounded-2xl w-fit shadow-sm">
       {[0, 1, 2].map(i => (
@@ -366,6 +370,12 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     if (!editingAgent?.id || !tempTranscription.trim()) return;
     
     try {
+      if (!hasFollowUpEnabled) {
+        setShowTranscriptionReview(false);
+        await finalizeEnrichedKnowledge(tempTranscription, []);
+        return;
+      }
+
       setIsAnalyzing(true);
       setShowTranscriptionReview(false);
 
@@ -1387,29 +1397,31 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                               )}
                            </button>
 
-                           <button 
-                             onClick={() => setFormData({...formData, training_mode: 'audio'})}
-                             className={`p-6 rounded-3xl border-2 transition-all text-left flex flex-col gap-3 group ${
-                               formData.training_mode === 'audio' 
-                               ? 'border-indigo-600 bg-indigo-50/30' 
-                               : 'border-slate-100 bg-white hover:border-slate-200'
-                             }`}
-                           >
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-                                formData.training_mode === 'audio' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
-                              }`}>
-                                 <Mic size={24} />
-                              </div>
-                              <div>
-                                 <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'audio' ? 'text-indigo-600' : 'text-slate-400'}`}>Modo Áudio</h4>
-                                 <p className="text-[11px] text-slate-500 font-medium mt-1">Grave sua voz para ensinar o agente sobre seu negócio.</p>
-                              </div>
-                              {formData.training_mode === 'audio' && (
-                                <div className="mt-auto pt-2">
-                                   <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 px-2 py-1 bg-indigo-100 rounded-full">Ativo</span>
+                           {useFeature('agent_training_audio') && (
+                             <button 
+                               onClick={() => setFormData({...formData, training_mode: 'audio'})}
+                               className={`p-6 rounded-3xl border-2 transition-all text-left flex flex-col gap-3 group ${
+                                 formData.training_mode === 'audio' 
+                                 ? 'border-indigo-600 bg-indigo-50/30' 
+                                 : 'border-slate-100 bg-white hover:border-slate-200'
+                               }`}
+                             >
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                                  formData.training_mode === 'audio' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                                }`}>
+                                   <Mic size={24} />
                                 </div>
-                              )}
-                           </button>
+                                <div>
+                                   <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'audio' ? 'text-indigo-600' : 'text-slate-400'}`}>Modo Áudio</h4>
+                                   <p className="text-[11px] text-slate-500 font-medium mt-1">Grave sua voz para ensinar o agente sobre seu negócio.</p>
+                                </div>
+                                {formData.training_mode === 'audio' && (
+                                  <div className="mt-auto pt-2">
+                                     <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 px-2 py-1 bg-indigo-100 rounded-full">Ativo</span>
+                                  </div>
+                                )}
+                             </button>
+                           )}
                         </div>
                      </div>
 
