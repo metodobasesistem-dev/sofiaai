@@ -337,6 +337,27 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
+  // Helper centralizado para resolver o nome do contato via CRM
+  const getResolvedContact = (remoteJid: string, fallbackName: string) => {
+    const phoneNumber = remoteJid.includes('@') ? remoteJid.split('@')[0] : remoteJid;
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    
+    const contact = contacts.find(c => {
+      const contactPhone = c.telefone?.replace(/\D/g, '');
+      if (!contactPhone) return false;
+      const p1 = cleanPhone.replace(/^55/, '');
+      const p2 = contactPhone.replace(/^55/, '');
+      if (p1 === p2) return true;
+      if (p1.length >= 8 && p2.length >= 8) return p1.slice(-8) === p2.slice(-8);
+      return false;
+    });
+
+    return {
+      name: contact?.nome || fallbackName,
+      funilStatus: contact?.status_funil || 'Lead'
+    };
+  };
+
   // Handle JID from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -414,20 +435,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         }
 
         if (data) {
+          const currentContacts = contactsData || [];
           const formatted = data.map(d => {
-            const jid = d.remote_jid || '';
-            const phoneNumber = jid.includes('@') ? jid.split('@')[0] : jid;
-            
-            const contact = contactsData?.find(c => {
+            // Helper local para usar os dados recém-buscados
+            const phoneNumber = (d.remote_jid || '').split('@')[0].replace(/\D/g, '');
+            const contact = currentContacts.find(c => {
               const contactPhone = c.telefone?.replace(/\D/g, '');
               if (!contactPhone) return false;
               const p1 = phoneNumber.replace(/^55/, '');
               const p2 = contactPhone.replace(/^55/, '');
-              if (p1 === p2) return true;
-              if (p1.length >= 8 && p2.length >= 8) return p1.slice(-8) === p2.slice(-8);
-              return false;
+              return p1 === p2 || (p1.length >= 8 && p2.length >= 8 && p1.slice(-8) === p2.slice(-8));
             });
-            
+
             return {
               id: d.id,
               name: contact?.nome || d.contact_name || 'Lead WhatsApp',
@@ -477,12 +496,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           { event: '*', schema: 'public', table: 'threads', filter: `user_id=eq.${userId}` },
           async (payload) => {
             if (payload.eventType === 'INSERT') {
-              // Adiciona novo thread se não existir
               setThreads(prev => {
                 if (prev.some(t => t.id === payload.new.id)) return prev;
+                const resolved = getResolvedContact(payload.new.remote_jid || '', payload.new.contact_name || 'Lead WhatsApp');
                 const newThread = {
                   id: payload.new.id,
-                  name: payload.new.contact_name || 'Lead WhatsApp',
+                  name: resolved.name,
                   lastMessage: payload.new.last_message || '',
                   time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
                   status: payload.new.status,
@@ -492,28 +511,36 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   agent_name: payload.new.agent_name || 'Robô IA',
                   ticketStatus: payload.new.ticket_status || 'open',
                   photo_url: payload.new.photo_url,
-                  assignedTo: payload.new.assigned_to
+                  assignedTo: payload.new.assigned_to,
+                  funilStatus: resolved.funilStatus
                 };
-                return [newThread as any, ...prev].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+                return [newThread as any, ...prev];
               });
             } else if (payload.eventType === 'UPDATE') {
-              // Atualiza apenas o thread específico no estado para manter consistência Header/Sidebar
-              setThreads(prev => prev.map(t => {
-                if (t.id === payload.new.id) {
-                  return {
-                    ...t,
-                    name: payload.new.contact_name || t.name,
-                    lastMessage: payload.new.last_message || t.lastMessage,
-                    status: payload.new.status,
-                    unreadCount: payload.new.unread_count ?? t.unreadCount,
-                    updatedAt: payload.new.updated_at,
-                    ticketStatus: payload.new.ticket_status || t.ticketStatus,
-                    assignedTo: payload.new.assigned_to ?? t.assignedTo,
-                    time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : t.time
-                  };
-                }
-                return t;
-              }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+              // Estratégia Move-to-Top: Remove, atualiza e insere no topo
+              setThreads(prev => {
+                const existingIndex = prev.findIndex(t => t.id === payload.new.id);
+                const baseThread = existingIndex > -1 ? prev[existingIndex] : null;
+                const filtered = prev.filter(t => t.id !== payload.new.id);
+                
+                const resolved = getResolvedContact(payload.new.remote_jid || (baseThread?.remoteJid as string), payload.new.contact_name || (baseThread?.name as string));
+
+                const updatedThread = {
+                  ...(baseThread || {}),
+                  id: payload.new.id,
+                  name: resolved.name,
+                  lastMessage: payload.new.last_message || (baseThread?.lastMessage as string),
+                  status: payload.new.status || (baseThread?.status as any),
+                  unreadCount: payload.new.unread_count ?? (baseThread?.unreadCount as number),
+                  updatedAt: payload.new.updated_at || (baseThread?.updatedAt as string),
+                  ticketStatus: payload.new.ticket_status || (baseThread?.ticketStatus as string),
+                  assignedTo: payload.new.assigned_to ?? (baseThread?.assignedTo as string),
+                  time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time as string),
+                  funilStatus: resolved.funilStatus
+                };
+
+                return [updatedThread as any, ...filtered];
+              });
             } else if (payload.eventType === 'DELETE') {
               setThreads(prev => prev.filter(t => t.id !== payload.old.id));
             }
