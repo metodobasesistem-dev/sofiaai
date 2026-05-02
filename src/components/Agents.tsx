@@ -27,7 +27,8 @@ import {
   Square,
   Pause,
   Upload,
-  Check
+  Check,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
