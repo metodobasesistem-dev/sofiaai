@@ -232,10 +232,10 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
   );
 };
 
-const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void }> = ({ thread, active, onClick }) => (
+const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, onClick, onDelete }) => (
   <div 
     onClick={onClick}
-    className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative
+    className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
       ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
   >
     <div className="relative shrink-0">
@@ -258,9 +258,21 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
         <h4 className="text-[15px] font-bold text-slate-900 truncate">
           {thread.name}
         </h4>
-        <span className={`text-[11px] font-medium ${thread.unreadCount ? 'text-emerald-500' : 'text-slate-400'}`}>
-          {thread.time}
-        </span>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(e);
+            }}
+            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+            title="Excluir conversa"
+          >
+            <Trash size={12} />
+          </button>
+          <span className={`text-[11px] font-medium ${thread.unreadCount ? 'text-emerald-500' : 'text-slate-400'}`}>
+            {thread.time}
+          </span>
+        </div>
       </div>
       
       <div className="flex items-center justify-between">
@@ -1107,6 +1119,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 thread={thread} 
                 active={selectedThreadId === thread.id}
                 onClick={() => setSelectedThreadId(thread.id)}
+                onDelete={() => handleDeleteThread(thread)}
               />
             ))
           )}
@@ -1188,6 +1201,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
                 <div className="hidden sm:flex items-center gap-1">
                   <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Phone size={18} /></button>
+                  <button 
+                    onClick={() => handleDeleteThread(activeThread)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    title="Excluir conversa"
+                  >
+                    <Trash size={18} />
+                  </button>
                   <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"><MoreVertical size={18} /></button>
                 </div>
               </div>
