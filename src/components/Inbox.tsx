@@ -283,7 +283,7 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
   
   return (
     <div className={`flex flex-col mb-3 ${!isLead ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[14px] leading-tight shadow-sm relative
+      <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[14px] leading-tight shadow-sm relative break-words overflow-hidden
         ${isPrivate 
           ? 'bg-amber-100 text-amber-900 border border-amber-200' 
           : !isLead 
@@ -299,7 +299,7 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
         {message.audio_url ? (
           <AudioPlayer url={message.audio_url} isOutbound={!isLead} />
         ) : (
-          <p className="whitespace-pre-wrap">{message.text}</p>
+          <p className="whitespace-pre-wrap break-all">{message.text}</p>
         )}
 
         <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-60 justify-end ${!isLead ? 'text-[#075e54]' : 'text-slate-400'}`}>
