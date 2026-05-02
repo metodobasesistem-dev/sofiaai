@@ -278,4 +278,14 @@ export class EvolutionApiService {
       return null;
     }
   }
+
+  static async setSettings(instanceName: string, settings: any) {
+    const api = getApi();
+    try {
+      await api.post(`/settings/set/${instanceName}`, settings);
+    } catch (error: any) {
+      console.error(`[EvolutionAPI] Error setting settings for ${instanceName}:`, error.response?.data || error.message);
+      throw error;
+    }
+  }
 }

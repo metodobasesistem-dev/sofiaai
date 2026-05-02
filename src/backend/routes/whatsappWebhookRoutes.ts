@@ -56,14 +56,16 @@ router.post('/webhook', async (req, res) => {
 async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any) {
   const { from, body, contactName, id: messageId, fromMe } = message;
   
-  if (fromMe || from.includes('@g.us')) {
-    // Se for echo (fromMe), só persistimos se necessário e encerramos (evita loop de IA)
-    if (fromMe) {
-       const cleanTo = from.split('@')[0].replace(/\D/g, '');
-       await agentService.persistMessage(`${userId}_${cleanTo}`, userId, body, 'outbound', messageId, contactName, from, cleanTo, 'Atendente');
+    if (fromMe || from.includes('@g.us')) {
+      // Se for echo (fromMe), só persistimos se necessário e encerramos (evita loop de IA)
+      if (fromMe) {
+         const cleanTo = from.split('@')[0].replace(/\D/g, '');
+         // FIX: No echo (outbound), não passamos o contactName vindo do webhook, 
+         // pois ele contém o nome do DONO da instância (Natan) e acabaria renomeando o contato.
+         await agentService.persistMessage(`${userId}_${cleanTo}`, userId, body, 'outbound', messageId, undefined, from, cleanTo, 'Atendente');
+      }
+      return;
     }
-    return;
-  }
 
   const cleanPhone = from.split('@')[0].replace(/\D/g, '');
   const threadId = `${userId}_${cleanPhone}`;
