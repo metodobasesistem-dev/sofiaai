@@ -318,6 +318,7 @@ class WhatsAppService {
     const tempId = `sending-${Date.now()}-${cleanTo}`;
     const sendTimestamp = Date.now();
 
+    try {
     // 1. Persiste com status='sending' ANTES de chamar a API
     await supabase.from('messages').insert({
       id: tempId,
