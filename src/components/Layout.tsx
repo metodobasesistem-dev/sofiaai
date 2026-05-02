@@ -565,6 +565,10 @@ export default function Layout({
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  
+                  <div className="mt-4 px-4 pb-2">
+                    <p className="text-[10px] text-gray-300 font-medium text-center">WppAi System v1.0.5</p>
+                  </div>
                 </div>
               </div>
             </motion.aside>
