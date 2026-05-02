@@ -753,10 +753,170 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                   </div>
                 )}
 
+
+
+                {/* --- NEW IMMERSIVE AUDIO TRAINING UI --- */}
+                <AnimatePresence>
+                  {isRecording && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-[100] bg-slate-950/98 backdrop-blur-2xl flex flex-col items-center justify-between py-20 px-6"
+                    >
+                      {/* Top Bar: Timer */}
+                      <motion.div 
+                        initial={{ y: -20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        className="flex flex-col items-center gap-2"
+                      >
+                        <span className="text-teal-500 text-xs font-black uppercase tracking-[0.3em]">Gravando Conhecimento</span>
+                        <span className="text-5xl font-mono font-black text-white tabular-nums">
+                          {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
+                          {(recordingTime % 60).toString().padStart(2, '0')}
+                        </span>
+                      </motion.div>
+
+                      {/* Center: Pulse Microphone */}
+                      <div className="relative">
+                        {/* Multiple Pulse Circles */}
+                        {[1, 2, 3].map((i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ scale: 1, opacity: 0.5 }}
+                            animate={{ scale: 2.5, opacity: 0 }}
+                            transition={{ duration: 2, repeat: Infinity, delay: i * 0.6 }}
+                            className="absolute inset-0 bg-teal-500/20 rounded-full"
+                          />
+                        ))}
+                        
+                        <motion.div 
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ duration: 1, repeat: Infinity }}
+                          className="relative w-32 h-32 bg-teal-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(20,184,166,0.3)] z-10"
+                        >
+                          <Mic size={48} className="text-white" />
+                        </motion.div>
+
+                        {/* Waveform Visualization (Simulated bars) */}
+                        <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 flex items-center gap-1 h-12">
+                          {Array.from({ length: 16 }).map((_, i) => (
+                            <motion.div
+                              key={i}
+                              animate={{ 
+                                height: [8, Math.random() * 40 + 10, 8],
+                              }}
+                              transition={{ 
+                                duration: 0.4, 
+                                repeat: Infinity, 
+                                delay: i * 0.05 
+                              }}
+                              className="w-1.5 bg-teal-500/50 rounded-full"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Bottom: Stop Button */}
+                      <motion.button
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={stopRecording}
+                        className="w-20 h-20 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/20 group transition-colors"
+                      >
+                        <Square size={24} className="text-white fill-current" />
+                      </motion.button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* --- BOTTOM SHEET FOR REVIEW --- */}
+                <AnimatePresence>
+                  {showTranscriptionReview && (
+                    <div className="fixed inset-0 z-[110] flex items-end justify-center">
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowTranscriptionReview(false)}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                      />
+                      
+                      <motion.div 
+                        initial={{ y: "100%" }}
+                        animate={{ y: 0 }}
+                        exit={{ y: "100%" }}
+                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                        className="relative w-full max-w-lg bg-white rounded-t-[32px] p-8 shadow-2xl z-[120] flex flex-col gap-6"
+                      >
+                        {/* Handle */}
+                        <div className="w-12 h-1.5 bg-gray-200 rounded-full self-center mb-2" />
+                        
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-900 tracking-tight">Revisar Transcrição</h3>
+                          <p className="text-slate-500 text-sm mt-1">O Whisper capturou o áudio abaixo. Edite se necessário.</p>
+                        </div>
+
+                        <div className="relative">
+                          <textarea 
+                            value={tempTranscription}
+                            onChange={(e) => setTempTranscription(e.target.value)}
+                            className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-6 text-[15px] text-slate-800 outline-none focus:border-teal-500/30 transition-all min-h-[200px] leading-relaxed resize-none"
+                            placeholder="Sua fala aparecerá aqui..."
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-3 mt-2">
+                          <button 
+                            onClick={saveTranscription}
+                            disabled={!tempTranscription.trim()}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                          >
+                            <Check size={20} />
+                            Confirmar e Salvar no Agente
+                          </button>
+                          
+                          <button 
+                            onClick={() => setShowTranscriptionReview(false)}
+                            className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all"
+                          >
+                            Descartar
+                          </button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+
+                {/* --- PROCESSING OVERLAY --- */}
+                <AnimatePresence>
+                  {isTranscribing && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-[130] bg-teal-600/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-white text-center"
+                    >
+                      <div className="w-24 h-24 relative mb-6">
+                        <motion.div 
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                          className="w-full h-full border-4 border-white/20 border-t-white rounded-full"
+                        />
+                        <Bot size={40} className="absolute inset-0 m-auto animate-pulse" />
+                      </div>
+                      <h3 className="text-3xl font-black mb-2">Transcrevendo Áudio</h3>
+                      <p className="text-teal-50 opacity-80 max-w-xs">Aguarde um momento enquanto a IA processa o seu conhecimento...</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {activeTab === 'knowledge' && (
                   <div className="space-y-8">
                     {/* Debug Marker */}
-                    <div className="hidden">Rendered Knowledge Tab v2</div>
+                    <div className="hidden">Rendered Knowledge Tab v3</div>
                     
                     <div className="space-y-6">
                       <div className="bg-slate-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
@@ -776,146 +936,79 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                             </div>
                           </div>
 
-                          {!isTranscribing && !showTranscriptionReview && (
-                            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 md:gap-6 mt-8">
-                              {!isRecording ? (
-                                <button 
-                                  onClick={startRecording}
-                                  className="flex items-center justify-center gap-3 px-6 py-3 bg-teal-500 hover:bg-teal-600 rounded-xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-teal-500/20 w-full md:w-auto"
-                                >
-                                  <Circle className="fill-red-500 text-red-500" size={16} />
-                                  Começar a Gravar
-                                </button>
-                              ) : (
-                                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 w-full md:w-auto">
-                                  <button 
-                                    onClick={stopRecording}
-                                    className="flex items-center justify-center gap-3 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl font-bold transition-all animate-pulse w-full md:w-auto"
-                                  >
-                                    <Square size={16} />
-                                    Parar Gravação ({Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')})
-                                  </button>
-                                  <div className="flex gap-1 items-center justify-center">
-                                    {[1, 2, 3, 4, 5].map(i => (
-                                      <motion.div 
-                                        key={i}
-                                        animate={{ height: [8, 16, 8] }}
-                                        transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
-                                        className="w-1 bg-teal-400 rounded-full"
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              <label className="flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all cursor-pointer w-full md:w-auto">
-                                <Upload size={18} />
-                                Enviar Áudio
-                                <input 
-                                  type="file" 
-                                  className="hidden" 
-                                  accept="audio/*" 
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) handleAudioUpload(file);
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          )}
-
-                          {isTranscribing && (
-                            <div className="mt-8 flex flex-col items-center gap-4 py-4 animate-in fade-in zoom-in">
-                              <Loader2 className="animate-spin text-teal-500" size={40} />
-                              <div className="text-center">
-                                <p className="font-bold text-lg">Transcrevendo áudio...</p>
-                                <p className="text-gray-400 text-sm italic">O Whisper está processando sua voz e extraindo conhecimento.</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {showTranscriptionReview && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="mt-8 bg-white/5 border border-white/10 rounded-xl p-6"
+                          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 md:gap-6 mt-8">
+                            <button 
+                              onClick={startRecording}
+                              className="flex items-center justify-center gap-3 px-6 py-4 bg-teal-500 hover:bg-teal-600 rounded-xl font-black transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-teal-500/20 w-full md:w-auto"
                             >
-                              <div className="flex items-center justify-between mb-4">
-                                <h4 className="font-bold text-teal-400 flex items-center gap-2">
-                                  <Volume2 size={18} />
-                                  Transcrição Detectada
-                                </h4>
-                                <div className="flex gap-2">
-                                  <button 
-                                    onClick={() => setShowTranscriptionReview(false)}
-                                    className="px-3 py-1 text-xs text-gray-400 hover:text-white"
-                                  >
-                                    Descartar
-                                  </button>
-                                  <button 
-                                    onClick={saveTranscription}
-                                    className="px-4 py-1.5 bg-teal-500 text-white text-xs font-bold rounded-lg hover:bg-teal-600 flex items-center gap-2"
-                                  >
-                                    <Check size={14} />
-                                    Confirmar e Treinar Agente
-                                  </button>
-                                </div>
-                              </div>
-                              <textarea 
-                                value={tempTranscription}
-                                onChange={(e) => setTempTranscription(e.target.value)}
-                                className="w-full bg-black/20 border border-white/5 rounded-lg p-4 text-sm text-gray-200 outline-none focus:border-teal-500/50 min-h-[150px] resize-none"
-                                placeholder="Revise a transcrição aqui..."
+                              <Circle className="fill-red-500 text-red-500" size={16} />
+                              Começar a Gravar Agora
+                            </button>
+                            
+                            <label className="flex items-center justify-center gap-2 px-6 py-4 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all cursor-pointer w-full md:w-auto">
+                              <Upload size={18} />
+                              Enviar Arquivo de Áudio
+                              <input 
+                                type="file" 
+                                className="hidden" 
+                                accept="audio/*" 
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleAudioUpload(file);
+                                }}
                               />
-                              <p className="text-[10px] text-gray-500 mt-2 italic">
-                                * Você pode editar o texto acima para corrigir nomes próprios ou termos técnicos antes de salvar.
-                              </p>
-                            </motion.div>
-                          )}
+                            </label>
+                          </div>
                         </div>
                       </div>
 
                       {/* Lista de Blocos de Áudio */}
                       {audioKnowledge.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {audioKnowledge.map((item) => (
-                            <div 
-                              key={item.id} 
-                              className={`p-4 rounded-xl border transition-all ${
-                                item.is_active ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-50 border-gray-100 opacity-60'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                  <div className={`p-1.5 rounded-lg ${item.is_active ? 'bg-teal-50 text-teal-600' : 'bg-gray-200 text-gray-500'}`}>
-                                    <Volume2 size={14} />
+                          <AnimatePresence mode="popLayout">
+                            {audioKnowledge.map((item) => (
+                              <motion.div 
+                                layout
+                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                key={item.id} 
+                                className={`p-5 rounded-2xl border transition-all ${
+                                  item.is_active ? 'bg-white border-slate-100 shadow-sm' : 'bg-slate-50 border-slate-50 opacity-60'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`p-2 rounded-xl ${item.is_active ? 'bg-teal-50 text-teal-600' : 'bg-slate-200 text-slate-500'}`}>
+                                      <Volume2 size={16} />
+                                    </div>
+                                    <span className="text-sm font-black text-slate-800 truncate max-w-[150px]">{item.title}</span>
                                   </div>
-                                  <span className="text-xs font-bold text-gray-700 truncate max-w-[150px]">{item.title}</span>
+                                  <div className="flex items-center gap-3">
+                                    <button 
+                                      onClick={() => toggleKnowledgeActive(item)}
+                                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${item.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                    >
+                                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${item.is_active ? 'translate-x-5.5' : 'translate-x-1'}`} />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDeleteKnowledge(item.id)}
+                                      className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <button 
-                                    onClick={() => toggleKnowledgeActive(item)}
-                                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${item.is_active ? 'bg-teal-500' : 'bg-gray-300'}`}
-                                  >
-                                    <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform ${item.is_active ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteKnowledge(item.id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
+                                <p className="text-[13px] text-slate-500 line-clamp-3 leading-relaxed">
+                                  {item.content}
+                                </p>
+                                <div className="mt-4 pt-4 border-t border-slate-50 text-[10px] text-slate-400 flex items-center justify-between">
+                                  <span className="font-medium">{new Date(item.created_at).toLocaleDateString('pt-BR')} às {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                  {item.is_active && <span className="text-emerald-600 font-bold flex items-center gap-1"><CheckCircle2 size={12}/> Ativo no Cérebro</span>}
                                 </div>
-                              </div>
-                              <p className="text-[11px] text-gray-500 line-clamp-3 leading-relaxed">
-                                {item.content}
-                              </p>
-                              <div className="mt-3 text-[9px] text-gray-400 flex items-center justify-between">
-                                <span>{new Date(item.created_at).toLocaleDateString('pt-BR')}</span>
-                                {item.is_active && <span className="text-teal-600 font-bold flex items-center gap-1"><Check size={10}/> Ativo no Cérebro</span>}
-                              </div>
-                            </div>
-                          ))}
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
                         </div>
                       )}
                     </div>
