@@ -283,12 +283,12 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
   
   return (
     <div className={`flex flex-col mb-3 ${!isLead ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[14px] leading-tight shadow-sm relative break-words overflow-hidden
+      <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed shadow-sm relative break-words
         ${isPrivate 
           ? 'bg-amber-100 text-amber-900 border border-amber-200' 
           : !isLead 
             ? 'bg-[#dcf8c6] text-[#075e54] rounded-tr-none' 
-            : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'}`}>
+            : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
         
         {isPrivate && (
           <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase">
@@ -618,7 +618,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           const formatted = data.map(d => ({
             id: d.id,
             text: d.text || '',
-            sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+            sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
             time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
             timestamp: d.created_at,
             audio_url: d.audio_url
@@ -636,7 +636,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       const formatMsg = (d: any) => ({
         id: d.id,
         text: d.text || '',
-        sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+        sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
         time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
         timestamp: d.created_at,
         audio_url: d.audio_url,
