@@ -17,7 +17,8 @@ import {
   Globe,
   Send,
   X,
-  Smartphone
+  Smartphone,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -147,6 +148,31 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
 
   const handleDisconnectWpp = async () => {
     toast.info('Funcionalidade de desconexão em manutenção.');
+  };
+  
+  const handleLogout = async () => {
+    try {
+      // 1. Limpeza total de cookies e localStorage
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('supabase.auth.token') || key.includes('-auth-token')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i];
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substring(0, eqPos) : cookie;
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      }
+      
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('Logout error:', e);
+    } finally {
+      window.location.replace('/');
+    }
   };
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -620,6 +646,26 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     </button>
                   </div>
                 </div>
+              </div>
+              
+              {/* Logout Section */}
+              <div className="bg-red-50 rounded-2xl border border-red-100 p-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
+                    <LogOut size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-red-900">Encerrar Sessão</h3>
+                    <p className="text-sm text-red-600/70">Desconecte sua conta com segurança deste dispositivo.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="px-8 py-3 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 flex items-center gap-2"
+                >
+                  <LogOut size={18} />
+                  Sair da Conta (Logout)
+                </button>
               </div>
             </div>
           )}

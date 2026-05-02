@@ -133,8 +133,17 @@ export default function Layout({
     } catch (e) {
       console.warn('[Logout] Fallback triggered', e);
     } finally {
-      // 3. Força o recarregamento para a tela de login
-      window.location.href = '/'; 
+      // 3. Limpeza total de cookies e estado
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i];
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substring(0, eqPos) : cookie;
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      }
+      
+      // 4. Força o recarregamento total para a raiz
+      window.location.replace('/');
     }
   };
 
@@ -547,10 +556,10 @@ export default function Layout({
                           <div className="h-px bg-gray-50 my-1 mx-2" />
                           <button 
                             onClick={handleLogout}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all"
+                            className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-all border border-red-200 mt-2"
                           >
-                            <LogOut size={18} className="text-gray-400 group-hover:text-red-600" />
-                            Sair do sistema
+                            <LogOut size={18} className="text-red-600" />
+                            Sair da Conta
                           </button>
                         </div>
                       </motion.div>
