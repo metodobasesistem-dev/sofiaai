@@ -267,35 +267,13 @@ class WhatsAppService {
       throw error;
     }
   }
-    } catch (error: any) {
-      throw error;
-    }
-  }
-
-  async logout(userId: string) {
-    try {
-      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
-      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
-      const provider = await WhatsAppProviderFactory.getProvider(userId); await provider.disconnect(instanceName);
-      // Mantemos o whatsapp_instance_id no banco para permitir reconexão rápida
-      await supabase.from('profiles').update({ 
-        whatsapp_status: 'disconnected', 
-        whatsapp_qr: null, 
-        updated_at: new Date().toISOString() 
-      }).eq('id', userId);
-    } catch (error) {
-      await this.updateProfileStatus(userId, { status: 'disconnected' });
-    }
-  }
-
   async deleteInstance(userId: string) {
     try {
       const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
       const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       
-      // Logout e Deleção na Evolution
-      await EvolutionApiService.logout(instanceName).catch(() => {});
-      await EvolutionApiService.deleteInstance(instanceName).catch(() => {});
+      const provider = await WhatsAppProviderFactory.getProvider(userId);
+      await provider.disconnect(instanceName).catch(() => {});
       
       // Limpeza total no banco
       await supabase.from('profiles').update({ 
@@ -307,6 +285,23 @@ class WhatsAppService {
     } catch (error) {
       console.error('[WhatsAppService] Error deleting instance:', error);
       throw error;
+    }
+  }
+
+  async logout(userId: string) {
+    try {
+      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+      const provider = await WhatsAppProviderFactory.getProvider(userId);
+      await provider.disconnect(instanceName);
+
+      await supabase.from('profiles').update({
+        whatsapp_status: 'disconnected',
+        whatsapp_qr: null,
+        updated_at: new Date().toISOString()
+      }).eq('id', userId);
+    } catch (error) {
+      await this.updateProfileStatus(userId, { status: 'disconnected' });
     }
   }
 
