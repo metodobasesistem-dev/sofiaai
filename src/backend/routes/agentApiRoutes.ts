@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { cacheWrap, invalidateCache, cacheKey, TTL } from '../lib/redisCache.js';
 import multer from 'multer';
-import { transcribeAudio } from '../services/aiService.js';
+import { transcribeAudio, analyzeTranscription } from '../services/aiService.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -137,6 +137,25 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('[AgentAPI] DELETE error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/agents/analyze-transcription ───────────────────────────────
+router.post('/analyze-transcription', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { transcription } = req.body;
+
+  if (!transcription) {
+    return res.status(400).json({ success: false, error: 'Transcription is required' });
+  }
+
+  try {
+    console.log(`[AgentAPI] 🔍 Analyzing transcription for user ${userId}...`);
+    const questions = await analyzeTranscription(transcription, userId);
+    res.json({ success: true, data: questions });
+  } catch (err: any) {
+    console.error('[AgentAPI] Analysis error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

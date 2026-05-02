@@ -224,3 +224,71 @@ export async function transcribeAudio(buffer: Buffer, filename: string, userId?:
     return null;
   }
 }
+
+/**
+ * Analyzes a transcription to identify missing business info and generate follow-up questions.
+ */
+export async function analyzeTranscription(transcription: string, userId?: string): Promise<string[]> {
+  const settings = await getAISettings(userId);
+  const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
+  if (!key) return [];
+
+  try {
+    const client = new OpenAI({ apiKey: key });
+    
+    // Fallback prompt se não houver um no banco
+    const defaultPrompt = `Você é um analista de negócios especialista em treinamento de agentes de IA. 
+Sua tarefa é analisar a transcrição de um dono de negócio explicando sua empresa e identificar lacunas CRÍTICAS de informação.
+
+Foque nos seguintes pilares:
+1. Detalhes dos Serviços/Produtos
+2. Preços e Formas de Pagamento
+3. Horários de Atendimento e Localização
+4. Como responder a objeções comuns (ex: "está caro")
+5. Tom de voz desejado (formal, amigável, etc.)
+
+Regras:
+- Identifique o que NÃO foi mencionado ou o que está vago.
+- Gere no MÁXIMO 3 perguntas curtas, diretas e amigáveis para o dono responder e completar o conhecimento.
+- NÃO faça perguntas sobre o que já foi explicado.
+- Se a transcrição já estiver completa, retorne um array vazio [].
+- Retorne APENAS o JSON puro no formato: ["pergunta 1", "pergunta 2"]`;
+
+    const systemPrompt = settings.knowledge_analysis_prompt || defaultPrompt;
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: `Transcrição: "${transcription}"`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.5
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) return [];
+
+    const parsed = JSON.parse(content);
+    // GPT might return { "questions": [...] } or just [...] if we are lucky, 
+    // but with json_object it usually needs a key.
+    // Let's refine the prompt to ensure a key if needed, or handle both.
+    if (Array.isArray(parsed)) return parsed.slice(0, 3);
+    if (parsed.questions && Array.isArray(parsed.questions)) return parsed.questions.slice(0, 3);
+    
+    // Fallback if it returned something else with values as questions
+    const values = Object.values(parsed).find(v => Array.isArray(v)) as string[];
+    if (values) return values.slice(0, 3);
+
+    return [];
+  } catch (error) {
+    console.error('[AIService] Analysis error:', error);
+    return [];
+  }
+}

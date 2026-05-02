@@ -67,7 +67,9 @@ export default function AdminPanel() {
     allow_signups: true,
     admin_notification_phone: '',
     admin_notification_user_id: '',
-    support_whatsapp: ''
+    support_whatsapp: '',
+    knowledge_analysis_prompt: '',
+    updated_at: ''
   });
   const [financeStats, setFinanceStats] = useState<any>({
     totalCostBrl: 0,
@@ -548,6 +550,61 @@ export default function AdminPanel() {
                     {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
                       <>
                         <Shield size={18} /> Salvar Configurações de Alerta
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* System Prompts Card */}
+              <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm border border-indigo-100">
+                      <FileText size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">Prompts do Sistema</h3>
+                      <p className="text-slate-500 text-xs">Configure como a IA processa o conhecimento dos agentes.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 mb-8">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Análise de Lacunas (Áudio/Treinamento)</label>
+                        {globalSettings.updated_at && (
+                          <span className="text-[9px] text-slate-400 font-bold">
+                            Última edição: {new Date(globalSettings.updated_at).toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <textarea 
+                          rows={12}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all font-mono leading-relaxed"
+                          value={globalSettings.knowledge_analysis_prompt || ''}
+                          onChange={(e) => setGlobalSettings({...globalSettings, knowledge_analysis_prompt: e.target.value})}
+                          placeholder="Digite o prompt do sistema aqui..."
+                        />
+                      </div>
+                      <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 flex gap-3">
+                        <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                          <b>Nota explicativa:</b> Este prompt define como a IA analisa as transcrições dos clientes e gera perguntas de refinamento. Edite com cuidado para não quebrar a lógica de retorno JSON.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={isActionLoading}
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-indigo-500/10"
+                  >
+                    {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
+                      <>
+                        <Save size={18} /> Salvar Prompt de Análise
                       </>
                     )}
                   </button>
