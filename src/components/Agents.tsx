@@ -167,7 +167,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'preview' | 'advanced' | 'knowledge'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'preview' | 'advanced' | 'knowledge' | 'voice'>('profile');
 
   // Form State
   const [formData, setFormData] = useState<Partial<Agent>>({
@@ -755,19 +755,24 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
                 {activeTab === 'knowledge' && (
                   <div className="space-y-8">
+                    {/* Debug Marker */}
+                    <div className="hidden">Rendered Knowledge Tab v2</div>
+                    
                     <div className="space-y-6">
-                      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
+                      <div className="bg-slate-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
                         {/* Decorative background element */}
-                        <div className="absolute -right-10 -top-10 w-40 h-40 bg-teal-500/20 rounded-full blur-3xl"></div>
+                        <div className="absolute -right-10 -top-10 w-40 h-40 bg-teal-500/10 rounded-full blur-3xl"></div>
                         
                         <div className="relative z-10">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-teal-500 rounded-lg">
-                              <Mic size={24} />
-                            </div>
-                            <div>
-                              <h3 className="text-xl font-bold">Base de Conhecimento por Áudio</h3>
-                              <p className="text-gray-400 text-sm">Ensine seu agente falando sobre seu negócio.</p>
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                              <div className="p-3 bg-teal-500 rounded-2xl shadow-lg shadow-teal-500/20">
+                                <Mic size={28} className="text-white" />
+                              </div>
+                              <div>
+                                <h3 className="text-xl font-bold text-white">Treinamento por Áudio</h3>
+                                <p className="text-slate-400 text-sm">Grave ou envie áudios para ensinar seu agente.</p>
+                              </div>
                             </div>
                           </div>
 
@@ -1148,6 +1153,24 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                     <div>
                       <h2 className="text-xl font-bold text-gray-900 mb-2">Respostas por Voz</h2>
                       <p className="text-sm text-gray-500 mb-6">Aumente a percepção de valor com respostas de áudio ultra-realistas via OpenAI.</p>
+                      
+                      <div className="mb-8 p-4 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-teal-100 text-teal-600 rounded-lg">
+                            <Mic size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-teal-900">Treinamento por Áudio disponível!</p>
+                            <p className="text-xs text-teal-700">Você também pode treinar o cérebro do agente enviando áudios na aba Conhecimento.</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setActiveTab('knowledge')}
+                          className="px-4 py-2 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition-all"
+                        >
+                          Ir para Treinamento
+                        </button>
+                      </div>
                       
                       <div className="space-y-6">
                         <div>
