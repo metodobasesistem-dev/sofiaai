@@ -2026,7 +2026,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                         ))}
                       </div>
                       <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex gap-3 max-w-2xl">
-                        <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div className="w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">!</div>
                         <p className="text-xs text-amber-800 leading-relaxed font-medium">
                           <strong>Dica de Segurança:</strong> Recomendamos a Evolution API para testes e MVPs. Para operações de larga escala, considere a API Oficial da Meta para evitar banimentos.
                         </p>
