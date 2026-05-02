@@ -167,8 +167,10 @@ export default function App() {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
+      case 'admin_hub':
+        return <AdminPanel initialView="hub" onTabChange={handleTabChange} />;
       case 'admin':
-        return <AdminPanel />;
+        return <AdminPanel onTabChange={handleTabChange} />;
       case 'reports':
         return <Reports />;
       case 'health':

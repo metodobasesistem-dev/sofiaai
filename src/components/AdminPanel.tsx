@@ -38,7 +38,13 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 type AdminTab = 'overview' | 'users' | 'config' | 'billing';
 
-export default function AdminPanel() {
+interface AdminPanelProps {
+  initialView?: 'hub' | 'standard';
+  onTabChange?: (tab: string) => void;
+}
+
+export default function AdminPanel({ initialView = 'standard', onTabChange }: AdminPanelProps) {
+  const [currentView, setCurrentView] = useState<'hub' | 'standard'>(initialView);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -722,18 +728,84 @@ export default function AdminPanel() {
     }
   };
 
+  const renderHub = () => (
+    <div className="p-6 md:p-10 space-y-10 pb-32 overflow-y-auto h-screen custom-scrollbar">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Administração</h2>
+        <p className="text-slate-500 font-medium">Gestão centralizada da plataforma WppAI.</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[
+          { id: 'overview_global', label: 'Dashboard Global', icon: <Activity size={24} />, desc: 'Status e atividade em tempo real', color: 'bg-blue-600', tab: 'overview', type: 'external' },
+          { id: 'users', label: 'Gestão de Inquilinos', icon: <Users size={24} />, desc: 'Controle de usuários e instâncias', color: 'bg-emerald-600', tab: 'users', type: 'internal' },
+          { id: 'reports', label: 'Relatórios de Uso', icon: <BarChart3 size={24} />, desc: 'Analytics e performance da rede', color: 'bg-indigo-600', tab: 'reports', type: 'external' },
+          { id: 'config', label: 'Configurações Globais', icon: <Settings size={24} />, desc: 'API Keys, Modelos e Prompts', color: 'bg-amber-500', tab: 'config', type: 'internal' },
+          { id: 'clients', label: 'Carteira Master', icon: <Star size={24} />, desc: 'Visão CRM de toda a base', color: 'bg-pink-500', tab: 'clients', type: 'external' },
+          { id: 'billing', label: 'Consumo & Billing', icon: <CreditCard size={24} />, desc: 'Tokens, custos e faturamento', color: 'bg-slate-900', tab: 'billing', type: 'internal' },
+        ].map((item) => (
+          <motion.div
+            key={item.id}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              if (item.type === 'external' && onTabChange) {
+                onTabChange(item.tab);
+              } else {
+                setActiveTab(item.tab as AdminTab);
+                setCurrentView('standard');
+              }
+            }}
+            className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-5 hover:border-indigo-200 transition-all cursor-pointer group"
+          >
+            <div className={`w-16 h-16 rounded-[1.25rem] ${item.color} text-white flex items-center justify-center shadow-lg transition-transform group-hover:scale-110`}>
+              {item.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-black text-lg text-slate-900 leading-tight">{item.label}</h3>
+              <p className="text-[10px] text-slate-400 font-bold truncate uppercase tracking-widest mt-1.5">{item.desc}</p>
+            </div>
+            <ChevronRight size={20} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+          </motion.div>
+        ))}
+      </div>
+      
+      <div className="bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 flex flex-col items-center text-center shadow-2xl relative overflow-hidden">
+        <div className="absolute -right-20 -top-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
+        <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center text-white shadow-sm mb-6 relative z-10">
+           <Shield size={40} />
+        </div>
+        <h4 className="text-xl font-black text-white relative z-10">Segurança da Plataforma</h4>
+        <p className="text-sm text-slate-400 mt-2 max-w-[280px] relative z-10">Acesso restrito ao nível Master. Todas as operações administrativas são monitoradas em tempo real.</p>
+      </div>
+    </div>
+  );
+
+  if (currentView === 'hub') {
+    return renderHub();
+  }
+
   return (
-    <div className="min-h-screen pb-12 animate-in fade-in duration-700">
+    <div className="min-h-screen pb-12 animate-in fade-in duration-700 custom-scrollbar overflow-y-auto">
       {/* Page Header */}
-      <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
-        <div>
-           <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest mb-4 border border-slate-200">
-             Restrito: Administrador
-           </div>
-           <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-             Painel do <span className="text-indigo-600">Ecossistema</span>.
-           </h1>
-           <p className="text-slate-500 mt-2 font-medium">Controle central de instâncias, usuários e provedores de IA.</p>
+      <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 px-2 pt-4">
+        <div className="flex items-center gap-4">
+          {initialView === 'hub' && (
+             <button 
+              onClick={() => setCurrentView('hub')}
+              className="w-12 h-12 rounded-2xl bg-white border border-slate-100 text-slate-400 flex items-center justify-center shadow-sm hover:bg-slate-50 transition-all active:scale-90"
+             >
+                <ChevronLeft size={24} />
+             </button>
+          )}
+          <div>
+             <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest mb-4 border border-slate-200">
+               Restrito: Administrador
+             </div>
+             <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+               Painel do <span className="text-indigo-600">Ecossistema</span>.
+             </h1>
+             <p className="text-slate-500 mt-2 font-medium">Controle central de instâncias, usuários e provedores de IA.</p>
+          </div>
         </div>
         
         {/* Sub-Nav Bar */}

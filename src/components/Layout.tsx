@@ -97,6 +97,7 @@ export default function Layout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [agendasOpen, setAgendasOpen] = useState(true);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -157,13 +158,20 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-    { id: 'admin', icon: <Shield size={20} />, label: 'Painel Admin', adminOnly: true },
-    { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', adminOnly: true },
-    { id: 'overview', icon: <Activity size={20} />, label: 'Visão Geral', adminOnly: true },
+    ...(role === 'admin' ? [{
+      id: 'admin_group',
+      icon: <Shield size={20} />,
+      label: 'Administração',
+      subItems: [
+        { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
+        { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios' },
+        { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
+        { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
+      ]
+    }] : []),
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
-    { id: 'clients', icon: <Star size={20} />, label: 'Carteira', adminOnly: true },
     { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
     { 
       id: 'agendas', 
@@ -176,11 +184,12 @@ export default function Layout({
     },
     { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
-  ].filter(item => !item.adminOnly || role === 'admin');
+  ];
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
       if (id === 'agendas') setAgendasOpen(!agendasOpen);
+      if (id === 'admin_group') setIsAdminOpen(!isAdminOpen);
       return;
     }
     onTabChange(id);
@@ -237,10 +246,15 @@ export default function Layout({
                 collapsed={collapsed}
                 onClick={() => handleTabClick(item.id, !!item.subItems)}
                 hasSubmenu={!!item.subItems}
-                isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                isSubmenuOpen={
+                  item.id === 'agendas' ? agendasOpen : 
+                  item.id === 'admin_group' ? isAdminOpen : false
+                }
               />
               
-              {item.subItems && !collapsed && (item.id === 'agendas' ? agendasOpen : false) && (
+              {item.subItems && !collapsed && (
+                (item.id === 'agendas' ? agendasOpen : item.id === 'admin_group' ? isAdminOpen : false)
+              ) && (
                 <motion.div 
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -447,9 +461,14 @@ export default function Layout({
                       collapsed={false}
                       onClick={() => handleTabClick(item.id, !!item.subItems)}
                       hasSubmenu={!!item.subItems}
-                      isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                      isSubmenuOpen={
+                        item.id === 'agendas' ? agendasOpen : 
+                        item.id === 'admin_group' ? isAdminOpen : false
+                      }
                     />
-                    {item.subItems && (item.id === 'agendas' ? agendasOpen : false) && (
+                    {item.subItems && (
+                      (item.id === 'agendas' ? agendasOpen : item.id === 'admin_group' ? isAdminOpen : false)
+                    ) && (
                       <div className="ml-9 mt-1 space-y-1">
                         {item.subItems.map((sub) => (
                           <div
@@ -707,6 +726,16 @@ export default function Layout({
           <Bot size={22} fill={activeTab === 'agents' ? 'currentColor' : 'none'} className={activeTab === 'agents' ? 'opacity-20' : ''} />
           <span className="text-[10px] font-bold uppercase tracking-wider">Agentes</span>
         </button>
+
+        {role === 'admin' && (
+          <button 
+            onClick={() => onTabChange('admin_hub')}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'admin_hub' ? 'text-indigo-600' : 'text-slate-400'}`}
+          >
+            <Shield size={22} fill={activeTab === 'admin_hub' ? 'currentColor' : 'none'} className={activeTab === 'admin_hub' ? 'opacity-20' : ''} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Admin</span>
+          </button>
+        )}
       </div>
     </div>
   );
