@@ -298,6 +298,11 @@ export class AgentService {
 
     // 2. Message Second
     try {
+        if (!messageId || messageId === '') {
+          console.warn(`[AgentService] ⚠️ Skipping persistence: messageId is empty for thread ${threadId}`);
+          return;
+        }
+
         const messageData: any = {
          id: messageId,
          user_id: userId,
