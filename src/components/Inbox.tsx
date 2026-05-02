@@ -1228,6 +1228,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 >
                   <Paperclip size={22} />
                 </button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  onChange={handleFileUpload} 
+                />
 
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
