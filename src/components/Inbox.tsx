@@ -324,6 +324,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
   const [contacts, setContacts] = useState<any[]>([]);
+  const contactsRef = useRef<any[]>([]);
+  
+  useEffect(() => {
+    contactsRef.current = contacts;
+  }, [contacts]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -342,7 +347,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     const phoneNumber = remoteJid.includes('@') ? remoteJid.split('@')[0] : remoteJid;
     const cleanPhone = phoneNumber.replace(/\D/g, '');
     
-    const contact = contacts.find(c => {
+    // Usamos o ref para garantir que o listener do Realtime sempre tenha os dados mais recentes
+    const currentContacts = contactsRef.current;
+    
+    const contact = currentContacts.find(c => {
       const contactPhone = c.telefone?.replace(/\D/g, '');
       if (!contactPhone) return false;
       const p1 = cleanPhone.replace(/^55/, '');
@@ -517,29 +525,36 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 return [newThread as any, ...prev];
               });
             } else if (payload.eventType === 'UPDATE') {
-              // Estratégia Move-to-Top: Remove, atualiza e insere no topo
               setThreads(prev => {
                 const existingIndex = prev.findIndex(t => t.id === payload.new.id);
-                const baseThread = existingIndex > -1 ? prev[existingIndex] : null;
-                const filtered = prev.filter(t => t.id !== payload.new.id);
+                if (existingIndex === -1) return prev; // Não deve acontecer
                 
-                const resolved = getResolvedContact(payload.new.remote_jid || (baseThread?.remoteJid as string), payload.new.contact_name || (baseThread?.name as string));
+                const baseThread = prev[existingIndex];
+                const resolved = getResolvedContact(payload.new.remote_jid || baseThread.remoteJid, payload.new.contact_name || baseThread.name);
 
                 const updatedThread = {
-                  ...(baseThread || {}),
+                  ...baseThread,
                   id: payload.new.id,
                   name: resolved.name,
-                  lastMessage: payload.new.last_message || (baseThread?.lastMessage as string),
-                  status: payload.new.status || (baseThread?.status as any),
-                  unreadCount: payload.new.unread_count ?? (baseThread?.unreadCount as number),
-                  updatedAt: payload.new.updated_at || (baseThread?.updatedAt as string),
-                  ticketStatus: payload.new.ticket_status || (baseThread?.ticketStatus as string),
-                  assignedTo: payload.new.assigned_to ?? (baseThread?.assignedTo as string),
-                  time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time as string),
+                  lastMessage: payload.new.last_message || baseThread.lastMessage,
+                  status: payload.new.status || baseThread.status,
+                  unreadCount: payload.new.unread_count ?? baseThread.unreadCount,
+                  updatedAt: payload.new.updated_at || baseThread.updatedAt,
+                  ticketStatus: payload.new.ticket_status || baseThread.ticketStatus,
+                  assignedTo: payload.new.assigned_to ?? baseThread.assignedTo,
+                  time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : baseThread.time,
                   funilStatus: resolved.funilStatus
                 };
 
-                return [updatedThread as any, ...filtered];
+                // Bug 1 Fix: Só move para o topo se o updatedAt mudou (nova mensagem ou atividade real)
+                // Se o timestamp for igual, mantemos a posição original
+                if (payload.new.updated_at && payload.new.updated_at !== baseThread.updatedAt) {
+                  const filtered = prev.filter(t => t.id !== payload.new.id);
+                  return [updatedThread as any, ...filtered];
+                } else {
+                  // Apenas atualiza o item sem mudar a ordem
+                  return prev.map(t => t.id === payload.new.id ? updatedThread : t);
+                }
               });
             } else if (payload.eventType === 'DELETE') {
               setThreads(prev => prev.filter(t => t.id !== payload.old.id));
