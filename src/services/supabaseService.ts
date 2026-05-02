@@ -11,6 +11,18 @@ export interface KnowledgeItem {
   createdAt: string;
 }
 
+export interface AgentKnowledge {
+  id: string;
+  user_id: string;
+  agent_id: string;
+  type: 'audio' | 'text' | 'document';
+  title?: string;
+  content: string;
+  metadata?: any;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Agent {
   id?: string;
   userId: string;
@@ -402,6 +414,68 @@ export const deleteAgent = async (agentId: string) => {
 
   const result = await res.json();
   if (!result.success) throw new Error(result.error);
+};
+
+/**
+ * Agent Knowledge (Audio Training)
+ */
+export const listAgentKnowledge = async (agentId: string): Promise<AgentKnowledge[]> => {
+  try {
+    const res = await standardFetch(`/api/v2/agents/${agentId}/knowledge`);
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+    return result.data || [];
+  } catch (err: any) {
+    logSystemError('frontend:knowledge:list', err.message);
+    return [];
+  }
+};
+
+export const createAgentKnowledge = async (agentId: string, data: Partial<AgentKnowledge>) => {
+  const res = await standardFetch(`/api/v2/agents/${agentId}/knowledge`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
+
+export const updateAgentKnowledge = async (agentId: string, knowledgeId: string, data: Partial<AgentKnowledge>) => {
+  const res = await standardFetch(`/api/v2/agents/${agentId}/knowledge/${knowledgeId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+};
+
+export const deleteAgentKnowledge = async (agentId: string, knowledgeId: string) => {
+  const res = await standardFetch(`/api/v2/agents/${agentId}/knowledge/${knowledgeId}`, {
+    method: 'DELETE'
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+};
+
+export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'recording.webm');
+
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token;
+
+  const res = await fetch('/api/v2/agents/transcribe', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.text;
 };
 
 /**

@@ -112,6 +112,13 @@ export class AgentService {
       console.log(`[AgentService] 🧠 Agent found: "${agentData.nome}". Proceeding with AI loop.`);
       activeProfessionals = profsRes || [];
 
+      // 2.1 Load Additional Knowledge Blocks
+      const { data: knowledgeBlocks } = await supabase
+        .from('agent_knowledge')
+        .select('*')
+        .eq('agent_id', agentData.id)
+        .eq('is_active', true);
+
       // 3. Persistent History - Improved Context (Last 20 messages)
       let history = await redisService.getHistory(threadId, 20);
       if (history.length === 0) {
@@ -125,7 +132,7 @@ export class AgentService {
       }
 
       // 5. AI Loop (Process Tools)
-      const systemPrompt = this.buildSystemPrompt(agentData, threadData, activeProfessionals);
+      const systemPrompt = this.buildSystemPrompt(agentData, threadData, activeProfessionals, knowledgeBlocks || []);
       const now = new Date();
       const dateContext = `\n[CONTEXTO TEMPORAL]\nHOJE: ${format(now, 'dd/MM/yyyy')}\nDATA ATUAL: ${format(now, 'yyyy-MM-dd')}\n`;
       const fullPrompt = systemPrompt + dateContext;
@@ -372,7 +379,7 @@ export class AgentService {
     }
   }
 
-  private buildSystemPrompt(agentData: any, threadData: any, professionals: any[]) {
+  private buildSystemPrompt(agentData: any, threadData: any, professionals: any[], additionalKnowledge: any[] = []) {
     const leadName = threadData?.lead_name || null;
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
@@ -385,6 +392,14 @@ export class AgentService {
         if (item.type === 'qa') return `P: ${item.question}\nR: ${item.answer}`;
         return `[UNIDADE DE CONHECIMENTO: ${item.title}]\n${item.content}`;
       }).join('\n\n');
+    }
+
+    // 1.1 Process Additional Knowledge Blocks (New Table)
+    if (additionalKnowledge && additionalKnowledge.length > 0) {
+      const additionalKbOutput = additionalKnowledge.map((item: any) => {
+        return `[CONHECIMENTO ADICIONAL: ${item.title || 'Sem título'}]\n${item.content}`;
+      }).join('\n\n');
+      kbOutput = kbOutput ? `${kbOutput}\n\n${additionalKbOutput}` : additionalKbOutput;
     }
 
     // 2. Process Professionals Info
@@ -642,7 +657,13 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         .eq('is_active', true);
 
       // 2. Prepare System Prompt
-      const systemPrompt = this.buildSystemPrompt(agentData, { lead_name: 'Cliente Teste' }, professionals || []);
+      const { data: knowledgeBlocks } = await supabase
+        .from('agent_knowledge')
+        .select('*')
+        .eq('agent_id', agentData.id)
+        .eq('is_active', true);
+
+      const systemPrompt = this.buildSystemPrompt(agentData, { lead_name: 'Cliente Teste' }, professionals || [], knowledgeBlocks || []);
       const dateContext = `\n[CONTEXTO TEMPORAL/SIMULAÇÃO]\nHOJE: ${format(new Date(), 'dd/MM/yyyy')}\nDATA ATUAL: ${format(new Date(), 'yyyy-MM-dd')}\n`;
       const fullPrompt = systemPrompt + dateContext;
 

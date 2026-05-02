@@ -9,8 +9,11 @@ import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { cacheWrap, invalidateCache, cacheKey, TTL } from '../lib/redisCache.js';
+import multer from 'multer';
+import { transcribeAudio } from '../services/aiService.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // All routes require a valid Supabase JWT
 router.use(requireAuth as any);
@@ -160,6 +163,118 @@ router.post('/simulate-chat', async (req: AuthenticatedRequest, res: Response) =
     }
   } catch (err: any) {
     console.error('[AgentAPI] Simulate chat error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/agents/transcribe ──────────────────────────────────────────
+router.post('/transcribe', upload.single('audio'), async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).json({ success: false, error: 'No audio file provided' });
+  }
+
+  try {
+    console.log(`[AgentAPI] 🎤 Transcribing audio for user ${userId} (${file.size} bytes)`);
+    const transcription = await transcribeAudio(file.buffer, file.originalname, userId);
+    
+    if (!transcription) {
+      throw new Error('Transcription failed');
+    }
+
+    res.json({ success: true, text: transcription });
+  } catch (err: any) {
+    console.error('[AgentAPI] Transcription error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/v2/agents/:id/knowledge ────────────────────────────────────────
+router.get('/:id/knowledge', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const agentId = req.params.id;
+
+  try {
+    const { data, error } = await supabase
+      .from('agent_knowledge')
+      .select('*')
+      .eq('agent_id', agentId)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[AgentAPI] GET knowledge error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/agents/:id/knowledge ───────────────────────────────────────
+router.post('/:id/knowledge', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const agentId = req.params.id;
+
+  try {
+    const { data, error } = await supabase
+      .from('agent_knowledge')
+      .insert({
+        ...req.body,
+        agent_id: agentId,
+        user_id: userId
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json({ success: true, data });
+  } catch (err: any) {
+    console.error('[AgentAPI] POST knowledge error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── PUT /api/v2/agents/:id/knowledge/:knowledgeId ──────────────────────────
+router.put('/:id/knowledge/:knowledgeId', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { knowledgeId } = req.params;
+
+  try {
+    const { error } = await supabase
+      .from('agent_knowledge')
+      .update({
+        ...req.body,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', knowledgeId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[AgentAPI] PUT knowledge error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── DELETE /api/v2/agents/:id/knowledge/:knowledgeId ───────────────────────
+router.delete('/:id/knowledge/:knowledgeId', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { knowledgeId } = req.params;
+
+  try {
+    const { error } = await supabase
+      .from('agent_knowledge')
+      .delete()
+      .eq('id', knowledgeId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[AgentAPI] DELETE knowledge error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

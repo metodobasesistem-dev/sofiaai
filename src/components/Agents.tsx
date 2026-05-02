@@ -20,11 +20,18 @@ import {
   Send,
   RotateCcw,
   Mic,
-  Calendar
+  Calendar,
+  Volume2,
+  Circle,
+  Play,
+  Square,
+  Pause,
+  Upload,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
-import { listAgents, createAgent, updateAgent, toggleAgentStatus, deleteAgent, getCachedAgents, clearAgentFromCache, type Agent, type KnowledgeItem } from '../services/supabaseService';
+import { listAgents, createAgent, updateAgent, toggleAgentStatus, deleteAgent, getCachedAgents, clearAgentFromCache, listAgentKnowledge, createAgentKnowledge, updateAgentKnowledge, deleteAgentKnowledge, transcribeAudio, type Agent, type KnowledgeItem, type AgentKnowledge } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 /// <reference types="vite/client" />
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -186,6 +193,15 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [previewInput, setPreviewInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
 
+  // Audio Training State
+  const [audioKnowledge, setAudioKnowledge] = useState<AgentKnowledge[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showTranscriptionReview, setShowTranscriptionReview] = useState(false);
+  const [tempTranscription, setTempTranscription] = useState('');
+
   const fetchAgents = async () => {
     const timeoutId = setTimeout(() => {
       setIsLoading(false);
@@ -220,6 +236,110 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   useEffect(() => {
     fetchAgents();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (editingAgent?.id && activeTab === 'knowledge') {
+      fetchAudioKnowledge();
+    }
+  }, [editingAgent?.id, activeTab]);
+
+  const fetchAudioKnowledge = async () => {
+    if (!editingAgent?.id) return;
+    try {
+      const data = await listAgentKnowledge(editingAgent.id);
+      setAudioKnowledge(data);
+    } catch (err) {
+      console.error('Error fetching audio knowledge:', err);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        handleAudioUpload(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      const interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      (recorder as any)._interval = interval;
+    } catch (err) {
+      toast.error('Erro ao acessar microfone. Verifique as permissões.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      clearInterval((mediaRecorder as any)._interval);
+      setIsRecording(false);
+    }
+  };
+
+  const handleAudioUpload = async (blob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const text = await transcribeAudio(blob);
+      setTempTranscription(text);
+      setShowTranscriptionReview(true);
+    } catch (err) {
+      toast.error('Erro na transcrição do áudio.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const saveTranscription = async () => {
+    if (!editingAgent?.id || !tempTranscription.trim()) return;
+    
+    try {
+      const newItem = await createAgentKnowledge(editingAgent.id, {
+        type: 'audio',
+        title: `Treinamento via Áudio - ${new Date().toLocaleDateString('pt-BR')}`,
+        content: tempTranscription,
+        is_active: true
+      });
+      setAudioKnowledge([newItem, ...audioKnowledge]);
+      setShowTranscriptionReview(false);
+      setTempTranscription('');
+      toast.success('Conhecimento salvo com sucesso!');
+    } catch (err) {
+      toast.error('Erro ao salvar conhecimento.');
+    }
+  };
+
+  const toggleKnowledgeActive = async (item: AgentKnowledge) => {
+    if (!editingAgent?.id) return;
+    try {
+      await updateAgentKnowledge(editingAgent.id, item.id, { is_active: !item.is_active });
+      setAudioKnowledge(prev => prev.map(k => k.id === item.id ? { ...k, is_active: !k.is_active } : k));
+    } catch (err) {
+      toast.error('Erro ao atualizar status.');
+    }
+  };
+
+  const handleDeleteKnowledge = async (knowledgeId: string) => {
+    if (!editingAgent?.id) return;
+    try {
+      await deleteAgentKnowledge(editingAgent.id, knowledgeId);
+      setAudioKnowledge(prev => prev.filter(k => k.id !== knowledgeId));
+      toast.success('Bloco excluído.');
+    } catch (err) {
+      toast.error('Erro ao excluir bloco.');
+    }
+  };
 
   const handleToggle = async (agentId: string, currentStatus: boolean) => {
     try {
@@ -635,6 +755,168 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
                 {activeTab === 'knowledge' && (
                   <div className="space-y-8">
+                    <div className="space-y-6">
+                      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
+                        {/* Decorative background element */}
+                        <div className="absolute -right-10 -top-10 w-40 h-40 bg-teal-500/20 rounded-full blur-3xl"></div>
+                        
+                        <div className="relative z-10">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 bg-teal-500 rounded-lg">
+                              <Mic size={24} />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold">Base de Conhecimento por Áudio</h3>
+                              <p className="text-gray-400 text-sm">Ensine seu agente falando sobre seu negócio.</p>
+                            </div>
+                          </div>
+
+                          {!isTranscribing && !showTranscriptionReview && (
+                            <div className="flex items-center gap-6 mt-8">
+                              {!isRecording ? (
+                                <button 
+                                  onClick={startRecording}
+                                  className="flex items-center gap-3 px-6 py-3 bg-teal-500 hover:bg-teal-600 rounded-xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-teal-500/20"
+                                >
+                                  <Circle className="fill-red-500 text-red-500" size={16} />
+                                  Começar a Gravar
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-4">
+                                  <button 
+                                    onClick={stopRecording}
+                                    className="flex items-center gap-3 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl font-bold transition-all animate-pulse"
+                                  >
+                                    <Square size={16} />
+                                    Parar Gravação ({Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')})
+                                  </button>
+                                  <div className="flex gap-1 items-center">
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                      <motion.div 
+                                        key={i}
+                                        animate={{ height: [8, 16, 8] }}
+                                        transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+                                        className="w-1 bg-teal-400 rounded-full"
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <label className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all cursor-pointer">
+                                <Upload size={18} />
+                                Enviar Áudio
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="audio/*" 
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleAudioUpload(file);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
+
+                          {isTranscribing && (
+                            <div className="mt-8 flex flex-col items-center gap-4 py-4 animate-in fade-in zoom-in">
+                              <Loader2 className="animate-spin text-teal-500" size={40} />
+                              <div className="text-center">
+                                <p className="font-bold text-lg">Transcrevendo áudio...</p>
+                                <p className="text-gray-400 text-sm italic">O Whisper está processando sua voz e extraindo conhecimento.</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {showTranscriptionReview && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mt-8 bg-white/5 border border-white/10 rounded-xl p-6"
+                            >
+                              <div className="flex items-center justify-between mb-4">
+                                <h4 className="font-bold text-teal-400 flex items-center gap-2">
+                                  <Volume2 size={18} />
+                                  Transcrição Detectada
+                                </h4>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => setShowTranscriptionReview(false)}
+                                    className="px-3 py-1 text-xs text-gray-400 hover:text-white"
+                                  >
+                                    Descartar
+                                  </button>
+                                  <button 
+                                    onClick={saveTranscription}
+                                    className="px-4 py-1.5 bg-teal-500 text-white text-xs font-bold rounded-lg hover:bg-teal-600 flex items-center gap-2"
+                                  >
+                                    <Check size={14} />
+                                    Confirmar e Treinar Agente
+                                  </button>
+                                </div>
+                              </div>
+                              <textarea 
+                                value={tempTranscription}
+                                onChange={(e) => setTempTranscription(e.target.value)}
+                                className="w-full bg-black/20 border border-white/5 rounded-lg p-4 text-sm text-gray-200 outline-none focus:border-teal-500/50 min-h-[150px] resize-none"
+                                placeholder="Revise a transcrição aqui..."
+                              />
+                              <p className="text-[10px] text-gray-500 mt-2 italic">
+                                * Você pode editar o texto acima para corrigir nomes próprios ou termos técnicos antes de salvar.
+                              </p>
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Lista de Blocos de Áudio */}
+                      {audioKnowledge.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {audioKnowledge.map((item) => (
+                            <div 
+                              key={item.id} 
+                              className={`p-4 rounded-xl border transition-all ${
+                                item.is_active ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-50 border-gray-100 opacity-60'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <div className={`p-1.5 rounded-lg ${item.is_active ? 'bg-teal-50 text-teal-600' : 'bg-gray-200 text-gray-500'}`}>
+                                    <Volume2 size={14} />
+                                  </div>
+                                  <span className="text-xs font-bold text-gray-700 truncate max-w-[150px]">{item.title}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    onClick={() => toggleKnowledgeActive(item)}
+                                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${item.is_active ? 'bg-teal-500' : 'bg-gray-300'}`}
+                                  >
+                                    <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform ${item.is_active ? 'translate-x-4.5' : 'translate-x-1'}`} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteKnowledge(item.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-gray-500 line-clamp-3 leading-relaxed">
+                                {item.content}
+                              </p>
+                              <div className="mt-3 text-[9px] text-gray-400 flex items-center justify-between">
+                                <span>{new Date(item.created_at).toLocaleDateString('pt-BR')}</span>
+                                {item.is_active && <span className="text-teal-600 font-bold flex items-center gap-1"><Check size={10}/> Ativo no Cérebro</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="h-px bg-gray-100 my-8"></div>
+
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div>
                         <h2 className="text-xl font-bold text-gray-900">Base de Inteligência</h2>
