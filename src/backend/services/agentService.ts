@@ -889,7 +889,7 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       if (!finalPhotoUrl) {
         const { whatsappService } = await import('./whatsappService.js');
         const instanceName = `wppai_${userId.substring(0, 8)}`;
-        const provider = await WhatsAppProviderFactory.getProvider(dbUserId);
+        const provider = await WhatsAppProviderFactory.getProvider(userId);
         finalPhotoUrl = await provider.fetchProfilePictureUrl(instanceName, remoteJid);
       }
 
