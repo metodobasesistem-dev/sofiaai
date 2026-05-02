@@ -31,7 +31,8 @@ import {
   Smartphone,
   Lock,
   Zap,
-  FileText
+  FileText,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
@@ -627,7 +628,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
         
         // Salva segredos se houver
         if (formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
-          const { data: { user: currentUser } } = await supabase.auth.getSession();
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          const currentUser = currentSession?.user;
           if (currentUser) {
             await saveAgentSecret(editingAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
           }
@@ -659,7 +661,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
         // Salva segredos para novo agente
         if (newAgent?.id && formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
-          const { data: { user: currentUser } } = await supabase.auth.getSession();
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          const currentUser = currentSession?.user;
           if (currentUser) {
             await saveAgentSecret(newAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
           }

@@ -125,6 +125,7 @@ export interface UserProfile {
   openai_api_key?: string;
   gemini_api_key?: string;
   default_ai_model?: string;
+  google_refresh_token?: string;
 }
 
 export interface AvailabilityConfig {
@@ -1180,8 +1181,8 @@ export const listGoogleCalendars = async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
+        client_id: (import.meta as any).env.VITE_GOOGLE_CLIENT_ID || '',
+        client_secret: (import.meta as any).env.VITE_GOOGLE_CLIENT_SECRET || '',
         refresh_token: refreshToken,
         grant_type: 'refresh_token'
       })
