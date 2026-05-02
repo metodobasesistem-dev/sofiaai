@@ -34,7 +34,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret } from '../services/supabaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
