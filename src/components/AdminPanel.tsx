@@ -28,7 +28,8 @@ import {
   ArrowRight,
   Info,
   Smartphone,
-  Save
+  Save,
+  Star
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity } from '../services/supabaseService';
