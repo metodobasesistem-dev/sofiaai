@@ -172,23 +172,24 @@ export class EvolutionProvider implements IWhatsAppProvider {
   transformPayload(payload: any): WhatsAppMessage | null {
     if (payload.event !== 'messages.upsert') return null;
     
-    const message = payload.data?.message;
-    if (!message) return null;
+    const messageData = payload.data;
+    if (!messageData) return null;
 
-    const from = message.key?.remoteJid || '';
-    const body = message.message?.conversation || 
-                 message.message?.extendedTextMessage?.text || 
-                 message.message?.imageMessage?.caption || '';
+    const from = messageData.key?.remoteJid || '';
+    const messageContent = messageData.message;
+    const body = messageContent?.conversation || 
+                 messageContent?.extendedTextMessage?.text || 
+                 messageContent?.imageMessage?.caption || '';
 
     return {
-      id: message.key?.id || '',
+      id: messageData.key?.id || '',
       from: from,
       to: payload.instanceId || '',
       body: body,
-      contactName: payload.data?.pushName,
+      contactName: messageData.pushName,
       isGroup: from.includes('@g.us'),
-      fromMe: !!payload.data?.key?.fromMe,
-      timestamp: message.messageTimestamp || Date.now()
+      fromMe: !!messageData.key?.fromMe,
+      timestamp: messageData.messageTimestamp || Date.now()
     };
   }
 }
