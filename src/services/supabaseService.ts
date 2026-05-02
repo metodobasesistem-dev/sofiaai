@@ -126,6 +126,9 @@ export interface UserProfile {
   gemini_api_key?: string;
   default_ai_model?: string;
   google_refresh_token?: string;
+  whatsapp_provider?: string;
+  whatsapp_provider_config?: any;
+  whatsapp_phone_number_id?: string;
 }
 
 export interface AvailabilityConfig {
@@ -1385,5 +1388,33 @@ export const getDashboardGrowth = async () => {
   return result.data;
 };
 
+
+/**
+ * Tenant Secrets (Vault)
+ */
+export const saveTenantSecret = async (tenantId: string, key: string, value: string) => {
+  const { error } = await supabase
+    .from('tenant_secrets')
+    .upsert({
+      tenant_id: tenantId,
+      secret_key: key,
+      secret_value: value,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'tenant_id,secret_key' });
+
+  if (error) throw error;
+};
+
+export const getTenantSecret = async (tenantId: string, key: string) => {
+  const { data, error } = await supabase
+    .from('tenant_secrets')
+    .select('secret_value')
+    .eq('tenant_id', tenantId)
+    .eq('secret_key', key)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.secret_value || '';
+};
 
 // Force redeploy to clear asset cache - Zyreo Update

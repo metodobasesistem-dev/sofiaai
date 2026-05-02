@@ -1981,54 +1981,15 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
                 {activeTab === 'advanced' && (
                   <div className="space-y-12">
-                    {/* WhatsApp Provider */}
-                    <div className="space-y-6">
-                      <div className="flex items-center gap-2 text-gray-900">
-                        <MessageSquare size={20} className="text-gray-400" />
-                        <h2 className="text-lg font-bold">Infraestrutura de WhatsApp</h2>
+                    {/* WhatsApp Provider - Moved to Tenant Settings */}
+                    <div className="p-8 bg-slate-50 border border-slate-100 rounded-[2rem] flex flex-col items-center text-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-300 shadow-sm">
+                        <Smartphone size={24} />
                       </div>
-                      <p className="text-sm text-gray-500">Escolha o provedor de API para envio de mensagens deste agente.</p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl">
-                        {[
-                          { id: 'evolution', label: 'Evolution API', desc: 'Conexão via QR Code (Baileys)', active: true },
-                          { id: 'uazapi', label: 'UazAPI', desc: 'Instância de alta performance', active: false },
-                          { id: 'meta_official', label: 'API Oficial (Meta)', desc: 'Cloud API Oficial', active: false }
-                        ].map((provider) => (
-                          <button
-                            key={provider.id}
-                            disabled={!provider.active}
-                            type="button"
-                            onClick={() => setFormData({...formData, whatsapp_provider: provider.id as any})}
-                            className={`p-5 rounded-3xl border-2 text-left transition-all relative group flex flex-col gap-2 ${
-                              formData.whatsapp_provider === provider.id 
-                                ? 'border-indigo-600 bg-indigo-50/30' 
-                                : !provider.active 
-                                  ? 'border-slate-50 bg-slate-50/50 opacity-60 cursor-not-allowed'
-                                  : 'border-slate-100 bg-white hover:border-slate-200'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[10px] font-black uppercase tracking-widest ${formData.whatsapp_provider === provider.id ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                {provider.label}
-                              </span>
-                              {!provider.active && (
-                                <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-slate-200 text-slate-500 rounded-full">Em breve</span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{provider.desc}</p>
-                            {formData.whatsapp_provider === provider.id && (
-                              <div className="absolute top-4 right-4 text-indigo-600">
-                                <Check size={16} />
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex gap-3 max-w-2xl">
-                        <div className="w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">!</div>
-                        <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                          <strong>Dica de Segurança:</strong> Recomendamos a Evolution API para testes e MVPs. Para operações de larga escala, considere a API Oficial da Meta para evitar banimentos.
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Configuração de Infraestrutura</h3>
+                        <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">
+                          As configurações de provedor WhatsApp agora são gerenciadas centralmente no Painel Administrativo pelo nível de Inquilino.
                         </p>
                       </div>
                     </div>

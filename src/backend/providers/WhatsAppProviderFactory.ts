@@ -18,28 +18,30 @@ export class WhatsAppProviderFactory {
     }
     
     try {
-      // 2. Fetch the agent's configured provider from DB
-      const { data: agent, error } = await supabase
-        .from('agents')
+      // 2. Fetch the tenant's configured provider from profiles (inquilinos)
+      const { data: profile, error } = await supabase
+        .from('profiles')
         .select('whatsapp_provider')
-        .eq('user_id', userId)
+        .eq('id', userId)
         .maybeSingle();
 
       if (error) throw error;
       
-      // 3. If agent has no provider, check Global Settings
-      let providerKey = agent?.whatsapp_provider;
+      // 3. Resolve provider hierarchy: Tenant -> Global -> Default
+      let providerKey = profile?.whatsapp_provider;
       
       if (!providerKey) {
         const { data: globalSet } = await supabase.from('global_settings').select('whatsapp_provider').limit(1).maybeSingle();
         providerKey = globalSet?.whatsapp_provider || 'evolution';
       }
 
+      console.log(`[WhatsAppProviderFactory] Resolved provider for ${userId}: ${providerKey}`);
+
       switch (providerKey) {
         case 'uazapi':
           return new UazApiProvider();
         case 'meta_official':
-          // Future implementation
+          // Future implementation: MetaProvider
           return new EvolutionProvider(); 
         case 'evolution':
         default:

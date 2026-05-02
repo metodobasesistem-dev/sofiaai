@@ -65,6 +65,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [userActivity, setUserActivity] = useState<any[]>([]);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [metaAccessToken, setMetaAccessToken] = useState('');
 
   const [globalSettings, setGlobalSettings] = useState<any>({
     openai_api_key: '',
@@ -165,6 +166,17 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Buscar segredo da Meta quando selecionar usuário para editar
+  useEffect(() => {
+    if (isEditModalOpen && selectedUser?.id) {
+      getTenantSecret(selectedUser.id, 'meta_access_token')
+        .then(token => setMetaAccessToken(token))
+        .catch(() => setMetaAccessToken(''));
+    } else if (!isEditModalOpen) {
+      setMetaAccessToken('');
+    }
+  }, [isEditModalOpen, selectedUser?.id]);
 
   const filteredProfiles = profiles.filter(p => 
     p.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -1062,6 +1074,82 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                     ))}
                   </div>
                 </div>
+
+                </div>
+
+                {/* WhatsApp Infrastructure Section */}
+                <div className="pt-8 border-t border-slate-100 space-y-6">
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <Smartphone size={20} className="text-indigo-600" />
+                    <h4 className="text-sm font-black uppercase tracking-tight">Infraestrutura WhatsApp</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-3">
+                    {[
+                      { id: 'evolution', label: 'Evolution API', desc: 'QR Code / Baileys', active: true },
+                      { id: 'uazapi', label: 'UazAPI', desc: 'Alta Performance', active: true },
+                      { id: 'meta_official', label: 'API Oficial (Meta)', desc: 'Cloud API Oficial', active: true }
+                    ].map((provider) => (
+                      <button
+                        key={provider.id}
+                        type="button"
+                        onClick={() => setSelectedUser({...selectedUser, whatsapp_provider: provider.id as any})}
+                        className={`p-4 rounded-2xl border-2 text-left transition-all relative group flex flex-col gap-1 ${
+                          selectedUser.whatsapp_provider === provider.id 
+                            ? 'border-indigo-600 bg-indigo-50/30' 
+                            : 'border-slate-100 bg-white hover:border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${selectedUser.whatsapp_provider === provider.id ? 'text-indigo-600' : 'text-slate-400'}`}>
+                            {provider.label}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium">{provider.desc}</p>
+                        {selectedUser.whatsapp_provider === provider.id && (
+                          <div className="absolute top-4 right-4 text-indigo-600">
+                            <CheckCircle2 size={16} />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedUser.whatsapp_provider === 'meta_official' && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4"
+                    >
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Phone Number ID</label>
+                        <input 
+                          type="text"
+                          value={selectedUser.whatsapp_phone_number_id || ''}
+                          onChange={e => setSelectedUser({...selectedUser, whatsapp_phone_number_id: e.target.value})}
+                          placeholder="Ex: 1029384756..."
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none transition-all text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                          Access Token
+                          <Lock size={12} className="text-slate-400" />
+                        </label>
+                        <input 
+                          type="password"
+                          value={metaAccessToken}
+                          onChange={e => setMetaAccessToken(e.target.value)}
+                          placeholder="EAA..."
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none transition-all text-sm"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                  <p className="text-[10px] text-slate-400 italic font-medium">
+                    * Esta configuração sobrescreve o padrão global para este inquilino específico.
+                  </p>
+                </div>
               </div>
 
               <div className="p-10 bg-slate-50 flex gap-4">
@@ -1078,8 +1166,16 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       await updateAdminUser(selectedUser.id, {
                         plano: selectedUser.plano,
                         role: selectedUser.role,
-                        trial_ends_at: selectedUser.trial_ends_at
+                        trial_ends_at: selectedUser.trial_ends_at,
+                        whatsapp_provider: selectedUser.whatsapp_provider,
+                        whatsapp_provider_config: selectedUser.whatsapp_provider_config,
+                        whatsapp_phone_number_id: selectedUser.whatsapp_phone_number_id
                       });
+                      
+                      // Salvar segredo se for Meta
+                      if (selectedUser.whatsapp_provider === 'meta_official' && metaAccessToken) {
+                        await saveTenantSecret(selectedUser.id, 'meta_access_token', metaAccessToken);
+                      }
                       toast.success('Inquilino atualizado!');
                       setIsEditModalOpen(false);
                       fetchData();
