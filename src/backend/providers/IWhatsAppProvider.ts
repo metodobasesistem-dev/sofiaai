@@ -10,6 +10,7 @@ export interface WhatsAppMessage {
   body: string;
   contactName?: string;
   isGroup: boolean;
+  fromMe: boolean;
   timestamp: number;
 }
 

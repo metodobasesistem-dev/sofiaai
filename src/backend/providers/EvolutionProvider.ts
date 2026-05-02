@@ -187,6 +187,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
       body: body,
       contactName: payload.data?.pushName,
       isGroup: from.includes('@g.us'),
+      fromMe: !!payload.data?.key?.fromMe,
       timestamp: message.messageTimestamp || Date.now()
     };
   }
