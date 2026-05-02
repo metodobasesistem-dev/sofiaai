@@ -777,25 +777,25 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                           </div>
 
                           {!isTranscribing && !showTranscriptionReview && (
-                            <div className="flex items-center gap-6 mt-8">
+                            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 md:gap-6 mt-8">
                               {!isRecording ? (
                                 <button 
                                   onClick={startRecording}
-                                  className="flex items-center gap-3 px-6 py-3 bg-teal-500 hover:bg-teal-600 rounded-xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-teal-500/20"
+                                  className="flex items-center justify-center gap-3 px-6 py-3 bg-teal-500 hover:bg-teal-600 rounded-xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-teal-500/20 w-full md:w-auto"
                                 >
                                   <Circle className="fill-red-500 text-red-500" size={16} />
                                   Começar a Gravar
                                 </button>
                               ) : (
-                                <div className="flex items-center gap-4">
+                                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 w-full md:w-auto">
                                   <button 
                                     onClick={stopRecording}
-                                    className="flex items-center gap-3 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl font-bold transition-all animate-pulse"
+                                    className="flex items-center justify-center gap-3 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl font-bold transition-all animate-pulse w-full md:w-auto"
                                   >
                                     <Square size={16} />
                                     Parar Gravação ({Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')})
                                   </button>
-                                  <div className="flex gap-1 items-center">
+                                  <div className="flex gap-1 items-center justify-center">
                                     {[1, 2, 3, 4, 5].map(i => (
                                       <motion.div 
                                         key={i}
@@ -808,7 +808,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                 </div>
                               )}
                               
-                              <label className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all cursor-pointer">
+                              <label className="flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all cursor-pointer w-full md:w-auto">
                                 <Upload size={18} />
                                 Enviar Áudio
                                 <input 
@@ -941,7 +941,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
                           <input 
                             type="file"
                             id="kb-file-upload"
@@ -987,7 +987,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                           />
                           <button 
                             onClick={() => document.getElementById('kb-file-upload')?.click()}
-                            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-50 text-gray-700 transition-all"
+                            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-gray-50 text-gray-700 transition-all w-full md:w-auto"
                           >
                             <Plus size={16} />
                             Importar
@@ -1003,7 +1003,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                               };
                               setFormData({...formData, knowledgeBase: [newItem, ...(formData.knowledgeBase || [])]});
                             }}
-                            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-50 text-gray-700 transition-all"
+                            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-gray-50 text-gray-700 transition-all w-full md:w-auto"
                           >
                             <MessageSquare size={16} />
                             Inserir P&R
@@ -1019,7 +1019,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                               };
                               setFormData({...formData, knowledgeBase: [newItem, ...(formData.knowledgeBase || [])]});
                             }}
-                            className="px-4 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-teal-700 transition-all shadow-md shadow-teal-100"
+                            className="px-4 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-teal-700 transition-all shadow-md shadow-teal-100 w-full md:w-auto"
                           >
                             <Sparkles size={16} />
                             Bloco de Texto

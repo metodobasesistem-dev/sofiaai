@@ -701,11 +701,11 @@ export default function Layout({
         </button>
 
         <button 
-          onClick={() => onTabChange('overview')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'overview' ? 'text-blue-600' : 'text-slate-400'}`}
+          onClick={() => onTabChange('agents')}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'agents' ? 'text-blue-600' : 'text-slate-400'}`}
         >
-          <BarChart3 size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Analytics</span>
+          <Bot size={22} fill={activeTab === 'agents' ? 'currentColor' : 'none'} className={activeTab === 'agents' ? 'opacity-20' : ''} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Agentes</span>
         </button>
       </div>
     </div>
