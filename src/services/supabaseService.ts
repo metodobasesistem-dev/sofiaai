@@ -56,6 +56,19 @@ export interface Agent {
   response_delay?: number;
   training_mode?: 'text' | 'audio';
   whatsapp_provider?: 'evolution' | 'uazapi' | 'meta_official';
+  whatsapp_provider_config?: {
+    phone_number_id?: string;
+    instance_name?: string;
+    [key: string]: any;
+  };
+}
+
+export interface AgentSecret {
+  id?: string;
+  agent_id: string;
+  user_id: string;
+  secret_key: string;
+  secret_value: string;
 }
 
 export interface Professional {
@@ -331,7 +344,9 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
       response_delay: agentData.response_delay || 15,
       knowledge_base: agentData.knowledgeBase,
       follow_ups: agentData.followUps,
-      reminders: agentData.reminders
+      reminders: agentData.reminders,
+      whatsapp_provider: agentData.whatsapp_provider,
+      whatsapp_provider_config: agentData.whatsapp_provider_config
     };
 
     const res = await standardFetch('/api/v2/agents', {
@@ -380,7 +395,9 @@ export const updateAgent = async (agentId: string, agentData: Partial<Agent>) =>
       response_delay: agentData.response_delay,
       knowledge_base: agentData.knowledgeBase,
       follow_ups: agentData.followUps,
-      reminders: agentData.reminders
+      reminders: agentData.reminders,
+      whatsapp_provider: agentData.whatsapp_provider,
+      whatsapp_provider_config: agentData.whatsapp_provider_config
     })
   });
 
@@ -1327,6 +1344,34 @@ export const getAdminActivity = async () => {
   return result.data;
 };
 
+/**
+ * Agent Secrets (Vault)
+ */
+export const saveAgentSecret = async (agentId: string, userId: string, key: string, value: string) => {
+  const { error } = await supabase
+    .from('agent_secrets')
+    .upsert({
+      agent_id: agentId,
+      user_id: userId,
+      secret_key: key,
+      secret_value: value,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'agent_id,secret_key' });
+
+  if (error) throw error;
+};
+
+export const getAgentSecret = async (agentId: string, key: string) => {
+  const { data, error } = await supabase
+    .from('agent_secrets')
+    .select('secret_value')
+    .eq('agent_id', agentId)
+    .eq('secret_key', key)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.secret_value || '';
+};
 export const getDashboardGrowth = async () => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');

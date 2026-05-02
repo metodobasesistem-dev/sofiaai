@@ -28,11 +28,14 @@ import {
   Pause,
   Upload,
   Check,
+  Smartphone,
+  Lock,
+  Zap,
   FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
-import { listAgents, createAgent, updateAgent, toggleAgentStatus, deleteAgent, getCachedAgents, clearAgentFromCache, listAgentKnowledge, createAgentKnowledge, updateAgentKnowledge, deleteAgentKnowledge, transcribeAudio, type Agent, type KnowledgeItem, type AgentKnowledge } from '../services/supabaseService';
+import { listAgents, createAgent, updateAgent, toggleAgentStatus, deleteAgent, getCachedAgents, clearAgentFromCache, listAgentKnowledge, createAgentKnowledge, updateAgentKnowledge, deleteAgentKnowledge, transcribeAudio, saveAgentSecret, getAgentSecret, type Agent, type KnowledgeItem, type AgentKnowledge } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 /// <reference types="vite/client" />
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -220,6 +223,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isKnowledgeEditModalOpen, setIsKnowledgeEditModalOpen] = useState(false);
   const [knowledgeEditContent, setKnowledgeEditContent] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [metaAccessToken, setMetaAccessToken] = useState('');
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
 
   // Feature Flags
@@ -562,8 +566,18 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       appointmentDuration: agent.appointmentDuration || 30,
       response_delay: agent.response_delay || 15,
       voice_mode: agent.voice_mode || 'disabled',
-      voice_id: agent.voice_id || 'alloy'
+      voice_id: agent.voice_id || 'alloy',
+      whatsapp_provider: agent.whatsapp_provider || 'evolution',
+      whatsapp_provider_config: agent.whatsapp_provider_config || {}
     });
+
+    // Buscar segredo se for Meta
+    if (agent.id) {
+      getAgentSecret(agent.id, 'meta_access_token').then(token => {
+        setMetaAccessToken(token);
+      }).catch(() => setMetaAccessToken(''));
+    }
+
     setActiveTab('profile');
     setIsModalOpen(true);
   };
@@ -587,8 +601,11 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       reminders: [{ mode: 'Tempo antes', hoursBefore: 24, message: '', sendAfterTime: false }],
       appointmentDuration: 30,
       voice_mode: 'disabled',
-      voice_id: 'alloy'
+      voice_id: 'alloy',
+      whatsapp_provider: 'evolution',
+      whatsapp_provider_config: {}
     });
+    setMetaAccessToken('');
     setActiveTab('profile');
     setIsModalOpen(true);
   };
@@ -607,9 +624,18 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       
       if (editingAgent?.id) {
         await updateAgent(editingAgent.id, formData);
+        
+        // Salva segredos se houver
+        if (formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
+          const { data: { user: currentUser } } = await supabase.auth.getSession();
+          if (currentUser) {
+            await saveAgentSecret(editingAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
+          }
+        }
+        
         toast.success('Agente atualizado com sucesso!');
       } else {
-        await createAgent({
+        const newAgent = await createAgent({
           nome: formData.nome!,
           nicho: formData.nicho || '',
           prompt_base: formData.prompt_base || '',
@@ -626,8 +652,19 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
           reminders: formData.reminders,
           appointmentDuration: formData.appointmentDuration || 30,
           voice_mode: formData.voice_mode || 'disabled',
-          voice_id: formData.voice_id || 'alloy'
+          voice_id: formData.voice_id || 'alloy',
+          whatsapp_provider: formData.whatsapp_provider || 'evolution',
+          whatsapp_provider_config: formData.whatsapp_provider_config || {}
         });
+
+        // Salva segredos para novo agente
+        if (newAgent?.id && formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
+          const { data: { user: currentUser } } = await supabase.auth.getSession();
+          if (currentUser) {
+            await saveAgentSecret(newAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
+          }
+        }
+
         toast.success('Agente criado com sucesso!');
       }
       
@@ -787,7 +824,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                   { id: 'knowledge', label: 'Conhecimento', icon: MessageSquare },
                   { id: 'voice', label: 'Voz e Áudio', icon: Mic },
                   { id: 'preview', label: 'Teste ao vivo', icon: Eye },
-                  { id: 'advanced', label: 'Automação', icon: Settings },
+                  { id: 'automation', label: 'Automação', icon: Settings },
+                  { id: 'advanced', label: 'Avançado', icon: Settings }
                 ].map(tab => (
                   <button
                     key={tab.id}
