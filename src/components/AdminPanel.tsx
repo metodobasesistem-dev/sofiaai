@@ -563,6 +563,64 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 </div>
               </div>
 
+              {/* WhatsApp Infrastructure Card */}
+              <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm border border-emerald-100">
+                      <MessageSquare size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">Infraestrutura WhatsApp</h3>
+                      <p className="text-slate-500 text-xs">Defina o provedor global de mensagens para toda a plataforma.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    {[
+                      { id: 'evolution', label: 'Evolution API', desc: 'QR Code / Baileys', active: true },
+                      { id: 'uazapi', label: 'UazAPI', desc: 'Alta Performance', active: true },
+                      { id: 'meta_official', label: 'API Oficial (Meta)', desc: 'Cloud API', active: true }
+                    ].map(p => (
+                      <button 
+                        key={p.id}
+                        type="button"
+                        onClick={() => setGlobalSettings({...globalSettings, whatsapp_provider: p.id})}
+                        className={`p-5 rounded-3xl border-2 text-left transition-all relative group flex flex-col gap-2 ${
+                          globalSettings.whatsapp_provider === p.id 
+                            ? 'border-indigo-600 bg-indigo-50/30' 
+                            : 'border-slate-100 bg-white hover:border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Provedor</span>
+                          {globalSettings.whatsapp_provider === p.id && (
+                            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                          )}
+                        </div>
+                        <div>
+                          <p className={`text-sm font-black ${globalSettings.whatsapp_provider === p.id ? 'text-indigo-900' : 'text-slate-700'}`}>{p.label}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-tight">{p.desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[9px] text-slate-400 font-medium px-1 mb-8 italic">
+                    * Esta configuração define qual adaptador o sistema usará para enviar mensagens quando não houver uma configuração específica no agente.
+                  </p>
+
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={isActionLoading}
+                    className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl"
+                  >
+                    {isActionLoading ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                    Salvar Infraestrutura
+                  </button>
+                </div>
+              </div>
+
               {/* Support Settings Card */}
               <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
                 <div className="relative z-10">

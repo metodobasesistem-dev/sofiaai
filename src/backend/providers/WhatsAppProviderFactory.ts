@@ -26,8 +26,14 @@ export class WhatsAppProviderFactory {
         .maybeSingle();
 
       if (error) throw error;
-
-      const providerKey = agent?.whatsapp_provider || 'evolution';
+      
+      // 3. If agent has no provider, check Global Settings
+      let providerKey = agent?.whatsapp_provider;
+      
+      if (!providerKey) {
+        const { data: globalSet } = await supabase.from('global_settings').select('whatsapp_provider').limit(1).maybeSingle();
+        providerKey = globalSet?.whatsapp_provider || 'evolution';
+      }
 
       switch (providerKey) {
         case 'uazapi':
