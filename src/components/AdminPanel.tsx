@@ -1075,8 +1075,6 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   </div>
                 </div>
 
-                </div>
-
                 {/* WhatsApp Infrastructure Section */}
                 <div className="pt-8 border-t border-slate-100 space-y-6">
                   <div className="flex items-center gap-2 text-slate-900">
