@@ -3,181 +3,94 @@ import { agentService } from '../services/agentService.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
-import { EvolutionApiService } from '../services/evolutionApiService.js';
+import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 
 const router = Router();
 
 router.post('/webhook', async (req, res) => {
   const body = req.body;
-  // Evolution v2 pode mandar em 'instance' ou 'instanceName'
+  // Identificador comum de instância (necessário para achar o dono)
   const instanceName = body.instance || body.instanceName || (body.data?.instance) || (body.data?.instanceName);
   const event = body.event;
 
-  console.log(`[WhatsappWebhook] 📩 Event: "${event}" | Instance: "${instanceName}"`);
-  
-  if (!instanceName) {
-    console.warn(`[WhatsappWebhook] ⚠️ No instanceName found in body:`, JSON.stringify(body).substring(0, 500));
-    return res.status(200).send('OK');
-  }
+  if (!instanceName) return res.status(200).send('OK');
 
   try {
-    // RESOLUÇÃO DE USUÁRIO: Buscar o UUID real do usuário pelo whatsapp_instance_id
-    const { data: profile, error: profileErr } = await supabase
+    // 1. Resolve o usuário pelo whatsapp_instance_id
+    const { data: profile } = await supabase
       .from('profiles')
       .select('id')
       .eq('whatsapp_instance_id', instanceName)
       .single();
 
-    if (profileErr || !profile) {
-      console.warn(`[WhatsappWebhook] ⚠️ Could not resolve user UUID for instance "${instanceName}". Skipping event.`);
-      if (profileErr) console.error(`[WhatsappWebhook] DB Error:`, profileErr);
-      return res.status(200).send('OK'); // Retornamos OK para a Evolution não ficar tentando reenviar algo que não achamos dono
+    if (!profile) return res.status(200).send('OK');
+    const userId = profile.id;
+
+    // 2. Obtém o Provider Abstraído
+    const provider = await WhatsAppProviderFactory.getProvider(userId);
+
+    // 3. Traduz o payload proprietário para o formato universal
+    const message = provider.transformPayload(body);
+
+    // 4. Processa se for uma mensagem válida
+    if (message) {
+      await handleStandardizedMessage(userId, instanceName, message, provider);
     }
 
-    const userId = profile.id; // O UUID real (ex: f8a2b1c0-xxxx-xxxx...)
-
-    // Normalizar evento para suportar v1 e v2
-    const normalizedEvent = event.toUpperCase().replace(/\./g, '_');
-
-    switch (normalizedEvent) {
-      case 'MESSAGES_UPSERT':
-        const messageObj = body.data.messages?.[0] || body.data.message || body.data;
-        const msgId = messageObj.key?.id || body.data.key?.id;
-        
-        if (msgId) {
-          // A trava de duplicidade deve ser única por instância
-          const lockKey = `${instanceName}:${msgId}`;
-          const isNew = await (await import('../services/redisService.js')).redisService.markAsProcessed(lockKey);
-          if (!isNew) {
-            console.log(`[WhatsappWebhook] 🛡️ Duplicate message detected and ignored: ${lockKey}`);
-            return res.status(200).send('OK');
-          }
-        }
-        await handleMessageUpsert(userId, instanceName, body.data);
-        break;
-      
-      case 'CONNECTION_UPDATE':
-
-        await handleConnectionUpdate(userId, body.data);
-        break;
-      
-      case 'QRCODE_UPDATED':
-        await handleQrUpdate(userId, body.data);
-        break;
-      
-      case 'MESSAGES_UPDATE':
-      case 'MESSAGES_DELETE':
-        // Eventos informativos, podemos implementar no futuro
-        break;
-
-      default:
-        console.log(`[WhatsappWebhook] Unhandled normalized event: ${normalizedEvent} (Original: ${event})`);
-        break;
+    // 5. Tratamento de Eventos de Conexão (Agnóstico via Evento do Provider se possível, 
+    // ou fallback para o switch atual se o evento for detectado)
+    const normalizedEvent = (event || '').toUpperCase().replace(/\./g, '_');
+    if (normalizedEvent === 'CONNECTION_UPDATE') {
+      await handleConnectionUpdate(userId, body.data);
+    } else if (normalizedEvent === 'QRCODE_UPDATED') {
+      await handleQrUpdate(userId, body.data);
     }
+
   } catch (error) {
-    console.error(`[WhatsappWebhook] Error processing event ${event}:`, error);
+    console.error(`[WhatsappWebhook] Error processing webhook:`, error);
   }
 
   res.status(200).send('OK');
 });
 
-async function handleMessageUpsert(userId: string, instanceName: string, data: any) {
-  // Extrair o dado unificado independente de Evolution v1 ou v2
-  const messageObj = data.message || (data.messages && data.messages[0]) || data;
-  const key = messageObj.key || data.key;
-  const messageContentObj = messageObj.message || messageObj;
+async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any) {
+  const { from, body, contactName, id: messageId, fromMe } = message;
   
-  if (!messageContentObj) return;
-
-  const fromMe = !!key?.fromMe;
-  const remoteJid = key?.remoteJid;
-  if (!remoteJid || remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') return;
-
-  const pushName = fromMe ? undefined : (messageObj.pushName || data.pushName || 'Cliente');
-  const cleanNumber = remoteJid.split('@')[0].replace(/\D/g, '');
-  const messageContent = messageContentObj.conversation || messageContentObj.extendedTextMessage?.text || '';
-  const messageId = key.id;
-
-  console.log(`[Webhook] 📥 Message from ${remoteJid} (fromMe: ${fromMe}): "${messageContent.substring(0, 30)}"`);
-
-  // Detectar Áudio
-  const isAudio = !!(messageContentObj.audioMessage || (messageContentObj.viewOnceMessageV2?.message?.audioMessage));
-  
-  if (isAudio) {
-      console.log(`[Webhook] 🎙️ Audio detected from ${remoteJid}. Processing...`);
-      
-      let base64Audio = messageContentObj.audioMessage?.base64 || messageContentObj.viewOnceMessageV2?.message?.audioMessage?.base64;
-      
-      if (!base64Audio) {
-         console.log(`[Webhook] 🎙️ Audio detected but no base64. Attempting to fetch from Evolution API...`);
-         const fetchedBase64 = await EvolutionApiService.getMediaBase64(instanceName, key, messageContentObj);
-         if (fetchedBase64) {
-            base64Audio = fetchedBase64;
-         }
-      }
-
-      const threadId = `${userId}_${cleanNumber}`;
-      if (!base64Audio) {
-         await agentService.persistMessage(
-            threadId, userId, fromMe ? '[Áudio enviado por você]' : '[Áudio enviado pelo cliente]',
-            fromMe ? 'outbound' : 'inbound', messageId, pushName, remoteJid, cleanNumber
-         );
-         return;
-      }
-      
-      const buffer = Buffer.from(base64Audio, 'base64');
-      const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
-      
-      if (transcription) {
-        const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `${fromMe ? 'outbound' : 'inbound'}_${Date.now()}.ogg`);
-        await agentService.persistMessage(
-          threadId, userId, `[Áudio]: ${transcription}`,
-          fromMe ? 'outbound' : 'inbound', messageId, pushName, remoteJid, cleanNumber,
-          undefined, undefined, audioUrl || undefined
-        );
-
-        // Disparar Resposta AI APENAS se NÃO for enviado por mim (fromMe: false)
-        if (!fromMe) {
-          await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, transcription, pushName, cleanNumber, messageId, true);
-        }
-      }
-      return;
-  }
-
-  // Persistir Mensagem de Texto
-  const threadId = `${userId}_${cleanNumber}`;
-  
-  // Mensagens enviadas por mim (fromMe): o webhook é o echo de confirmação.
-  // Fazemos upsert com status='sent' — se já existir (inserido pelo sendMessage),
-  // apenas atualiza o status. Se não existir, insere como nova mensagem.
-  if (fromMe) {
-    await agentService.persistMessage(
-      threadId,
-      userId,
-      messageContent,
-      'outbound',
-      messageId,
-      pushName,
-      remoteJid,
-      cleanNumber
-    );
-    // Echo do WhatsApp: não dispara IA
+  if (fromMe || from.includes('@g.us')) {
+    // Se for echo (fromMe), só persistimos se necessário e encerramos (evita loop de IA)
+    if (fromMe) {
+       const cleanTo = from.split('@')[0].replace(/\D/g, '');
+       await agentService.persistMessage(`${userId}_${cleanTo}`, userId, body, 'outbound', messageId, contactName, from, cleanTo, 'Atendente');
+    }
     return;
   }
 
-  await agentService.persistMessage(
-    threadId,
-    userId,
-    messageContent,
-    'inbound',
-    messageId,
-    pushName,
-    remoteJid,
-    cleanNumber
-  );
+  const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+  const threadId = `${userId}_${cleanPhone}`;
 
-  // Disparar Resposta AI APENAS para mensagens recebidas
-  await (whatsappService as any).triggerAIResponseViaWebhook(userId, remoteJid, messageContent, pushName, cleanNumber, messageId, false);
+  // Verificar se a mensagem possui mídia (através do objeto original preservado ou campos do provider)
+  // Nota: A lógica de áudio permanece similar, mas usando o provider para buscar o base64
+  const isAudio = body === '[Áudio]' || !!(message.raw?.message?.audioMessage);
+
+  if (isAudio) {
+    console.log(`[Webhook] 🎙️ Audio detected. Processing via Provider...`);
+    const base64 = await provider.getMediaBase64(instanceName, message.raw?.key, message.raw?.message);
+    
+    if (base64) {
+      const buffer = Buffer.from(base64, 'base64');
+      const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
+      if (transcription) {
+        const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `inbound_${Date.now()}.ogg`);
+        await agentService.persistMessage(threadId, userId, `[Áudio]: ${transcription}`, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, audioUrl || undefined);
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
+        return;
+      }
+    }
+  }
+
+  // Persistir Texto e Disparar IA
+  await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone);
+  await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
 }
 
 async function handleConnectionUpdate(userId: string, data: any) {

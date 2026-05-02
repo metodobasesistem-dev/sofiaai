@@ -5,6 +5,7 @@ import { redisService } from './redisService.js';
 import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fns';
 import { googleCalendarService } from './googleCalendarService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
+import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 
 
 async function logToDB(userId: string, level: string, module: string, message: string, metadata: any = {}) {
@@ -883,7 +884,8 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       if (!finalPhotoUrl) {
         const { whatsappService } = await import('./whatsappService.js');
         const instanceName = `wppai_${userId.substring(0, 8)}`;
-        finalPhotoUrl = await EvolutionApiService.fetchProfilePictureUrl(instanceName, remoteJid);
+        const provider = await WhatsAppProviderFactory.getProvider(dbUserId);
+        finalPhotoUrl = await provider.fetchProfilePictureUrl(instanceName, remoteJid);
       }
 
       if (finalPhotoUrl) {

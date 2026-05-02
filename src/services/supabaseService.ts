@@ -54,6 +54,8 @@ export interface Agent {
   }[];
   appointmentDuration?: number;
   response_delay?: number;
+  training_mode?: 'text' | 'audio';
+  whatsapp_provider?: 'evolution' | 'uazapi' | 'meta_official';
 }
 
 export interface Professional {
