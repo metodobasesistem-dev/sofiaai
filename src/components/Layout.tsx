@@ -98,17 +98,45 @@ export default function Layout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [agendasOpen, setAgendasOpen] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const headerProfileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
       }
+      if (headerProfileRef.current && !headerProfileRef.current.contains(event.target as Node)) {
+        setIsHeaderProfileOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleLogout = async () => {
+    console.log('[Layout] Logging out safely...');
+    try {
+      // 1. Limpa o localStorage do Supabase manualmente para garantir
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('supabase.auth.token') || key.includes('-auth-token')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // 2. Chama o signOut (com timeout de segurança)
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SignOut Timeout')), 2000))
+      ]);
+    } catch (e) {
+      console.warn('[Logout] Fallback triggered', e);
+    } finally {
+      // 3. Força o recarregamento para a tela de login
+      window.location.href = '/'; 
+    }
+  };
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return 'U';
@@ -518,11 +546,11 @@ export default function Layout({
                           </button>
                           <div className="h-px bg-gray-50 my-1 mx-2" />
                           <button 
-                            onClick={() => supabase.auth.signOut()}
+                            onClick={handleLogout}
                             className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all"
                           >
                             <LogOut size={18} className="text-gray-400 group-hover:text-red-600" />
-                            Log out
+                            Sair do sistema
                           </button>
                         </div>
                       </motion.div>
@@ -567,12 +595,59 @@ export default function Layout({
             
             <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
             
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-transparent transition-all overflow-hidden">
-              {user?.user_metadata?.avatar_url ? (
-                <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <UserIcon size={20} />
-              )}
+            <div className="relative" ref={headerProfileRef}>
+              <div 
+                onClick={() => setIsHeaderProfileOpen(!isHeaderProfileOpen)}
+                className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-transparent hover:border-blue-200 transition-all overflow-hidden cursor-pointer shadow-sm active:scale-95"
+              >
+                {user?.user_metadata?.avatar_url ? (
+                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon size={20} />
+                )}
+              </div>
+
+              <AnimatePresence>
+                {isHeaderProfileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100]"
+                  >
+                    <div className="p-4 border-b border-gray-50 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">
+                        {getInitials(user?.user_metadata?.full_name || user?.email)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">
+                          {user?.user_metadata?.full_name || 'Usuário'}
+                        </p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {user?.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-2">
+                      <button 
+                        onClick={() => { onTabChange('settings', 'account'); setIsHeaderProfileOpen(false); }}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                      >
+                        <UserIcon size={18} className="text-gray-400" />
+                        Minha Conta
+                      </button>
+                      <div className="h-px bg-gray-50 my-1 mx-2" />
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-red-600 hover:bg-red-50 transition-all font-bold"
+                      >
+                        <LogOut size={18} />
+                        Sair do sistema (Logout)
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>

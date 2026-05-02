@@ -610,7 +610,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
               </div>
 
               {/* Tabs */}
-              <div className="flex items-center gap-8 border-b border-gray-200 mb-8">
+              <div className="flex items-center gap-4 md:gap-8 border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar whitespace-nowrap pb-1">
                 {[
                   { id: 'profile', label: 'Identidade', icon: User },
                   { id: 'company', label: 'Empresa', icon: Building2 },

@@ -383,7 +383,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
       </div>
 
       {/* Internal Tabs Navigation */}
-      <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-full md:w-fit overflow-x-auto no-scrollbar whitespace-nowrap">
         {tabs.map((tab) => (
           <button
             key={tab.id}
