@@ -186,7 +186,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     followUps: [{ delayMinutes: 60, type: 'static', message: '', extraPrompt: '' }],
     reminders: [{ mode: 'Tempo antes', hoursBefore: 24, message: '', sendAfterTime: false }],
     appointmentDuration: 30,
-    response_delay: 15
+    response_delay: 15,
+    training_mode: 'text'
   });
 
   const [previewMessages, setPreviewMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
@@ -212,6 +213,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [highlightedKnowledgeId, setHighlightedKnowledgeId] = useState<string | null>(null);
+  const [selectedKnowledge, setSelectedKnowledge] = useState<AgentKnowledge | null>(null);
+  const [isKnowledgeEditModalOpen, setIsKnowledgeEditModalOpen] = useState(false);
+  const [knowledgeEditContent, setKnowledgeEditContent] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
 
   const TypingIndicator = () => (
@@ -226,6 +231,29 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       ))}
     </div>
   );
+
+  const handleUpdateKnowledge = async () => {
+    if (!selectedKnowledge || !knowledgeEditContent.trim()) return;
+
+    try {
+      setIsSavingEdit(true);
+      await updateAgentKnowledge(selectedKnowledge.id, {
+        content: knowledgeEditContent.trim()
+      });
+      
+      setAudioKnowledge(prev => prev.map(k => 
+        k.id === selectedKnowledge.id ? { ...k, content: knowledgeEditContent.trim() } : k
+      ));
+      
+      toast.success('Conhecimento atualizado!');
+      setIsKnowledgeEditModalOpen(false);
+    } catch (error) {
+      console.error('Update knowledge error:', error);
+      toast.error('Erro ao atualizar conhecimento.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const fetchAgents = async () => {
     const timeoutId = setTimeout(() => {
@@ -1251,10 +1279,143 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                   )}
                 </AnimatePresence>
 
+                {/* --- EDIT KNOWLEDGE MODAL --- */}
+                <AnimatePresence>
+                  {isKnowledgeEditModalOpen && (
+                    <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center">
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsKnowledgeEditModalOpen(false)}
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                      />
+                      <motion.div 
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        className="bg-white w-full max-w-2xl rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 relative z-10 shadow-2xl overflow-hidden"
+                      >
+                         <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-4">
+                               <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                  <Settings2 size={24} />
+                               </div>
+                               <div>
+                                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Editar Conhecimento</h3>
+                                  <p className="text-slate-500 text-[11px] font-bold uppercase tracking-widest">Ajuste manual da transcrição</p>
+                               </div>
+                            </div>
+                            <button 
+                              onClick={() => setIsKnowledgeEditModalOpen(false)}
+                              className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-100 transition-all"
+                            >
+                               <X size={20} />
+                            </button>
+                         </div>
+
+                         <div className="space-y-6">
+                            <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Conteúdo do Bloco</label>
+                               <textarea 
+                                 value={knowledgeEditContent}
+                                 onChange={(e) => setKnowledgeEditContent(e.target.value)}
+                                 className="w-full h-48 bg-transparent text-slate-700 font-medium leading-relaxed outline-none resize-none custom-scrollbar"
+                                 placeholder="Edite o conhecimento aqui..."
+                               />
+                            </div>
+
+                            <div className="flex gap-4">
+                               <button 
+                                 onClick={() => setIsKnowledgeEditModalOpen(false)}
+                                 className="flex-1 py-4 bg-slate-100 text-slate-500 font-bold rounded-2xl hover:bg-slate-200 transition-all"
+                               >
+                                 Cancelar
+                               </button>
+                               <button 
+                                 onClick={handleUpdateKnowledge}
+                                 disabled={isSavingEdit || !knowledgeEditContent.trim()}
+                                 className="flex-[2] py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                               >
+                                 {isSavingEdit ? (
+                                   <Loader2 size={20} className="animate-spin" />
+                                 ) : (
+                                   <>
+                                     <Save size={20} />
+                                     Salvar Alterações
+                                   </>
+                                 )}
+                               </button>
+                            </div>
+                         </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
+
                 {activeTab === 'knowledge' && (
-                  <div className="space-y-8">
-                    {/* Debug Marker */}
-                    <div className="hidden">Rendered Knowledge Tab v3</div>
+                   <div className="space-y-8">
+                     {/* Training Mode Selector */}
+                     <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
+                        <div className="flex flex-col gap-2 mb-8 text-center">
+                           <h3 className="text-xl font-black text-slate-900 tracking-tight">Modo de Treinamento</h3>
+                           <p className="text-slate-500 text-sm">Escolha como seu agente deve aprender sobre o seu negócio.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <button 
+                             onClick={() => setFormData({...formData, training_mode: 'text'})}
+                             className={`p-6 rounded-3xl border-2 transition-all text-left flex flex-col gap-3 group ${
+                               formData.training_mode === 'text' 
+                               ? 'border-blue-600 bg-blue-50/30' 
+                               : 'border-slate-100 bg-white hover:border-slate-200'
+                             }`}
+                           >
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                                formData.training_mode === 'text' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                              }`}>
+                                 <FileText size={24} />
+                              </div>
+                              <div>
+                                 <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'text' ? 'text-blue-600' : 'text-slate-400'}`}>Modo Texto</h4>
+                                 <p className="text-[11px] text-slate-500 font-medium mt-1">Preencha os campos de empresa, serviços e FAQ manualmente.</p>
+                              </div>
+                              {formData.training_mode === 'text' && (
+                                <div className="mt-auto pt-2">
+                                   <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 px-2 py-1 bg-blue-100 rounded-full">Ativo</span>
+                                </div>
+                              )}
+                           </button>
+
+                           <button 
+                             onClick={() => setFormData({...formData, training_mode: 'audio'})}
+                             className={`p-6 rounded-3xl border-2 transition-all text-left flex flex-col gap-3 group ${
+                               formData.training_mode === 'audio' 
+                               ? 'border-indigo-600 bg-indigo-50/30' 
+                               : 'border-slate-100 bg-white hover:border-slate-200'
+                             }`}
+                           >
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                                formData.training_mode === 'audio' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                              }`}>
+                                 <Mic size={24} />
+                              </div>
+                              <div>
+                                 <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'audio' ? 'text-indigo-600' : 'text-slate-400'}`}>Modo Áudio</h4>
+                                 <p className="text-[11px] text-slate-500 font-medium mt-1">Grave sua voz para ensinar o agente sobre seu negócio.</p>
+                              </div>
+                              {formData.training_mode === 'audio' && (
+                                <div className="mt-auto pt-2">
+                                   <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 px-2 py-1 bg-indigo-100 rounded-full">Ativo</span>
+                                </div>
+                              )}
+                           </button>
+                        </div>
+                     </div>
+
+                     <div className="h-px bg-slate-100 my-4" />
+                     
+                     <div className="hidden">Rendered Knowledge Tab v3</div>
                     
                     <div className="space-y-6">
                       <div className="bg-slate-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
@@ -1317,36 +1478,50 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                 exit={{ opacity: 0, scale: 0.9 }}
                                 key={item.id} 
                                 className={`p-5 rounded-2xl border transition-all ${
-                                  highlightedKnowledgeId === item.id 
-                                  ? 'border-emerald-300 ring-4 ring-emerald-50 shadow-lg' 
-                                  : item.is_active ? 'bg-white border-slate-100 shadow-sm' : 'bg-slate-50 border-slate-50 opacity-60'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`p-2 rounded-xl ${item.is_active ? 'bg-teal-50 text-teal-600' : 'bg-slate-200 text-slate-500'}`}>
-                                      <Volume2 size={16} />
-                                    </div>
-                                    <span className="text-sm font-black text-slate-800 truncate max-w-[150px]">{item.title}</span>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <button 
-                                      onClick={() => toggleKnowledgeActive(item)}
-                                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${item.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                    >
-                                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${item.is_active ? 'translate-x-5.5' : 'translate-x-1'}`} />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDeleteKnowledge(item.id)}
-                                      className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </div>
-                                </div>
-                                <p className="text-[13px] text-slate-500 line-clamp-3 leading-relaxed">
-                                  {item.content}
-                                </p>
+                                   highlightedKnowledgeId === item.id 
+                                   ? 'border-emerald-300 ring-4 ring-emerald-50 shadow-lg' 
+                                   : item.is_active ? 'bg-white border-slate-100 shadow-sm' : 'bg-slate-50 border-slate-50 opacity-50'
+                                 }`}
+                               >
+                                 <div className="flex items-center justify-between mb-3">
+                                   <div className="flex items-center gap-2">
+                                     <div className={`p-2 rounded-xl ${item.is_active ? 'bg-teal-50 text-teal-600' : 'bg-slate-200 text-slate-500'}`}>
+                                       <Volume2 size={16} />
+                                     </div>
+                                     <div className="flex flex-col">
+                                        <span className="text-sm font-black text-slate-800 truncate max-w-[150px]">{item.title}</span>
+                                        {!item.is_active && <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Inativo</span>}
+                                     </div>
+                                   </div>
+                                   <div className="flex items-center gap-2">
+                                     <button 
+                                       onClick={() => {
+                                          setSelectedKnowledge(item);
+                                          setKnowledgeEditContent(item.content);
+                                          setIsKnowledgeEditModalOpen(true);
+                                       }}
+                                       className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                       title="Editar conteúdo"
+                                     >
+                                       <Settings2 size={16} />
+                                     </button>
+                                     <button 
+                                       onClick={() => toggleKnowledgeActive(item)}
+                                       className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${item.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                     >
+                                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${item.is_active ? 'translate-x-5.5' : 'translate-x-1'}`} />
+                                     </button>
+                                     <button 
+                                       onClick={() => handleDeleteKnowledge(item.id)}
+                                       className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                     >
+                                       <Trash2 size={16} />
+                                     </button>
+                                   </div>
+                                 </div>
+                                 <p className="text-[13px] text-slate-500 line-clamp-2 leading-relaxed italic">
+                                   "{item.content}"
+                                 </p>
                                 <div className="mt-4 pt-4 border-t border-slate-50 text-[10px] text-slate-400 flex items-center justify-between">
                                   <span className="font-medium">{new Date(item.created_at).toLocaleDateString('pt-BR')} às {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                                   {item.is_active && <span className="text-emerald-600 font-bold flex items-center gap-1"><CheckCircle2 size={12}/> Ativo no Cérebro</span>}

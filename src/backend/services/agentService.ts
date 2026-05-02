@@ -384,22 +384,30 @@ export class AgentService {
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
     const dayStr = now.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const trainingMode = agentData.training_mode || 'text';
 
     // 1. Process Knowledge Base
     let kbOutput = '';
-    if (agentData.knowledge_base && Array.isArray(agentData.knowledge_base)) {
-      kbOutput = agentData.knowledge_base.map((item: any) => {
-        if (item.type === 'qa') return `P: ${item.question}\nR: ${item.answer}`;
-        return `[UNIDADE DE CONHECIMENTO: ${item.title}]\n${item.content}`;
-      }).join('\n\n');
-    }
-
-    // 1.1 Process Additional Knowledge Blocks (New Table)
-    if (additionalKnowledge && additionalKnowledge.length > 0) {
-      const additionalKbOutput = additionalKnowledge.map((item: any) => {
-        return `[CONHECIMENTO ADICIONAL: ${item.title || 'Sem título'}]\n${item.content}`;
-      }).join('\n\n');
-      kbOutput = kbOutput ? `${kbOutput}\n\n${additionalKbOutput}` : additionalKbOutput;
+    
+    // In AUDIO mode, we ONLY use the audio blocks (additionalKnowledge)
+    // In TEXT mode, we use the manual fields and the legacy JSONB KB if present
+    
+    if (trainingMode === 'audio') {
+      if (additionalKnowledge && additionalKnowledge.length > 0) {
+        kbOutput = additionalKnowledge
+          .filter((item: any) => item.is_active)
+          .map((item: any) => {
+            return `[CONHECIMENTO DE ÁUDIO: ${item.title || 'Sem título'}]\n${item.content}`;
+          }).join('\n\n');
+      }
+    } else {
+      // TEXT MODE: legacy JSONB KB
+      if (agentData.knowledge_base && Array.isArray(agentData.knowledge_base)) {
+        kbOutput = agentData.knowledge_base.map((item: any) => {
+          if (item.type === 'qa') return `P: ${item.question}\nR: ${item.answer}`;
+          return `[UNIDADE DE CONHECIMENTO: ${item.title}]\n${item.content}`;
+        }).join('\n\n');
+      }
     }
 
     // 2. Process Professionals Info
@@ -410,27 +418,33 @@ export class AgentService {
       }).join('\n');
     }
 
+    // Build conditional sections for Text Mode
+    const aboutCompany = trainingMode === 'text' ? agentData.company_description || '' : 'Consulte a Base de Conhecimento de Áudio abaixo.';
+    const productsInfo = trainingMode === 'text' ? agentData.company_products || '' : 'Consulte a Base de Conhecimento de Áudio abaixo.';
+    const faqInfo = trainingMode === 'text' ? agentData.company_faq || '' : 'Consulte a Base de Conhecimento de Áudio abaixo.';
+
     return `Você é assistente virtual da ${agentData.company_name || 'Nossa Empresa'}. 
 OBJETIVO: Atendimento consultivo e agendamento.
 NOME DO CLIENTE: ${leadName || 'Pergunte o nome se ainda não souber'}.
+MODO DE TREINAMENTO ATUAL: ${trainingMode.toUpperCase()}.
 
 CONTEXTO TEMPORAL:
 - Hoje é ${dayStr}, dia ${dateStr}.
 - Horário Atual: ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
 
 SOBRE A EMPRESA:
-${agentData.company_description || ''}
+${aboutCompany}
 
 PRODUTOS E SERVIÇOS:
-${agentData.company_products || ''}
+${productsInfo}
 
 PERGUNTAS FREQUENTES (FAQ):
-${agentData.company_faq || ''}
+${faqInfo}
 
 NOSSA EQUIPE:
 ${profsInfo || 'Consulte os horários disponíveis se necessário.'}
 
-BASE DE CONHECIMENTO ADICIONAL:
+BASE DE CONHECIMENTO (${trainingMode === 'audio' ? 'ÁUDIO' : 'TEXTO'}):
 ${kbOutput || 'Use as informações acima para guiar o cliente.'}
 
 LINKS E CONTATOS:
