@@ -21,6 +21,7 @@ function createClient(): Redis {
         port: REDIS_PORT,
         password: REDIS_PASSWORD || undefined,
         lazyConnect: true,
+        maxRetriesPerRequest: null,
       };
 
   const r = REDIS_URL

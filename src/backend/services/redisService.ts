@@ -29,10 +29,14 @@ async function getRedisClient() {
       password: redisPassword,
       username: redisUsername,
       lazyConnect: true,
+      maxRetriesPerRequest: null,
       retryStrategy: (times) => Math.min(times * 50, 2000)
     });
     
-    redis.on('error', (err: any) => console.warn('[RedisService] Redis Warning:', err.message));
+    if (!connectionFailed) {
+      console.warn('[RedisService] Redis Connection Issue (retrying...):', err.message);
+      connectionFailed = true;
+    }
     return redis;
   } catch (e) {
     console.warn('[RedisService] ioredis module not found or connection failed. Using Firestore fallback.');
