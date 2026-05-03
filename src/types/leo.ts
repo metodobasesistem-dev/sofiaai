@@ -15,6 +15,7 @@ export interface QualificationResult {
   score: number;
   interesse: string;
   orcamento: string;
-  proximo_passo: string;
+  resposta_usuario?: string;
+  proximo_passo?: string;
   deve_passar_sofia: boolean;
 }

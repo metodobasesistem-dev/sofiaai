@@ -197,30 +197,112 @@ export const leoInstagramService = {
   },
 
   async processWebhookEvent(body: any): Promise<void> {
-    // Implementação básica de roteamento de eventos
     const entry = body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const messaging = entry?.messaging?.[0];
+    if (!entry) return;
+
+    const instagramAccountId = entry.id;
+    
+    // Buscar qual empresa é dona desta conta do Instagram
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('company_id')
+      .eq('instagram_account_id', instagramAccountId)
+      .maybeSingle();
+
+    if (!config) {
+      console.warn('[LeoWebhook] Conta do Instagram não vinculada a nenhuma empresa:', instagramAccountId);
+      return;
+    }
+
+    const companyId = config.company_id;
+    const changes = entry.changes?.[0];
+    const messaging = entry.messaging?.[0];
 
     if (changes) {
-      // Comentário
-      const value = changes.value;
-      if (value.from && value.text) {
-        await this.handleComment(value);
-      }
+      await this.handleComment(changes.value, companyId);
     } else if (messaging) {
-      // DM
-      await this.handleDM(messaging);
+      await this.handleDM(messaging, companyId);
     }
   },
 
-  async handleComment(value: any) {
+  async handleComment(value: any, companyId: string) {
+    if (!value.from || !value.text) return;
     const instagramUid = value.from.id;
-    // ... Lógica de criação de lead e interação
+
+    // 1. Upsert Lead
+    const { data: lead } = await supabase.from('leo_leads').upsert({
+      company_id: companyId,
+      instagram_uid: instagramUid,
+      nome: value.from.username,
+      plataforma: 'instagram'
+    }, { onConflict: 'company_id,instagram_uid' }).select().single();
+
+    if (!lead) return;
+
+    // 2. Registrar Interação
+    await supabase.from('leo_instagram_interacoes').insert({
+      lead_id: lead.id,
+      tipo: 'comentario',
+      conteudo: value.text,
+      instagram_message_id: value.id
+    });
+
+    console.log(`[LeoWebhook] Comentário processado para lead: ${value.from.username}`);
   },
 
-  async handleDM(messaging: any) {
+  async handleDM(messaging: any, companyId: string) {
     const instagramUid = messaging.sender.id;
-    // ... Lógica de atualização de conversa e qualificação
+    const text = messaging.message?.text;
+    if (!text) return;
+
+    // 1. Upsert Lead
+    const { data: lead } = await supabase.from('leo_leads').upsert({
+      company_id: companyId,
+      instagram_uid: instagramUid,
+      plataforma: 'instagram'
+    }, { onConflict: 'company_id,instagram_uid' }).select().single();
+
+    if (!lead) return;
+
+    // 2. Registrar Interação
+    await supabase.from('leo_instagram_interacoes').insert({
+      lead_id: lead.id,
+      tipo: 'dm_recebida',
+      conteudo: text,
+      instagram_message_id: messaging.message.mid
+    });
+
+    // 3. Chamar Qualificação (IA)
+    try {
+      const { leoQualificationService } = await import('./leoQualificationService.js');
+      await leoQualificationService.qualifyLead(lead.id);
+    } catch (err) {
+      console.error('[LeoWebhook] Erro no fluxo de DM:', err);
+    }
+  },
+
+  async sendMessage(recipientIgUid: string, text: string, companyId: string): Promise<void> {
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('instagram_access_token, instagram_account_id')
+      .eq('company_id', companyId)
+      .single();
+
+    if (!config?.instagram_access_token) return;
+
+    const accessToken = decrypt(config.instagram_access_token);
+    
+    const res = await fetch(`https://graph.facebook.com/v19.0/${config.instagram_account_id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: recipientIgUid },
+        message: { text },
+        access_token: accessToken
+      })
+    });
+
+    const result = await res.json();
+    if (result.error) throw new Error(result.error.message);
   }
 };

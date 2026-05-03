@@ -18,27 +18,43 @@ export const leoQualificationService = {
     // 3. Montar histórico para o Gemini
     const historico = interacoes?.map(i => `${i.tipo === 'dm_recebida' ? 'Lead' : 'Leo'}: ${i.conteudo}`).join('\n');
     
-    const systemPrompt = `Você é o Leo, um agente de qualificação de leads. Seu objetivo é analisar a conversa abaixo e determinar o score de qualificação do lead (0-100).
-    Perguntas de qualificação definidas: ${JSON.stringify(config.perguntas_qualificacao)}
-    Score mínimo exigido: ${config.score_minimo}
+    const systemPrompt = `Você é o Leo, um agente de qualificação de leads extremamente prestativo e natural. Sua missão é conversar com o lead no Instagram para qualificá-lo.
+    
+    Perguntas de qualificação que você deve tentar responder durante a conversa: ${JSON.stringify(config.perguntas_qualificacao)}
+    Score mínimo exigido para considerar o lead "quente": ${config.score_minimo}
 
-    Regras:
-    - Analise o interesse e o orçamento.
-    - O orçamento deve ser compatível com um cliente ideal.
-    - Retorne APENAS um JSON no formato:
+    Instruções de Resposta:
+    - Seja breve e amigável (estilo Instagram).
+    - Não use robótica, use emojis moderadamente.
+    - Foque em manter a conversa fluindo até ter as informações necessárias.
+    - Se o lead já estiver qualificado (score alto), avise que um consultor entrará em contato.
+
+    Retorne APENAS um JSON no formato:
     {
-      "score": number,
+      "score": number (0-100),
       "interesse": "string resumindo o interesse",
       "orcamento": "string resumindo o orçamento",
-      "proximo_passo": "o que o Leo deve fazer agora",
+      "resposta_usuario": "O TEXTO QUE VOCÊ VAI ENVIAR PARA O LEAD AGORA",
       "deve_passar_sofia": boolean
     }`;
 
     const response = await generateAIResponse(systemPrompt, [{ role: 'user', content: `Histórico da conversa:\n${historico}` }], [], 'none', lead.company_id);
     
-    const result: QualificationResult = JSON.parse(response.text || '{}');
+    let result: QualificationResult;
+    try {
+      result = JSON.parse(response.text || '{}');
+    } catch (e) {
+      console.error('[LeoQualificationService] Error parsing AI response:', response.text);
+      return { score: 0, interesse: '', orcamento: '', deve_passar_sofia: false };
+    }
 
-    // 4. Atualizar lead
+    // 4. Enviar Resposta para o Instagram
+    if (result.resposta_usuario) {
+      const { leoInstagramService } = await import('./leoInstagramService.js');
+      await leoInstagramService.sendMessage(lead.instagram_uid, result.resposta_usuario, lead.company_id);
+    }
+
+    // 5. Atualizar lead
     const updateData: any = {
       score: result.score,
       interesse: result.interesse,
