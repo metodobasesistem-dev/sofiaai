@@ -83,8 +83,14 @@ export const leoInstagramService = {
     const pagesRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${userAccessToken}`);
     const pagesData = await pagesRes.json();
     
+    console.log('[LeoInstagramService] Resposta da busca de páginas:', JSON.stringify(pagesData));
+
+    if (pagesData.error) {
+      throw new Error(`Erro na Meta ao buscar páginas: ${pagesData.error.message}`);
+    }
+
     if (!pagesData.data || pagesData.data.length === 0) {
-      throw new Error('Nenhuma página do Facebook vinculada encontrada.');
+      throw new Error('A Meta não retornou nenhuma página vinculada a este login. Verifique se você é administrador da página.');
     }
 
     // Procurar a primeira página que tenha uma conta do Instagram Business vinculada
