@@ -61,10 +61,15 @@ router.get('/instagram/webhook', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
+  // Log temporário para depuração
+  console.log('[Leo Webhook] Verificação recebida:', { mode, token, challenge });
+
   if (mode === 'subscribe' && token === process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN) {
+    console.log('[Leo Webhook] ✅ Verificação aprovada!');
     res.status(200).send(challenge);
   } else {
-    res.sendStatus(403);
+    console.warn('[Leo Webhook] ❌ Verificação falhou. Token recebido:', token);
+    res.status(403).send('Forbidden');
   }
 });
 
