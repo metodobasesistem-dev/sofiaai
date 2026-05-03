@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { InstagramAccount, InstagramStatus } from '../../types/leo.js';
 
 const META_APP_ID = process.env.META_APP_ID;
-const META_APP_SECRET = process.env.META_APP_SECRET || '';
+const META_APP_SECRET = process.env.META_APP_SECRET || 'wppai_leo_secret_default_2024'; // Fallback fix
 const REDIRECT_URI = 'https://baseai.natandesouza.com.br/api/leo/instagram/callback';
 
 // Helper de criptografia
@@ -18,13 +18,18 @@ function encrypt(text: string): string {
 
 function decrypt(text: string): string {
   if (!text) return '';
-  const data = Buffer.from(text, 'base64');
-  const iv = data.subarray(0, 16);
-  const tag = data.subarray(16, 32);
-  const encrypted = data.subarray(32);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.scryptSync(META_APP_SECRET, 'salt', 32), iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  try {
+    const data = Buffer.from(text, 'base64');
+    const iv = data.subarray(0, 16);
+    const tag = data.subarray(16, 32);
+    const encrypted = data.subarray(32);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.scryptSync(META_APP_SECRET, 'salt', 32), iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  } catch (err: any) {
+    console.error('[LeoInstagramService] Erro crítico na descriptografia. Verifique se o META_APP_SECRET mudou:', err.message);
+    throw new Error('Falha de segurança ao ler o token do Instagram. Tente reconectar sua conta.');
+  }
 }
 
 export const leoInstagramService = {
@@ -276,15 +281,47 @@ export const leoInstagramService = {
     if (!value.from || !value.text) return;
     const instagramUid = value.from.id;
 
-    // 1. Upsert Lead
-    const { data: lead } = await supabase.from('leo_leads').upsert({
-      company_id: companyId,
-      instagram_uid: instagramUid,
-      nome: value.from.username,
-      plataforma: 'instagram'
-    }, { onConflict: 'company_id,instagram_uid' }).select().single();
+    // 1. Obter ou Criar Lead (Manual para evitar falha de constraint)
+    let { data: lead, error: leadError } = await supabase
+      .from('leo_leads')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('instagram_uid', instagramUid)
+      .maybeSingle();
 
-    if (!lead) return;
+    if (leadError) {
+      console.error('[LeoWebhook] Erro ao buscar lead:', leadError);
+    }
+
+    if (!lead) {
+      console.log('[LeoWebhook] Criando novo lead para Instagram UID:', instagramUid);
+      const { data: newLead, error: createError } = await supabase
+        .from('leo_leads')
+        .insert({
+          company_id: companyId,
+          instagram_uid: instagramUid,
+          nome: value.from.username,
+          plataforma: 'instagram'
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('[LeoWebhook] Erro ao criar lead:', createError);
+        return;
+      }
+      lead = newLead;
+    } else {
+      // Atualizar nome se mudou
+      if (lead.nome !== value.from.username) {
+        await supabase.from('leo_leads').update({ nome: value.from.username }).eq('id', lead.id);
+      }
+    }
+
+    if (!lead) {
+      console.error('[LeoWebhook] Falha crítica: Lead não disponível após upsert manual.');
+      return;
+    }
 
     // 2. Registrar Interação
     await supabase.from('leo_instagram_interacoes').insert({
