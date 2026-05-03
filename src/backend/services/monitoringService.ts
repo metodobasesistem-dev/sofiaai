@@ -46,7 +46,10 @@ export class MonitoringService {
         // Trigger WhatsApp alert for critical changes
         // Alert if it goes to 'error' OR if it recovers from 'error' to 'healthy'
         if (status === 'error' || (previousStatus === 'error' && status === 'healthy')) {
-          await this.sendAdminAlert(serviceId, status, previousStatus, metadata);
+          // Skip WhatsApp alerts for Redis to avoid spam during connection flapping
+          if (serviceId !== 'redis') {
+            await this.sendAdminAlert(serviceId, status, previousStatus, metadata);
+          }
         }
       }
     } catch (err) {
