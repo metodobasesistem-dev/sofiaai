@@ -32,11 +32,13 @@ export const leoInstagramService = {
     const token = crypto.randomUUID();
     const state = Buffer.from(JSON.stringify({ token, company_id: companyId })).toString('base64');
 
-    // Salvar state token no banco
+    // Salvar state token no banco (usar upsert para garantir que o registro exista)
     await supabase
       .from('leo_config')
-      .update({ instagram_state_token: token })
-      .eq('company_id', companyId);
+      .upsert({ 
+        company_id: companyId,
+        instagram_state_token: token 
+      }, { onConflict: 'company_id' });
 
     const scopes = [
       'instagram_basic',
@@ -60,8 +62,14 @@ export const leoInstagramService = {
       .eq('company_id', companyId)
       .single();
 
-    if (!config || config.instagram_state_token !== token) {
-      throw new Error('Invalid state token');
+    if (!config) {
+      console.error('[LeoInstagramService] No config found for company:', companyId);
+      throw new Error('Configuração não encontrada para esta empresa');
+    }
+
+    if (config.instagram_state_token !== token) {
+      console.error('[LeoInstagramService] State token mismatch. Expected:', config.instagram_state_token, 'Got:', token);
+      throw new Error('Token de estado inválido ou expirado');
     }
 
     // 1. Trocar code por short-lived token
