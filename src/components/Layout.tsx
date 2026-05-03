@@ -24,8 +24,10 @@ import {
   Star,
   BarChart3,
   Activity,
-  Shield
+  Shield,
+  Zap
 } from 'lucide-react';
+
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
@@ -159,7 +161,9 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    { id: 'leo', icon: <Zap size={20} className="text-amber-500" />, label: 'Leo' },
     ...(role === 'admin' ? [{
+
       id: 'admin_group',
       icon: <Shield size={20} />,
       label: 'Administração',

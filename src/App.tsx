@@ -14,6 +14,8 @@ import Professionals from './components/Professionals';
 import Professionals from './components/Professionals';
 import Overview from './components/Overview';
 import AdminPanel from './components/AdminPanel';
+import LeoApp from './pages/Leo/LeoApp';
+
  import Login from './components/Login';
  import MaintenancePage from './components/MaintenancePage';
 import { supabase } from './lib/supabase';
@@ -197,6 +199,9 @@ export default function App() {
         return <Integrations user={user} role={role} />;
       case 'settings':
         return <Settings initialSubTab={settingsSubTab} />;
+      case 'leo':
+        return <LeoApp user={user} role={role} onTabChange={handleTabChange} />;
+
       default:
         return (
           <div className="h-[60vh] flex flex-col items-center justify-center text-gray-400">

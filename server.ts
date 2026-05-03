@@ -61,6 +61,10 @@ import adminApiRoutes from './src/backend/routes/adminApiRoutes.js';
 import whatsappRoutes from './src/backend/routes/whatsappRoutes.js';
 import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js';
 import { rPing } from './src/backend/lib/redisClient.js';
+import leoRoutes from './src/backend/routes/leoRoutes.js';
+import { requireAuth } from './src/backend/middleware/authMiddleware.js';
+
+
 
 async function startServer() {
   console.log('[Server] Starting server version 3.0 (Supabase)...');
@@ -188,6 +192,9 @@ async function startServer() {
     app.use('/api/v2/admin', adminApiRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/whatsapp/evolution', whatsappWebhookRoutes); // Novo Webhook
+    app.use('/api/leo', requireAuth, leoRoutes);
+
+
     
     console.log('[Server] All API Routes Registered (v1 & v2)');
 
