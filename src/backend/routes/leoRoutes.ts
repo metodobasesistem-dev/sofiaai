@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { leoInstagramService } from '../services/leoInstagramService.js';
 import { leoMetaService } from '../services/leoMetaService.js';
-import { AuthenticatedRequest, requireAdmin } from '../middleware/authMiddleware.js';
+import { AuthenticatedRequest, requireAdmin, requireAuth } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
 // --- INSTAGRAM OAUTH ---
 
-router.get('/instagram/auth-url', requireAdmin, async (req: AuthenticatedRequest, res) => {
+router.get('/instagram/auth-url', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const url = await leoInstagramService.generateAuthUrl(req.userId!);
     res.json({ url });
@@ -27,7 +27,7 @@ router.get('/instagram/callback', async (req, res) => {
   }
 });
 
-router.get('/instagram/status', async (req: AuthenticatedRequest, res) => {
+router.get('/instagram/status', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const status = await leoInstagramService.getStatus(req.userId!);
     res.json(status);
@@ -36,7 +36,7 @@ router.get('/instagram/status', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-router.post('/instagram/disconnect', requireAdmin, async (req: AuthenticatedRequest, res) => {
+router.post('/instagram/disconnect', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     await leoInstagramService.disconnect(req.userId!);
     res.json({ success: true });
@@ -45,7 +45,7 @@ router.post('/instagram/disconnect', requireAdmin, async (req: AuthenticatedRequ
   }
 });
 
-router.post('/instagram/refresh-token', requireAdmin, async (req: AuthenticatedRequest, res) => {
+router.post('/instagram/refresh-token', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     await leoInstagramService.refreshToken(req.userId!);
     res.json({ success: true });
@@ -84,7 +84,7 @@ router.post('/instagram/webhook', async (req, res) => {
 
 // --- OUTRAS ROTAS ---
 
-router.get('/campanhas', async (req: AuthenticatedRequest, res) => {
+router.get('/campanhas', requireAuth, async (req: AuthenticatedRequest, res) => {
   const userId = req.userId;
   const campaigns = await leoMetaService.fetchCampaigns(userId!);
   res.json(campaigns);

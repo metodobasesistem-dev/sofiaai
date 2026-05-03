@@ -192,7 +192,8 @@ async function startServer() {
     app.use('/api/v2/admin', adminApiRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/whatsapp/evolution', whatsappWebhookRoutes); // Novo Webhook
-    app.use('/api/leo', requireAuth, leoRoutes);
+    app.use('/api/leo', leoRoutes);
+
 
 
     
