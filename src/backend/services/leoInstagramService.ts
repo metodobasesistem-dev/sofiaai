@@ -45,7 +45,8 @@ export const leoInstagramService = {
       'instagram_manage_comments',
       'instagram_manage_messages',
       'pages_show_list',
-      'pages_read_engagement'
+      'pages_read_engagement',
+      'business_management'
     ].join(',');
 
     return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${scopes}&state=${state}`;
