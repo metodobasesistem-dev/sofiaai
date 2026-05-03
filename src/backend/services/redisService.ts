@@ -33,10 +33,14 @@ async function getRedisClient() {
       retryStrategy: (times) => Math.min(times * 50, 2000)
     });
     
-    if (!connectionFailed) {
-      console.warn('[RedisService] Redis Connection Issue (retrying...):', err.message);
-      connectionFailed = true;
-    }
+    // Suprimir erros de conexão para não travar o processo principal
+    redis.on('error', (err: any) => {
+      // Apenas logamos no console do servidor, sem disparar alertas externos aqui
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Redis] Error:', err.message);
+      }
+    });
+
     return redis;
   } catch (e) {
     console.warn('[RedisService] ioredis module not found or connection failed. Using Firestore fallback.');

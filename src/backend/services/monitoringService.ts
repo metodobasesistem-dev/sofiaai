@@ -45,10 +45,15 @@ export class MonitoringService {
 
         // Trigger WhatsApp alert for critical changes
         // Alert if it goes to 'error' OR if it recovers from 'error' to 'healthy'
+        // Bloqueio AGRESSIVO para Redis: Nunca enviar alerta de WhatsApp para esse serviço
+        const isRedis = serviceId.toLowerCase().trim() === 'redis';
+        
         if (status === 'error' || (previousStatus === 'error' && status === 'healthy')) {
-          // Skip WhatsApp alerts for Redis to avoid spam during connection flapping
-          if (serviceId !== 'redis') {
+          if (!isRedis) {
+            console.log(`[Monitoring] Preparando alerta de WhatsApp para: ${serviceId}`);
             await this.sendAdminAlert(serviceId, status, previousStatus, metadata);
+          } else {
+            console.log(`[Monitoring] Alerta de WhatsApp SILENCIADO para o serviço Redis.`);
           }
         }
       }
