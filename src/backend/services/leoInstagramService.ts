@@ -72,42 +72,49 @@ export const leoInstagramService = {
       throw new Error('Token de estado inválido ou expirado');
     }
 
-    // 1. Trocar code por short-lived token
+    // 1. Trocar code por User Access Token
     const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code=${code}`);
     const tokenData = await tokenRes.json();
     if (tokenData.error) throw new Error(tokenData.error.message);
 
-    // 2. Trocar por long-lived token
-    const longTokenRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${META_APP_SECRET}&access_token=${tokenData.access_token}`);
-    const longTokenData = await longTokenRes.json();
+    const userAccessToken = tokenData.access_token;
 
-    // 3. Buscar dados da conta
-    const meRes = await fetch(`https://graph.instagram.com/me?fields=id,username,name,profile_picture_url&access_token=${longTokenData.access_token}`);
-    const meData = await meRes.json();
+    // 2. Buscar as Páginas do Facebook vinculadas e suas contas do Instagram
+    const pagesRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${userAccessToken}`);
+    const pagesData = await pagesRes.json();
+    
+    if (!pagesData.data || pagesData.data.length === 0) {
+      throw new Error('Nenhuma página do Facebook vinculada encontrada.');
+    }
 
-    const encryptedToken = encrypt(longTokenData.access_token);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 60);
+    // Procurar a primeira página que tenha uma conta do Instagram Business vinculada
+    const pageWithIg = pagesData.data.find((p: any) => p.instagram_business_account);
+    if (!pageWithIg) {
+      throw new Error('Nenhuma conta do Instagram Business vinculada às suas páginas do Facebook.');
+    }
+
+    const igAccount = pageWithIg.instagram_business_account;
+    const encryptedToken = encrypt(userAccessToken); // Salvamos o token do usuário que tem permissão geral
 
     // 4. Salvar no banco
     await supabase
       .from('leo_config')
       .update({
         instagram_access_token: encryptedToken,
-        instagram_account_id: meData.id,
-        instagram_username: meData.username,
-        instagram_name: meData.name,
-        instagram_picture_url: meData.profile_picture_url,
-        instagram_token_expires_at: expiresAt.toISOString(),
+        instagram_account_id: igAccount.id,
+        instagram_username: igAccount.username,
+        instagram_name: igAccount.name,
+        instagram_picture_url: igAccount.profile_picture_url,
+        instagram_token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 dias aprox
         instagram_state_token: null
       })
       .eq('company_id', companyId);
 
     return {
-      id: meData.id,
-      username: meData.username,
-      name: meData.name,
-      picture_url: meData.profile_picture_url
+      id: igAccount.id,
+      username: igAccount.username,
+      name: igAccount.name,
+      picture_url: igAccount.profile_picture_url
     };
   },
 
