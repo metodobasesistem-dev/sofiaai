@@ -286,7 +286,46 @@ export const leoInstagramService = {
 
     console.log(`[LeoWebhook] Comentário processado para lead: ${value.from.username}`);
 
-    // 3. Automação de Resposta
+    // 3. Automação por Palavra-Chave (Gatilhos)
+    const { data: triggers } = await supabase
+      .from('leo_insta_gatilhos')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('ativo', true);
+
+    const commentText = value.text.toLowerCase().trim();
+    const matchedTrigger = triggers?.find(t => commentText.includes(t.palavra_chave.toLowerCase().trim()));
+
+    if (matchedTrigger) {
+      console.log(`[LeoWebhook] Gatilho encontrado para "${matchedTrigger.palavra_chave}"`);
+      
+      // Ação 1: Enviar DM
+      if (matchedTrigger.mensagem_dm) {
+        try {
+          await this.sendMessage(instagramUid, matchedTrigger.mensagem_dm, companyId);
+          await supabase.from('leo_instagram_interacoes').insert({
+            lead_id: lead.id,
+            tipo: 'dm_enviada',
+            conteudo: matchedTrigger.mensagem_dm
+          });
+        } catch (err) {
+          console.error('[LeoWebhook] Erro ao enviar DM do gatilho:', err);
+        }
+      }
+
+      // Ação 2: Responder Comentário Publicamente
+      if (matchedTrigger.resposta_comentario) {
+        try {
+          await this.replyToComment(value.id, matchedTrigger.resposta_comentario, companyId);
+        } catch (err) {
+          console.error('[LeoWebhook] Erro ao responder comentário do gatilho:', err);
+        }
+      }
+
+      return; // Se houve match de gatilho, encerra aqui (não executa a resposta padrão)
+    }
+
+    // 4. Automação de Resposta Padrão (Fallback)
     const { data: config } = await supabase
       .from('leo_config')
       .select('insta_auto_comment_enabled, insta_auto_comment_msg')
@@ -365,6 +404,29 @@ export const leoInstagramService = {
     if (result.error) throw new Error(result.error.message);
   },
 
+  async replyToComment(commentId: string, text: string, companyId: string): Promise<void> {
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('instagram_access_token')
+      .eq('company_id', companyId)
+      .single();
+
+    if (!config?.instagram_access_token) return;
+    const accessToken = decrypt(config.instagram_access_token);
+
+    const res = await fetch(`https://graph.facebook.com/v19.0/${commentId}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        access_token: accessToken
+      })
+    });
+
+    const result = await res.json();
+    if (result.error) throw new Error(result.error.message);
+  },
+
   async getHistory(companyId: string) {
     const { data: leads } = await supabase
       .from('leo_leads')
@@ -393,5 +455,33 @@ export const leoInstagramService = {
       .from('leo_config')
       .update(settings)
       .eq('company_id', companyId);
+  },
+
+  async getTriggers(companyId: string) {
+    const { data } = await supabase
+      .from('leo_insta_gatilhos')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async addTrigger(companyId: string, trigger: any) {
+    const { data, error } = await supabase
+      .from('leo_insta_gatilhos')
+      .insert({ ...trigger, company_id: companyId })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteTrigger(companyId: string, triggerId: string) {
+    const { error } = await supabase
+      .from('leo_insta_gatilhos')
+      .delete()
+      .eq('id', triggerId)
+      .eq('company_id', companyId);
+    if (error) throw error;
   }
 };

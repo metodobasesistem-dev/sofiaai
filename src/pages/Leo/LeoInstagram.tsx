@@ -11,7 +11,10 @@ import {
   Activity, 
   Shield, 
   Save,
-  MessageSquare
+  MessageSquare,
+  Plus,
+  Trash2,
+  Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { InstagramStatus } from '../../types/leo';
@@ -24,6 +27,9 @@ export default function LeoInstagram({ role }: any) {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [history, setHistory] = useState<{ comments: any[], dms: any[] }>({ comments: [], dms: [] });
   const [localSettings, setLocalSettings] = useState<any>(null);
+  const [triggers, setTriggers] = useState<any[]>([]);
+  const [newTrigger, setNewTrigger] = useState({ palavra_chave: '', mensagem_dm: '', resposta_comentario: '' });
+  const [showAddTrigger, setShowAddTrigger] = useState(false);
 
   const authFetch = async (url: string, options: RequestInit = {}) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -60,9 +66,20 @@ export default function LeoInstagram({ role }: any) {
     }
   };
 
+  const fetchTriggers = async () => {
+    try {
+      const res = await authFetch('/api/leo/instagram/triggers');
+      const data = await res.json();
+      setTriggers(data);
+    } catch (error) {
+      console.error('Failed to fetch triggers:', error);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchHistory();
+    fetchTriggers();
 
     // Verificar retorno do OAuth
     const params = new URLSearchParams(window.location.search);
@@ -131,6 +148,40 @@ export default function LeoInstagram({ role }: any) {
     }
   };
 
+  const handleAddTrigger = async () => {
+    if (!newTrigger.palavra_chave || !newTrigger.mensagem_dm) {
+      toast.error('Preencha a palavra-chave e a mensagem no privado.');
+      return;
+    }
+    try {
+      const res = await authFetch('/api/leo/instagram/triggers', {
+        method: 'POST',
+        body: JSON.stringify(newTrigger)
+      });
+      if (res.ok) {
+        toast.success('Gatilho adicionado!');
+        setNewTrigger({ palavra_chave: '', mensagem_dm: '', resposta_comentario: '' });
+        setShowAddTrigger(false);
+        fetchTriggers();
+      }
+    } catch (error) {
+      toast.error('Erro ao adicionar gatilho.');
+    }
+  };
+
+  const handleDeleteTrigger = async (id: string) => {
+    if (!confirm('Excluir este gatilho?')) return;
+    try {
+      const res = await authFetch(`/api/leo/instagram/triggers/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Gatilho removido.');
+        fetchTriggers();
+      }
+    } catch (error) {
+      toast.error('Erro ao remover gatilho.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4 text-gray-400">
@@ -177,9 +228,9 @@ export default function LeoInstagram({ role }: any) {
           {status?.connected ? (
             <>
               <button 
-                onClick={fetchHistory}
+                onClick={() => { fetchHistory(); fetchTriggers(); }}
                 className="p-3 text-gray-500 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100"
-                title="Atualizar histórico"
+                title="Atualizar dados"
               >
                 <RefreshCw size={20} />
               </button>
@@ -244,8 +295,8 @@ export default function LeoInstagram({ role }: any) {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Automation Settings */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Automation Settings */}
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
                   <div className="flex items-center gap-3">
@@ -253,8 +304,8 @@ export default function LeoInstagram({ role }: any) {
                       <Settings size={20} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-gray-900">Configurações de Automação</h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Configure como o Leo deve agir</p>
+                      <h4 className="font-bold text-gray-900">Automação Geral</h4>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Configurações globais de resposta</p>
                     </div>
                   </div>
                   {isAdmin && (
@@ -279,13 +330,111 @@ export default function LeoInstagram({ role }: any) {
                   />
                   <div className="h-px bg-gray-50"></div>
                   <AutomationToggle 
-                    title="Resposta Automática em Comentários"
-                    description="O Leo enviará uma DM para quem comentar em qualquer postagem sua."
+                    title="Resposta Automática em Comentários (Padrão)"
+                    description="O Leo enviará uma DM padrão para quem comentar (caso não haja gatilho específico)."
                     enabled={localSettings?.insta_auto_comment_enabled}
                     onToggle={(val) => setLocalSettings({ ...localSettings, insta_auto_comment_enabled: val })}
                     message={localSettings?.insta_auto_comment_msg}
                     onMessageChange={(val) => setLocalSettings({ ...localSettings, insta_auto_comment_msg: val })}
                   />
+                </div>
+              </div>
+
+              {/* Keyword Triggers */}
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
+                      <Zap size={20} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">Gatilhos por Palavra-Chave</h4>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Respostas específicas baseadas no comentário</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowAddTrigger(!showAddTrigger)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-all"
+                  >
+                    <Plus size={14} />
+                    Novo Gatilho
+                  </button>
+                </div>
+
+                <div className="p-6">
+                  {showAddTrigger && (
+                    <div className="mb-8 p-6 bg-blue-50/50 border border-blue-100 rounded-3xl space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black text-blue-600 uppercase mb-1 block">Palavra-Chave</label>
+                          <input 
+                            value={newTrigger.palavra_chave}
+                            onChange={(e) => setNewTrigger({ ...newTrigger, palavra_chave: e.target.value })}
+                            className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            placeholder="Ex: QUERO, SISTEMA, OI"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-blue-600 uppercase mb-1 block">Resposta no Comentário (Público)</label>
+                          <input 
+                            value={newTrigger.resposta_comentario}
+                            onChange={(e) => setNewTrigger({ ...newTrigger, resposta_comentario: e.target.value })}
+                            className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            placeholder="Ex: Te mandei no direct! 😉"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-blue-600 uppercase mb-1 block">Mensagem no Direct (Privado)</label>
+                        <textarea 
+                          value={newTrigger.mensagem_dm}
+                          onChange={(e) => setNewTrigger({ ...newTrigger, mensagem_dm: e.target.value })}
+                          className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none min-h-[80px]"
+                          placeholder="Olá! Vi que você quer saber mais sobre o sistema..."
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setShowAddTrigger(false)} className="px-4 py-2 text-xs font-bold text-gray-500">Cancelar</button>
+                        <button onClick={handleAddTrigger} className="px-6 py-2 bg-blue-600 text-white text-xs font-black rounded-xl hover:bg-blue-700">Criar Gatilho</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {triggers.length > 0 ? (
+                      triggers.map((trigger) => (
+                        <div key={trigger.id} className="p-5 border border-gray-50 rounded-2xl bg-white hover:border-blue-200 transition-all flex items-start justify-between group">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-black rounded-md uppercase tracking-wider">
+                                {trigger.palavra_chave}
+                              </span>
+                              {trigger.resposta_comentario && (
+                                <span className="text-[10px] text-gray-400 font-bold italic">
+                                  + Resposta pública: "{trigger.resposta_comentario}"
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 font-medium line-clamp-1 max-w-md">
+                              <span className="font-bold text-gray-400">DM:</span> {trigger.mensagem_dm}
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => handleDeleteTrigger(trigger.id)}
+                            className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-12 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+                        <Zap size={24} className="mx-auto text-gray-300 mb-2" />
+                        <p className="text-xs font-bold text-gray-400">Nenhum gatilho configurado.</p>
+                        <p className="text-[10px] text-gray-300">Crie gatilhos para responder conforme o comentário.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
