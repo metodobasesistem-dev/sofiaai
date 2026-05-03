@@ -234,20 +234,29 @@ export const leoInstagramService = {
   },
 
   async processWebhookEvent(body: any): Promise<void> {
+    console.log('[LeoWebhook] Evento bruto recebido:', JSON.stringify(body, null, 2));
     const entry = body.entry?.[0];
-    if (!entry) return;
+    if (!entry) {
+      console.warn('[LeoWebhook] Payload sem "entry".');
+      return;
+    }
 
     const instagramAccountId = entry.id;
+    console.log('[LeoWebhook] ID da conta no evento:', instagramAccountId);
     
     // Buscar qual empresa é dona desta conta do Instagram
-    const { data: config } = await supabase
+    const { data: config, error: configError } = await supabase
       .from('leo_config')
       .select('company_id')
       .eq('instagram_account_id', instagramAccountId)
       .maybeSingle();
 
+    if (configError) {
+      console.error('[LeoWebhook] Erro ao buscar config:', configError);
+    }
+
     if (!config) {
-      console.warn('[LeoWebhook] Conta do Instagram não vinculada a nenhuma empresa:', instagramAccountId);
+      console.warn('[LeoWebhook] Nenhuma empresa encontrada para o ID:', instagramAccountId);
       return;
     }
 
@@ -263,6 +272,7 @@ export const leoInstagramService = {
   },
 
   async handleComment(value: any, companyId: string) {
+    console.log(`[LeoWebhook] Processando comentário de @${value.from?.username}: "${value.text}"`);
     if (!value.from || !value.text) return;
     const instagramUid = value.from.id;
 

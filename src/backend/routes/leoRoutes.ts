@@ -120,10 +120,15 @@ router.get('/instagram/webhook', (req, res) => {
 
 router.post('/instagram/webhook', async (req, res) => {
   const signature = req.headers['x-hub-signature-256'] as string;
+  console.log('[Leo Webhook] POST recebido. Assinatura:', signature);
+
   if (!signature || !leoInstagramService.validateWebhookSignature(JSON.stringify(req.body), signature)) {
+    console.warn('[Leo Webhook] ❌ Falha na validação da assinatura ou assinatura ausente.');
     return res.sendStatus(403);
   }
 
+  console.log('[Leo Webhook] ✅ Assinatura validada. Processando evento...');
+  
   // Processar em background
   leoInstagramService.processWebhookEvent(req.body).catch(err => {
     console.error('[LeoWebhook] Error processing event:', err);
