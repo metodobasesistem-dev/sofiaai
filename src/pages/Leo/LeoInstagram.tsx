@@ -2,15 +2,26 @@ import React, { useEffect, useState } from 'react';
 import { Instagram, MessageCircle, Clock, CheckCircle2, RefreshCw, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { InstagramStatus } from '../../types/leo';
+import { supabase } from '../../lib/supabase';
 
 export default function LeoInstagram({ role }: any) {
   const isAdmin = role === 'admin';
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<InstagramStatus | null>(null);
 
+  const authFetch = async (url: string, options: RequestInit = {}) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${session?.access_token || ''}`,
+      'Content-Type': 'application/json'
+    };
+    return fetch(url, { ...options, headers });
+  };
+
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/leo/instagram/status');
+      const res = await authFetch('/api/leo/instagram/status');
       const data = await res.json();
       setStatus(data);
     } catch (error) {
@@ -36,7 +47,7 @@ export default function LeoInstagram({ role }: any) {
 
   const handleConnect = async () => {
     try {
-      const res = await fetch('/api/leo/instagram/auth-url');
+      const res = await authFetch('/api/leo/instagram/auth-url');
       const data = await res.json();
       if (data.url) window.location.href = data.url;
     } catch (error) {
@@ -47,7 +58,7 @@ export default function LeoInstagram({ role }: any) {
   const handleDisconnect = async () => {
     if (!confirm('Tem certeza que deseja desconectar o Instagram?')) return;
     try {
-      const res = await fetch('/api/leo/instagram/disconnect', { method: 'POST' });
+      const res = await authFetch('/api/leo/instagram/disconnect', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         toast.success('Desconectado com sucesso.');
@@ -60,7 +71,7 @@ export default function LeoInstagram({ role }: any) {
 
   const handleRefresh = async () => {
     try {
-      const res = await fetch('/api/leo/instagram/refresh-token', { method: 'POST' });
+      const res = await authFetch('/api/leo/instagram/refresh-token', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         toast.success('Token renovado com sucesso.');
