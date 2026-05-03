@@ -90,13 +90,17 @@ export const leoInstagramService = {
     }
 
     if (!pagesData.data || pagesData.data.length === 0) {
-      throw new Error('A Meta não retornou nenhuma página vinculada a este login. Verifique se você é administrador da página.');
+      console.warn('[LeoInstagramService] Lista de páginas vazia para o usuário.');
+      throw new Error('A Meta não retornou nenhuma página. Verifique se você concedeu as permissões de "Páginas" durante o login e se o seu App está no modo "Live".');
     }
 
     // Procurar a primeira página que tenha uma conta do Instagram Business vinculada
     const pageWithIg = pagesData.data.find((p: any) => p.instagram_business_account);
+    
     if (!pageWithIg) {
-      throw new Error('Nenhuma conta do Instagram Business vinculada às suas páginas do Facebook.');
+      const hasPages = pagesData.data.length;
+      console.warn(`[LeoInstagramService] Usuário tem ${hasPages} páginas, mas nenhuma com IG Business vinculado.`);
+      throw new Error(`Encontramos ${hasPages} página(s), mas nenhuma delas tem uma "Conta do Instagram Business" vinculada corretamente. Verifique se a sua conta do Instagram é "Comercial" e não "Criador/Pessoal".`);
     }
 
     const igAccount = pageWithIg.instagram_business_account;
