@@ -134,16 +134,24 @@ router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
 // ─── PATCH /api/v2/admin/settings ────────────────────────────────────────
 router.patch('/settings', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const payload = { ...req.body };
+    
+    // Tratar campos UUID vazios como null para evitar erro de sintaxe no banco
+    if (payload.admin_notification_user_id === '') {
+      payload.admin_notification_user_id = null;
+    }
+    
     const { data: existing } = await supabase.from('global_settings').select('id').limit(1).maybeSingle();
     let result;
     if (existing) {
-      result = await supabase.from('global_settings').update(req.body).eq('id', existing.id);
+      result = await supabase.from('global_settings').update(payload).eq('id', existing.id);
     } else {
-      result = await supabase.from('global_settings').insert(req.body);
+      result = await supabase.from('global_settings').insert(payload);
     }
     if (result.error) throw result.error;
     res.json({ success: true });
   } catch (err: any) {
+    console.error('[AdminAPI] Settings Update Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
