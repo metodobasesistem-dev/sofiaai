@@ -132,7 +132,18 @@ export const leoInstagramService = {
   async getStatus(companyId: string): Promise<InstagramStatus> {
     const { data: config } = await supabase
       .from('leo_config')
-      .select('instagram_username, instagram_name, instagram_picture_url, instagram_token_expires_at, instagram_access_token')
+      .select(`
+        instagram_username, 
+        instagram_name, 
+        instagram_picture_url, 
+        instagram_token_expires_at, 
+        instagram_access_token,
+        instagram_account_id,
+        insta_auto_follow_enabled,
+        insta_auto_follow_msg,
+        insta_auto_comment_enabled,
+        insta_auto_comment_msg
+      `)
       .eq('company_id', companyId)
       .single();
 
@@ -140,15 +151,36 @@ export const leoInstagramService = {
       return { connected: false, account: null, expires_at: null };
     }
 
+    // Buscar dados extras da conta via Graph API
+    let followers = 0;
+    let media = 0;
+    try {
+      const accessToken = decrypt(config.instagram_access_token);
+      const res = await fetch(`https://graph.facebook.com/v19.0/${config.instagram_account_id}?fields=followers_count,media_count&access_token=${accessToken}`);
+      const data = await res.json();
+      followers = data.followers_count || 0;
+      media = data.media_count || 0;
+    } catch (err) {
+      console.error('[LeoInstagramService] Error fetching extra account data:', err);
+    }
+
     return {
       connected: true,
       account: {
-        id: '', // Not stored/needed here
+        id: config.instagram_account_id,
         username: config.instagram_username,
         name: config.instagram_name,
-        picture_url: config.instagram_picture_url
+        picture_url: config.instagram_picture_url,
+        followers_count: followers,
+        media_count: media
       },
-      expires_at: config.instagram_token_expires_at
+      expires_at: config.instagram_token_expires_at,
+      settings: {
+        insta_auto_follow_enabled: config.insta_auto_follow_enabled,
+        insta_auto_follow_msg: config.insta_auto_follow_msg,
+        insta_auto_comment_enabled: config.insta_auto_comment_enabled,
+        insta_auto_comment_msg: config.insta_auto_comment_msg
+      }
     };
   },
 
@@ -253,6 +285,28 @@ export const leoInstagramService = {
     });
 
     console.log(`[LeoWebhook] Comentário processado para lead: ${value.from.username}`);
+
+    // 3. Automação de Resposta
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('insta_auto_comment_enabled, insta_auto_comment_msg')
+      .eq('company_id', companyId)
+      .single();
+
+    if (config?.insta_auto_comment_enabled && config.insta_auto_comment_msg) {
+      try {
+        await this.sendMessage(instagramUid, config.insta_auto_comment_msg, companyId);
+        
+        // Registrar DM enviada pela automação
+        await supabase.from('leo_instagram_interacoes').insert({
+          lead_id: lead.id,
+          tipo: 'dm_enviada',
+          conteudo: config.insta_auto_comment_msg
+        });
+      } catch (err) {
+        console.error('[LeoWebhook] Erro ao enviar auto-resposta de comentário:', err);
+      }
+    }
   },
 
   async handleDM(messaging: any, companyId: string) {
@@ -309,5 +363,35 @@ export const leoInstagramService = {
 
     const result = await res.json();
     if (result.error) throw new Error(result.error.message);
+  },
+
+  async getHistory(companyId: string) {
+    const { data: leads } = await supabase
+      .from('leo_leads')
+      .select('id')
+      .eq('company_id', companyId);
+    
+    if (!leads || leads.length === 0) return { comments: [], dms: [] };
+
+    const leadIds = leads.map(l => l.id);
+
+    const { data: interacoes } = await supabase
+      .from('leo_instagram_interacoes')
+      .select('*, lead:leo_leads(nome, instagram_uid)')
+      .in('lead_id', leadIds)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    return {
+      comments: interacoes?.filter(i => i.tipo === 'comentario') || [],
+      dms: interacoes?.filter(i => i.tipo !== 'comentario') || []
+    };
+  },
+
+  async updateSettings(companyId: string, settings: any) {
+    await supabase
+      .from('leo_config')
+      .update(settings)
+      .eq('company_id', companyId);
   }
 };

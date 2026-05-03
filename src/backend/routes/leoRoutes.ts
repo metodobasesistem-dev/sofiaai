@@ -54,6 +54,24 @@ router.post('/instagram/refresh-token', requireAuth, requireAdmin, async (req: A
   }
 });
 
+router.get('/instagram/history', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const history = await leoInstagramService.getHistory(req.userId!);
+    res.json(history);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/instagram/settings', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    await leoInstagramService.updateSettings(req.userId!, req.body);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- WEBHOOKS (Público) ---
 
 router.get('/instagram/webhook', (req, res) => {
