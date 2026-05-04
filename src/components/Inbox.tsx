@@ -356,7 +356,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
   </div>
 );
 
-const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
+const ChatBubble: React.FC<{ message: Message; onPreview: (media: any) => void }> = ({ message, onPreview }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -379,7 +379,7 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
         return (
           <div className="space-y-2">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity"
-                 onClick={() => window.open(message.media_url, '_blank')}>
+                 onClick={() => onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
               <img src={message.media_url} alt="WhatsApp" className="max-w-full max-h-[300px] object-contain" />
             </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
@@ -389,18 +389,25 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
       case 'video':
         return (
           <div className="space-y-2">
-            <video controls className="rounded-lg max-w-full max-h-[300px]">
-              <source src={message.media_url} type={message.media_mime_type} />
-              Seu navegador não suporta vídeos.
-            </video>
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group"
+                 onClick={() => onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
+              <video className="max-w-full max-h-[300px]">
+                <source src={message.media_url} type={message.media_mime_type} />
+              </video>
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <Play size={24} className="fill-white ml-1" />
+                </div>
+              </div>
+            </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
           </div>
         );
 
       case 'document':
         return (
-          <a href={message.media_url} target="_blank" rel="noopener noreferrer" 
-             className="flex items-center gap-3 p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-colors no-underline">
+          <div onClick={() => onPreview({ url: message.media_url, type: 'document', name: message.media_filename })}
+             className="flex items-center gap-3 p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-colors cursor-pointer">
             <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white shrink-0">
               <FileText size={20} />
             </div>
@@ -412,7 +419,7 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
                 {message.media_mime_type?.split('/')[1] || 'Documento'}
               </p>
             </div>
-          </a>
+          </div>
         );
 
       case 'sticker':
@@ -518,6 +525,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
 
   // Helper centralizado para resolver o nome do contato via CRM
   const getResolvedContact = (remoteJid: string, fallbackName: string) => {
@@ -1483,7 +1491,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
                     .map(msg => (
-                      <ChatBubble key={msg.id} message={msg} />
+                      <ChatBubble key={msg.id} message={msg} onPreview={setPreviewMedia} />
                     ))}
                   <div ref={messagesEndRef} />
                 </>
@@ -2009,6 +2017,59 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {previewMedia && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-10 animate-in fade-in duration-200">
+          <button 
+            onClick={() => setPreviewMedia(null)}
+            className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all z-10"
+            title="Fechar"
+          >
+            <X size={28} />
+          </button>
+
+          <div className="max-w-7xl max-h-screen w-full h-full flex flex-col items-center justify-center relative">
+            {previewMedia.type === 'image' && (
+              <img src={previewMedia.url} alt={previewMedia.name || 'Preview'} className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in duration-300" />
+            )}
+            
+            {previewMedia.type === 'video' && (
+              <video controls autoPlay className="max-w-full max-h-full rounded-xl shadow-2xl animate-in zoom-in duration-300">
+                <source src={previewMedia.url} />
+                Seu navegador não suporta vídeos.
+              </video>
+            )}
+
+            {previewMedia.type === 'document' && (
+               <div className="bg-white rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in duration-300 max-w-sm w-full">
+                  <div className="w-24 h-24 rounded-2xl bg-blue-500 flex items-center justify-center text-white">
+                    <FileText size={48} />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-xl font-bold text-slate-800 break-all">{previewMedia.name || 'Documento'}</h3>
+                    <p className="text-slate-500 mt-2 text-sm">Este arquivo está pronto para download.</p>
+                  </div>
+                  <a 
+                    href={previewMedia.url} 
+                    target="_blank" 
+                    download={previewMedia.name}
+                    className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg"
+                  >
+                    <Download size={18} /> Download Arquivo
+                  </a>
+               </div>
+            )}
+
+            {previewMedia.name && previewMedia.type !== 'document' && (
+              <div className="absolute bottom-0 left-0 right-0 text-center pb-6">
+                <span className="px-4 py-2 bg-black/40 text-white text-[11px] font-bold rounded-full backdrop-blur-md border border-white/10">
+                  {previewMedia.name}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
