@@ -157,10 +157,10 @@ export default function App() {
   };
 
   const { flags = {}, isLoading: flagsLoading } = useFeatureContext();
-  const leoEnabled = flags['leo_ai'];
-  const agendasEnabled = flags['agendas'];
-  const crmEnabled = flags['crm'];
-  const chatEnabled = flags['chat'];
+  const leoEnabled = flags['leo_ai'] === true;
+  const agendasEnabled = flags['agendas'] === true;
+  const crmEnabled = flags['crm'] !== false; // Permite por padrão se não existir no banco
+  const chatEnabled = flags['chat'] !== false; // Permite por padrão se não existir no banco
 
   if (loading || flagsLoading) {
     return (
