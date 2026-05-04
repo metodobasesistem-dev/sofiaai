@@ -8,6 +8,9 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#075e54" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
   </head>
   <body>
     <div id="root"></div>
@@ -15,12 +18,19 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW Registered!', reg))
-            .catch(err => console.log('SW Reg Error:', err));
+          navigator.serviceWorker.register('/sw.js').then(reg => {
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              installingWorker.onstatechange = () => {
+                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('[SW] New version found, reloading...');
+                  window.location.reload();
+                }
+              };
+            };
+          });
         });
       }
     </script>
   </body>
-</html>
 
