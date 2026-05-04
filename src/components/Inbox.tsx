@@ -1841,7 +1841,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <CreditCard size={14} className="text-blue-500" /> Gestão de Funil
                 </h4>
                 <div className="flex flex-col gap-2">
-                  {(['Lead', 'Qualificado', 'Cliente'] as const).map((status) => {
+                  {(['Lead', 'Qualificado', 'Resolvido'] as const).map((status) => {
                     const isActive = activeThread.funilStatus === status;
                     return (
                       <button 
@@ -1870,7 +1870,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full 
-                            ${status === 'Lead' ? 'bg-slate-400' : 
+                            ${status === 'Lead' ? 'bg-blue-500' : 
                               status === 'Qualificado' ? 'bg-indigo-500' : 'bg-emerald-500'}`} 
                           />
                           <span className={`text-[13px] font-semibold ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>{status}</span>
