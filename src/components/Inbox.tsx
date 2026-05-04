@@ -265,7 +265,9 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-1">
-        <h4 className={`text-[15px] truncate ${(thread.unreadCount ?? 0) > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700'}`}>
+        <h4 className={(thread.unreadCount ?? 0) > 0 
+          ? "text-[15px] truncate font-black text-slate-900" 
+          : "text-[15px] truncate font-medium text-slate-600"}>
           {thread.name}
         </h4>
         <div className="flex items-center gap-2">
@@ -279,17 +281,21 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
           >
             <Trash size={12} />
           </button>
-          <span className={`text-[11px] font-medium ${thread.unreadCount ? 'text-emerald-500' : 'text-slate-400'}`}>
+          <span className={(thread.unreadCount ?? 0) > 0 
+            ? "text-[11px] font-bold text-emerald-500" 
+            : "text-[11px] font-medium text-slate-400"}>
             {thread.time}
           </span>
         </div>
       </div>
       
       <div className="flex items-center justify-between">
-        <p className={`text-[13px] truncate leading-tight flex-1 mr-2 ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+        <p className={(thread.unreadCount ?? 0) > 0 
+          ? "text-[13px] truncate leading-tight flex-1 mr-2 font-bold text-slate-900" 
+          : "text-[13px] truncate leading-tight flex-1 mr-2 font-normal text-slate-500"}>
           {thread.lastMessage || 'Inicie uma conversa'}
         </p>
-        {Boolean(thread.unreadCount) && (
+        {(thread.unreadCount ?? 0) > 0 && (
           <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm">
             {thread.unreadCount}
           </span>
