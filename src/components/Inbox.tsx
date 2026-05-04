@@ -445,7 +445,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [contacts, setContacts] = useState<any[]>([]);
   const contactsRef = useRef<any[]>([]);
   
-  useEffect(() => {
+  // States for Image Pasting (Ctrl+V)
+  const [pastedFile, setPastedFile] = useState<File | null>(null);
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteCaption, setPasteCaption] = useState('');
+  const [isUploadingPaste, setIsUploadingPaste] = useState(false);
+  const [pastedImageUrl, setPastedImageUrl] = useState<string | null>(null);
     contactsRef.current = contacts;
   }, [contacts]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1068,6 +1073,66 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          setPastedFile(file);
+          const url = URL.createObjectURL(file);
+          setPastedImageUrl(url);
+          setShowPasteModal(true);
+          setPasteCaption('');
+          e.preventDefault();
+        }
+      }
+    }
+  };
+
+  const handleSendPastedImage = async () => {
+    if (!pastedFile || !selectedThreadId || !activeThread) return;
+    
+    const userId = user?.id;
+    if (!userId) return;
+
+    setIsUploadingPaste(true);
+    try {
+      const formData = new FormData();
+      formData.append('media', pastedFile);
+      formData.append('userId', userId);
+      formData.append('remoteJid', activeThread.remoteJid);
+      if (pasteCaption.trim()) formData.append('caption', pasteCaption.trim());
+
+      const response = await fetch('/api/whatsapp/send-media', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Falha ao enviar imagem colada');
+      
+      toast.success('Imagem enviada!');
+      
+      // Cleanup
+      if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
+      setShowPasteModal(false);
+      setPastedFile(null);
+      setPastedImageUrl(null);
+      setPasteCaption('');
+      
+      await supabase
+        .from('threads')
+        .update({ status: 'human', updated_at: new Date().toISOString() })
+        .eq('id', selectedThreadId);
+
+    } catch (err) {
+      console.error('Error sending pasted image:', err);
+      toast.error('Erro ao enviar imagem colada');
+    } finally {
+      setIsUploadingPaste(false);
+    }
+  };
+
   useEffect(() => {
     (window as any).handleDeleteThread = handleDeleteThread;
   }, [threads, selectedThreadId]);
@@ -1430,6 +1495,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <textarea 
                     rows={1} 
                     value={messageText} 
+                    onPaste={handlePaste}
                     onChange={(e) => {
                       const val = e.target.value;
                       setMessageText(val);
@@ -1774,6 +1840,90 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <BarChart3 size={24} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Analytics</span>
           </button>
+        </div>
+      )}
+      {/* Modal para Colar Imagem (Ctrl+V) */}
+      {showPasteModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <Paperclip size={18} className="text-blue-500" />
+                Enviar Imagem Colada
+              </h3>
+              <button 
+                onClick={() => {
+                  if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
+                  setShowPasteModal(false);
+                  setPastedFile(null);
+                  setPastedImageUrl(null);
+                }}
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Preview */}
+            <div className="p-6 flex-1 overflow-y-auto bg-slate-50/30">
+              <div className="relative group rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
+                {pastedImageUrl && (
+                  <img 
+                    src={pastedImageUrl} 
+                    alt="Pasted" 
+                    className="w-full max-h-[350px] object-contain mx-auto" 
+                  />
+                )}
+              </div>
+              
+              <div className="mt-6 space-y-2">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">
+                  Legenda (Opcional)
+                </label>
+                <textarea
+                  placeholder="Escreva uma legenda para a imagem..."
+                  value={pasteCaption}
+                  onChange={(e) => setPasteCaption(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-50 outline-none transition-all resize-none"
+                  rows={2}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
+                  setShowPasteModal(false);
+                  setPastedFile(null);
+                  setPastedImageUrl(null);
+                }}
+                className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSendPastedImage}
+                disabled={isUploadingPaste}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+              >
+                {isUploadingPaste ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send size={18} />
+                    Enviar Imagem
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
