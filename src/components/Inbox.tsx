@@ -906,7 +906,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       if (!thread) return;
 
       try {
-        const cleanPhone = thread.remoteJid.split('@')[0].replace(/\D/g, '');
+        const cleanPhone = (thread.remoteJid || '').split('@')[0].replace(/\D/g, '');
         const { data: contact } = await supabase
           .from('contacts')
           .select('*')
@@ -1111,7 +1111,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       await supabase.from('messages').delete().eq('thread_id', thread.id);
       await supabase.from('threads').delete().eq('id', thread.id);
       
-      const phoneNumber = thread.remoteJid.split('@')[0];
+      const phoneNumber = (thread.remoteJid || '').split('@')[0];
       await supabase.from('contacts').delete().ilike('telefone', `%${phoneNumber.slice(-8)}%`);
 
       toast.success('Conversa excluída');
@@ -1399,7 +1399,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   onClick={async () => {
                     const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
                     const newFunil = newStatus === 'resolved' ? 'Resolvido' : 'Lead';
-                    const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
                     
                     // Update thread
                     await supabase.from('threads').update({ ticket_status: newStatus }).eq('id', activeThread.id);
@@ -1694,7 +1694,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     <button
                       onClick={async () => {
                         const newVal = !activeThread.is_client;
-                        const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                        const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
                         await supabase.from('contacts').update({ is_client: newVal }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
                         setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
                         toast.success(newVal ? 'Marcado como Cliente! ⭐' : 'Etiqueta de Cliente removida.');
@@ -1769,7 +1769,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">WhatsApp</p>
-                      <p className="text-sm font-black text-gray-800">{activeThread.remoteJid.split('@')[0]}</p>
+                      <p className="text-sm font-black text-gray-800">{(activeThread.remoteJid || '').split('@')[0]}</p>
                     </div>
                   </div>
                   
@@ -1836,7 +1836,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       <button 
                         key={status}
                         onClick={async () => {
-                          const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                          const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
                           const { error } = await supabase
                             .from('contacts')
                             .update({ status_funil: status })

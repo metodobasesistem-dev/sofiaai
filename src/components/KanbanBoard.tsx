@@ -127,7 +127,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
           if (error) throw error;
         } else {
           // Fallback to update contacts table via cleanPhone
-          const cleanPhone = card.remoteJid.split('@')[0].replace(/\D/g, '');
+          const cleanPhone = (card.remoteJid || '').split('@')[0].replace(/\D/g, '');
           const { error } = await supabase
             .from('contacts')
             .update({ status_funil: targetColumnId })
