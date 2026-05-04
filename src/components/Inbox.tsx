@@ -1331,15 +1331,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             />
           </div>
 
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
             {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0
                   ${filterStatus === f 
-                    ? 'bg-blue-600 text-white shadow-sm' 
-                    : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border border-blue-500' 
+                    : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'}`}
               >
                 {f}
               </button>
