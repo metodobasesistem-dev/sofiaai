@@ -263,25 +263,39 @@ export class AgentService {
     try {
       const cleanPhone = (displayPhone || threadId.split('_')[1] || '').replace(/\D/g, '');
       const [{ data: existingThread }, { data: contact }] = await Promise.all([
-        supabase.from('threads').select('contact_name, photo_url, unread_count').eq('id', threadId).maybeSingle(),
-        supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
+        supabase.from('threads').select('contact_name, photo_url, unread_count, ticket_status').eq('id', threadId).maybeSingle(),
+        supabase.from('contacts').select('nome, status_funil').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
       ]);
       
       const newUnreadCount = direction === 'inbound' 
         ? (existingThread?.unread_count || 0) + 1 
         : (existingThread?.unread_count || 0);
 
+      // Lógica de Reabertura Automática (Resolvido -> Lead)
+      let finalTicketStatus = existingThread?.ticket_status || 'open';
+      let finalFunilStatus = contact?.status_funil;
+
+      if (direction === 'inbound' && (finalTicketStatus === 'resolved' || finalFunilStatus === 'Resolvido')) {
+        console.log(`[AgentService] 🔄 Reopening resolved thread for ${cleanPhone}. Moving back to Lead.`);
+        finalTicketStatus = 'open';
+        finalFunilStatus = 'Lead';
+        
+        // Atualiza o contato no banco também
+        await supabase.from('contacts').update({ status_funil: 'Lead' }).eq('id', `${userId}_${cleanPhone}`);
+      }
+
       const threadData: any = {
         id: threadId,
         user_id: userId,
         last_message: text.substring(0, 1000),
         last_message_time: new Date(timestamp).toISOString(),
-        status: 'ia', // Mantemos 'ia' como padrão ou o que vier do DB
+        status: 'ia', 
         remote_jid: remoteJid || `${cleanPhone}@c.us`,
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia',
         contact_name: contact?.nome || contactName || existingThread?.contact_name || 'Cliente',
         unread_count: newUnreadCount,
+        ticket_status: finalTicketStatus,
         updated_at: new Date(timestamp).toISOString()
       };
 

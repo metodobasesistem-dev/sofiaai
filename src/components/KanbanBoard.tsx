@@ -36,7 +36,8 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     ? [
         { id: 'Lead', title: 'Leads', color: 'bg-slate-100', borderColor: 'border-slate-200', titleColor: 'text-slate-600' },
         { id: 'Qualificado', title: 'Qualificados', color: 'bg-indigo-50', borderColor: 'border-indigo-100', titleColor: 'text-indigo-600' },
-        { id: 'Cliente', title: 'Clientes', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
+        { id: 'Cliente', title: 'Clientes', color: 'bg-blue-50', borderColor: 'border-blue-100', titleColor: 'text-blue-600' },
+        { id: 'Resolvido', title: 'Resolvidos', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
       ]
     : [
         { id: 'open', title: 'Abertos', color: 'bg-amber-50', borderColor: 'border-amber-100', titleColor: 'text-amber-600' },

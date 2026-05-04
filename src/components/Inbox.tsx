@@ -1393,8 +1393,16 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <button
                   onClick={async () => {
                     const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
+                    const newFunil = newStatus === 'resolved' ? 'Resolvido' : 'Lead';
+                    const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                    
+                    // Update thread
                     await supabase.from('threads').update({ ticket_status: newStatus }).eq('id', activeThread.id);
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, ticketStatus: newStatus } : t));
+                    
+                    // Update contact funil status
+                    await supabase.from('contacts').update({ status_funil: newFunil }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, ticketStatus: newStatus, funilStatus: newFunil } : t));
                     if (newStatus === 'resolved') toast.success('Conversa marcada como resolvida!');
                   }}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-1.5
