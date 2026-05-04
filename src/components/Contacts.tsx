@@ -87,10 +87,10 @@ const getAvatarColor = (id: string) => AVATAR_COLORS[(id.charCodeAt(0) + id.char
 
 // ── Status Badge ────────────────────────────────────────────────────────────────
 
-const FUNIL_STYLES: Record<Contact['status_funil'], { label: string; className: string; icon: React.ReactNode }> = {
+const FUNIL_STYLES: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   Lead:       { label: 'Lead',       className: 'bg-blue-50 text-blue-700 border-blue-200',     icon: <Zap size={10} /> },
-  Qualificado:{ label: 'Qualificado',className: 'bg-green-50 text-green-700 border-green-200',   icon: <CheckCircle2 size={10} /> },
-  Cliente:    { label: 'Cliente',    className: 'bg-amber-50 text-amber-700 border-amber-200',   icon: <Star size={10} /> },
+  Qualificado:{ label: 'Qualificado',className: 'bg-indigo-50 text-indigo-700 border-indigo-200',   icon: <CheckCircle2 size={10} /> },
+  Resolvido:  { label: 'Resolvido',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200',   icon: <CheckCircle2 size={10} /> },
 };
 
 const StatusBadge = ({ status, onClick }: { status: Contact['status_funil']; onClick?: (e: React.MouseEvent) => void }) => {
@@ -143,6 +143,23 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
     }
   };
 
+  const toggleIsClient = async () => {
+    if (!contact.id || updatingStatus) return;
+    setUpdatingStatus(true);
+    try {
+      const newVal = !contact.is_client;
+      await updateContact(contact.id, { is_client: newVal } as any);
+      onStatusChange(contact.id, contact.status_funil); // Just to trigger parent refresh, better way would be a new callback
+      // Force local update if possible, but let's assume parent handles it
+      toast.success(newVal ? 'Marcado como Cliente! ⭐' : 'Removido de Clientes');
+      window.location.reload(); // Quick fix to sync all states
+    } catch (err) {
+      toast.error('Erro ao atualizar etiqueta');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const openInbox = () => {
     const cleanPhone = contact.telefone.replace(/\D/g, '');
     const jid = `${cleanPhone}@s.whatsapp.net`;
@@ -166,16 +183,21 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
             {getInitials(contact.nome)}
           </div>
           <div>
-            <h3 className="text-lg font-black text-gray-900 leading-tight">{contact.nome}</h3>
+            <h3 className="text-lg font-black text-gray-900 leading-tight flex items-center gap-2">
+              {contact.nome}
+              {contact.is_client && <Star size={16} className="fill-amber-500 text-amber-500" />}
+            </h3>
             <p className="text-sm text-gray-500">{formatPhone(contact.telefone)}</p>
+            <div className="flex items-center gap-2 mt-1">
               <StatusBadge 
                 status={contact.status_funil} 
                 onClick={() => {
-                  const order: Contact['status_funil'][] = ['Lead', 'Qualificado', 'Cliente'];
+                  const order: any[] = ['Lead', 'Qualificado', 'Resolvido'];
                   const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
                   handleUpdateStatus(next);
                 }} 
               />
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -201,6 +223,21 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
             <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">{stat.label}</span>
           </div>
         ))}
+      </div>
+
+      {/* Special Action: Mark as Client */}
+      <div className="p-6 border-b border-gray-100">
+        <button
+          onClick={toggleIsClient}
+          disabled={updatingStatus}
+          className={`w-full flex items-center justify-center gap-2 p-3 rounded-2xl border-2 font-black text-xs uppercase tracking-widest transition-all
+            ${contact.is_client 
+              ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' 
+              : 'bg-white border-gray-100 text-gray-400 hover:border-amber-200 hover:text-amber-500'}`}
+        >
+          <Star size={16} className={contact.is_client ? 'fill-amber-500' : ''} />
+          {contact.is_client ? 'É Cliente ⭐' : 'Etiquetar como Cliente'}
+        </button>
       </div>
 
       {/* Info */}
@@ -263,9 +300,9 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
         <div className="pt-2">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Mudar Status (Funil)</p>
           <div className="grid grid-cols-3 gap-2">
-            {(['Lead', 'Qualificado', 'Cliente'] as const).map((status) => {
+            {(['Lead', 'Qualificado', 'Resolvido'] as const).map((status) => {
               const isActive = contact.status_funil === status;
-              const s = FUNIL_STYLES[status];
+              const s = FUNIL_STYLES[status] || FUNIL_STYLES['Lead'];
               return (
                 <button
                   key={status}
@@ -411,7 +448,10 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
     contacts.filter(c => {
       const matchSearch = c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           c.telefone.includes(searchTerm);
-      const matchStatus = filterStatus === 'Todos' || c.status_funil === filterStatus;
+      let matchStatus = true;
+      if (filterStatus === 'Cliente') matchStatus = !!c.is_client;
+      else if (filterStatus !== 'Todos') matchStatus = c.status_funil === filterStatus;
+      
       return matchSearch && matchStatus;
     }), [contacts, searchTerm, filterStatus]);
 
@@ -419,7 +459,8 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
     total: contacts.length,
     leads: contacts.filter(c => c.status_funil === 'Lead').length,
     qualificados: contacts.filter(c => c.status_funil === 'Qualificado').length,
-    clientes: contacts.filter(c => c.status_funil === 'Cliente').length,
+    resolvidos: contacts.filter(c => c.status_funil === 'Resolvido').length,
+    clientes: contacts.filter(c => c.is_client).length,
   }), [contacts]);
 
   return (
@@ -463,8 +504,8 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
           {[
             { label: 'Total', value: stats.total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', status: 'Todos' },
             { label: 'Leads', value: stats.leads, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100', status: 'Lead' },
-            { label: 'Qualificados', value: stats.qualificados, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-100', status: 'Qualificado' },
             { label: 'Clientes', value: stats.clientes, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-100', status: 'Cliente' },
+            { label: 'Resolvidos', value: stats.resolvidos, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', status: 'Resolvido' },
           ].map((s, i) => (
             <button
               key={i}
@@ -492,7 +533,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
         </div>
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-gray-400" />
-          {(['Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+          {(['Todos', 'Lead', 'Qualificado', 'Resolvido', 'Cliente'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilterStatus(f as any)}
@@ -543,7 +584,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                   <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contato</th>
                   <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Número</th>
                   <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Última mensagem</th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Interação</th>
+                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell text-center">Tipo</th>
                   <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
                   <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Ações</th>
                 </tr>
@@ -579,20 +620,23 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                       <td className="px-5 py-4 hidden lg:table-cell max-w-[220px]">
                         <p className="text-xs text-gray-500 truncate">{contact.ultimaMensagem || '—'}</p>
                       </td>
-                      <td className="px-5 py-4 hidden sm:table-cell">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <Clock size={12} className="text-gray-400" />
-                          {formatRelative(contact.ultimaInteracao || contact.data_criacao)}
-                        </div>
+                      <td className="px-5 py-4 hidden sm:table-cell text-center">
+                        {contact.is_client ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[9px] font-black uppercase tracking-wider">
+                            <Star size={10} className="fill-amber-500" /> Cliente
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Lead</span>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <StatusBadge 
                           status={contact.status_funil} 
                           onClick={async (e: any) => {
-                            e.stopPropagation();
-                            if (!contact.id) return;
-                            const order: Contact['status_funil'][] = ['Lead', 'Qualificado', 'Cliente'];
-                            const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
+                             e.stopPropagation();
+                             if (!contact.id) return;
+                             const order: any[] = ['Lead', 'Qualificado', 'Resolvido'];
+                             const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
                             try {
                               await updateContactFunilStatus(contact.id, next);
                               handleStatusChange(contact.id, next);

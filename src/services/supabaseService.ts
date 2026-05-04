@@ -95,6 +95,7 @@ export interface Contact {
   primeiroContato?: string;
   totalMensagens?: number;
   source?: 'whatsapp' | 'manual';
+  is_client?: boolean;
 }
 
 export interface UserProfile {
@@ -521,7 +522,8 @@ export const listContacts = async (): Promise<Contact[]> => {
       ultimaInteracao: c.ultima_interacao,
       primeiroContato: c.primeiro_contato,
       totalMensagens: c.total_mensagens,
-      source: c.source as any
+      source: c.source as any,
+      is_client: c.is_client
     }));
   } catch (err: any) {
     logSystemError('frontend:contacts', err.message);
