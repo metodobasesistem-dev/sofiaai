@@ -372,9 +372,13 @@ export class AgentService {
 
     // 3. Update Contact
     try {
-      const cleanPhone = (displayPhone || threadId.split('_')[1]).replace(/\D/g, '');
-      await this.upsertContact(userId, cleanPhone, contactName, text, direction === 'inbound');
-    } catch (dbErr) {}
+      const cleanPhone = (displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId) || '').replace(/\D/g, '');
+      if (cleanPhone) {
+        await this.upsertContact(userId, cleanPhone, contactName, text, direction === 'inbound');
+      }
+    } catch (dbErr) {
+      console.error('[AgentService] Contact sync error:', dbErr);
+    }
   }
 
   private async upsertContact(userId: string, phoneNumber: string, contactName: string | undefined, lastMessage: string, incrementCount: boolean = true) {
@@ -384,33 +388,34 @@ export class AgentService {
       const { data: existing } = await supabase.from('contacts').select('*').eq('id', contactId).maybeSingle();
 
       const contactData: any = {
+        id: contactId,
+        user_id: userId,
+        telefone: cleanPhone,
         ultima_mensagem: lastMessage,
         ultima_interacao: new Date().toISOString(),
       };
 
       if (!existing) {
-        const { error: insErr } = await supabase.from('contacts').insert({
-          id: contactId,
-          user_id: userId,
-          nome: contactName || cleanPhone,
-          telefone: cleanPhone,
-          status_funil: 'Lead',
-          source: 'whatsapp',
-          ...contactData,
-          primeiro_contato: new Date().toISOString(),
-          data_criacao: new Date().toISOString(),
-          total_mensagens: 1
-        });
-        if (insErr) console.error('[DEBUG-CONTACTS] ERRO AO INSERIR CONTATO:', JSON.stringify(insErr, null, 2));
+        contactData.nome = contactName || cleanPhone;
+        contactData.status_funil = 'Lead';
+        contactData.source = 'whatsapp';
+        contactData.primeiro_contato = new Date().toISOString();
+        contactData.data_criacao = new Date().toISOString();
+        contactData.total_mensagens = 1;
       } else {
         // Só atualiza o nome se for inbound OU se o nome atual for genérico
         const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp' || existing.nome === 'Você';
         if (contactName && (incrementCount || isGeneric)) {
            contactData.nome = contactName;
         }
-        if (incrementCount) contactData.total_mensagens = (existing.total_mensagens || 0) + 1;
-        const { error: updErr } = await supabase.from('contacts').update(contactData).eq('id', contactId);
-        if (updErr) console.error('[DEBUG-CONTACTS] ERRO AO ATUALIZAR CONTATO:', JSON.stringify(updErr, null, 2));
+        if (incrementCount) {
+          contactData.total_mensagens = (existing.total_mensagens || 0) + 1;
+        }
+      }
+
+      const { error: upsertErr } = await supabase.from('contacts').upsert(contactData, { onConflict: 'id' });
+      if (upsertErr) {
+        console.error('[AgentService] ❌ Contact upsert failed:', upsertErr);
       }
     } catch (error) {
       console.error('[AgentService] Contact error:', error);

@@ -457,6 +457,26 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
         </div>
         <div className="flex items-center gap-3">
           <button 
+            onClick={async () => {
+              try {
+                toast.loading('Sincronizando contatos...');
+                const res = await syncContacts();
+                toast.dismiss();
+                if (res.success) {
+                  toast.success(`${res.synced} novos contatos sincronizados!`);
+                  fetchContacts();
+                }
+              } catch (err: any) {
+                toast.dismiss();
+                toast.error('Erro ao sincronizar: ' + err.message);
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-sm font-bold hover:bg-emerald-100 transition-all shadow-sm"
+            title="Sincronizar contatos das conversas do WhatsApp"
+          >
+            <RefreshCw size={16} /> Sincronizar Leads
+          </button>
+          <button 
             onClick={fetchContacts}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
             title="Atualizar lista"

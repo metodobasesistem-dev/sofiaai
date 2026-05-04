@@ -149,7 +149,7 @@ export const syncContacts = async (): Promise<{ success: boolean; synced: number
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
-  const response = await fetch('/api/contacts/sync', {
+  const response = await fetch('/api/v2/contacts/sync', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
