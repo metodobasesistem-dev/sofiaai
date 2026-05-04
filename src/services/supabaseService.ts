@@ -938,23 +938,22 @@ export const getDashboardStats = async (passedUserId?: string) => {
     userId = user.id;
   }
 
-  const [contactsCount, qualifiedCount, appointmentsCount] = await Promise.all([
+  const [contactsCount, qualifiedCount, resolvedCount] = await Promise.all([
     supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status_funil', 'Qualificado'),
-    supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'confirmed')
+    supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status_funil', 'Resolvido')
   ]);
 
   if (contactsCount.error) console.error('[DashboardStats] Contacts fetch error:', contactsCount.error);
-  if (appointmentsCount.error) console.error('[DashboardStats] Appts fetch error:', appointmentsCount.error);
 
   const totalLeads = contactsCount.count || 0;
-  const totalAppts = appointmentsCount.count || 0;
+  const totalResolved = resolvedCount.count || 0;
 
   return {
     contacts: totalLeads,
     qualified: qualifiedCount.count || 0,
-    appointments: totalAppts,
-    conversionRate: totalLeads > 0 ? Math.round((totalAppts / totalLeads) * 100) : 0,
+    appointments: totalResolved, // Mapeado para appointments para compatibilidade com o front que já usa esse campo
+    conversionRate: totalLeads > 0 ? Math.round((totalResolved / totalLeads) * 100) : 0,
     avgScore: 0,
     messages: 0 
   };
@@ -964,20 +963,20 @@ export const getGlobalDashboardStats = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { contacts: 0, appointments: 0, messages: 0, qualified: 0, conversionRate: 0, avgScore: 0 };
 
-  const [contactsCount, qualifiedCount, appointmentsCount] = await Promise.all([
+  const [contactsCount, qualifiedCount, resolvedCount] = await Promise.all([
     supabase.from('contacts').select('*', { count: 'exact', head: true }),
     supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('status_funil', 'Qualificado'),
-    supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('status', 'confirmed')
+    supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('status_funil', 'Resolvido')
   ]);
 
   const totalLeads = contactsCount.count || 0;
-  const totalAppts = appointmentsCount.count || 0;
+  const totalResolved = resolvedCount.count || 0;
 
   return {
     contacts: totalLeads,
     qualified: qualifiedCount.count || 0,
-    appointments: totalAppts,
-    conversionRate: totalLeads > 0 ? Math.round((totalAppts / totalLeads) * 100) : 0,
+    appointments: totalResolved,
+    conversionRate: totalLeads > 0 ? Math.round((totalResolved / totalLeads) * 100) : 0,
     avgScore: 0,
     messages: 0 
   };
@@ -1385,7 +1384,7 @@ export const getDashboardGrowth = async () => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const res = await fetch('/api/v2/admin/dashboard/growth', {
+  const res = await fetch('/api/v2/profile/growth', {
     headers: { 'Authorization': `Bearer ${session.access_token}` }
   });
   const result = await res.json();

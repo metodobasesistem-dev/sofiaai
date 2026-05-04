@@ -63,4 +63,46 @@ router.patch('/', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── GET /api/v2/profile/growth ─────────────────────────────────────────────
+router.get('/growth', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    // Buscar leads e resolvidos do usuário nos últimos 7 dias
+    const [leads, resolved] = await Promise.all([
+      supabase.from('contacts')
+        .select('created_at')
+        .eq('user_id', userId)
+        .gt('created_at', sevenDaysAgo),
+      supabase.from('contacts')
+        .select('updated_at') // Usamos updated_at para capturar quando virou resolvido
+        .eq('user_id', userId)
+        .eq('status_funil', 'Resolvido')
+        .gt('updated_at', sevenDaysAgo)
+    ]);
+
+    const dailyData: Record<string, any> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      dailyData[d] = { date: d, leads: 0, resolvidos: 0 };
+    }
+
+    (leads.data || []).forEach(l => {
+      const d = l.created_at.split('T')[0];
+      if (dailyData[d]) dailyData[d].leads++;
+    });
+
+    (resolved.data || []).forEach(r => {
+      const d = r.updated_at.split('T')[0];
+      if (dailyData[d]) dailyData[d].resolvidos++;
+    });
+
+    res.json({ success: true, data: Object.values(dailyData).reverse() });
+  } catch (err: any) {
+    console.error('[ProfileAPI] Growth error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
