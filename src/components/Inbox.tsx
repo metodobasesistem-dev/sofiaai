@@ -1459,8 +1459,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const filteredThreads = threads.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.remoteJid.includes(searchTerm);
     let matchesFilter = true;
-    if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved';
-    else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved';
+    if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
+    else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
     else if (filterStatus === 'Cliente') matchesFilter = !!t.is_client;
     else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
     return matchesSearch && matchesFilter;

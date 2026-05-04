@@ -109,9 +109,11 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     // Update optimistically
     onThreadsChange(prev => prev.map(t => {
       if (t.id === draggedCardId) {
-        return viewMode === 'funil'
-          ? { ...t, funilStatus: targetColumnId }
-          : { ...t, ticketStatus: targetColumnId };
+        if (viewMode === 'funil') {
+          return { ...t, funilStatus: targetColumnId, ticketStatus: targetColumnId === 'Resolvido' ? 'resolved' : 'open' };
+        } else {
+          return { ...t, ticketStatus: targetColumnId, funilStatus: targetColumnId === 'resolved' ? 'Resolvido' : 'Lead' };
+        }
       }
       return t;
     }));
@@ -119,27 +121,23 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     // Send to Supabase
     try {
       if (viewMode === 'funil') {
+        const ticketStatusUpdate = targetColumnId === 'Resolvido' ? 'resolved' : 'open';
         if (card.contactId) {
-          const { error } = await supabase
-            .from('contacts')
-            .update({ status_funil: targetColumnId })
-            .eq('id', card.contactId);
-          if (error) throw error;
+          await supabase.from('contacts').update({ status_funil: targetColumnId }).eq('id', card.contactId);
         } else {
-          // Fallback to update contacts table via cleanPhone
           const cleanPhone = (card.remoteJid || '').split('@')[0].replace(/\D/g, '');
-          const { error } = await supabase
-            .from('contacts')
-            .update({ status_funil: targetColumnId })
-            .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-          if (error) throw error;
+          await supabase.from('contacts').update({ status_funil: targetColumnId }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
         }
+        await supabase.from('threads').update({ ticket_status: ticketStatusUpdate }).eq('id', draggedCardId);
       } else {
-        const { error } = await supabase
-          .from('threads')
-          .update({ ticket_status: targetColumnId })
-          .eq('id', draggedCardId);
-        if (error) throw error;
+        const funilStatusUpdate = targetColumnId === 'resolved' ? 'Resolvido' : 'Lead';
+        await supabase.from('threads').update({ ticket_status: targetColumnId }).eq('id', draggedCardId);
+        if (card.contactId) {
+          await supabase.from('contacts').update({ status_funil: funilStatusUpdate }).eq('id', card.contactId);
+        } else {
+          const cleanPhone = (card.remoteJid || '').split('@')[0].replace(/\D/g, '');
+          await supabase.from('contacts').update({ status_funil: funilStatusUpdate }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+        }
       }
       toast.success(`Movido para ${targetColumnId}`);
     } catch (err) {
