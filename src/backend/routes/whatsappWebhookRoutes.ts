@@ -71,8 +71,8 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
       .maybeSingle();
 
     if (existing) return; // Already persisted by system
+  }
 
-    // If not in DB, it was sent from the phone
   // INBOUND OR OUTBOUND FROM PHONE
   console.log(`[Webhook] 📥 Processing message: ${messageId} | Type: ${type} | fromMe: ${fromMe}`);
 
