@@ -317,6 +317,8 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
           ${(thread.unreadCount ?? 0) > 0 ? "font-black text-slate-900" : "font-medium text-slate-600"}`}>
           {thread.name}
           {thread.is_client && <Star size={12} className="fill-amber-500 text-amber-500 shrink-0" />}
+          {thread.priority === 'urgent' && <span className="text-xs" title="Urgente">🔥</span>}
+          {thread.priority === 'high' && <span className="text-xs" title="Alta">🔴</span>}
         </h4>
         <div className="flex items-center gap-2">
           <button 
