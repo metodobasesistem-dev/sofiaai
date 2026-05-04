@@ -66,6 +66,7 @@ interface Thread {
   unreadCount?: number;
   remoteJid: string;
   updatedAt: any;
+  lastMessageTime?: number;
   ticketStatus: 'open' | 'resolved';
   funilStatus: string;
   is_client?: boolean;
@@ -642,6 +643,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               unreadCount: d.unread_count || 0,
               remoteJid: d.remote_jid || '',
               updatedAt: d.updated_at || new Date().toISOString(),
+              lastMessageTime: d.last_message_time ? new Date(d.last_message_time).getTime() : 0,
               ticketStatus: d.ticket_status || 'open',
               funilStatus: contact?.status_funil || 'Lead',
               is_client: contact?.is_client || false,
@@ -696,6 +698,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   unreadCount: payload.new.unread_count || 0,
                   remoteJid: payload.new.remote_jid,
                   updatedAt: payload.new.updated_at,
+                  lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : 0,
                   ticketStatus: payload.new.ticket_status || 'open',
                   funilStatus: resolved.funilStatus,
                   profilePictureUrl: payload.new.profile_picture_url
@@ -716,6 +719,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   status: payload.new.status || baseThread?.status || 'ia',
                   unreadCount: payload.new.unread_count ?? baseThread?.unreadCount ?? 0,
                   updatedAt: payload.new.updated_at || baseThread?.updatedAt || new Date().toISOString(),
+                  lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : (baseThread?.lastMessageTime || 0),
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
                   funilStatus: resolved.funilStatus,
