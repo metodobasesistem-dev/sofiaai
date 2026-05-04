@@ -459,7 +459,7 @@ const ChatBubble: React.FC<{
               : 'bg-white text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
         
         {isPrivate && (
-          <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase">
+          <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase" title="Esta é uma nota interna visível apenas para você">
             <Lock size={9} /> Nota Privada
           </div>
         )}
@@ -1348,7 +1348,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
            thread_id: selectedThreadId,
            text: finalMessageText,
            direction: 'outbound',
-           timestamp: Date.now()
+           timestamp: Date.now(),
+           whatsapp_id: privateId // Resolve erro de NOT NULL e constraint UNIQUE
         });
         if (error) throw error;
         
