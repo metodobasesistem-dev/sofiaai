@@ -171,21 +171,14 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isCancelledRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const startRecording = async () => {
     try {
-      // Pre-check for race condition
-      const startTime = Date.now();
-      audioChunksRef.current = [];
-      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       
-      // If the button was released while we were getting permission, stop now
-      if (!isRecordingRef.current) {
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-
       const mimeType = MediaRecorder.isTypeSupported('audio/ogg; codecs=opus') 
         ? 'audio/ogg; codecs=opus' 
         : 'audio/webm; codecs=opus';
@@ -193,24 +186,26 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
+      isCancelledRef.current = false;
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
+
       recorder.onstop = () => {
-        if (audioChunksRef.current.length > 0) {
+        if (!isCancelledRef.current && audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
-          // Only send if it's more than 500ms to avoid empty files
-          if (Date.now() - startTime > 500) {
-            onStop(audioBlob);
-          }
+          onStop(audioBlob);
         }
-        stream.getTracks().forEach(track => track.stop());
+        // Cleanup stream tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
       };
 
-      recorder.start(200); // Send chunks every 200ms
+      recorder.start(200);
       setIsRecording(true);
-      isRecordingRef.current = true;
       setRecordingTime(0);
       timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
     } catch (err) {
@@ -218,65 +213,78 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
     }
   };
 
-  const stopRecording = () => {
-    isRecordingRef.current = false;
+  const stopAndSend = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      isCancelledRef.current = false;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     }
   };
 
-  const isRecordingRef = useRef(false);
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      isCancelledRef.current = true;
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      toast.error('Gravação cancelada');
+    }
+  };
 
-  return (
-    <div className="flex items-center gap-2">
-      {isRecording && (
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-3 bg-red-50 px-4 py-2 rounded-full border border-red-100"
+  if (isRecording) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex items-center gap-3 bg-slate-50 px-4 py-1.5 rounded-2xl border border-slate-100 shadow-sm"
+      >
+        <button 
+          onClick={cancelRecording}
+          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+          title="Cancelar gravação"
         >
+          <Trash2 size={20} />
+        </button>
+
+        <div className="flex items-center gap-3 px-2 border-x border-slate-200">
           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-          <span className="text-red-600 text-xs font-black font-mono">
+          <span className="text-slate-700 text-xs font-black font-mono w-10">
             {Math.floor(recordingTime / 60)}:{Math.floor(recordingTime % 60).toString().padStart(2, '0')}
           </span>
-          <div className="flex gap-0.5 items-center">
-            {[1, 2, 3, 4, 5].map(i => (
+          
+          <div className="flex gap-0.5 items-center w-16">
+            {[1, 2, 3, 4, 5, 6].map(i => (
               <motion.div 
                 key={i}
-                className="w-0.5 bg-red-300 rounded-full"
+                className="w-0.5 bg-blue-400 rounded-full"
                 animate={{ height: [4, 12, 4] }}
                 transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
               />
             ))}
           </div>
-        </motion.div>
-      )}
-      <button
-        type="button"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          startRecording();
-        }}
-        onMouseUp={stopRecording}
-        onMouseLeave={stopRecording}
-        onTouchStart={(e) => {
-          e.preventDefault();
-          startRecording();
-        }}
-        onTouchEnd={stopRecording}
-        className={`p-3 rounded-2xl transition-all duration-300 shadow-lg active:scale-90
-          ${isRecording 
-            ? 'bg-red-500 text-white shadow-red-200 rotate-12 scale-110' 
-            : 'bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
-      >
-        <Mic size={22} className={isRecording ? 'animate-bounce' : ''} />
-      </button>
-    </div>
+        </div>
+
+        <button 
+          onClick={stopAndSend}
+          className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all"
+          title="Enviar áudio"
+        >
+          <Send size={18} />
+        </button>
+      </motion.div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startRecording}
+      className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-300 shadow-sm active:scale-90"
+      title="Gravar áudio"
+    >
+      <Mic size={22} />
+    </button>
   );
 };
 
