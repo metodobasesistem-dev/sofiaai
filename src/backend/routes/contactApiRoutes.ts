@@ -102,6 +102,43 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── GET /api/v2/contacts/profile-picture/:phone ──────────────────────────
+router.get('/profile-picture/:phone', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const phone = req.params.phone;
+  try {
+    const { agentService } = await import('../services/agentService.js');
+    const remoteJid = `${phone}@s.whatsapp.net`;
+    
+    // Tentamos buscar a threadId para esse contato
+    const { data: thread } = await supabase
+      .from('threads')
+      .select('id')
+      .eq('user_id', userId)
+      .ilike('remote_jid', `%${phone}%`)
+      .maybeSingle();
+
+    if (thread) {
+      // Sincroniza em background
+      await agentService.syncProfilePicture(userId, thread.id, remoteJid);
+      
+      // Busca o resultado atualizado
+      const { data: updated } = await supabase
+        .from('threads')
+        .select('profile_picture_url')
+        .eq('id', thread.id)
+        .single();
+        
+      return res.json({ success: true, url: updated?.profile_picture_url });
+    }
+
+    res.json({ success: false, error: 'Thread not found' });
+  } catch (err: any) {
+    console.error('[ContactAPI] Profile picture error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── POST /api/v2/contacts/sync ──────────────────────────────────────────
 router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId!;

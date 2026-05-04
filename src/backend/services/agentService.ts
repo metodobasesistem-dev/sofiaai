@@ -301,8 +301,8 @@ export class AgentService {
 
       const { error: tErr } = await supabase.from('threads').upsert(threadData);
       
-      // Sincronizar foto de perfil se for novo ou não tiver foto
-      if (!existingThread?.photo_url && threadData.remote_jid) {
+      // Sincronizar foto de perfil (respeita cache de 24h internamente)
+      if (threadData.remote_jid) {
         this.syncProfilePicture(userId, threadId, threadData.remote_jid).catch(() => {});
       }
       
@@ -913,29 +913,39 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       }
     ];
   }
-  public async syncProfilePicture(userId: string, threadId: string, remoteJid: string, photoUrl?: string) {
+  public async syncProfilePicture(userId: string, threadId: string, remoteJid: string, force = false) {
     try {
-      let finalPhotoUrl = photoUrl;
-      
-      // Se não veio foto no parâmetro, tentamos buscar na Evolution
-      if (!finalPhotoUrl) {
-        const { whatsappService } = await import('./whatsappService.js');
-        const instanceName = `wppai_${userId.substring(0, 8)}`;
-        const provider = await WhatsAppProviderFactory.getProvider(userId);
-        finalPhotoUrl = await provider.fetchProfilePictureUrl(instanceName, remoteJid);
+      const cleanPhone = remoteJid.split('@')[0].replace(/\D/g, '');
+      const contactId = `${userId}_${cleanPhone}`;
+
+      if (!force) {
+        const { data: existing } = await supabase
+          .from('threads')
+          .select('profile_picture_url, profile_picture_updated_at')
+          .eq('id', threadId)
+          .maybeSingle();
+
+        if (existing?.profile_picture_updated_at) {
+          const lastUpdate = new Date(existing.profile_picture_updated_at);
+          const diffHours = (new Date().getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
+          if (diffHours < 24 && existing.profile_picture_url) return;
+        }
       }
 
-      if (finalPhotoUrl) {
-        const cleanPhone = remoteJid.split('@')[0].replace(/\D/g, '');
-        
-        // Atualiza na thread
-        await supabase.from('threads').update({ photo_url: finalPhotoUrl }).eq('id', threadId);
-        
-        // Atualiza no contato
-        await supabase.from('contacts').update({ photo_url: finalPhotoUrl }).eq('telefone', cleanPhone).eq('user_id', userId);
-        
-        console.log(`[AgentService] 🖼️ Photo synced for ${remoteJid}`);
-      }
+      const provider = await WhatsAppProviderFactory.getProvider(userId);
+      const instanceName = `wppai_${userId.substring(0, 8)}`;
+      const photoUrl = await provider.fetchProfilePictureUrl(instanceName, remoteJid);
+
+      const updateData = {
+        profile_picture_url: photoUrl,
+        profile_picture_updated_at: new Date().toISOString(),
+        photo_url: photoUrl 
+      };
+
+      await Promise.all([
+        supabase.from('threads').update(updateData).eq('id', threadId),
+        supabase.from('contacts').update(updateData).eq('id', contactId)
+      ]);
     } catch (err) {
       console.error('[AgentService] Error syncing profile picture:', err);
     }

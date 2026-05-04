@@ -88,7 +88,7 @@ export interface Contact {
   userId: string;
   nome: string;
   telefone: string;
-  status_funil: 'Lead' | 'Qualificado' | 'Cliente';
+  status_funil: 'Lead' | 'Qualificado' | 'Cliente' | 'Resolvido';
   data_criacao: string;
   ultimaMensagem?: string;
   ultimaInteracao?: string;
@@ -96,6 +96,9 @@ export interface Contact {
   totalMensagens?: number;
   source?: 'whatsapp' | 'manual';
   is_client?: boolean;
+  priority?: string;
+  profile_picture_url?: string;
+  profile_picture_updated_at?: string;
 }
 
 export interface UserProfile {

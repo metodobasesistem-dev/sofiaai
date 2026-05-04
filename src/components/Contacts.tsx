@@ -22,6 +22,7 @@ import {
   Trash2,
   Edit2
 } from 'lucide-react';
+import { ContactAvatar } from './ContactAvatar';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   listContacts, 
@@ -72,18 +73,6 @@ const formatRelative = (date: any): string => {
   return formatDate(date);
 };
 
-const getInitials = (name: string) => {
-  const parts = name.trim().split(' ').filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
-
-const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500',
-];
-const getAvatarColor = (id: string) => AVATAR_COLORS[(id.charCodeAt(0) + id.charCodeAt(1)) % AVATAR_COLORS.length];
 
 // ── Status Badge ────────────────────────────────────────────────────────────────
 
@@ -165,9 +154,6 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
     const jid = `${cleanPhone}@s.whatsapp.net`;
     if (onTabChange) onTabChange('inbox', jid);
   };
-
-  const color = getAvatarColor(contact.id || contact.telefone);
-
   return (
     <motion.div
       initial={{ x: '100%', opacity: 0 }}
@@ -179,9 +165,7 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
       {/* Header */}
       <div className="p-6 border-b border-gray-100 flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <div className={`w-14 h-14 rounded-2xl ${color} text-white flex items-center justify-center text-xl font-black shadow-lg`}>
-            {getInitials(contact.nome)}
-          </div>
+          <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="lg" />
           <div>
             <h3 className="text-lg font-black text-gray-900 leading-tight flex items-center gap-2">
               {contact.nome}
@@ -590,9 +574,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredContacts.map((contact) => {
-                  const color = getAvatarColor(contact.id || contact.telefone);
-                  return (
+                {filteredContacts.map((contact) => (
                     <tr 
                       key={contact.id} 
                       onClick={() => setSelectedContact(contact)}
@@ -600,9 +582,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                     >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl ${color} text-white flex items-center justify-center text-sm font-black flex-shrink-0`}>
-                            {getInitials(contact.nome)}
-                          </div>
+                          <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
                           <div>
                             <p className="text-sm font-bold text-gray-900">{contact.nome}</p>
                             {contact.totalMensagens !== undefined && (
@@ -666,8 +646,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
+                  ))}
               </tbody>
             </table>
           </div>

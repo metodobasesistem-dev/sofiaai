@@ -54,6 +54,8 @@ import KanbanBoard from './KanbanBoard';
 import ReportsDashboard from './ReportsDashboard';
 import Integrations from './Integrations';
 
+import { ContactAvatar } from './ContactAvatar';
+
 interface Thread {
   id: string;
   contactId?: string;
@@ -64,15 +66,11 @@ interface Thread {
   unreadCount?: number;
   remoteJid: string;
   updatedAt: any;
-  lastMessageTime?: any;
-  agent_name?: string;
-  funilStatus?: 'Lead' | 'Qualificado' | 'Cliente';
-  ticketStatus?: 'open' | 'pending' | 'resolved';
-  priority?: 'low' | 'normal' | 'high' | 'urgent';
-  assignedTo?: string | null;
-  labels?: string[];
-  photo_url?: string;
+  ticketStatus: 'open' | 'resolved';
+  funilStatus: string;
   is_client?: boolean;
+  priority?: string;
+  profilePictureUrl?: string;
 }
 
 interface Message {
@@ -90,27 +88,7 @@ interface Message {
   is_external?: boolean;
 }
 
-const getInitials = (name: string) => {
-  if (!name) return 'U';
-  const parts = name.trim().split(' ');
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return name.substring(0, 2).toUpperCase();
-};
 
-const getAvatarColor = (name: string) => {
-  if (!name) return '#94a3b8';
-  const colors = [
-    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
-    '#ec4899', '#06b6d4', '#14b8a6', '#f43f5e', '#6366f1'
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-};
 
 const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOutbound }) => {
   const [playing, setPlaying] = useState(false);
@@ -298,15 +276,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
   >
     <div className="relative shrink-0">
-      <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden shadow-sm"
-        style={{ backgroundColor: !thread.photo_url ? getAvatarColor(thread.name) : 'transparent' }}
-      >
-        {thread.photo_url ? (
-          <img src={thread.photo_url} alt={thread.name} className="w-full h-full object-cover" />
-        ) : (
-          getInitials(thread.name)
-        )}
-      </div>
+      <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="lg" />
       {thread.status === 'ia' && (
         <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full z-10" />
       )}
@@ -527,6 +497,27 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
 
+  // ─── Lógica de Busca de Fotos em Lote ──────────────────────────────────────────
+  const fetchProfilePicturesInBatch = async (threadsToSync: Thread[]) => {
+    // Máximo de 10 simultâneas para não sobrecarregar
+    const batchSize = 10;
+    for (let i = 0; i < threadsToSync.length; i += batchSize) {
+      const chunk = threadsToSync.slice(i, i + batchSize);
+      await Promise.allSettled(chunk.map(async (t) => {
+        try {
+          const phone = t.remoteJid.split('@')[0].replace(/\D/g, '');
+          const res = await fetch(`/api/v2/contacts/profile-picture/${phone}`, {
+            headers: { 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` }
+          });
+          const result = await res.json();
+          if (result.success && result.url) {
+            setThreads(prev => prev.map(pt => pt.id === t.id ? { ...pt, profilePictureUrl: result.url } : pt));
+          }
+        } catch (e) {}
+      }));
+    }
+  };
+
   // Helper centralizado para resolver o nome do contato via CRM
   const getResolvedContact = (remoteJid: string, fallbackName: string) => {
     const phoneNumber = remoteJid.includes('@') ? remoteJid.split('@')[0] : remoteJid;
@@ -651,19 +642,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               unreadCount: d.unread_count || 0,
               remoteJid: d.remote_jid || '',
               updatedAt: d.updated_at || new Date().toISOString(),
-              lastMessageTime: d.last_message_time,
-              agent_name: d.agent_name || 'Robô IA',
-              funilStatus: contact?.status_funil || 'Lead',
               ticketStatus: d.ticket_status || 'open',
-              priority: d.priority || 'normal',
-              assignedTo: d.assigned_to || null,
-              labels: Array.isArray(d.labels) ? d.labels : [],
-              photo_url: d.photo_url,
+              funilStatus: contact?.status_funil || 'Lead',
               is_client: contact?.is_client || false,
-              createdAt: d.created_at || d.updated_at || new Date().toISOString()
+              priority: contact?.priority,
+              profilePictureUrl: d.profile_picture_url
             };
           });
           setThreads(formatted);
+          
+          // ─── Busca fotos em lote ──────────────────────────────────────────────
+          const threadsToUpdate = formatted.filter(t => !t.profilePictureUrl);
+          if (threadsToUpdate.length > 0) {
+            fetchProfilePicturesInBatch(threadsToUpdate);
+          }
           
           const params = new URLSearchParams(window.location.search);
           const jidFromUrl = params.get('jid');
@@ -704,20 +696,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   unreadCount: payload.new.unread_count || 0,
                   remoteJid: payload.new.remote_jid,
                   updatedAt: payload.new.updated_at,
-                  lastMessageTime: payload.new.last_message_time,
-                  agent_name: payload.new.agent_name || 'Robô IA',
                   ticketStatus: payload.new.ticket_status || 'open',
-                  photo_url: payload.new.photo_url,
-                  assignedTo: payload.new.assigned_to,
-                  funilStatus: resolved.funilStatus
+                  funilStatus: resolved.funilStatus,
+                  profilePictureUrl: payload.new.profile_picture_url
                 };
                 return [newThread as any, ...prev];
               });
             } else if (payload.eventType === 'UPDATE') {
               setThreads(prev => {
                 const existingIndex = prev.findIndex(t => t.id === payload.new.id);
-                
-                // Se não existe, podemos ignorar ou adicionar (melhor mover para o topo se for atualização relevante)
                 const baseThread = existingIndex !== -1 ? prev[existingIndex] : null;
                 const resolved = getResolvedContact(payload.new.remote_jid || baseThread?.remoteJid || '', payload.new.contact_name || baseThread?.name || 'Lead WhatsApp');
 
@@ -729,11 +716,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   status: payload.new.status || baseThread?.status || 'ia',
                   unreadCount: payload.new.unread_count ?? baseThread?.unreadCount ?? 0,
                   updatedAt: payload.new.updated_at || baseThread?.updatedAt || new Date().toISOString(),
-                  lastMessageTime: payload.new.last_message_time || baseThread?.lastMessageTime,
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
-                  assignedTo: payload.new.assigned_to ?? baseThread?.assignedTo ?? null,
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
-                  funilStatus: resolved.funilStatus
+                  funilStatus: resolved.funilStatus,
+                  profilePictureUrl: payload.new.profile_picture_url || baseThread?.profilePictureUrl
                 };
 
                 // BUG 1 FIX: Só move para o topo se a última mensagem mudou
@@ -1395,15 +1381,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <ArrowLeft size={20} />
                 </button>
 
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200/50 overflow-hidden shrink-0">
-                  {activeThread.photo_url ? (
-                    <img src={activeThread.photo_url} alt={activeThread.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white" style={{ backgroundColor: getAvatarColor(activeThread.name) }}>
-                      {getInitials(activeThread.name)}
-                    </div>
-                  )}
-                </div>
+                <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" />
                 <div className="min-w-0">
                   <h3 className="text-[15px] font-bold text-slate-900 leading-tight truncate flex items-center gap-2">
                     {activeThread.name}
