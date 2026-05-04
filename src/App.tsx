@@ -159,6 +159,8 @@ export default function App() {
   const { flags = {}, isLoading: flagsLoading } = useFeatureContext();
   const leoEnabled = flags['leo_ai'];
   const agendasEnabled = flags['agendas'];
+  const crmEnabled = flags['crm'];
+  const chatEnabled = flags['chat'];
 
   if (loading || flagsLoading) {
     return (
@@ -183,6 +185,7 @@ export default function App() {
       case 'overview':
         return <Overview />;
       case 'professionals':
+        if (role !== 'admin' && !crmEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Professionals />;
       case 'agents':
         return <Agents user={user} role={role} />;
@@ -193,8 +196,10 @@ export default function App() {
         if (role !== 'admin' && !agendasEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Availability />;
       case 'inbox':
+        if (role !== 'admin' && !chatEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Inbox user={user} role={role} />;
       case 'contacts':
+        if (role !== 'admin' && !crmEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Contacts onTabChange={handleTabChange} user={user} role={role} />;
       case 'clients':
         return <Clients onTabChange={handleTabChange} user={user} role={role} />;

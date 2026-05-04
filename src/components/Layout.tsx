@@ -166,15 +166,16 @@ export default function Layout({
     }
   }, [user, role]);
 
-  const leoEnabled = useFeature('leo_ai');
-  const agendasEnabled = useFeature('agendas');
+  const { flags } = useFeatureContext();
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-    // Menu Leo: Visível para admin OU se a flag estiver ativa
-    ...((role === 'admin' || leoEnabled) ? [
-      { id: 'leo', icon: <Zap size={20} className="text-amber-500" />, label: 'Leo' }
-    ] : []),
+    { 
+      id: 'leo', 
+      icon: <Zap size={20} className="text-amber-500" />, 
+      label: 'Leo',
+      flag: 'leo_ai'
+    },
     ...(role === 'admin' ? [
       {
         id: 'admin_group',
@@ -188,26 +189,30 @@ export default function Layout({
         ]
       }
     ] : []),
-    { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
-    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
-    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+    { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
+    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada', flag: 'chat' },
+    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos', flag: 'crm' },
     { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
-    // Menu Agendas: Visível para admin OU se a flag estiver ativa
-    ...((role === 'admin' || agendasEnabled) ? [{ 
+    { 
       id: 'agendas', 
       icon: <Calendar size={20} />, 
       label: 'Agendas',
+      flag: 'agendas',
       subItems: [
         { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
       ]
-    }] : []),
+    },
     { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
   ];
 
-  const { flags } = useFeatureContext();
-  const filteredMenuItems = menuItems.filter(item => !(item as any).flag || flags[(item as any).flag]);
+  // Filtra itens com base nas flags (Admin sempre vê tudo)
+  const filteredMenuItems = menuItems.filter(item => {
+    if (role === 'admin') return true;
+    if (item.flag && flags[item.flag] === false) return false;
+    return true;
+  });
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {

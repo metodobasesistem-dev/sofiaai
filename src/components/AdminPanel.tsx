@@ -226,6 +226,11 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       }`}>
                         {flag.key === 'leo_ai' ? <Bot size={24} /> : 
                          flag.key === 'agendas' ? <Calendar size={24} /> :
+                         flag.key === 'crm' ? <Layers size={24} /> :
+                         flag.key === 'analytics' ? <BarChart3 size={24} /> :
+                         flag.key === 'chat' ? <MessageSquare size={24} /> :
+                         flag.key === 'agent_training_audio' ? <Smartphone size={24} /> :
+                         flag.key === 'ai_followup_questions' ? <Zap size={24} /> :
                          <Zap size={24} className={flag.enabled ? 'animate-pulse' : ''} />}
                       </div>
                       <button 
