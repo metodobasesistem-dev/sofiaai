@@ -205,8 +205,9 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
             const formatted = growthData.map((d: any) => ({
               name: format(new Date(d.date + 'T12:00:00'), 'dd MMM', { locale: ptBR }),
               leads: d.leads,
-              agendamentos: d.agendamentos
+              resolvidos: d.agendamentos // Mapeando agendamentos para resolvidos como solicitado
             }));
+            console.log('[Dashboard] Growth data loaded:', formatted.length, 'points');
             setChartData(formatted);
           }).catch(() => {
             // Fallback empty data if fails
@@ -537,7 +538,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           {[
             { label: 'Novos Leads', value: stats.contacts, icon: Users, color: '#3b82f6', trend: '+12%', data: [4, 6, 5, 8, 7, 10, stats.contacts] },
             { label: 'Qualificados', value: stats.qualified, icon: Sparkles, color: '#a855f7', trend: '+5%', data: [2, 3, 2, 4, 3, 5, stats.qualified] },
-            { label: 'Agendamentos', value: stats.appointments, icon: Calendar, color: '#10b981', trend: '+8%', data: [1, 2, 1, 3, 2, 4, stats.appointments] },
+            { label: 'Resolvidos', value: stats.appointments, icon: CheckCircle2, color: '#10b981', trend: '+8%', data: [1, 2, 1, 3, 2, 4, stats.appointments] },
             { label: 'Conversão', value: `${stats.conversionRate}%`, icon: Zap, color: '#f59e0b', trend: 'Estável', data: [15, 18, 16, 20, 19, 22, stats.conversionRate] },
           ].map((item, i) => (
             <motion.div 
@@ -614,7 +615,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               </div>
               <div className="flex items-center gap-2 px-3">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-200" />
-                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Agendamentos</span>
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Resolvidos</span>
               </div>
             </div>
           </div>
@@ -682,8 +683,8 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                 />
                 <Area 
                   type="monotone" 
-                  dataKey="agendamentos" 
-                  name="Agendamentos"
+                  dataKey="resolvidos" 
+                  name="Resolvidos"
                   stroke="#10b981" 
                   strokeWidth={4}
                   fillOpacity={1} 
@@ -751,7 +752,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                 {[
                   { label: 'Leads Captados', value: stats.contacts, pct: 100, color: '#3b82f6', icon: Users },
                   { label: 'Qualificados', value: stats.qualified, pct: stats.contacts > 0 ? (stats.qualified / stats.contacts) * 100 : 0, color: '#a855f7', icon: Sparkles },
-                  { label: 'Agendamentos', value: stats.appointments, pct: stats.contacts > 0 ? (stats.appointments / stats.contacts) * 100 : 0, color: '#10b981', icon: Calendar }
+                  { label: 'Resolvidos', value: stats.appointments, pct: stats.contacts > 0 ? (stats.appointments / stats.contacts) * 100 : 0, color: '#10b981', icon: CheckCircle2 }
                 ].map((item, i) => (
                   <div key={i} className="group cursor-pointer">
                     <div className="flex items-center justify-between mb-2">
