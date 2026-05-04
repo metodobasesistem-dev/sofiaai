@@ -223,7 +223,9 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
                         flag.enabled ? 'bg-teal-500 text-white shadow-lg shadow-teal-100' : 'bg-slate-100 text-slate-400'
                       }`}>
-                        <Zap size={24} className={flag.enabled ? 'animate-pulse' : ''} />
+                        {flag.key === 'leo_ai' ? <Bot size={24} /> : 
+                         flag.key === 'agendas' ? <Calendar size={24} /> :
+                         <Zap size={24} className={flag.enabled ? 'animate-pulse' : ''} />}
                       </div>
                       <button 
                         onClick={() => toggleFeatureFlag(flag.key, flag.enabled)}

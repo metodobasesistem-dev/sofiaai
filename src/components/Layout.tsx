@@ -166,27 +166,34 @@ export default function Layout({
     }
   }, [user, role]);
 
+  const leoEnabled = useFeature('leo_ai');
+  const agendasEnabled = useFeature('agendas');
+
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    // Menu Leo: Visível para admin OU se a flag estiver ativa
+    ...((role === 'admin' || leoEnabled) ? [
+      { id: 'leo', icon: <Zap size={20} className="text-amber-500" />, label: 'Leo' }
+    ] : []),
     ...(role === 'admin' ? [
-      { id: 'leo', icon: <Zap size={20} className="text-amber-500" />, label: 'Leo' },
       {
-
-      id: 'admin_group',
-      icon: <Shield size={20} />,
-      label: 'Administração',
-      subItems: [
-        { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
-        { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios' },
-        { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
-        { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
-      ]
-    }] : []),
+        id: 'admin_group',
+        icon: <Shield size={20} />,
+        label: 'Administração',
+        subItems: [
+          { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
+          { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios' },
+          { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
+          { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
+        ]
+      }
+    ] : []),
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe' },
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
     { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
-    { 
+    // Menu Agendas: Visível para admin OU se a flag estiver ativa
+    ...((role === 'admin' || agendasEnabled) ? [{ 
       id: 'agendas', 
       icon: <Calendar size={20} />, 
       label: 'Agendas',
@@ -194,7 +201,7 @@ export default function Layout({
         { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
       ]
-    },
+    }] : []),
     { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
   ];

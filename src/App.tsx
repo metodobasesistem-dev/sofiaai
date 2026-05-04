@@ -156,7 +156,9 @@ export default function App() {
     }
   };
 
-  const { isLoading: flagsLoading } = useFeatureContext();
+  const { features, isLoading: flagsLoading } = useFeatureContext();
+  const leoEnabled = features.find(f => f.key === 'leo_ai')?.enabled;
+  const agendasEnabled = features.find(f => f.key === 'agendas')?.enabled;
 
   if (loading || flagsLoading) {
     return (
@@ -185,8 +187,10 @@ export default function App() {
       case 'agents':
         return <Agents user={user} role={role} />;
       case 'schedule':
+        if (role !== 'admin' && !agendasEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Schedules user={user} role={role} />;
       case 'availability':
+        if (role !== 'admin' && !agendasEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Availability />;
       case 'inbox':
         return <Inbox user={user} role={role} />;
@@ -199,7 +203,7 @@ export default function App() {
       case 'settings':
         return <Settings initialSubTab={settingsSubTab} />;
       case 'leo':
-        if (role !== 'admin') return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
+        if (role !== 'admin' && !leoEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <LeoApp user={user} role={role} onTabChange={handleTabChange} />;
 
       default:
