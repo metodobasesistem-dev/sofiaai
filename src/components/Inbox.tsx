@@ -38,7 +38,8 @@ import {
   Bookmark,
   LayoutDashboard,
   BarChart3,
-  Layers
+  Layers,
+  Star
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
