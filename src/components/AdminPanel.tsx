@@ -31,7 +31,8 @@ import {
   Save,
   Star,
   ToggleLeft,
-  ChevronLeft
+  ChevronLeft,
+  Calendar
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret } from '../services/supabaseService';
