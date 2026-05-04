@@ -56,6 +56,7 @@ import Integrations from './Integrations';
 
 interface Thread {
   id: string;
+  contactId?: string;
   name: string;
   lastMessage: string;
   time: string;
@@ -634,6 +635,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
             return {
               id: d.id,
+              contactId: contact?.id,
               name: contact?.nome || d.contact_name || 'Lead WhatsApp',
               lastMessage: d.last_message || '',
               time: d.last_message_time ? new Date(d.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',

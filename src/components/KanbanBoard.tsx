@@ -119,13 +119,21 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     // Send to Supabase
     try {
       if (viewMode === 'funil') {
-        // Need to update contacts table via cleanPhone
-        const cleanPhone = card.remoteJid.split('@')[0].replace(/\D/g, '');
-        const { error } = await supabase
-          .from('contacts')
-          .update({ status_funil: targetColumnId })
-          .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-        if (error) throw error;
+        if (card.contactId) {
+          const { error } = await supabase
+            .from('contacts')
+            .update({ status_funil: targetColumnId })
+            .eq('id', card.contactId);
+          if (error) throw error;
+        } else {
+          // Fallback to update contacts table via cleanPhone
+          const cleanPhone = card.remoteJid.split('@')[0].replace(/\D/g, '');
+          const { error } = await supabase
+            .from('contacts')
+            .update({ status_funil: targetColumnId })
+            .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+          if (error) throw error;
+        }
       } else {
         const { error } = await supabase
           .from('threads')
