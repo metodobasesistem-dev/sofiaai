@@ -437,7 +437,9 @@ class WhatsAppService {
         cleanTo, 
         'Atendente', // agentName
         undefined, 
-        audioUrl || undefined
+        audioUrl || undefined,
+        'audio', // messageType
+        audioUrl || undefined // mediaUrl
       );
     } catch (err) {}
     return { success: true, messageId: result.key?.id };
@@ -448,10 +450,32 @@ class WhatsAppService {
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     const type = mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document';
     const result = await provider.sendMedia(instanceName, to, buffer.toString('base64'), filename, type);
+    
+    // Upload para nosso storage para visualização no chat
+    const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
+
     try {
       const cleanTo = to.split('@')[0].replace(/\D/g, '');
-      await agentService.persistMessage(`${userId}_${cleanTo}`, userId, `[Mídia]: ${filename}`, 'outbound', result.key?.id || `med-${Date.now()}`, 'Cliente', to, cleanTo, 'Atendente');
-    } catch (err) {}
+      await agentService.persistMessage(
+        `${userId}_${cleanTo}`, 
+        userId, 
+        `[Mídia]: ${filename}`, 
+        'outbound', 
+        result.key?.id || `med-${Date.now()}`, 
+        'Cliente', 
+        to, 
+        cleanTo, 
+        'Atendente',
+        undefined, // usage
+        undefined, // audioUrl
+        type,      // messageType
+        mediaUrl || undefined, // mediaUrl
+        mimetype,
+        filename
+      );
+    } catch (err) {
+      console.error('[WhatsAppService] Error persisting sent media:', err);
+    }
     return { success: true, messageId: result.key?.id };
   }
 
@@ -552,7 +576,9 @@ class WhatsAppService {
         await agentService.persistMessage(
            `${userId}_${displayPhone}`, userId, '[Áudio]',
            'outbound', `${aiMsgId}-audio`, contactName, from, displayPhone,
-           'Atendente', undefined, aiAudioUrl || undefined
+           'Atendente', undefined, aiAudioUrl || undefined,
+           'audio',
+           aiAudioUrl || undefined
         );
       } else {
         await provider.sendMessage(instanceName, from, finalResponseText);
@@ -562,7 +588,9 @@ class WhatsAppService {
           await agentService.persistMessage(
             `${userId}_${displayPhone}`, userId, '[Áudio]',
             'outbound', `${aiMsgId}-audio`, contactName, from, displayPhone,
-            'Atendente', undefined, aiAudioUrl || undefined
+            'Atendente', undefined, aiAudioUrl || undefined,
+            'audio',
+            aiAudioUrl || undefined
           );
         }
       }

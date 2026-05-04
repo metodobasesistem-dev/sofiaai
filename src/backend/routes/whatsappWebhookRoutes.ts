@@ -73,43 +73,37 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
     if (existing) return; // Already persisted by system
 
     // If not in DB, it was sent from the phone
-    console.log(`[Webhook] 📱 Outbound message from phone detected: ${messageId}`);
-    
-    // Process media for outbound if needed (simpler version for now, prioritize inbound)
-    await agentService.persistMessage(
-      threadId, userId, body, 'outbound', messageId, undefined, from, cleanPhone, 
-      'Atendente', undefined, undefined, type, undefined, mimeType, fileName, caption, true
-    );
-    return;
-  }
-
-  // INBOUND MESSAGE HANDLING
-  console.log(`[Webhook] 📥 Inbound message: ${messageId} | Type: ${type}`);
+  // INBOUND OR OUTBOUND FROM PHONE
+  console.log(`[Webhook] 📥 Processing message: ${messageId} | Type: ${type} | fromMe: ${fromMe}`);
 
   // Handle Media Asynchronously to not block the response
   if (type !== 'text' && type !== 'unknown') {
-    handleMediaMessage(userId, instanceName, threadId, message, provider).catch(err => {
+    handleMediaMessage(userId, instanceName, threadId, message, provider, fromMe ? 'outbound' : 'inbound').catch(err => {
       console.error(`[Webhook] Error handling media message:`, err);
     });
     return;
   }
 
-  // Persist Text and Trigger AI
-  await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, undefined, type);
-  await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+  // Persist Text and Trigger AI (only if inbound)
+  await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe);
+  
+  if (!fromMe) {
+    await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+  }
 }
 
-async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any) {
+async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any, direction: 'inbound' | 'outbound' = 'inbound') {
   const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, raw } = message;
   const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+  const isExternal = direction === 'outbound';
 
-  console.log(`[Webhook] 📥 Downloading media for message: ${messageId} (${type})`);
+  console.log(`[Webhook] 📥 Downloading media for ${direction} message: ${messageId} (${type})`);
   
   try {
     const base64 = await provider.getMediaBase64(instanceName, raw?.key, raw?.message);
     if (!base64) {
       console.warn(`[Webhook] Could not get base64 for media message: ${messageId}`);
-      await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, undefined, type, undefined, mimeType, fileName, caption);
+      await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal);
       return;
     }
 
@@ -118,7 +112,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     const storagePath = `${type}s/${Date.now()}_${fileName || `file.${ext}`}`;
     
     // Upload to Storage
-    const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, storagePath);
+    const mediaUrl = await (whatsappService as any).uploadToStorage(userId, buffer, storagePath);
     
     let processedText = body;
     let transcription = undefined;
@@ -133,24 +127,24 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
 
     // Persist enriched message
     await agentService.persistMessage(
-      threadId, userId, processedText, 'inbound', messageId, contactName, from, cleanPhone, 
-      undefined, undefined, audioUrl, type, audioUrl, mimeType, fileName, caption
+      threadId, userId, processedText, direction, messageId, contactName, from, cleanPhone, 
+      isExternal ? 'Atendente' : undefined, undefined, mediaUrl, type, mediaUrl, mimeType, fileName, caption, isExternal
     );
 
-    // Trigger AI with transcription if audio
-    if (type === 'audio' && transcription) {
-      await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
-    } else if (type === 'image' || type === 'video') {
-       // Maybe trigger AI for images/videos in the future
-       // For now, if there is a caption, trigger AI
-       if (caption) {
-         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption, contactName, cleanPhone, messageId, false);
-       }
+    // Trigger AI only if inbound
+    if (direction === 'inbound') {
+      if (type === 'audio' && transcription) {
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
+      } else if (type === 'image' || type === 'video') {
+         if (caption) {
+           await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption, contactName, cleanPhone, messageId, false);
+         }
+      }
     }
   } catch (err) {
     console.error(`[Webhook] Failed to process media message ${messageId}:`, err);
     // Fallback persist without media URL if failed
-    await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, undefined, type, undefined, mimeType, fileName, caption);
+    await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal);
   }
 }
 

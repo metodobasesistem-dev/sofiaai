@@ -263,10 +263,14 @@ export class AgentService {
     try {
       const cleanPhone = (displayPhone || threadId.split('_')[1] || '').replace(/\D/g, '');
       const [{ data: existingThread }, { data: contact }] = await Promise.all([
-        supabase.from('threads').select('contact_name, photo_url').eq('id', threadId).maybeSingle(),
+        supabase.from('threads').select('contact_name, photo_url, unread_count').eq('id', threadId).maybeSingle(),
         supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
       ]);
       
+      const newUnreadCount = direction === 'inbound' 
+        ? (existingThread?.unread_count || 0) + 1 
+        : (existingThread?.unread_count || 0);
+
       const threadData: any = {
         id: threadId,
         user_id: userId,
@@ -276,7 +280,9 @@ export class AgentService {
         remote_jid: remoteJid || `${cleanPhone}@c.us`,
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia',
-        contact_name: contact?.nome || contactName || existingThread?.contact_name || 'Cliente'
+        contact_name: contact?.nome || contactName || existingThread?.contact_name || 'Cliente',
+        unread_count: newUnreadCount,
+        updated_at: new Date(timestamp).toISOString()
       };
 
       const { error: tErr } = await supabase.from('threads').upsert(threadData);

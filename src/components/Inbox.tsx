@@ -264,7 +264,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-1">
-        <h4 className="text-[15px] font-bold text-slate-900 truncate">
+        <h4 className={`text-[15px] truncate ${thread.unreadCount > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700'}`}>
           {thread.name}
         </h4>
         <div className="flex items-center gap-2">
@@ -285,11 +285,11 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       </div>
       
       <div className="flex items-center justify-between">
-        <p className="text-[13px] text-slate-500 truncate leading-tight flex-1 mr-2">
+        <p className={`text-[13px] truncate leading-tight flex-1 mr-2 ${thread.unreadCount > 0 ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
           {thread.lastMessage || 'Inicie uma conversa'}
         </p>
         {Boolean(thread.unreadCount) && (
-          <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+          <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm">
             {thread.unreadCount}
           </span>
         )}
@@ -545,7 +545,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         const { data, error } = await supabase
           .from('threads')
           .select('*')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .order('last_message_time', { ascending: false });
 
         if (error) throw error;
         if (contactsError) console.warn('[Inbox] Contacts fetch warning:', contactsError);
@@ -571,7 +572,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               id: d.id,
               name: contact?.nome || d.contact_name || 'Lead WhatsApp',
               lastMessage: d.last_message || '',
-              time: d.updated_at ? new Date(d.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+              time: d.last_message_time ? new Date(d.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
               status: (d.status as any) || 'ia',
               unreadCount: d.unread_count || 0,
               remoteJid: d.remote_jid || '',
@@ -586,13 +587,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               createdAt: d.created_at || d.updated_at || new Date().toISOString()
             };
           });
-          const sorted = formatted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-          setThreads(sorted);
+          setThreads(formatted);
           
           const params = new URLSearchParams(window.location.search);
           const jidFromUrl = params.get('jid');
           if (jidFromUrl) {
-            const match = sorted.find(t => t.remoteJid.includes(jidFromUrl));
+            const match = formatted.find(t => t.remoteJid.includes(jidFromUrl));
             if (match) setSelectedThreadId(match.id);
           }
         }
@@ -623,7 +623,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   id: payload.new.id,
                   name: resolved.name,
                   lastMessage: payload.new.last_message || '',
-                  time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                  time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
                   status: payload.new.status,
                   unreadCount: payload.new.unread_count || 0,
                   remoteJid: payload.new.remote_jid,
@@ -639,34 +639,28 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             } else if (payload.eventType === 'UPDATE') {
               setThreads(prev => {
                 const existingIndex = prev.findIndex(t => t.id === payload.new.id);
-                if (existingIndex === -1) return prev; // Não deve acontecer
                 
-                const baseThread = prev[existingIndex];
-                const resolved = getResolvedContact(payload.new.remote_jid || baseThread.remoteJid, payload.new.contact_name || baseThread.name);
+                // Se não existe, podemos ignorar ou adicionar (melhor mover para o topo se for atualização relevante)
+                const baseThread = existingIndex !== -1 ? prev[existingIndex] : null;
+                const resolved = getResolvedContact(payload.new.remote_jid || baseThread?.remoteJid || '', payload.new.contact_name || baseThread?.name || 'Lead WhatsApp');
 
                 const updatedThread = {
-                  ...baseThread,
+                  ...(baseThread || {}),
                   id: payload.new.id,
                   name: resolved.name,
-                  lastMessage: payload.new.last_message || baseThread.lastMessage,
-                  status: payload.new.status || baseThread.status,
-                  unreadCount: payload.new.unread_count ?? baseThread.unreadCount,
-                  updatedAt: payload.new.updated_at || baseThread.updatedAt,
-                  ticketStatus: payload.new.ticket_status || baseThread.ticketStatus,
-                  assignedTo: payload.new.assigned_to ?? baseThread.assignedTo,
-                  time: payload.new.updated_at ? new Date(payload.new.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : baseThread.time,
+                  lastMessage: payload.new.last_message || baseThread?.lastMessage || '',
+                  status: payload.new.status || baseThread?.status || 'ia',
+                  unreadCount: payload.new.unread_count ?? baseThread?.unreadCount ?? 0,
+                  updatedAt: payload.new.updated_at || baseThread?.updatedAt || new Date().toISOString(),
+                  ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
+                  assignedTo: payload.new.assigned_to ?? baseThread?.assignedTo ?? null,
+                  time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
                   funilStatus: resolved.funilStatus
                 };
 
-                // Bug 1 Fix: Só move para o topo se o updatedAt mudou (nova mensagem ou atividade real)
-                // Se o timestamp for igual, mantemos a posição original
-                if (payload.new.updated_at && payload.new.updated_at !== baseThread.updatedAt) {
-                  const filtered = prev.filter(t => t.id !== payload.new.id);
-                  return [updatedThread as any, ...filtered];
-                } else {
-                  // Apenas atualiza o item sem mudar a ordem
-                  return prev.map(t => t.id === payload.new.id ? updatedThread : t);
-                }
+                // Sempre move para o topo em caso de atualização de última mensagem ou unread_count
+                const filtered = prev.filter(t => t.id !== payload.new.id);
+                return [updatedThread as any, ...filtered];
               });
             } else if (payload.eventType === 'DELETE') {
               setThreads(prev => prev.filter(t => t.id !== payload.old.id));
@@ -829,7 +823,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         )
         .subscribe();
 
-      // Zerar não-lidas
+      // Zerar não-lidas (Optimistic + Backend)
+      setThreads(prev => prev.map(t => t.id === selectedThreadId ? { ...t, unreadCount: 0 } : t));
       supabase.from('threads').update({ unread_count: 0 }).eq('id', selectedThreadId).then(() => {});
 
       // ── BLOCO 3: Dados da barra lateral (não-crítico, isolado) ────────
