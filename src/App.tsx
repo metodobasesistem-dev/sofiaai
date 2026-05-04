@@ -199,6 +199,7 @@ export default function App() {
       case 'settings':
         return <Settings initialSubTab={settingsSubTab} />;
       case 'leo':
+        if (role !== 'admin') return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <LeoApp user={user} role={role} onTabChange={handleTabChange} />;
 
       default:

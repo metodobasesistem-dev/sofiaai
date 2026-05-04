@@ -159,6 +159,13 @@ export default function Layout({
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
+  // Log de diagnóstico para permissões (apenas em desenvolvimento)
+  useEffect(() => {
+    if (user) {
+      console.log(`[Permissions] User: ${user.email} | Role: ${role}`);
+    }
+  }, [user, role]);
+
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     ...(role === 'admin' ? [
