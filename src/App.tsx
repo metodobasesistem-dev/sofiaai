@@ -11,7 +11,6 @@ import Integrations from './components/Integrations';
 import Settings from './components/Settings';
 import Reports from './components/Reports';
 import Professionals from './components/Professionals';
-import Professionals from './components/Professionals';
 import Overview from './components/Overview';
 import AdminPanel from './components/AdminPanel';
 import LeoApp from './pages/Leo/LeoApp';
