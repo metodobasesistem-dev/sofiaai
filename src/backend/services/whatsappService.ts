@@ -547,6 +547,27 @@ class WhatsAppService {
 
     try {
       console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (BullMQ Worker)`);
+
+      // 🛑 Idempotência: Verifica se já houve uma resposta outbound recente para esta thread (últimos 30s)
+      // para evitar duplicatas por retentativa de webhook/job
+      const thirtySecondsAgo = Date.now() - 30000;
+      const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+      const threadId = `${userId}_${cleanPhone}`;
+
+      const { data: recentReply } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('thread_id', threadId)
+        .eq('direction', 'outbound')
+        .gte('timestamp', thirtySecondsAgo)
+        .limit(1)
+        .maybeSingle();
+
+      if (recentReply) {
+        console.log(`[WhatsAppService] 🛡️ Idempotency: Response already sent recently for ${from}. Skipping.`);
+        return;
+      }
+
       const aiResponse = await agentService.processIncoming(userId, {
         from, body, contactName, messageId,
         displayPhone: displayPhone,
@@ -568,7 +589,8 @@ class WhatsAppService {
 
       if (!finalResponseText || finalResponseText.trim().length === 0) return;
 
-      // LÓGICA DE ENVIO INTELIGENTE VIA PROVÍDER ABSTRAÍDO
+      // LÓGICA DE ENVIO INTELIGENTE VIA MÉTODO CENTRALIZADO
+      // Isso garante status 'sending', 'sent' e evita duplicidade no chat.
       const provider = await WhatsAppProviderFactory.getProvider(userId);
       if (audioBuffer && usedVoiceMode === 'audio_only') {
         await provider.sendMedia(instanceName, from, audioBuffer.toString('base64'), undefined, 'audio');
@@ -581,7 +603,7 @@ class WhatsAppService {
            aiAudioUrl || undefined
         );
       } else {
-        await provider.sendMessage(instanceName, from, finalResponseText);
+        await this.sendMessage(userId, from, finalResponseText, agentData?.nome || 'Sofia', 'IA');
         if (audioBuffer && usedVoiceMode === 'always') {
           const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
           await provider.sendMedia(instanceName, from, audioBuffer.toString('base64'), undefined, 'audio');
@@ -594,10 +616,6 @@ class WhatsAppService {
           );
         }
       }
-
-      // 🔄 Agenda o Follow-up após o envio da resposta da IA
-      await this.scheduleFollowUp(userId, from, 0);
-
     } catch (err) {
       console.error(`[WhatsAppService] AI Processing Error for ${from}:`, err);
       throw err; // Força retry do BullMQ

@@ -223,8 +223,10 @@ export class AgentService {
 
       if (aiFinalText) {
         const aiMsgId = `ai-${Date.now()}`;
-        await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome, finalUsage);
-        await redisService.pushMessage(threadId, 'assistant', aiFinalText);
+        if (!skipPersist) {
+          await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome, finalUsage);
+          await redisService.pushMessage(threadId, 'assistant', aiFinalText);
+        }
         return { text: aiFinalText, audioBuffer: voiceBuffer, voiceMode, aiMsgId };
       }
       return null;
@@ -316,7 +318,10 @@ export class AgentService {
           last_message_time: new Date(timestamp).toISOString(),
           remote_jid: threadData.remote_jid
         });
-        if (fErr) console.error('[DEBUG-THREADS-FATAL] FAILED EVEN MINIMAL UPSERT:', fErr);
+        if (fErr) {
+          console.error('[DEBUG-THREADS-FATAL] FAILED EVEN MINIMAL UPSERT:', fErr);
+          throw fErr; // Throw to block caller
+        }
       }
     } catch (err) {
       console.error('[AgentService] Thread sync error:', err);
@@ -364,6 +369,7 @@ export class AgentService {
         if (mErr) {
           console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
           await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
+          throw mErr; // Throw to block caller (Bug 1)
         }
 
     } catch (mErr) {
