@@ -82,4 +82,9 @@ export interface IWhatsAppProvider {
    * Transforms provider-specific payload to generic WhatsAppMessage
    */
   transformPayload(payload: any): WhatsAppMessage | null;
+
+  /**
+   * Deletes a message for everyone (if possible) or just for the user
+   */
+  deleteMessage(instanceId: string, remoteJid: string, messageId: string, fromMe: boolean): Promise<boolean>;
 }

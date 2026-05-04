@@ -29,6 +29,14 @@ export class UazApiProvider implements IWhatsAppProvider {
     throw new Error('UazApiProvider: Method not implemented.');
   }
 
+  async requestPairingCode(): Promise<string> {
+    throw new Error('UazApiProvider: Method not implemented.');
+  }
+
+  async deleteMessage(): Promise<boolean> {
+    throw new Error('UazApiProvider: Method not implemented.');
+  }
+
   onMessageReceived(): void {
     // Stub
   }

@@ -119,6 +119,21 @@ class SessionController {
       res.status(500).json({ error: error.message || 'Failed to delete session' });
     }
   }
+
+  async deleteMessage(req: Request, res: Response) {
+    let { userId, messageId } = req.body;
+    if (!userId || !messageId) {
+      return res.status(400).json({ error: 'Missing userId or messageId' });
+    }
+
+    try {
+      const result = await whatsappService.deleteMessage(userId, messageId);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error in controller deleteMessage:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete message' });
+    }
+  }
 }
 
 export const sessionController = new SessionController();

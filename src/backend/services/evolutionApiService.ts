@@ -288,4 +288,21 @@ export class EvolutionApiService {
       throw error;
     }
   }
+
+  static async deleteMessage(userId: string, remoteJid: string, messageId: string, fromMe: boolean) {
+    const api = getApi();
+    try {
+      await api.post(`/chat/deleteMessage/${userId}`, {
+        key: {
+          remoteJid: remoteJid,
+          fromMe: fromMe,
+          id: messageId
+        }
+      });
+      return true;
+    } catch (error: any) {
+      console.error(`[EvolutionAPI] Error deleting message ${messageId}:`, error.response?.data || error.message);
+      return false;
+    }
+  }
 }

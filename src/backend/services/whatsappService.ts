@@ -419,6 +419,50 @@ class WhatsAppService {
     }
   }
 
+  async deleteMessage(userId: string, messageId: string) {
+    try {
+      // 1. Localizar a mensagem para saber a direção e o remoteJid
+      const { data: msg } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!msg) return { success: false, error: 'Mensagem não encontrada' };
+
+      // 2. Se for outbound, tenta apagar no WhatsApp via Provider
+      if (msg.direction === 'outbound') {
+         const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+         const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+         const provider = await WhatsAppProviderFactory.getProvider(userId);
+         
+         // No WhatsApp, apagamos para todos (fromMe: true)
+         const remoteJid = msg.thread_id.includes('_') ? msg.thread_id.split('_')[1] + '@c.us' : msg.thread_id;
+         await provider.deleteMessage(instanceName, remoteJid, msg.whatsapp_id || messageId, true);
+      }
+
+      // 3. Marcamos como apagada no banco (estilo WhatsApp)
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          text: '🚫 Esta mensagem foi apagada',
+          message_type: 'revoked',
+          media_url: null,
+          audio_url: null,
+          caption: null
+        })
+        .eq('id', messageId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error('[WhatsAppService] Error deleting message:', err);
+      return { success: false, error: err.message };
+    }
+  }
+
   async sendVoice(userId: string, to: string, audioBuffer: Buffer) {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     const provider = await WhatsAppProviderFactory.getProvider(userId);

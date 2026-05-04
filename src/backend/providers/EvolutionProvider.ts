@@ -246,4 +246,20 @@ export class EvolutionProvider implements IWhatsAppProvider {
       raw: messageData
     };
   }
+
+  async deleteMessage(instanceId: string, remoteJid: string, messageId: string, fromMe: boolean): Promise<boolean> {
+    try {
+      await this.api.post(`/chat/deleteMessage/${instanceId}`, {
+        key: {
+          remoteJid: remoteJid,
+          fromMe: fromMe,
+          id: messageId
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error(`[EvolutionProvider] Error deleting message ${messageId}:`, error);
+      return false;
+    }
+  }
 }

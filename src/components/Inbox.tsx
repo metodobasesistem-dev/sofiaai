@@ -39,7 +39,8 @@ import {
   LayoutDashboard,
   BarChart3,
   Layers,
-  Star
+  Star,
+  Ban
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -327,12 +328,26 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
   </div>
 );
 
-const ChatBubble: React.FC<{ message: Message; onPreview: (media: any) => void }> = ({ message, onPreview }) => {
+const ChatBubble: React.FC<{ 
+  message: Message; 
+  onPreview: (media: any) => void;
+  onDelete: (messageId: string) => void;
+}> = ({ message, onPreview, onDelete }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
+  const isRevoked = message.message_type === 'revoked';
   
   const renderMediaContent = () => {
+    if (isRevoked) {
+      return (
+        <div className="flex items-center gap-2 italic opacity-50 py-1">
+          <Ban size={14} />
+          <span className="text-[13px]">Esta mensagem foi apagada</span>
+        </div>
+      );
+    }
+
     switch (message.message_type) {
       case 'audio':
         return (
@@ -360,12 +375,12 @@ const ChatBubble: React.FC<{ message: Message; onPreview: (media: any) => void }
       case 'video':
         return (
           <div className="space-y-2">
-            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group"
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group/video"
                  onClick={() => onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
               <video className="max-w-full max-h-[300px]">
                 <source src={message.media_url} type={message.media_mime_type} />
               </video>
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
                   <Play size={24} className="fill-white ml-1" />
                 </div>
@@ -433,13 +448,15 @@ const ChatBubble: React.FC<{ message: Message; onPreview: (media: any) => void }
   };
   
   return (
-    <div className={`flex flex-col mb-3 ${!isLead ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed shadow-sm relative break-words
-        ${isPrivate 
-          ? 'bg-amber-100 text-amber-900 border border-amber-200' 
-          : !isLead 
-            ? 'bg-[#dcf8c6] text-[#075e54] rounded-tr-none' 
-            : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
+    <div className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'}`}>
+      <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[14.5px] leading-relaxed shadow-sm relative break-words transition-all
+        ${isRevoked
+          ? 'bg-slate-50 text-slate-400 border border-slate-100 italic'
+          : isPrivate 
+            ? 'bg-amber-100 text-amber-900 border border-amber-200' 
+            : !isLead 
+              ? 'bg-[#dcf8c6] text-slate-800 rounded-tr-none' 
+              : 'bg-white text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
         
         {isPrivate && (
           <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase">
@@ -449,10 +466,22 @@ const ChatBubble: React.FC<{ message: Message; onPreview: (media: any) => void }
         
         {renderMediaContent()}
 
-        <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-60 justify-end ${!isLead ? 'text-[#075e54]' : 'text-slate-400'}`}>
-          {isExternal && !isLead && <Smartphone size={10} className="mr-0.5" />}
+        {!isRevoked && (
+          <div className={`absolute top-1 ${!isLead ? '-left-8' : '-right-8'} opacity-0 group-hover:opacity-100 transition-all`}>
+            <button 
+              onClick={() => onDelete(message.id)}
+              className="p-1.5 bg-white shadow-md border border-slate-100 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Apagar mensagem"
+            >
+              <Trash size={12} />
+            </button>
+          </div>
+        )}
+
+        <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-50 justify-end ${!isLead && !isRevoked ? 'text-[#075e54]' : 'text-slate-400'}`}>
+          {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
           {message.time}
-          {!isLead && !isPrivate && <CheckCheck size={14} className="ml-1" />}
+          {!isLead && !isPrivate && !isRevoked && <CheckCheck size={14} className="ml-1 text-[#34b7f1]" />}
         </div>
       </div>
     </div>
@@ -1392,6 +1421,27 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!window.confirm('Deseja apagar esta mensagem? No WhatsApp ela será apagada para todos.')) return;
+    
+    try {
+      const userId = user?.id;
+      if (!userId) return;
+
+      const response = await fetch('/api/messages/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, messageId })
+      });
+
+      if (!response.ok) throw new Error('Falha ao apagar mensagem');
+      toast.success('Mensagem apagada');
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      toast.error('Erro ao apagar mensagem');
+    }
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
@@ -1745,7 +1795,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
                     .map(msg => (
-                      <ChatBubble key={msg.id} message={msg} onPreview={setPreviewMedia} />
+                      <ChatBubble key={msg.id} message={msg} onPreview={setPreviewMedia} onDelete={handleDeleteMessage} />
                     ))}
                   <div ref={messagesEndRef} />
                 </>
