@@ -62,6 +62,7 @@ interface Thread {
   unreadCount?: number;
   remoteJid: string;
   updatedAt: any;
+  lastMessageTime?: any;
   agent_name?: string;
   funilStatus?: 'Lead' | 'Qualificado' | 'Cliente';
   ticketStatus?: 'open' | 'pending' | 'resolved';
@@ -264,7 +265,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-1">
-        <h4 className={`text-[15px] truncate ${thread.unreadCount > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700'}`}>
+        <h4 className={`text-[15px] truncate ${(thread.unreadCount ?? 0) > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700'}`}>
           {thread.name}
         </h4>
         <div className="flex items-center gap-2">
@@ -285,7 +286,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       </div>
       
       <div className="flex items-center justify-between">
-        <p className={`text-[13px] truncate leading-tight flex-1 mr-2 ${thread.unreadCount > 0 ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+        <p className={`text-[13px] truncate leading-tight flex-1 mr-2 ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
           {thread.lastMessage || 'Inicie uma conversa'}
         </p>
         {Boolean(thread.unreadCount) && (
@@ -577,6 +578,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               unreadCount: d.unread_count || 0,
               remoteJid: d.remote_jid || '',
               updatedAt: d.updated_at || new Date().toISOString(),
+              lastMessageTime: d.last_message_time,
               agent_name: d.agent_name || 'Robô IA',
               funilStatus: contact?.status_funil || 'Lead',
               ticketStatus: d.ticket_status || 'open',
@@ -628,6 +630,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   unreadCount: payload.new.unread_count || 0,
                   remoteJid: payload.new.remote_jid,
                   updatedAt: payload.new.updated_at,
+                  lastMessageTime: payload.new.last_message_time,
                   agent_name: payload.new.agent_name || 'Robô IA',
                   ticketStatus: payload.new.ticket_status || 'open',
                   photo_url: payload.new.photo_url,
@@ -652,15 +655,25 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   status: payload.new.status || baseThread?.status || 'ia',
                   unreadCount: payload.new.unread_count ?? baseThread?.unreadCount ?? 0,
                   updatedAt: payload.new.updated_at || baseThread?.updatedAt || new Date().toISOString(),
+                  lastMessageTime: payload.new.last_message_time || baseThread?.lastMessageTime,
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
                   assignedTo: payload.new.assigned_to ?? baseThread?.assignedTo ?? null,
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
                   funilStatus: resolved.funilStatus
                 };
 
-                // Sempre move para o topo em caso de atualização de última mensagem ou unread_count
-                const filtered = prev.filter(t => t.id !== payload.new.id);
-                return [updatedThread as any, ...filtered];
+                // BUG 1 FIX: Só move para o topo se a última mensagem mudou
+                const isNewMessage = payload.new.last_message_time && 
+                                   (!baseThread?.lastMessageTime || 
+                                    new Date(payload.new.last_message_time).getTime() > new Date(baseThread.lastMessageTime).getTime());
+
+                if (isNewMessage) {
+                  const filtered = prev.filter(t => t.id !== payload.new.id);
+                  return [updatedThread as any, ...filtered];
+                } else {
+                  // Apenas atualiza dados (ex: unreadCount = 0) sem mudar a ordem
+                  return prev.map(t => (t.id === payload.new.id ? (updatedThread as any) : t));
+                }
               });
             } else if (payload.eventType === 'DELETE') {
               setThreads(prev => prev.filter(t => t.id !== payload.old.id));
