@@ -248,10 +248,16 @@ export class AgentService {
     displayPhone?: string,
     agentName?: string,
     usage?: any,
-    audioUrl?: string
+    audioUrl?: string,
+    messageType: string = 'text',
+    mediaUrl?: string,
+    mediaMimeType?: string,
+    mediaFileName?: string,
+    caption?: string,
+    isExternal: boolean = false
   ) {
     const timestamp = Date.now();
-    console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction}`);
+    console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
     
     // 1. Thread UPSERT FIRST
     try {
@@ -311,7 +317,13 @@ export class AgentService {
          direction: direction,
          status: 'sent',        // ← Fase 3: campo status obrigatório
          timestamp: timestamp,
-         audio_url: audioUrl,
+         audio_url: audioUrl || mediaUrl, // Compatibility with audio_url
+         message_type: messageType,
+         media_url: mediaUrl,
+         media_mime_type: mediaMimeType,
+         media_filename: mediaFileName,
+         caption: caption,
+         is_external: isExternal,
          whatsapp_id: messageId, // id === whatsapp_id sempre neste sistema
          created_at: new Date(timestamp).toISOString()
        };

@@ -177,19 +177,73 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
     const from = messageData.key?.remoteJid || '';
     const messageContent = messageData.message;
-    const body = messageContent?.conversation || 
-                 messageContent?.extendedTextMessage?.text || 
-                 messageContent?.imageMessage?.caption || '';
+    if (!messageContent) return null;
+
+    let body = '';
+    let type = 'text';
+    let mediaUrl = undefined;
+    let mimeType = undefined;
+    let fileName = undefined;
+    let caption = undefined;
+
+    // Extract content based on message type
+    if (messageContent.conversation) {
+      body = messageContent.conversation;
+      type = 'text';
+    } else if (messageContent.extendedTextMessage) {
+      body = messageContent.extendedTextMessage.text || '';
+      type = 'text';
+    } else if (messageContent.imageMessage) {
+      body = '[Imagem]';
+      type = 'image';
+      caption = messageContent.imageMessage.caption;
+      mimeType = messageContent.imageMessage.mimetype;
+    } else if (messageContent.videoMessage) {
+      body = '[Vídeo]';
+      type = 'video';
+      caption = messageContent.videoMessage.caption;
+      mimeType = messageContent.videoMessage.mimetype;
+    } else if (messageContent.audioMessage) {
+      body = '[Áudio]';
+      type = 'audio';
+      mimeType = messageContent.audioMessage.mimetype;
+    } else if (messageContent.documentMessage) {
+      body = `[Documento]: ${messageContent.documentMessage.fileName || 'arquivo'}`;
+      type = 'document';
+      fileName = messageContent.documentMessage.fileName;
+      mimeType = messageContent.documentMessage.mimetype;
+    } else if (messageContent.stickerMessage) {
+      body = '[Figurinha]';
+      type = 'sticker';
+      mimeType = messageContent.stickerMessage.mimetype;
+    } else if (messageContent.contactMessage) {
+      body = `[Contato]: ${messageContent.contactMessage.displayName || ''}`;
+      type = 'contact';
+    } else if (messageContent.locationMessage) {
+      body = `[Localização]: ${messageContent.locationMessage.degreesLatitude}, ${messageContent.locationMessage.degreesLongitude}`;
+      type = 'location';
+    } else {
+      // Fallback for unknown types
+      const messageType = Object.keys(messageContent)[0];
+      body = `[Mensagem não suportada: ${messageType}]`;
+      type = 'unknown';
+    }
 
     return {
       id: messageData.key?.id || '',
       from: from,
-      to: payload.instanceId || '',
+      to: payload.instance || '',
       body: body,
       contactName: messageData.pushName,
       isGroup: from.includes('@g.us'),
       fromMe: !!messageData.key?.fromMe,
-      timestamp: messageData.messageTimestamp || Date.now()
+      timestamp: messageData.messageTimestamp || Math.floor(Date.now() / 1000),
+      type,
+      mediaUrl,
+      mimeType,
+      fileName,
+      caption,
+      raw: messageData
     };
   }
 }

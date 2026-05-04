@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
+  FileText,
+  MapPin,
+  Smartphone,
   Search, 
   Paperclip, 
   Send, 
@@ -75,6 +78,12 @@ interface Message {
   time: string;
   timestamp: any;
   audio_url?: string;
+  message_type?: string;
+  media_url?: string;
+  media_mime_type?: string;
+  media_filename?: string;
+  caption?: string;
+  is_external?: boolean;
 }
 
 const getInitials = (name: string) => {
@@ -292,6 +301,100 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
+  const isExternal = message.is_external;
+  
+  const renderMediaContent = () => {
+    switch (message.message_type) {
+      case 'audio':
+        return (
+          <div className="space-y-1">
+            <AudioPlayer url={message.media_url || message.audio_url || ''} isOutbound={!isLead} />
+            {message.text && message.text !== '[Áudio]' && (
+              <p className="text-[12px] italic opacity-80 mt-1">
+                "{message.text.replace('[Áudio]: ', '')}"
+              </p>
+            )}
+          </div>
+        );
+      
+      case 'image':
+        return (
+          <div className="space-y-2">
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity"
+                 onClick={() => window.open(message.media_url, '_blank')}>
+              <img src={message.media_url} alt="WhatsApp" className="max-w-full max-h-[300px] object-contain" />
+            </div>
+            {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
+          </div>
+        );
+
+      case 'video':
+        return (
+          <div className="space-y-2">
+            <video controls className="rounded-lg max-w-full max-h-[300px]">
+              <source src={message.media_url} type={message.media_mime_type} />
+              Seu navegador não suporta vídeos.
+            </video>
+            {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
+          </div>
+        );
+
+      case 'document':
+        return (
+          <a href={message.media_url} target="_blank" rel="noopener noreferrer" 
+             className="flex items-center gap-3 p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-colors no-underline">
+            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white shrink-0">
+              <FileText size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-[13px] truncate text-slate-800">
+                {message.media_filename || 'Arquivo'}
+              </p>
+              <p className="text-[10px] text-slate-500 uppercase">
+                {message.media_mime_type?.split('/')[1] || 'Documento'}
+              </p>
+            </div>
+          </a>
+        );
+
+      case 'sticker':
+        return (
+          <div className="w-32 h-32">
+            <img src={message.media_url} alt="Sticker" className="w-full h-full object-contain" />
+          </div>
+        );
+
+      case 'contact':
+        return (
+          <div className="flex items-center gap-3 p-2">
+            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
+              <User size={20} />
+            </div>
+            <p className="font-bold text-sm">{message.text}</p>
+          </div>
+        );
+
+      case 'location':
+        return (
+          <div className="space-y-2">
+             <div className="flex items-center gap-2 text-blue-600 font-bold">
+               <MapPin size={16} /> Localização enviada
+             </div>
+             <p className="text-xs">{message.text}</p>
+             <a href={`https://www.google.com/maps/search/?api=1&query=${message.text.split(': ')[1]}`} target="_blank" className="text-blue-500 underline text-xs">
+               Ver no mapa
+             </a>
+          </div>
+        );
+
+      default:
+        return (
+          <p className="whitespace-pre-wrap break-all">
+            {message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : '')}
+          </p>
+        );
+    }
+  };
   
   return (
     <div className={`flex flex-col mb-3 ${!isLead ? 'items-end' : 'items-start'}`}>
@@ -308,13 +411,10 @@ const ChatBubble: React.FC<{ message: Message }> = ({ message }) => {
           </div>
         )}
         
-        {message.audio_url ? (
-          <AudioPlayer url={message.audio_url} isOutbound={!isLead} />
-        ) : (
-          <p className="whitespace-pre-wrap break-all">{message.text}</p>
-        )}
+        {renderMediaContent()}
 
         <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-60 justify-end ${!isLead ? 'text-[#075e54]' : 'text-slate-400'}`}>
+          {isExternal && !isLead && <Smartphone size={10} className="mr-0.5" />}
           {message.time}
           {!isLead && !isPrivate && <CheckCheck size={14} className="ml-1" />}
         </div>
@@ -633,7 +733,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
             time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
             timestamp: d.created_at,
-            audio_url: d.audio_url
+            audio_url: d.audio_url,
+            message_type: d.message_type || 'text',
+            media_url: d.media_url,
+            media_mime_type: d.media_mime_type,
+            media_filename: d.media_filename,
+            caption: d.caption,
+            is_external: d.is_external
           }));
           setMessages(formatted as any);
         }
@@ -652,7 +758,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
         timestamp: d.created_at,
         audio_url: d.audio_url,
-        status: d.status
+        status: d.status,
+        message_type: d.message_type || 'text',
+        media_url: d.media_url,
+        media_mime_type: d.media_mime_type,
+        media_filename: d.media_filename,
+        caption: d.caption,
+        is_external: d.is_external
       });
 
       channel = supabase

@@ -54,45 +54,104 @@ router.post('/webhook', async (req, res) => {
 });
 
 async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any) {
-  const { from, body, contactName, id: messageId, fromMe } = message;
+  const { from, body, contactName, id: messageId, fromMe, type, caption, fileName, mimeType, raw } = message;
   
-    if (fromMe || from.includes('@g.us')) {
-      // Se for echo (fromMe), só persistimos se necessário e encerramos (evita loop de IA)
-      if (fromMe) {
-         const cleanTo = from.split('@')[0].replace(/\D/g, '');
-         // FIX: No echo (outbound), não passamos o contactName vindo do webhook, 
-         // pois ele contém o nome do DONO da instância (Natan) e acabaria renomeando o contato.
-         await agentService.persistMessage(`${userId}_${cleanTo}`, userId, body, 'outbound', messageId, undefined, from, cleanTo, 'Atendente');
-      }
-      return;
-    }
+  if (from.includes('@g.us')) return; // Ignore groups for now
 
   const cleanPhone = from.split('@')[0].replace(/\D/g, '');
   const threadId = `${userId}_${cleanPhone}`;
 
-  // Verificar se a mensagem possui mídia (através do objeto original preservado ou campos do provider)
-  // Nota: A lógica de áudio permanece similar, mas usando o provider para buscar o base64
-  const isAudio = body === '[Áudio]' || !!(message.raw?.message?.audioMessage);
+  // If it's fromMe, it was sent from the phone (or system echo)
+  if (fromMe) {
+    // Check if it's already in the DB (sent by system)
+    const { data: existing } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('whatsapp_id', messageId)
+      .maybeSingle();
 
-  if (isAudio) {
-    console.log(`[Webhook] 🎙️ Audio detected. Processing via Provider...`);
-    const base64 = await provider.getMediaBase64(instanceName, message.raw?.key, message.raw?.message);
+    if (existing) return; // Already persisted by system
+
+    // If not in DB, it was sent from the phone
+    console.log(`[Webhook] 📱 Outbound message from phone detected: ${messageId}`);
     
-    if (base64) {
-      const buffer = Buffer.from(base64, 'base64');
-      const transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
-      if (transcription) {
-        const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, `inbound_${Date.now()}.ogg`);
-        await agentService.persistMessage(threadId, userId, `[Áudio]: ${transcription}`, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, audioUrl || undefined);
-        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
-        return;
-      }
-    }
+    // Process media for outbound if needed (simpler version for now, prioritize inbound)
+    await agentService.persistMessage(
+      threadId, userId, body, 'outbound', messageId, undefined, from, cleanPhone, 
+      'Atendente', undefined, undefined, type, undefined, mimeType, fileName, caption, true
+    );
+    return;
   }
 
-  // Persistir Texto e Disparar IA
-  await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone);
+  // INBOUND MESSAGE HANDLING
+  console.log(`[Webhook] 📥 Inbound message: ${messageId} | Type: ${type}`);
+
+  // Handle Media Asynchronously to not block the response
+  if (type !== 'text' && type !== 'unknown') {
+    handleMediaMessage(userId, instanceName, threadId, message, provider).catch(err => {
+      console.error(`[Webhook] Error handling media message:`, err);
+    });
+    return;
+  }
+
+  // Persist Text and Trigger AI
+  await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, undefined, type);
   await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+}
+
+async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any) {
+  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, raw } = message;
+  const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+
+  console.log(`[Webhook] 📥 Downloading media for message: ${messageId} (${type})`);
+  
+  try {
+    const base64 = await provider.getMediaBase64(instanceName, raw?.key, raw?.message);
+    if (!base64) {
+      console.warn(`[Webhook] Could not get base64 for media message: ${messageId}`);
+      await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, undefined, type, undefined, mimeType, fileName, caption);
+      return;
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+    const ext = mimeType?.split('/')[1]?.split(';')[0] || 'bin';
+    const storagePath = `${type}s/${Date.now()}_${fileName || `file.${ext}`}`;
+    
+    // Upload to Storage
+    const audioUrl = await (whatsappService as any).uploadToStorage(userId, buffer, storagePath);
+    
+    let processedText = body;
+    let transcription = undefined;
+
+    if (type === 'audio') {
+      console.log(`[Webhook] 🎙️ Transcribing audio: ${messageId}`);
+      transcription = await transcribeAudio(buffer, `audio_${Date.now()}.ogg`);
+      if (transcription) {
+        processedText = `[Áudio]: ${transcription}`;
+      }
+    }
+
+    // Persist enriched message
+    await agentService.persistMessage(
+      threadId, userId, processedText, 'inbound', messageId, contactName, from, cleanPhone, 
+      undefined, undefined, audioUrl, type, audioUrl, mimeType, fileName, caption
+    );
+
+    // Trigger AI with transcription if audio
+    if (type === 'audio' && transcription) {
+      await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
+    } else if (type === 'image' || type === 'video') {
+       // Maybe trigger AI for images/videos in the future
+       // For now, if there is a caption, trigger AI
+       if (caption) {
+         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption, contactName, cleanPhone, messageId, false);
+       }
+    }
+  } catch (err) {
+    console.error(`[Webhook] Failed to process media message ${messageId}:`, err);
+    // Fallback persist without media URL if failed
+    await agentService.persistMessage(threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone, undefined, undefined, undefined, type, undefined, mimeType, fileName, caption);
+  }
 }
 
 async function handleConnectionUpdate(userId: string, data: any) {

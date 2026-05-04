@@ -12,6 +12,12 @@ export interface WhatsAppMessage {
   isGroup: boolean;
   fromMe: boolean;
   timestamp: number;
+  type?: string;
+  mediaUrl?: string;
+  mimeType?: string;
+  fileName?: string;
+  caption?: string;
+  raw?: any;
 }
 
 export interface WhatsAppStatus {

@@ -167,10 +167,24 @@ class WhatsAppService {
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
     try {
       const path = `${userId}/${Date.now()}_${filename}`;
+      const ext = filename.split('.').pop()?.toLowerCase() || 'bin';
+      
+      // Mapear extensão para Content-Type
+      let contentType = 'application/octet-stream';
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+        contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      } else if (['mp4', 'avi', 'mov', 'mpeg'].includes(ext)) {
+        contentType = `video/${ext === 'mov' ? 'quicktime' : (ext === 'mpeg' ? 'mpeg' : 'mp4')}`;
+      } else if (['ogg', 'mp3', 'wav', 'aac'].includes(ext)) {
+        contentType = `audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : 'ogg')}`;
+      } else if (ext === 'pdf') {
+        contentType = 'application/pdf';
+      }
+
       const { data, error } = await supabase.storage
-        .from('chat-audios')
+        .from('chat-audios') // Bucket legado, mas usaremos para todas as mídias do chat por enquanto
         .upload(path, buffer, {
-          contentType: 'audio/ogg',
+          contentType,
           upsert: true
         });
 
