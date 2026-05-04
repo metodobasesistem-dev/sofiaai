@@ -31,7 +31,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { useFeature } from '../contexts/FeatureFlagContext';
+import { useFeature, useFeatureContext } from '../contexts/FeatureFlagContext';
 import { useRef, useEffect } from 'react';
 
 interface SidebarItemProps {
@@ -189,7 +189,10 @@ export default function Layout({
     },
     { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
-  ].filter(item => !item.flag || useFeature(item.flag));
+  ];
+
+  const { flags } = useFeatureContext();
+  const filteredMenuItems = menuItems.filter(item => !(item as any).flag || flags[(item as any).flag]);
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
@@ -242,7 +245,7 @@ export default function Layout({
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => (
+          {filteredMenuItems.map((item) => (
             <div key={item.id}>
               <SidebarItem 
                 icon={item.icon} 
@@ -457,7 +460,7 @@ export default function Layout({
                 </button>
               </div>
               <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
-                {menuItems.map((item) => (
+                {filteredMenuItems.map((item) => (
                   <div key={item.id}>
                     <SidebarItem 
                       icon={item.icon} 
