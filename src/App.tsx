@@ -156,9 +156,9 @@ export default function App() {
     }
   };
 
-  const { features, isLoading: flagsLoading } = useFeatureContext();
-  const leoEnabled = features.find(f => f.key === 'leo_ai')?.enabled;
-  const agendasEnabled = features.find(f => f.key === 'agendas')?.enabled;
+  const { flags = {}, isLoading: flagsLoading } = useFeatureContext();
+  const leoEnabled = flags['leo_ai'];
+  const agendasEnabled = flags['agendas'];
 
   if (loading || flagsLoading) {
     return (
