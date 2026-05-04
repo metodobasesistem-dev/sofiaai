@@ -489,6 +489,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [pasteCaption, setPasteCaption] = useState('');
   const [isUploadingPaste, setIsUploadingPaste] = useState(false);
   const [pastedImageUrl, setPastedImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
     contactsRef.current = contacts;
   }, [contacts]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
