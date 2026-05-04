@@ -632,7 +632,10 @@ class WhatsAppService {
       const aiMsgId = (aiResponseData as any)?.aiMsgId;
 
       if (!finalResponseText || finalResponseText.trim().length === 0) return;
-
+ 
+      // Busca dados do agente para usar o nome correto no chat
+      const { data: agentData } = await supabase.from('agents').select('nome').eq('user_id', userId).eq('is_active', true).maybeSingle();
+ 
       // LÓGICA DE ENVIO INTELIGENTE VIA MÉTODO CENTRALIZADO
       // Isso garante status 'sending', 'sent' e evita duplicidade no chat.
       const provider = await WhatsAppProviderFactory.getProvider(userId);
