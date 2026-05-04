@@ -161,8 +161,9 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-    { id: 'leo', icon: <Zap size={20} className="text-amber-500" />, label: 'Leo' },
-    ...(role === 'admin' ? [{
+    ...(role === 'admin' ? [
+      { id: 'leo', icon: <Zap size={20} className="text-amber-500" />, label: 'Leo' },
+      {
 
       id: 'admin_group',
       icon: <Shield size={20} />,
