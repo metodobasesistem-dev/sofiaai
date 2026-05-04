@@ -174,20 +174,43 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
 
   const startRecording = async () => {
     try {
+      // Pre-check for race condition
+      const startTime = Date.now();
+      audioChunksRef.current = [];
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      
+      // If the button was released while we were getting permission, stop now
+      if (!isRecordingRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/ogg; codecs=opus') 
+        ? 'audio/ogg; codecs=opus' 
+        : 'audio/webm; codecs=opus';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
-      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
       recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
-        onStop(audioBlob);
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+          // Only send if it's more than 500ms to avoid empty files
+          if (Date.now() - startTime > 500) {
+            onStop(audioBlob);
+          }
+        }
         stream.getTracks().forEach(track => track.stop());
       };
 
-      recorder.start();
+      recorder.start(200); // Send chunks every 200ms
       setIsRecording(true);
+      isRecordingRef.current = true;
       setRecordingTime(0);
       timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
     } catch (err) {
@@ -196,12 +219,18 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    isRecordingRef.current = false;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
   };
+
+  const isRecordingRef = useRef(false);
 
   return (
     <div className="flex items-center gap-2">
@@ -229,8 +258,17 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
       )}
       <button
         type="button"
-        onMouseDown={startRecording}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          startRecording();
+        }}
         onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        onTouchStart={(e) => {
+          e.preventDefault();
+          startRecording();
+        }}
+        onTouchEnd={stopRecording}
         className={`p-3 rounded-2xl transition-all duration-300 shadow-lg active:scale-90
           ${isRecording 
             ? 'bg-red-500 text-white shadow-red-200 rotate-12 scale-110' 
