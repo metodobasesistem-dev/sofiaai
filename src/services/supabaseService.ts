@@ -207,7 +207,7 @@ const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 /**
  * Helper para obter sessão e token de forma centralizada
  */
-const getAuthSession = async () => {
+export const getAuthSession = async () => {
   try {
     // Try to get the session. If it fails, retry once after a short delay.
     let { data: { session } } = await supabase.auth.getSession();
@@ -253,7 +253,7 @@ export const logSystemError = async (module: string, message: string, metadata: 
 /**
  * Wrapper de Fetch padronizado com timeout e headers de auth
  */
-const standardFetch = async (url: string, options: RequestInit = {}, timeoutMs = 8000) => {
+export const standardFetch = async (url: string, options: RequestInit = {}, timeoutMs = 8000) => {
   const session = await getAuthSession();
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);

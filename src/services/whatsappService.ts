@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { standardFetch } from './supabaseService';
 
 const API_BASE_URL = '/api/sessions';
 
@@ -149,11 +150,8 @@ export const syncContacts = async (): Promise<{ success: boolean; synced: number
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
-  const response = await fetch('/api/v2/contacts/sync', {
+  const response = await standardFetch('/api/v2/contacts/sync', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
     body: JSON.stringify({ userId: user.id })
   });
 
