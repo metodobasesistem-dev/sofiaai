@@ -782,34 +782,68 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
   }
 
   public async syncContactsFromThreads(userId: string) {
-     console.log(`[AgentService] 🔄 Syncing contacts for userId: ${userId}`);
-     try {
-       const { data: threads, error: tErr } = await supabase
-         .from('threads')
-         .select('*')
-         .eq('user_id', userId);
-       
-       if (tErr) throw tErr;
-       if (!threads || threads.length === 0) return { success: true, synced: 0 };
+      console.log(`[AgentService] 🔄 Aggressive sync starting for userId: ${userId}`);
+      try {
+        const { data: threads, error: tErr } = await supabase
+          .from('threads')
+          .select('*')
+          .eq('user_id', userId);
+        
+        if (tErr) throw tErr;
+        if (!threads || threads.length === 0) {
+          console.log('[AgentService] No threads found for this user to sync.');
+          return { success: true, synced: 0 };
+        }
 
-       let synced = 0;
-       for (const thread of threads) {
-         const cleanPhone = (thread.display_phone || thread.remote_jid?.split('@')[0] || '').replace(/\D/g, '');
-         if (!cleanPhone) continue;
+        console.log(`[AgentService] Found ${threads.length} threads. Analyzing...`);
+        let synced = 0;
+        let skipped = 0;
 
-         const contactId = `${userId}_${cleanPhone}`;
-         const { data: existing } = await supabase.from('contacts').select('id').eq('id', contactId).maybeSingle();
+        for (const thread of threads) {
+          // 1. Ignorar grupos
+          if (thread.remote_jid?.endsWith('@g.us')) {
+            skipped++;
+            continue;
+          }
 
-         if (!existing) {
-           await this.upsertContact(userId, cleanPhone, thread.contact_name, thread.last_message || '', false);
-           synced++;
-         }
-       }
-       return { success: true, synced };
-     } catch (err: any) {
-       console.error('[AgentService] Sync error:', err);
-       throw err;
-     }
+          // 2. Extração robusta do telefone
+          let rawPhone = thread.display_phone || thread.remote_jid?.split('@')[0] || '';
+          
+          // Se ainda vazio, tenta extrair do ID da thread (userId_phone ou apenas phone)
+          if (!rawPhone && thread.id) {
+            rawPhone = thread.id.includes('_') ? thread.id.split('_')[1] : thread.id;
+          }
+
+          const cleanPhone = rawPhone.replace(/\D/g, '');
+          if (!cleanPhone || cleanPhone.length < 8) {
+            console.log(`[AgentService] ⚠️ Skipping thread ${thread.id}: Invalid phone "${cleanPhone}"`);
+            skipped++;
+            continue;
+          }
+
+          const contactId = `${userId}_${cleanPhone}`;
+          const { data: existing } = await supabase.from('contacts').select('id, status_funil').eq('id', contactId).maybeSingle();
+
+          if (!existing) {
+            // CRIAR NOVO: Forçar Lead para passar no SQL Check
+            await this.upsertContact(userId, cleanPhone, thread.contact_name, thread.last_message || '', false);
+            synced++;
+          } else {
+            // JÁ EXISTE: Verificar se o status_funil é válido para o novo SQL
+            const validStatus = ['Lead', 'Qualificado', 'Resolvido'];
+            if (!validStatus.includes(existing.status_funil)) {
+               console.log(`[AgentService] 🛠️ Fixing invalid status "${existing.status_funil}" for contact ${contactId}`);
+               await supabase.from('contacts').update({ status_funil: 'Lead' }).eq('id', contactId);
+            }
+          }
+        }
+        
+        console.log(`[AgentService] ✅ Sync complete. Synced: ${synced}, Skipped: ${skipped}`);
+        return { success: true, synced };
+      } catch (err: any) {
+        console.error('[AgentService] Sync error:', err);
+        throw err;
+      }
   }
 
   private async handleSearchCatalog(userId: string, query: string) {
