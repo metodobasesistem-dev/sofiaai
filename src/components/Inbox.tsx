@@ -488,6 +488,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [showDetails, setShowDetails] = useState(true);
+  const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -948,6 +949,271 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
 
   const activeThread = threads.find(t => t.id === selectedThreadId);
+
+  const renderContactDetails = () => {
+    if (!activeThread) return null;
+    
+    return (
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+        {/* Perfil Header */}
+        <div className="p-8 border-b border-slate-100 text-center bg-slate-50/30 relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[140%] opacity-[0.03] pointer-events-none" 
+               style={{ backgroundImage: `url(${activeThread.profilePictureUrl || ''})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(40px)' }}></div>
+          
+          <div className="relative z-10">
+            <div className="w-28 h-28 rounded-[2.5rem] bg-white text-slate-400 flex items-center justify-center mx-auto mb-6 border border-slate-200/50 shadow-xl overflow-hidden group">
+              {activeThread.profilePictureUrl ? (
+                <img src={activeThread.profilePictureUrl} alt={activeThread.name} className="w-full h-full object-cover" />
+              ) : (
+                <User size={48} className="text-slate-200" />
+              )}
+            </div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight px-2">{activeThread.name}</h3>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
+                ${activeThread.funilStatus === 'Lead' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
+                  activeThread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
+                  'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                {activeThread.funilStatus || 'Lead'}
+              </span>
+              {activeThread.is_client && (
+                <span className="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
+                  <Star size={10} className="fill-amber-500" /> Cliente
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 space-y-10">
+          {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <Bookmark size={14} className="text-blue-500" /> Contexto do Ticket
+            </h4>
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
+                <select 
+                  value={activeThread.priority || 'normal'}
+                  onChange={async (e) => {
+                    const val = e.target.value as any;
+                    await supabase.from('threads').update({ priority: val }).eq('id', activeThread.id);
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, priority: val } : t));
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                >
+                  <option value="low">Baixa 🟢</option>
+                  <option value="normal">Normal ⚪</option>
+                  <option value="high">Alta 🔴</option>
+                  <option value="urgent">Urgente 🔥</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Atribuído a</label>
+                <select 
+                  value={activeThread.assignedTo || ''}
+                  onChange={async (e) => {
+                    const val = e.target.value || null;
+                    await supabase.from('threads').update({ assigned_to: val }).eq('id', activeThread.id);
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, assignedTo: val } : t));
+                    toast.success(val ? 'Conversa atribuída!' : 'Atribuição removida.');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                >
+                  <option value="">Não atribuído</option>
+                  <option value={user?.id || 'me'}>Você ({user?.email?.split('@')[0]})</option>
+                  {professionals.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} (Equipe)</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Etiqueta Especial</label>
+                <button
+                  onClick={async () => {
+                    const newVal = !activeThread.is_client;
+                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                    await supabase.from('contacts').update({ is_client: newVal }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
+                    toast.success(newVal ? 'Marcado como Cliente! ⭐' : 'Etiqueta de Cliente removida.');
+                  }}
+                  className={`w-full flex items-center justify-center gap-2 px-3 py-3 rounded-2xl border text-[12px] font-black uppercase tracking-widest transition-all
+                    ${activeThread.is_client 
+                      ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-lg shadow-amber-500/5' 
+                      : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500'}`}
+                >
+                  <Star size={16} className={activeThread.is_client ? 'fill-amber-500' : ''} />
+                  {activeThread.is_client ? 'É Cliente' : 'Marcar como Cliente'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Etiquetas (Labels) */}
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <Tag size={14} className="text-blue-500" /> Etiquetas
+            </h4>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {activeThread.labels && activeThread.labels.length > 0 ? (
+                activeThread.labels.map((label, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-xl text-[11px] font-bold text-blue-700 group shadow-sm">
+                    {label}
+                    <button 
+                      onClick={async () => {
+                        const newLabels = activeThread.labels!.filter(l => l !== label);
+                        await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                      }}
+                      className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-[11px] text-slate-400 font-medium">Nenhuma etiqueta</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Adicionar..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl text-[12px] px-4 py-2.5 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    const val = e.currentTarget.value.trim();
+                    if (val && (!activeThread.labels || !activeThread.labels.includes(val))) {
+                      const newLabels = [...(activeThread.labels || []), val];
+                      await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Dados do Contato */}
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+              <Info size={14} className="text-blue-500" /> Informações
+            </h4>
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100 shadow-sm">
+                  <Phone size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">WhatsApp</p>
+                  <p className="text-sm font-black text-gray-800">{(activeThread.remoteJid || '').split('@')[0]}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100 shadow-sm">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</p>
+                  <p className="text-sm font-black text-gray-800">
+                    {selectedContact?.created_at ? new Date(selectedContact.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Agendamentos */}
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
+              <span className="flex items-center gap-2"><Calendar size={14} className="text-blue-500" /> Agendamentos</span>
+              <span className="bg-blue-600 text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg shadow-blue-500/20">{appointments.length}</span>
+            </h4>
+            <div className="space-y-4">
+              {appointments.length > 0 ? (
+                appointments.map((app, idx) => (
+                  <div key={idx} className="p-5 bg-slate-50/50 rounded-[2rem] border border-slate-100 hover:border-blue-200 transition-all group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2">
+                       <Calendar size={48} className="text-blue-500/5 -mr-4 -mt-4 rotate-12" />
+                    </div>
+                    <div className="flex justify-between items-start mb-3 relative z-10">
+                      <p className="text-[14px] font-black text-slate-900 truncate flex-1">{app.service || 'Procedimento'}</p>
+                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ml-2 border shadow-sm
+                        ${app.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                        {app.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold relative z-10 bg-white/50 w-fit px-3 py-1 rounded-full border border-slate-100/50">
+                      <Clock size={12} className="text-blue-500" />
+                      {new Date(app.start_time).toLocaleDateString('pt-BR')} • {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12 bg-slate-50/30 rounded-[2.5rem] border border-dashed border-slate-200">
+                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
+                    <Calendar size={24} className="text-slate-300" />
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-4">Nenhum agendamento futuro</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Gestão do Funil */}
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+              <CreditCard size={14} className="text-blue-500" /> Gestão de Funil
+            </h4>
+            <div className="flex flex-col gap-2">
+              {(['Lead', 'Qualificado', 'Resolvido'] as const).map((status) => {
+                const isActive = activeThread.funilStatus === status;
+                return (
+                  <button 
+                    key={status}
+                    onClick={async () => {
+                      const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                      const { error } = await supabase
+                        .from('contacts')
+                        .update({ status_funil: status })
+                        .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                      
+                      if (!error) {
+                        toast.success(`Status alterado para ${status}`);
+                        // Atualização local imediata para feedback instantâneo
+                        setThreads(prev => prev.map(t => 
+                          t.id === selectedThreadId ? { ...t, funilStatus: status } : t
+                        ));
+                      } else {
+                        toast.error('Erro ao atualizar status');
+                      }
+                    }}
+                    className={`group w-full flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all
+                      ${isActive 
+                        ? 'bg-blue-50 border-blue-500 shadow-xl shadow-blue-500/10 scale-[1.02]' 
+                        : 'bg-white border-slate-100 hover:border-blue-200'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-3 h-3 rounded-full shadow-sm
+                        ${status === 'Lead' ? 'bg-blue-500' : 
+                          status === 'Qualificado' ? 'bg-indigo-500' : 'bg-emerald-500'}`} 
+                      />
+                      <span className={`text-[14px] font-bold ${isActive ? 'text-blue-700' : 'text-slate-600'}`}>{status}</span>
+                    </div>
+                    {isActive && <Check size={18} className="text-blue-600" strokeWidth={3} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const toggleThreadStatus = async () => {
     if (!selectedThreadId || !activeThread) return;
@@ -1440,7 +1706,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </button>
 
                 <button 
-                  onClick={() => setShowDetails(!showDetails)}
+                  onClick={() => {
+                    if (window.innerWidth < 1024) {
+                      setIsMobileDetailsOpen(true);
+                    } else {
+                      setShowDetails(!showDetails);
+                    }
+                  }}
                   className={`p-2 rounded-lg transition-all ${showDetails ? 'text-blue-600 bg-blue-50 border border-blue-100' : 'text-slate-400 hover:bg-slate-50 border border-transparent'}`}
                   title={showDetails ? "Esconder Detalhes" : "Mostrar Detalhes"}
                 >
@@ -1632,249 +1904,34 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           animate={{ opacity: 1, width: '28%' }}
           className="hidden lg:flex border-l border-gray-100 flex-col bg-white overflow-hidden"
         >
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {/* Perfil Header */}
-            <div className="p-6 border-b border-slate-100 text-center bg-slate-50/30">
-              <div className="w-20 h-20 rounded-2xl bg-white text-slate-400 flex items-center justify-center mx-auto mb-4 border border-slate-200/50 shadow-sm">
-                <User size={36} />
-              </div>
-              <h3 className="text-[15px] font-bold text-slate-900 truncate px-2">{activeThread.name}</h3>
-              <div className="mt-2 flex items-center justify-center">
-                <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border
-                  ${activeThread.funilStatus === 'Lead' ? 'bg-slate-50 text-slate-500 border-slate-200' : 
-                    activeThread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
-                    'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                  {activeThread.funilStatus || 'Lead'}
-                </span>
-              </div>
-            </div>
+          {renderContactDetails()}
+        </motion.div>
+      )}
 
-            <div className="p-8 space-y-10">
-              
-              {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
-              <div>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                  <Bookmark size={14} className="text-blue-500" /> Contexto do Ticket
-                </h4>
-                <div className="space-y-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
-                    <select 
-                      value={activeThread.priority || 'normal'}
-                      onChange={async (e) => {
-                        const val = e.target.value as any;
-                        await supabase.from('threads').update({ priority: val }).eq('id', activeThread.id);
-                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, priority: val } : t));
-                      }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg text-[13px] px-3 py-2 font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    >
-                      <option value="low">Baixa 🟢</option>
-                      <option value="normal">Normal ⚪</option>
-                      <option value="high">Alta 🔴</option>
-                      <option value="urgent">Urgente 🔥</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Atribuído a</label>
-                    <select 
-                      value={activeThread.assignedTo || ''}
-                      onChange={async (e) => {
-                        const val = e.target.value || null;
-                        await supabase.from('threads').update({ assigned_to: val }).eq('id', activeThread.id);
-                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, assignedTo: val } : t));
-                        toast.success(val ? 'Conversa atribuída!' : 'Atribuição removida.');
-                      }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg text-[13px] px-3 py-2 font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    >
-                      <option value="">Não atribuído</option>
-                      <option value={user?.id || 'me'}>Você ({user?.email?.split('@')[0]})</option>
-                      {professionals.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} (Equipe)</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Etiqueta Especial</label>
-                    <button
-                      onClick={async () => {
-                        const newVal = !activeThread.is_client;
-                        const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                        await supabase.from('contacts').update({ is_client: newVal }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
-                        toast.success(newVal ? 'Marcado como Cliente! ⭐' : 'Etiqueta de Cliente removida.');
-                      }}
-                      className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-[12px] font-black uppercase tracking-widest transition-all
-                        ${activeThread.is_client 
-                          ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' 
-                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500'}`}
-                    >
-                      <Star size={16} className={activeThread.is_client ? 'fill-amber-500' : ''} />
-                      {activeThread.is_client ? 'É Cliente' : 'Marcar como Cliente'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+      {/* Mobile Contact Info Modal */}
+      {selectedThreadId && activeThread && isMobileDetailsOpen && (
+        <motion.div 
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          className="fixed inset-0 z-[150] bg-white flex flex-col md:hidden"
+        >
+          {/* Header Mobile Info */}
+          <div className="px-4 h-16 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+             <button 
+               onClick={() => setIsMobileDetailsOpen(false)}
+               className="p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all flex items-center gap-2"
+             >
+               <ArrowLeft size={24} />
+               <span className="font-bold text-slate-800">Detalhes do Lead</span>
+             </button>
+             <button className="p-2 text-slate-400 hover:text-blue-600 rounded-full transition-all">
+                <MoreVertical size={20} />
+             </button>
+          </div>
 
-              {/* Etiquetas (Labels) */}
-              <div>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                  <Tag size={14} className="text-blue-500" /> Etiquetas
-                </h4>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {activeThread.labels && activeThread.labels.length > 0 ? (
-                    activeThread.labels.map((label, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[11px] font-bold text-blue-700 group">
-                        {label}
-                        <button 
-                          onClick={async () => {
-                            const newLabels = activeThread.labels!.filter(l => l !== label);
-                            await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
-                            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
-                          }}
-                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-slate-400 font-medium">Nenhuma etiqueta</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Adicionar..."
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-[12px] px-3 py-1.5 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                    onKeyDown={async (e) => {
-                      if (e.key === 'Enter') {
-                        const val = e.currentTarget.value.trim();
-                        if (val && (!activeThread.labels || !activeThread.labels.includes(val))) {
-                          const newLabels = [...(activeThread.labels || []), val];
-                          await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
-                          setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
-                          e.currentTarget.value = '';
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Dados do Contato */}
-              <div>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                  <Info size={14} className="text-blue-500" /> Informações
-                </h4>
-                <div className="space-y-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100">
-                      <Phone size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">WhatsApp</p>
-                      <p className="text-sm font-black text-gray-800">{(activeThread.remoteJid || '').split('@')[0]}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100">
-                      <Clock size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</p>
-                      <p className="text-sm font-black text-gray-800">
-                        {selectedContact?.created_at ? new Date(selectedContact.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Agendamentos */}
-              <div>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
-                  <span className="flex items-center gap-2"><Calendar size={14} className="text-blue-500" /> Agendamentos</span>
-                  <span className="bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] font-black shadow-sm">{appointments.length}</span>
-                </h4>
-                <div className="space-y-4">
-                  {appointments.length > 0 ? (
-                    appointments.map((app, idx) => (
-                      <div key={idx} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-blue-200 transition-all group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-2">
-                           <Calendar size={32} className="text-blue-500/5 -mr-2 -mt-2 rotate-12" />
-                        </div>
-                        <div className="flex justify-between items-start mb-2 relative z-10">
-                          <p className="text-[13px] font-bold text-slate-900 truncate flex-1">{app.service || 'Procedimento'}</p>
-                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase ml-2 border
-                            ${app.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                            {app.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold relative z-10">
-                          <Clock size={12} className="text-slate-400" />
-                          {new Date(app.start_time).toLocaleDateString('pt-BR')} • {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-10 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
-                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
-                        <Calendar size={20} className="text-slate-300" />
-                      </div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nenhum agendamento</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Gestão do Funil */}
-              <div>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                  <CreditCard size={14} className="text-blue-500" /> Gestão de Funil
-                </h4>
-                <div className="flex flex-col gap-2">
-                  {(['Lead', 'Qualificado', 'Resolvido'] as const).map((status) => {
-                    const isActive = activeThread.funilStatus === status;
-                    return (
-                      <button 
-                        key={status}
-                        onClick={async () => {
-                          const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                          const { error } = await supabase
-                            .from('contacts')
-                            .update({ status_funil: status })
-                            .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                          
-                          if (!error) {
-                            toast.success(`Status alterado para ${status}`);
-                            // Atualização local imediata para feedback instantâneo
-                            setThreads(prev => prev.map(t => 
-                              t.id === selectedThreadId ? { ...t, funilStatus: status } : t
-                            ));
-                          } else {
-                            toast.error('Erro ao atualizar status');
-                          }
-                        }}
-                        className={`group w-full flex items-center justify-between p-4 rounded-3xl border-2 transition-all
-                          ${isActive 
-                            ? 'bg-blue-50 border-blue-500 shadow-lg shadow-blue-500/10' 
-                            : 'bg-white border-gray-100 hover:border-blue-200'}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-2 h-2 rounded-full 
-                            ${status === 'Lead' ? 'bg-blue-500' : 
-                              status === 'Qualificado' ? 'bg-indigo-500' : 'bg-emerald-500'}`} 
-                          />
-                          <span className={`text-[13px] font-semibold ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>{status}</span>
-                        </div>
-                        {isActive && <Check size={16} className="text-blue-600" strokeWidth={3} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+          <div className="flex-1 overflow-y-auto">
+             {renderContactDetails()}
           </div>
         </motion.div>
       )}
