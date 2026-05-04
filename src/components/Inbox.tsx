@@ -70,6 +70,7 @@ interface Thread {
   assignedTo?: string | null;
   labels?: string[];
   photo_url?: string;
+  is_client?: boolean;
 }
 
 interface Message {
@@ -311,10 +312,10 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-1">
-        <h4 className={(thread.unreadCount ?? 0) > 0 
-          ? "text-[15px] truncate font-black text-slate-900" 
-          : "text-[15px] truncate font-medium text-slate-600"}>
+        <h4 className={`text-[15px] truncate flex items-center gap-2 
+          ${(thread.unreadCount ?? 0) > 0 ? "font-black text-slate-900" : "font-medium text-slate-600"}`}>
           {thread.name}
+          {thread.is_client && <Star size={12} className="fill-amber-500 text-amber-500 shrink-0" />}
         </h4>
         <div className="flex items-center gap-2">
           <button 
@@ -645,6 +646,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               assignedTo: d.assigned_to || null,
               labels: Array.isArray(d.labels) ? d.labels : [],
               photo_url: d.photo_url,
+              is_client: contact?.is_client || false,
               createdAt: d.created_at || d.updated_at || new Date().toISOString()
             };
           });
@@ -1326,7 +1328,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
 
           <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
-            {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+            {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}
@@ -1389,7 +1391,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[15px] font-bold text-slate-900 leading-tight truncate">{activeThread.name}</h3>
+                  <h3 className="text-[15px] font-bold text-slate-900 leading-tight truncate flex items-center gap-2">
+                    {activeThread.name}
+                    {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
+                  </h3>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                     <span className="text-[11px] text-slate-500 font-medium truncate">Online via WhatsApp</span>
@@ -1691,6 +1696,25 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                         <option key={p.id} value={p.id}>{p.name} (Equipe)</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Etiqueta Especial</label>
+                    <button
+                      onClick={async () => {
+                        const newVal = !activeThread.is_client;
+                        const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                        await supabase.from('contacts').update({ is_client: newVal }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
+                        toast.success(newVal ? 'Marcado como Cliente! ⭐' : 'Etiqueta de Cliente removida.');
+                      }}
+                      className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-[12px] font-black uppercase tracking-widest transition-all
+                        ${activeThread.is_client 
+                          ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' 
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500'}`}
+                    >
+                      <Star size={16} className={activeThread.is_client ? 'fill-amber-500' : ''} />
+                      {activeThread.is_client ? 'É Cliente' : 'Marcar como Cliente'}
+                    </button>
                   </div>
                 </div>
               </div>

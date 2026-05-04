@@ -36,7 +36,6 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     ? [
         { id: 'Lead', title: 'Leads', color: 'bg-slate-100', borderColor: 'border-slate-200', titleColor: 'text-slate-600' },
         { id: 'Qualificado', title: 'Qualificados', color: 'bg-indigo-50', borderColor: 'border-indigo-100', titleColor: 'text-indigo-600' },
-        { id: 'Cliente', title: 'Clientes', color: 'bg-blue-50', borderColor: 'border-blue-100', titleColor: 'text-blue-600' },
         { id: 'Resolvido', title: 'Resolvidos', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
       ]
     : [
@@ -305,11 +304,19 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                           ${draggedCardId === card.id ? 'opacity-50 scale-95' : ''}`}
                       >
                         <div className="flex justify-between items-start mb-3">
-                          <h4 className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">{card.name}</h4>
+                          <h4 className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1 flex items-center gap-2">
+                            {card.name}
+                            {card.is_client && <span className="text-amber-500" title="Cliente">⭐</span>}
+                          </h4>
                           {card.priority && card.priority !== 'normal' && (
                             <span className="text-xs">{card.priority === 'urgent' ? '🔥' : card.priority === 'high' ? '🔴' : '🟢'}</span>
                           )}
                         </div>
+                        {card.is_client && (
+                          <div className="mb-2">
+                            <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">Cliente</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
                           <MessageCircle size={12} />
                           <p className="line-clamp-1">{card.lastMessage || 'Sem mensagens'}</p>
