@@ -1195,6 +1195,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     let matchesFilter = true;
     if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved';
     else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved';
+    else if (filterStatus === 'Cliente') matchesFilter = !!t.is_client;
     else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -1331,7 +1332,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
 
           <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
-            {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado'] as const).map(f => (
+            {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}
