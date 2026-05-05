@@ -231,6 +231,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                          flag.key === 'chat' ? <MessageSquare size={24} /> :
                          flag.key === 'agent_training_audio' ? <Smartphone size={24} /> :
                          flag.key === 'ai_followup_questions' ? <Zap size={24} /> :
+                         flag.key === 'meta_official' ? <Globe size={24} /> :
                          <Zap size={24} className={flag.enabled ? 'animate-pulse' : ''} />}
                       </div>
                       <button 
