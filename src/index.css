@@ -1,4 +1,16 @@
 @import "tailwindcss";
+@theme {
+  --color-primary: var(--color-indigo-600);
+  --color-primary-hover: var(--color-indigo-700);
+  --color-primary-light: var(--color-indigo-50);
+  --color-accent: var(--color-cyan-500);
+  --color-accent-hover: var(--color-cyan-600);
+  --color-accent-light: var(--color-cyan-50);
+  
+  /* Sofia Specifics */
+  --color-sofia-purple: #8B5CF6;
+  --color-sofia-glow: #06B6D4;
+}
 
 @layer base {
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
@@ -9,7 +21,7 @@
   }
 
   body {
-    @apply antialiased text-slate-900 bg-[#F8FAFC];
+    @apply antialiased text-slate-900 bg-[#F1F5F9];
     font-family: var(--font-sans);
   }
 

@@ -50,7 +50,7 @@ const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSu
       onClick={onClick}
       className={`flex items-center p-2.5 rounded-xl cursor-pointer transition-all duration-300 group relative
         ${active 
-          ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+          ? 'bg-primary text-white shadow-lg shadow-primary/20' 
           : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group-active:scale-95'
         }`}
     >
@@ -245,18 +245,18 @@ export default function Layout({
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-center gap-2 font-bold text-xl text-blue-600 cursor-pointer"
+              className="flex items-center gap-2 font-bold text-xl text-primary cursor-pointer"
               onClick={() => handleTabClick('dashboard')}
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30">
                 <Bot size={20} />
               </div>
-              <span>WppAI</span>
+              <span className="tracking-tighter font-black">Sofia</span>
             </motion.div>
           )}
           {collapsed && (
             <div 
-              className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer"
+              className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer shadow-lg shadow-primary/30"
               onClick={() => handleTabClick('dashboard')}
             >
               <Bot size={20} />
@@ -294,7 +294,7 @@ export default function Layout({
                       onClick={() => handleTabClick(sub.id)}
                       className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
                         ${activeTab === sub.id 
-                          ? 'text-blue-600 font-bold bg-blue-50/50' 
+                          ? 'text-primary font-bold bg-primary-light/50' 
                           : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                         }`}
                     >
@@ -322,7 +322,7 @@ export default function Layout({
               className={`flex items-center p-2 rounded-xl cursor-pointer transition-all hover:bg-gray-50 group
                 ${isProfileOpen ? 'bg-gray-50' : ''}`}
             >
-              <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
+              <div className="w-10 h-10 rounded-lg bg-sofia-purple flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
                 {user?.user_metadata?.avatar_url ? (
                   <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
                 ) : (
@@ -525,7 +525,7 @@ export default function Layout({
                     className={`flex items-center p-2 rounded-xl cursor-pointer transition-all hover:bg-gray-50 group
                       ${isProfileOpen ? 'bg-gray-50' : ''}`}
                   >
-                    <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
+                    <div className="w-10 h-10 rounded-lg bg-sofia-purple flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
                       {user?.user_metadata?.avatar_url ? (
                         <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
                       ) : (
@@ -642,7 +642,7 @@ export default function Layout({
               <input 
                 type="text" 
                 placeholder="Pesquisar..." 
-                className="block w-full pl-10 pr-4 py-2.5 border border-slate-100 rounded-xl bg-slate-50 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:bg-white focus:border-blue-400 transition-all"
+                className="block w-full pl-10 pr-4 py-2.5 border border-slate-100 rounded-xl bg-slate-50 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary transition-all"
               />
             </div>
           </div>
@@ -658,7 +658,7 @@ export default function Layout({
             <div className="relative" ref={headerProfileRef}>
               <div 
                 onClick={() => setIsHeaderProfileOpen(!isHeaderProfileOpen)}
-                className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-transparent hover:border-blue-200 transition-all overflow-hidden cursor-pointer shadow-sm active:scale-95"
+                className="w-10 h-10 rounded-full bg-primary-light flex items-center justify-center text-primary border-2 border-transparent hover:border-primary-light transition-all overflow-hidden cursor-pointer shadow-sm active:scale-95"
               >
                 {user?.user_metadata?.avatar_url ? (
                   <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -725,7 +725,7 @@ export default function Layout({
         ${(activeTab === 'inbox' && (window.location.search.includes('jid') || window.location.hash.includes('jid'))) ? 'hidden' : 'flex'}`}>
         <button 
           onClick={() => onTabChange('inbox')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'inbox' ? 'text-blue-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'inbox' ? 'text-primary' : 'text-slate-400'}`}
         >
           <MessageSquare size={22} fill={activeTab === 'inbox' ? 'currentColor' : 'none'} className={activeTab === 'inbox' ? 'opacity-20' : ''} />
           <span className="text-[10px] font-bold uppercase tracking-wider">Conversas</span>
@@ -734,7 +734,7 @@ export default function Layout({
         {useFeature('crm') && (
           <button 
             onClick={() => onTabChange('contacts')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-blue-600' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-primary' : 'text-slate-400'}`}
           >
             <Users size={22} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Contatos</span>
@@ -751,7 +751,7 @@ export default function Layout({
 
         <button 
           onClick={() => onTabChange('agents')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'agents' ? 'text-blue-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'agents' ? 'text-primary' : 'text-slate-400'}`}
         >
           <Bot size={22} fill={activeTab === 'agents' ? 'currentColor' : 'none'} className={activeTab === 'agents' ? 'opacity-20' : ''} />
           <span className="text-[10px] font-bold uppercase tracking-wider">Agentes</span>
