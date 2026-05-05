@@ -648,8 +648,40 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                 </div>
               </div>
               
+              {/* App Mobile Section */}
+              <div className="bg-teal-50 rounded-2xl border border-teal-100 p-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-teal-100 text-teal-600 flex items-center justify-center">
+                    <Smartphone size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-teal-900">Aplicativo Mobile</h3>
+                    <p className="text-sm text-teal-600/70">Instale o WppAi na sua tela inicial para acesso rápido e notificações melhores.</p>
+                  </div>
+                </div>
+                <button 
+                  id="install-button"
+                  onClick={async () => {
+                    const promptEvent = (window as any).deferredPrompt;
+                    if (promptEvent) {
+                      promptEvent.prompt();
+                      const { outcome } = await promptEvent.userChoice;
+                      console.log(`[PWA] User response to the install prompt: ${outcome}`);
+                      (window as any).deferredPrompt = null;
+                    } else {
+                      toast.info('Para instalar: Clique nos 3 pontos do navegador e selecione "Instalar Aplicativo" ou "Adicionar à tela de início".');
+                    }
+                  }}
+                  className="px-8 py-3 bg-teal-600 text-white rounded-xl text-sm font-bold hover:bg-teal-700 transition-all shadow-lg shadow-teal-200 flex items-center gap-2"
+                >
+                  <Smartphone size={18} />
+                  Instalar Aplicativo
+                </button>
+              </div>
+
               {/* Logout Section */}
               <div className="bg-red-50 rounded-2xl border border-red-100 p-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
+
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
                     <LogOut size={24} />

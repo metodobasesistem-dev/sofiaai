@@ -16,21 +16,38 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Debug PWA
+      window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('[PWA] beforeinstallprompt event fired!');
+        // Prevent the mini-infobar from appearing on mobile if you want to use your own UI
+        // e.preventDefault();
+        window.deferredPrompt = e;
+      });
+
+      window.addEventListener('appinstalled', (evt) => {
+        console.log('[PWA] App was installed');
+      });
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(reg => {
+            console.log('[SW] Registered with scope:', reg.scope);
             reg.onupdatefound = () => {
               const installingWorker = reg.installing;
+              console.log('[SW] New version detected...');
               installingWorker.onstatechange = () => {
                 if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('[SW] New version found, reloading...');
+                  console.log('[SW] Content updated, reloading...');
                   window.location.reload();
                 }
               };
             };
+          }).catch(err => {
+            console.error('[SW] Registration failed:', err);
           });
         });
       }
     </script>
+
   </body>
 

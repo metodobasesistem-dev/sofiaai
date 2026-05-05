@@ -56,6 +56,13 @@ router.post('/webhook', async (req, res) => {
 async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any) {
   const { from, body, contactName, id: messageId, fromMe, type, caption, fileName, mimeType, raw } = message;
   
+  // Filtro de Tipos Não Suportados/Técnicos
+  const tiposParaIgnorar = ['messageContextInfo', 'reactionMessage', 'pollUpdateMessage', 'protocolMessage'];
+  if (tiposParaIgnorar.includes(type)) {
+    console.log(`[Webhook] 🔇 Ignoring technical message type: ${type} from ${from}`);
+    return;
+  }
+
   if (from.includes('@g.us')) return; // Ignore groups for now
 
   const cleanPhone = from.split('@')[0].replace(/\D/g, '');
@@ -64,19 +71,24 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
   // If it's fromMe, it was sent from the phone (or system echo)
   if (fromMe) {
     // Check if it's already in the DB (sent by system)
+    // Usamos select count para ser rápido. A constraint UNIQUE no banco é o fallback final.
     const { data: existing } = await supabase
       .from('messages')
       .select('id')
       .eq('whatsapp_id', messageId)
+      .eq('user_id', userId)
       .maybeSingle();
 
-    if (existing) return; // Already persisted by system
+    if (existing) {
+      console.log(`[Webhook] 🔄 Message ${messageId} already exists (echo). Skipping.`);
+      return; 
+    }
   }
 
   // INBOUND OR OUTBOUND FROM PHONE
   console.log(`[Webhook] 📥 Processing message: ${messageId} | Type: ${type} | fromMe: ${fromMe}`);
 
-  // Handle Media Asynchronously to not block the response
+  // Handle Media Asynchronously
   if (type !== 'text' && type !== 'unknown') {
     handleMediaMessage(userId, instanceName, threadId, message, provider, fromMe ? 'outbound' : 'inbound').catch(err => {
       console.error(`[Webhook] Error handling media message:`, err);
@@ -85,10 +97,18 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
   }
 
   // Persist Text and Trigger AI (only if inbound)
-  await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe);
-  
-  if (!fromMe) {
-    await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+  try {
+    // 1. PRIMEIRO PERSISTE (Bug 1: Garante ordem e sucesso)
+    await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe);
+    
+    // 2. SÓ DISPARA SE PERSISTIU (ou se for outbound do telefone, não dispara IA)
+    if (!fromMe) {
+      await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+    }
+  } catch (err: any) {
+    // Log detalhado conforme solicitado no Bug 1
+    console.error(`[Webhook] ❌ PERSISTENCE FAILED for message ${messageId} | User: ${userId} | Jid: ${from} | Type: ${type} | Error:`, err.message || err);
+    // Não dispara a IA se a persistência falhou
   }
 }
 
