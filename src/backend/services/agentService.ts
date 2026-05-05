@@ -180,17 +180,17 @@ export class AgentService {
             
             let toolResult;
 
-            if (functionName === 'check_availability') {
-              toolResult = await this.handleCheckAvailability(dbUserId, args.date, agentData, activeProfessionals, args.professional_name);
-            } else if (functionName === 'book_appointment') {
-              toolResult = await this.handleBookAppointment(dbUserId, threadId, contactName, args, agentData, activeProfessionals);
-              if (toolResult.success && args.clientName) {
-                await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
+            if (functionName === 'Agendar') {
+              if (args.acao === 'agendar') {
+                toolResult = await this.handleBookAppointment(dbUserId, threadId, contactName, args, agentData, activeProfessionals);
+                if (toolResult.success && args.clientName) {
+                  await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
+                }
+              } else {
+                toolResult = await this.handleCheckAvailability(dbUserId, args.date, agentData, activeProfessionals, args.professional_name);
               }
-            } else if (functionName === 'search_catalog') {
-              toolResult = await this.handleSearchCatalog(dbUserId, args.query);
-            } else if (functionName === 'send_catalog_item') {
-              toolResult = await this.handleSendCatalogItem(dbUserId, from, args.item_id);
+            } else if (functionName === 'servicoTool') {
+              toolResult = await this.handleSearchCatalog(dbUserId, args.pergunta || args.query);
             }
 
             console.log(`[AgentService] ✅ TOOL RESULT: ${functionName}`, toolResult);
@@ -793,11 +793,14 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
             const args = JSON.parse(toolCall.function.arguments);
             
             let toolResult;
-            if (functionName === 'check_availability') {
-              toolResult = await this.handleCheckAvailability(userId, args.date, agentData, professionals || [], args.professional_name);
-            } else if (functionName === 'book_appointment') {
-              // IN SIMULATION: We mock the success but don't persist in DB
-              toolResult = { success: true, id: 'sim-appt-' + Date.now(), is_simulation: true };
+            if (functionName === 'Agendar') {
+              if (args.acao === 'agendar') {
+                toolResult = { success: true, id: 'sim-appt-' + Date.now(), is_simulation: true };
+              } else {
+                toolResult = await this.handleCheckAvailability(userId, args.date, agentData, professionals || [], args.professional_name);
+              }
+            } else if (functionName === 'servicoTool') {
+              toolResult = await this.handleSearchCatalog(userId, args.pergunta || args.query);
             }
 
             currentMessages.push({
@@ -943,60 +946,32 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       {
         type: 'function',
         function: {
-          name: 'check_availability',
-          description: 'Consulta horários disponíveis para uma data (ex: 2026-04-15).',
+          name: 'servicoTool',
+          description: 'Consulta informações sobre serviços, valores, formas de pagamento, dúvidas frequentes e detalhes sobre o atendimento.',
           parameters: {
             type: 'object',
             properties: {
-              date: { type: 'string', description: 'Data YYYY-MM-DD' },
-              professional_name: { type: 'string' }
+              pergunta: { type: 'string', description: 'A dúvida ou assunto que o cliente deseja saber.' }
             },
-            required: ['date']
+            required: ['pergunta']
           }
         }
       },
       {
         type: 'function',
         function: {
-          name: 'book_appointment',
-          description: 'Realiza o agendamento de uma consulta.',
+          name: 'Agendar',
+          description: 'Ferramenta completa para verificar disponibilidade de horários e realizar agendamentos no calendário.',
           parameters: {
             type: 'object',
             properties: {
-              date: { type: 'string' },
-              time: { type: 'string' },
-              clientName: { type: 'string' },
-              professional_name: { type: 'string' }
+              acao: { type: 'string', enum: ['verificar', 'agendar'], description: 'Se deseja apenas ver horários ou se deseja marcar a consulta.' },
+              date: { type: 'string', description: 'Data no formato YYYY-MM-DD' },
+              time: { type: 'string', description: 'Horário no formato HH:mm (ex: 14:30)' },
+              clientName: { type: 'string', description: 'Nome completo do paciente (obrigatório para agendar)' },
+              professional_name: { type: 'string', description: 'Nome do profissional (opcional)' }
             },
-            required: ['date', 'time', 'clientName']
-          }
-        }
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_catalog',
-          description: 'Busca fotos, kits ou documentos no catálogo de produtos.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Palavra-chave para busca (ex: kit frozen)' }
-            },
-            required: ['query']
-          }
-        }
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'send_catalog_item',
-          description: 'Envia uma foto ou arquivo do catálogo para o cliente.',
-          parameters: {
-            type: 'object',
-            properties: {
-              item_id: { type: 'string', description: 'O ID do item retornado pela busca' }
-            },
-            required: ['item_id']
+            required: ['acao', 'date']
           }
         }
       }
