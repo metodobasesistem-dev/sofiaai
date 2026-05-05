@@ -383,7 +383,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
            </div>
            <div>
              <h3 className="text-lg font-bold text-white leading-none">WhatsApp Provider</h3>
-             <p className="text-white/70 text-xs mt-1">Conexão via Evolution API</p>
+             <p className="text-white/70 text-xs mt-1">Conexão via Sofia</p>
            </div>
          </div>
          <div className="absolute right-6 bottom-4">
