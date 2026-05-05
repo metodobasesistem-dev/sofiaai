@@ -264,15 +264,26 @@ export class AgentService {
     const timestamp = Date.now();
     console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
     
-    // 1. Thread UPSERT FIRST
+      // 1. Thread UPSERT FIRST
     try {
       const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId));
-      const [{ data: existingThread }, { data: contact }] = await Promise.all([
-
+      let [{ data: existingThread }, { data: contact }] = await Promise.all([
         supabase.from('threads').select('contact_name, photo_url, unread_count, ticket_status').eq('id', threadId).maybeSingle(),
         supabase.from('contacts').select('nome, status_funil').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
       ]);
       
+      // [FIX] Busca aproximada para lidar com o 9º dígito se não encontrar por ID exato
+      if (!contact && cleanPhone.startsWith('55')) {
+        const last8 = cleanPhone.slice(-8);
+        const { data: fuzzyContact } = await supabase
+          .from('contacts')
+          .select('nome, status_funil')
+          .eq('user_id', userId)
+          .ilike('telefone', `%${last8}`)
+          .maybeSingle();
+        contact = fuzzyContact;
+      }
+
       const newUnreadCount = direction === 'inbound' 
         ? (existingThread?.unread_count || 0) + 1 
         : (existingThread?.unread_count || 0);
@@ -299,7 +310,8 @@ export class AgentService {
         remote_jid: remoteJid || `${cleanPhone}@c.us`,
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia',
-        contact_name: contact?.nome || contactName || existingThread?.contact_name || 'Cliente',
+        // [FIX] Prioridade: CRM > Nome Editado na Thread > PushName do WhatsApp > Cliente
+        contact_name: contact?.nome || existingThread?.contact_name || contactName || 'Cliente',
         unread_count: newUnreadCount,
         ticket_status: finalTicketStatus,
         updated_at: new Date(timestamp).toISOString()
