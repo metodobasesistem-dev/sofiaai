@@ -222,6 +222,9 @@ export class EvolutionProvider implements IWhatsAppProvider {
     } else if (messageContent.locationMessage) {
       body = `[Localização]: ${messageContent.locationMessage.degreesLatitude}, ${messageContent.locationMessage.degreesLongitude}`;
       type = 'location';
+    } else if (messageContent.reactionMessage) {
+      body = `[Reação]: ${messageContent.reactionMessage.text || ''}`;
+      type = 'reaction';
     } else {
       // Fallback for unknown types
       const messageType = Object.keys(messageContent)[0];
@@ -243,6 +246,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       mimeType,
       fileName,
       caption,
+      reaction: type === 'reaction' ? messageContent.reactionMessage?.text : undefined,
+      reactionTargetId: type === 'reaction' ? messageContent.reactionMessage?.key?.id : undefined,
       raw: messageData
     };
   }
@@ -259,6 +264,22 @@ export class EvolutionProvider implements IWhatsAppProvider {
       return true;
     } catch (error) {
       console.error(`[EvolutionProvider] Error deleting message ${messageId}:`, error);
+      return false;
+    }
+  }
+
+  async sendReaction(instanceId: string, remoteJid: string, messageId: string, emoji: string): Promise<boolean> {
+    try {
+      await this.api.post(`/message/sendReaction/${instanceId}`, {
+        number: remoteJid,
+        reaction: emoji,
+        key: {
+          id: messageId
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error(`[EvolutionProvider] Error sending reaction to ${messageId}:`, error);
       return false;
     }
   }

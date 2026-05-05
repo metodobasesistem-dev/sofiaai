@@ -59,9 +59,17 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
   const { from, body, contactName, id: messageId, fromMe, type, caption, fileName, mimeType, raw } = message;
   
   // Filtro de Tipos Não Suportados/Técnicos
-  const tiposParaIgnorar = ['messageContextInfo', 'reactionMessage', 'pollUpdateMessage', 'protocolMessage'];
+  const tiposParaIgnorar = ['pollUpdateMessage', 'protocolMessage'];
   if (tiposParaIgnorar.includes(type)) {
     console.log(`[Webhook] 🔇 Ignoring technical message type: ${type} from ${from}`);
+    return;
+  }
+
+  if (type === 'reaction') {
+    const { reaction, reactionTargetId } = message;
+    if (reactionTargetId) {
+      await agentService.updateMessageReaction(userId, reactionTargetId, reaction || '');
+    }
     return;
   }
 

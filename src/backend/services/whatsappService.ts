@@ -466,6 +466,22 @@ class WhatsAppService {
     }
   }
 
+  async sendReaction(userId: string, to: string, messageId: string, emoji: string) {
+    try {
+      const instanceName = `wppai_${userId.substring(0, 8)}`;
+      const provider = await WhatsAppProviderFactory.getProvider(userId);
+      
+      const success = await provider.sendReaction(instanceName, to, messageId, emoji);
+      if (success) {
+        await agentService.updateMessageReaction(userId, messageId, emoji);
+      }
+      return { success };
+    } catch (err: any) {
+      console.error(`[WhatsAppService] Error sending reaction to ${messageId}:`, err);
+      return { success: false, error: err.message };
+    }
+  }
+
   async sendVoice(userId: string, to: string, audioBuffer: Buffer) {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     const provider = await WhatsAppProviderFactory.getProvider(userId);

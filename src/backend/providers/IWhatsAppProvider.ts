@@ -17,6 +17,8 @@ export interface WhatsAppMessage {
   mimeType?: string;
   fileName?: string;
   caption?: string;
+  reaction?: string;
+  reactionTargetId?: string;
   raw?: any;
 }
 
@@ -82,6 +84,11 @@ export interface IWhatsAppProvider {
    * Transforms provider-specific payload to generic WhatsAppMessage
    */
   transformPayload(payload: any): WhatsAppMessage | null;
+
+  /**
+   * Sends a reaction (emoji) to a specific message
+   */
+  sendReaction(instanceId: string, remoteJid: string, messageId: string, emoji: string): Promise<boolean>;
 
   /**
    * Deletes a message for everyone (if possible) or just for the user

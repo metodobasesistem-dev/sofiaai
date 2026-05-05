@@ -390,6 +390,21 @@ export class AgentService {
       console.error('[AgentService] Contact sync error:', dbErr);
     }
   }
+  
+  public async updateMessageReaction(userId: string, whatsappId: string, reaction: string) {
+    try {
+      console.log(`[AgentService] 😃 Updating reaction for message ${whatsappId}: ${reaction}`);
+      const { error } = await supabase
+        .from('messages')
+        .update({ reaction: reaction })
+        .eq('whatsapp_id', whatsappId)
+        .eq('user_id', userId);
+      
+      if (error) throw error;
+    } catch (err) {
+      console.error('[AgentService] Error updating reaction:', err);
+    }
+  }
 
   private async upsertContact(userId: string, phoneNumber: string, contactName: string | undefined, lastMessage: string, incrementCount: boolean = true) {
     try {

@@ -134,6 +134,21 @@ class SessionController {
       res.status(500).json({ error: error.message || 'Failed to delete message' });
     }
   }
+
+  async reactToMessage(req: Request, res: Response) {
+    let { userId, messageId, reaction, remoteJid } = req.body;
+    if (!userId || !messageId || !reaction || !remoteJid) {
+      return res.status(400).json({ error: 'Missing userId, messageId, reaction or remoteJid' });
+    }
+
+    try {
+      const result = await whatsappService.sendReaction(userId, remoteJid, messageId, reaction);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error in controller reactToMessage:', error);
+      res.status(500).json({ error: error.message || 'Failed to react to message' });
+    }
+  }
 }
 
 export const sessionController = new SessionController();

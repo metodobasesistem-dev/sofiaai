@@ -40,7 +40,8 @@ import {
   BarChart3,
   Layers,
   Star,
-  Ban
+  Ban,
+  Smile
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -88,6 +89,7 @@ interface Message {
   media_filename?: string;
   caption?: string;
   is_external?: boolean;
+  reaction?: string;
 }
 
 
@@ -332,7 +334,8 @@ const ChatBubble: React.FC<{
   message: Message; 
   onPreview: (media: any) => void;
   onDelete: (messageId: string) => void;
-}> = ({ message, onPreview, onDelete }) => {
+  onReact: (messageId: string, emoji: string) => void;
+}> = ({ message, onPreview, onDelete, onReact }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -486,7 +489,45 @@ const ChatBubble: React.FC<{
           {message.time}
           {!isLead && !isPrivate && !isRevoked && <CheckCheck size={14} className="ml-1 text-[#34b7f1]" />}
         </div>
+
+        {message.reaction && (
+          <div className={`absolute -bottom-2 ${isLead ? 'right-0' : 'left-0'} bg-white border border-slate-100 rounded-full px-1 py-0.5 shadow-sm text-[12px] z-20 animate-in zoom-in-50 duration-200`}>
+            {message.reaction}
+          </div>
+        )}
       </div>
+
+      {!isRevoked && (
+        <div className={`flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
+          <div className="relative group/emoji">
+            <button 
+              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+              title="Reagir"
+            >
+              <Smile size={14} />
+            </button>
+            <div className="absolute bottom-full mb-2 left-0 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 hidden group-focus-within/emoji:flex gap-1.5 z-[100] animate-in slide-in-from-bottom-2 duration-200">
+              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                <button 
+                  key={emoji}
+                  onClick={() => onReact(message.id, emoji)}
+                  className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[16px] hover:scale-125"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => onDelete(message.id)}
+            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+            title="Apagar"
+          >
+            <Trash size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -512,6 +553,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [pasteCaption, setPasteCaption] = useState('');
   const [isUploadingPaste, setIsUploadingPaste] = useState(false);
   const [pastedImageUrl, setPastedImageUrl] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   useEffect(() => {
     contactsRef.current = contacts;
@@ -843,7 +885,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             media_mime_type: d.media_mime_type,
             media_filename: d.media_filename,
             caption: d.caption,
-            is_external: d.is_external
+            is_external: d.is_external,
+            reaction: d.reaction
           }));
           setMessages(formatted as any);
         }
@@ -868,7 +911,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         media_mime_type: d.media_mime_type,
         media_filename: d.media_filename,
         caption: d.caption,
-        is_external: d.is_external
+        is_external: d.is_external,
+        reaction: d.reaction
       });
 
       channel = supabase
@@ -1445,6 +1489,35 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       toast.error('Erro ao apagar mensagem');
     }
   };
+  
+  const handleReactToMessage = async (messageId: string, emoji: string) => {
+    if (!selectedThreadId || !activeThread) return;
+    
+    try {
+      const userId = user?.id;
+      if (!userId) return;
+
+      const response = await fetch('/api/messages/react', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId, 
+          messageId, 
+          reaction: emoji,
+          remoteJid: activeThread.remoteJid
+        })
+      });
+
+      if (!response.ok) throw new Error('Falha ao reagir');
+      
+      // Update local state optimistically
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reaction: emoji } : m));
+      
+    } catch (err) {
+      console.error('Error reacting to message:', err);
+      toast.error('Erro ao reagir');
+    }
+  };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
@@ -1799,7 +1872,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
                     .map(msg => (
-                      <ChatBubble key={msg.id} message={msg} onPreview={setPreviewMedia} onDelete={handleDeleteMessage} />
+                      <ChatBubble key={msg.id} message={msg} onPreview={setPreviewMedia} onDelete={handleDeleteMessage} onReact={handleReactToMessage} />
                     ))}
                   <div ref={messagesEndRef} />
                 </>
@@ -1864,6 +1937,33 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 >
                   <Paperclip size={22} />
                 </button>
+                <div className="relative">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+                    className={`p-2 transition-all ${showEmojiPicker ? 'text-blue-600' : 'text-slate-500 hover:text-blue-600'}`}
+                    title="Emojis"
+                  >
+                    <Smile size={22} />
+                  </button>
+                  
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-full mb-3 left-0 bg-white rounded-3xl shadow-2xl border border-slate-100 p-4 w-[280px] md:w-[320px] grid grid-cols-6 gap-2 z-[100] animate-in slide-in-from-bottom-4 duration-300">
+                      {['😊', '😂', '🥰', '😍', '🤔', '😎', '👍', '🙏', '❤️', '🔥', '✨', '⭐', '👏', '🙌', '💪', '🤝', '✅', '🚀', '📞', '💬', '📍', '🎁', '💰', '🎉', '💡', '⚠️', '🏠', '🚗', '🍕', '☕'].map(emoji => (
+                        <button 
+                          key={emoji}
+                          onClick={() => {
+                            setMessageText(prev => prev + emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="w-10 h-10 flex items-center justify-center hover:bg-blue-50 rounded-xl transition-all text-[20px] hover:scale-125 active:scale-95"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
