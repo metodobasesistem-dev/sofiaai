@@ -530,11 +530,11 @@ class WhatsAppService {
     return { success: true, messageId: result.key?.id };
   }
 
-  async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string) {
+  async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string, caption?: string) {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     const type = mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document';
-    const result = await provider.sendMedia(instanceName, to, buffer.toString('base64'), filename, type);
+    const result = await provider.sendMedia(instanceName, to, buffer.toString('base64'), caption || filename, type);
     
     // Upload para nosso storage para visualização no chat
     const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
@@ -544,7 +544,7 @@ class WhatsAppService {
       await agentService.persistMessage(
         `${userId}_${cleanTo}`, 
         userId, 
-        `[Mídia]: ${filename}`, 
+        caption || `[Mídia]: ${filename}`, 
         'outbound', 
         result.key?.id || `med-${Date.now()}`, 
         'Cliente', 
@@ -556,7 +556,8 @@ class WhatsAppService {
         type,      // messageType
         mediaUrl || undefined, // mediaUrl
         mimetype,
-        filename
+        filename,
+        caption
       );
     } catch (err) {
       console.error('[WhatsAppService] Error persisting sent media:', err);

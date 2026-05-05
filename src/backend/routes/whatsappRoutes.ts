@@ -24,7 +24,7 @@ router.post('/send-voice', upload.single('audio'), async (req, res) => {
 });
 
 router.post('/send-media', upload.single('media'), async (req, res) => {
-  const { userId, remoteJid } = req.body;
+  const { userId, remoteJid, caption } = req.body;
   const mediaFile = req.file;
 
   if (!userId || !remoteJid || !mediaFile) {
@@ -33,7 +33,7 @@ router.post('/send-media', upload.single('media'), async (req, res) => {
 
   try {
     console.log(`[WhatsappRoutes] 📎 Recebido pedido de envio de mídia para ${remoteJid}`);
-    await whatsappService.sendMedia(userId, remoteJid, mediaFile.buffer, mediaFile.mimetype, mediaFile.originalname);
+    await whatsappService.sendMedia(userId, remoteJid, mediaFile.buffer, mediaFile.mimetype, mediaFile.originalname, caption);
     res.json({ success: true, message: 'Mídia enviada com sucesso!' });
   } catch (err: any) {
     console.error('[WhatsappRoutes] Erro ao enviar mídia:', err);
