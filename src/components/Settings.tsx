@@ -18,8 +18,12 @@ import {
   Send,
   X,
   Smartphone,
-  LogOut
+  LogOut,
+  Settings as SettingsIcon,
+  ShieldAlert
 } from 'lucide-react';
+import PWADiagnostic from './PWADiagnostic';
+
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   getUserProfile, 
@@ -648,7 +652,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                 </div>
               </div>
               
+              {/* Diagnóstico de PWA */}
+              <PWADiagnostic />
+
               {/* App Mobile Section */}
+
               <div className="bg-teal-50 rounded-2xl border border-teal-100 p-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-teal-100 text-teal-600 flex items-center justify-center">

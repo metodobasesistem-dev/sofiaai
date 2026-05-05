@@ -1,12 +1,13 @@
 const CACHE_VERSION = 'v1.0.2'; // Mude aqui para forçar atualização
 const CACHE_NAME = 'wppai-' + CACHE_VERSION;
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  './',
+  'index.html',
+  'manifest.json',
+  'icon-192.png',
+  'icon-512.png'
 ];
+
 
 // Instalação: Cacheia os recursos essenciais
 self.addEventListener('install', (event) => {
