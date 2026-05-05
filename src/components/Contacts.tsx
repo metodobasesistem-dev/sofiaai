@@ -450,52 +450,61 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Contatos (CRM)</h1>
-          <p className="text-gray-500 text-sm">Gerencie seus leads e o histórico de atendimento via WhatsApp.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={async () => {
-              try {
-                toast.loading('Sincronizando contatos...');
-                const res = await syncContacts();
-                toast.dismiss();
-                if (res.success) {
-                  toast.success(`${res.synced} novos contatos sincronizados!`);
-                  fetchContacts();
-                }
-              } catch (err: any) {
-                toast.dismiss();
-                toast.error('Erro ao sincronizar: ' + err.message);
-              }
-            }}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-sm font-bold hover:bg-emerald-100 transition-all shadow-sm"
-            title="Sincronizar contatos das conversas do WhatsApp"
-          >
-            <RefreshCw size={16} /> Sincronizar Leads
-          </button>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Contatos (CRM)</h1>
+            <p className="text-gray-500 text-xs sm:text-sm">Gerencie seus leads e histórico via WhatsApp.</p>
+          </div>
           <button 
             onClick={fetchContacts}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
-            title="Atualizar lista"
+            className="md:hidden p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
           >
             <RefreshCw size={18} />
           </button>
-          <button 
-            onClick={() => { 
-              setEditingContactId(null); 
-              setFormData({ nome: '', telefone: '' }); 
-              setIsModalOpen(true); 
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
-          >
-            <Plus size={18} /> Novo Contato
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-            <Download size={18} className="text-gray-400" /> Exportar CSV
-          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+            <button 
+              onClick={async () => {
+                try {
+                  toast.loading('Sincronizando contatos...');
+                  const res = await syncContacts();
+                  toast.dismiss();
+                  if (res.success) {
+                    toast.success(`${res.synced} novos contatos sincronizados!`);
+                    fetchContacts();
+                  }
+                } catch (err: any) {
+                  toast.dismiss();
+                  toast.error('Erro ao sincronizar: ' + err.message);
+                }
+              }}
+              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-xs font-black hover:bg-emerald-100 transition-all shadow-sm"
+            >
+              <RefreshCw size={14} /> Sincronizar
+            </button>
+            <button 
+              onClick={() => { 
+                setEditingContactId(null); 
+                setFormData({ nome: '', telefone: '' }); 
+                setIsModalOpen(true); 
+              }}
+              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+            >
+              <Plus size={16} /> Novo Contato
+            </button>
+            <button className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+              <Download size={14} className="text-gray-400" /> Exportar
+            </button>
+            <button 
+              onClick={fetchContacts}
+              className="hidden md:flex flex-shrink-0 items-center justify-center p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all border border-transparent"
+            >
+              <RefreshCw size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -503,7 +512,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
       {!isLoading && contacts.length > 0 && (
         <motion.div 
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+          className="flex md:grid md:grid-cols-4 gap-3 overflow-x-auto pb-2 md:pb-0 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0"
         >
           {[
             { label: 'Total', value: stats.total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', status: 'Todos' },
@@ -514,34 +523,37 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             <button
               key={i}
               onClick={() => setFilterStatus(s.status as any)}
-              className={`${s.bg} border ${s.border} rounded-xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-blue-400' : ''}`}
+              className={`flex-shrink-0 w-32 md:w-auto ${s.bg} border ${s.border} rounded-2xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-blue-400' : ''}`}
             >
-              <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-              <p className="text-xs font-semibold text-gray-500 mt-0.5">{s.label}</p>
+              <p className={`text-xl md:text-2xl font-black ${s.color}`}>{s.value}</p>
+              <p className="text-[10px] md:text-xs font-bold text-gray-500 mt-0.5 uppercase tracking-wider">{s.label}</p>
             </button>
           ))}
         </motion.div>
       )}
 
       {/* Search & Filter */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 items-center">
+      <div className="bg-white p-3 md:p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 items-center">
         <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input 
             type="text" 
             placeholder="Buscar por nome ou número..." 
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            className="w-full pl-11 pr-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-sm focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={16} className="text-gray-400" />
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 no-scrollbar">
+          <div className="flex-shrink-0 p-1.5 bg-gray-50 rounded-lg md:hidden">
+             <Filter size={14} className="text-gray-400" />
+          </div>
+          <Filter size={16} className="text-gray-400 hidden md:block" />
           {(['Todos', 'Lead', 'Qualificado', 'Resolvido', 'Cliente'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilterStatus(f as any)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStatus === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all ${filterStatus === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
             >
               {f}
             </button>
@@ -549,10 +561,10 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
         </div>
       </div>
 
-      {/* Table */}
+      {/* List / Table */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+        className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
       >
         {isLoading ? (
           <div className="p-6">
@@ -581,95 +593,145 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contato</th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Número</th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Última mensagem</th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell text-center">Tipo</th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredContacts.map((contact) => (
-                    <tr 
-                      key={contact.id} 
-                      onClick={() => setSelectedContact(contact)}
-                      className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
-                          <div>
-                            <p className="text-sm font-bold text-gray-900">{contact.nome}</p>
-                            {contact.totalMensagens !== undefined && (
-                              <p className="text-[10px] text-gray-400">{contact.totalMensagens} msgs • {contact.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</p>
-                            )}
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Contato</th>
+                    <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest hidden md:table-cell">Número</th>
+                    <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest hidden lg:table-cell">Última mensagem</th>
+                    <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest hidden sm:table-cell text-center">Tipo</th>
+                    <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                    <th className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredContacts.map((contact) => (
+                      <tr 
+                        key={contact.id} 
+                        onClick={() => setSelectedContact(contact)}
+                        className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
+                            <div>
+                              <p className="text-sm font-black text-gray-900">{contact.nome}</p>
+                              {contact.totalMensagens !== undefined && (
+                                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{contact.totalMensagens} msgs • {contact.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 hidden md:table-cell">
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                          <Phone size={12} className="text-gray-400" />
-                          {formatPhone(contact.telefone)}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 hidden lg:table-cell max-w-[220px]">
-                        <p className="text-xs text-gray-500 truncate">{contact.ultimaMensagem || '—'}</p>
-                      </td>
-                      <td className="px-5 py-4 hidden sm:table-cell text-center">
-                        {contact.is_client ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[9px] font-black uppercase tracking-wider">
-                            <Star size={10} className="fill-amber-500" /> Cliente
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Lead</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge 
-                          status={contact.status_funil} 
-                          onClick={async (e: any) => {
-                             e.stopPropagation();
-                             if (!contact.id) return;
-                             const order: any[] = ['Lead', 'Qualificado', 'Resolvido'];
-                             const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
-                            try {
-                              await updateContactFunilStatus(contact.id, next);
-                              handleStatusChange(contact.id, next);
-                              toast.success(`Status atualizado para ${next}`);
-                            } catch (err) {
-                              toast.error('Erro ao atualizar status');
-                            }
-                          }}
-                        />
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button 
-                            onClick={(e) => handleDeleteContact(e, contact)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            title="Excluir Lead"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                            title="Ver detalhes"
-                          >
-                            <ChevronRight size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-5 py-4 hidden md:table-cell">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600">
+                            <Phone size={12} className="text-gray-400" />
+                            {formatPhone(contact.telefone)}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 hidden lg:table-cell max-w-[220px]">
+                          <p className="text-xs text-gray-500 truncate">{contact.ultimaMensagem || '—'}</p>
+                        </td>
+                        <td className="px-5 py-4 hidden sm:table-cell text-center">
+                          {contact.is_client ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[9px] font-black uppercase tracking-wider">
+                              <Star size={10} className="fill-amber-500" /> Cliente
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Lead</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <StatusBadge 
+                            status={contact.status_funil} 
+                            onClick={async (e: any) => {
+                               e.stopPropagation();
+                               if (!contact.id) return;
+                               const order: any[] = ['Lead', 'Qualificado', 'Resolvido'];
+                               const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
+                              try {
+                                await updateContactFunilStatus(contact.id, next);
+                                handleStatusChange(contact.id, next);
+                                toast.success(`Status atualizado para ${next}`);
+                              } catch (err) {
+                                toast.error('Erro ao atualizar status');
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button 
+                              onClick={(e) => handleDeleteContact(e, contact)}
+                              className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                              title="Excluir Lead"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
+                              className="p-2 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                              title="Ver detalhes"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden divide-y divide-gray-50">
+              {filteredContacts.map((contact) => (
+                <div 
+                  key={contact.id} 
+                  onClick={() => setSelectedContact(contact)}
+                  className="p-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+                >
+                  <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h4 className="text-sm font-black text-gray-900 truncate">
+                        {contact.nome}
+                      </h4>
+                      <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap">
+                        {formatRelative(contact.ultimaInteracao)}
+                      </span>
+                    </div>
+                    
+                    {contact.ultimaMensagem ? (
+                      <p className="text-xs text-gray-500 truncate mb-2">
+                        {contact.ultimaMensagem}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-2">
+                        {formatPhone(contact.telefone)}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={contact.status_funil} />
+                      {contact.is_client && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[9px] font-black uppercase tracking-wider">
+                          <Star size={10} className="fill-amber-500" />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-gray-300">
+                    <ChevronRight size={20} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Footer count */}
