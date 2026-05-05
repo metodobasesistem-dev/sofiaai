@@ -689,11 +689,28 @@ class WhatsAppService {
 
       if (!finalResponseText || finalResponseText.trim().length === 0) return;
  
+      // [FIX] Lógica de Respostas Picadas (Human-like Split)
+      const cleanMarkdown = (text: string) => {
+        return text
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Remove negrito
+          .replace(/\*(.*?)\*/g, '$1')   // Remove itálico
+          .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // Remove links
+          .replace(/^#+\s+/gm, '')       // Remove headers
+          .replace(/`(.*?)`/g, '$1')     // Remove code blocks
+          .replace(/_{1,2}(.*?)_{1,2}/g, '$1'); // Remove underline
+      };
+
+      const cleanedText = cleanMarkdown(finalResponseText);
+      
+      // Divide a mensagem em partes por quebra de linha (conforme lógica do n8n)
+      const messageParts = cleanedText
+        .split(/\n+/)
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+
       // Busca dados do agente para usar o nome correto no chat
-      const { data: agentData } = await supabase.from('agents').select('nome').eq('user_id', userId).eq('is_active', true).maybeSingle();
+      const { data: agentData } = await supabase.from('agents').select('nome').eq('user_id', userId).eq('status_ativo', true).maybeSingle();
  
-      // LÓGICA DE ENVIO INTELIGENTE VIA MÉTODO CENTRALIZADO
-      // Isso garante status 'sending', 'sent' e evita duplicidade no chat.
       const provider = await WhatsAppProviderFactory.getProvider(userId);
       if (audioBuffer && usedVoiceMode === 'audio_only') {
         await provider.sendMedia(instanceName, from, audioBuffer.toString('base64'), undefined, 'audio');
@@ -706,7 +723,19 @@ class WhatsAppService {
            aiAudioUrl || undefined
         );
       } else {
-        await this.sendMessage(userId, from, finalResponseText, agentData?.nome || 'Sofia', 'IA');
+        // Envia cada parte da mensagem sequencialmente (Picado)
+        for (let i = 0; i < messageParts.length; i++) {
+          const part = messageParts[i];
+          
+          await this.sendMessage(userId, from, part, agentData?.nome || 'Sofia', 'IA');
+          
+          // Se houver mais partes, aguarda 2 segundos (simulação humana)
+          if (i < messageParts.length - 1) {
+            console.log(`[WhatsAppService] ⏳ Waiting 2s before next part for ${from}`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+
         if (audioBuffer && usedVoiceMode === 'always') {
           const aiAudioUrl = await this.uploadToStorage(userId, audioBuffer, `ai_resp_${Date.now()}.ogg`);
           await provider.sendMedia(instanceName, from, audioBuffer.toString('base64'), undefined, 'audio');
