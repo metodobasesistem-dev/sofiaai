@@ -277,12 +277,13 @@ export class EvolutionProvider implements IWhatsAppProvider {
     }
   }
 
-  async sendReaction(instanceId: string, remoteJid: string, messageId: string, emoji: string): Promise<boolean> {
+  async sendReaction(instanceId: string, remoteJid: string, messageId: string, emoji: string, fromMe: boolean): Promise<boolean> {
     try {
       await this.api.post(`/message/sendReaction/${instanceId}`, {
-        number: remoteJid,
         reaction: emoji,
         key: {
+          remoteJid: remoteJid,
+          fromMe: fromMe,
           id: messageId
         }
       });

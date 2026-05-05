@@ -482,8 +482,17 @@ class WhatsAppService {
       const instanceName = await this.getInstanceName(dbUserId);
       const provider = await WhatsAppProviderFactory.getProvider(dbUserId);
       
-      console.log(`[WhatsAppService] Sending reaction "${emoji}" to ${messageId} | Instance: ${instanceName}`);
-      const success = await provider.sendReaction(instanceName, to, messageId, emoji);
+      // Busca a direção da mensagem original para saber o fromMe
+      const { data: msg } = await supabase
+        .from('messages')
+        .select('direction')
+        .eq('whatsapp_id', messageId)
+        .maybeSingle();
+      
+      const fromMe = msg?.direction === 'outbound';
+
+      console.log(`[WhatsAppService] Sending reaction "${emoji}" to ${messageId} | fromMe: ${fromMe} | Instance: ${instanceName}`);
+      const success = await provider.sendReaction(instanceName, to, messageId, emoji, fromMe);
       
       if (success) {
         await agentService.updateMessageReaction(dbUserId, messageId, emoji);

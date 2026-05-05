@@ -88,7 +88,7 @@ export interface IWhatsAppProvider {
   /**
    * Sends a reaction (emoji) to a specific message
    */
-  sendReaction(instanceId: string, remoteJid: string, messageId: string, emoji: string): Promise<boolean>;
+  sendReaction(instanceId: string, remoteJid: string, messageId: string, emoji: string, fromMe: boolean): Promise<boolean>;
 
   /**
    * Deletes a message for everyone (if possible) or just for the user
