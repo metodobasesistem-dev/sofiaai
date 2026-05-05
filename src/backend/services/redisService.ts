@@ -182,6 +182,32 @@ export const redisService = {
     } catch (e) {
       return { status: 'error', message: (e as any).message };
     }
+  },
+
+  /**
+   * Buffer para Agrupamento de Mensagens (Debounce)
+   */
+  async pushToBuffer(userId: string, from: string, content: string) {
+    const client = await getRedisClient();
+    if (!client) return;
+    const key = `buffer:${userId}:${from}`;
+    try {
+      await client.rpush(key, content);
+      await client.expire(key, 3600); // 1 hora de vida no máximo
+    } catch (error) {}
+  },
+
+  async getAndClearBuffer(userId: string, from: string): Promise<string[]> {
+    const client = await getRedisClient();
+    if (!client) return [];
+    const key = `buffer:${userId}:${from}`;
+    try {
+      const messages = await client.lrange(key, 0, -1);
+      await client.del(key);
+      return messages;
+    } catch (error) {
+      return [];
+    }
   }
 };
 

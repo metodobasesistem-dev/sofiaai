@@ -601,6 +601,9 @@ class WhatsAppService {
       // 🛑 Cancela follow-ups pendentes pois o cliente acabou de mandar uma mensagem
       await this.cancelFollowUp(userId, from);
 
+      // [FIX] Adiciona ao buffer para agrupamento (Debounce)
+      await redisService.pushToBuffer(userId, from, body);
+
       const job = await this.messageQueue.getJob(jobId);
       if (job) {
         await job.remove();
@@ -654,8 +657,19 @@ class WhatsAppService {
         return;
       }
 
+      // [FIX] Recupera todas as mensagens do buffer e concatena (Agrupamento)
+      const bufferedMessages = await redisService.getAndClearBuffer(userId, from);
+      let finalBody = body;
+      
+      if (bufferedMessages.length > 0) {
+        // Remove duplicatas se houver (por segurança) e junta com \n
+        const uniqueMessages = Array.from(new Set(bufferedMessages));
+        finalBody = uniqueMessages.join('\n');
+        console.log(`[WhatsAppService] 🧩 Grouped ${bufferedMessages.length} messages for ${from}`);
+      }
+
       const aiResponse = await agentService.processIncoming(userId, {
-        from, body, contactName, messageId,
+        from, body: finalBody, contactName, messageId,
         displayPhone: displayPhone,
         skipPersist: true,
         isAudioRequest: isAudio
