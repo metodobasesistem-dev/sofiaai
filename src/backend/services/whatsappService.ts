@@ -702,9 +702,21 @@ class WhatsAppService {
 
       const cleanedText = cleanMarkdown(finalResponseText);
       
-      // Divide a mensagem em partes por quebra de linha (conforme lógica do n8n)
+      // Divide a mensagem em partes (conforme lógica do n8n para humanização)
+      // 1. Primeiro separa por quebras de linha explícitas
+      // 2. Depois, se algum bloco for longo, quebra por sentenças (., !, ?) mantendo a pontuação
       const messageParts = cleanedText
         .split(/\n+/)
+        .map(p => p.trim())
+        .filter(p => p.length > 0)
+        .flatMap(part => {
+          // Se a parte for maior que 40 caracteres, tenta quebrar em frases menores
+          if (part.length > 40) {
+            // Quebra após ponto final, exclamação ou interrogação que seja seguido por espaço e letra maiúscula
+            return part.split(/(?<=[.?!])\s+(?=[A-ZÀ-Ÿ])/).filter(p => p.length > 0);
+          }
+          return [part];
+        })
         .map(p => p.trim())
         .filter(p => p.length > 0);
 
