@@ -1,6 +1,7 @@
 import { IWhatsAppProvider } from './IWhatsAppProvider.js';
 import { EvolutionProvider } from './EvolutionProvider.js';
 import { UazApiProvider } from './UazApiProvider.js';
+import { MetaProvider } from './MetaProvider.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { isFeatureEnabled } from '../lib/featureFlags.js';
 
@@ -41,8 +42,7 @@ export class WhatsAppProviderFactory {
         case 'uazapi':
           return new UazApiProvider();
         case 'meta_official':
-          // Future implementation: MetaProvider
-          return new EvolutionProvider(); 
+          return new MetaProvider(); 
         case 'evolution':
         default:
           return new EvolutionProvider();
