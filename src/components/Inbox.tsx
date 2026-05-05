@@ -41,7 +41,8 @@ import {
   Layers,
   Star,
   Ban,
-  Smile
+  Smile,
+  Edit2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
