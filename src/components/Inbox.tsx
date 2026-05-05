@@ -820,6 +820,45 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           }
         )
         .subscribe();
+
+      // Contacts listener para garantir que mudanças de nome no CRM reflitam no chat
+      const contactsChannel = supabase
+        .channel(`contacts-realtime-${userId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'contacts', filter: `user_id=eq.${userId}` },
+          (payload) => {
+            console.log('[Inbox] 👤 Mudança no contato detectada:', payload.eventType);
+            if (payload.eventType === 'INSERT') {
+              setContacts(prev => [...prev, payload.new]);
+            } else if (payload.eventType === 'UPDATE') {
+              setContacts(prev => prev.map(c => c.id === payload.new.id ? payload.new : c));
+              // Atualiza o nome nas threads existentes
+              setThreads(prevThreads => prevThreads.map(t => {
+                const phoneNumber = (t.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                const contactPhone = payload.new.telefone?.replace(/\D/g, '');
+                if (!contactPhone) return t;
+                
+                const p1 = phoneNumber.replace(/^55/, '');
+                const p2 = contactPhone.replace(/^55/, '');
+                const isMatch = p1 === p2 || (p1.length >= 8 && p2.length >= 8 && p1.slice(-8) === p2.slice(-8));
+                
+                if (isMatch) {
+                  return { 
+                    ...t, 
+                    name: payload.new.nome || t.name,
+                    funilStatus: payload.new.status_funil || t.funilStatus,
+                    is_client: payload.new.is_client ?? t.is_client
+                  };
+                }
+                return t;
+              }));
+            } else if (payload.eventType === 'DELETE') {
+              setContacts(prev => prev.filter(c => c.id === payload.old.id));
+            }
+          }
+        )
+        .subscribe();
     };
 
     setupThreads();

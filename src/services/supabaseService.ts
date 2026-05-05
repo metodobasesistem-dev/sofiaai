@@ -685,6 +685,27 @@ export const updateContact = async (contactId: string, data: Partial<Contact>) =
     .eq('id', contactId);
   
   if (error) throw error;
+
+  // Sincroniza o nome na tabela threads se o nome mudou para manter consistência no CRM
+  if (data.nome) {
+    try {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('user_id, telefone')
+        .eq('id', contactId)
+        .single();
+        
+      if (contact) {
+        const threadId = `${contact.user_id}_${contact.telefone}`;
+        await supabase
+          .from('threads')
+          .update({ contact_name: data.nome })
+          .eq('id', threadId);
+      }
+    } catch (err) {
+      console.warn('[updateContact] Falha ao sincronizar nome na thread:', err);
+    }
+  }
 };
 
 export const deleteContact = async (contactId: string) => {
