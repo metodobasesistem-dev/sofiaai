@@ -963,10 +963,11 @@ export const getGlobalDashboardStats = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { contacts: 0, appointments: 0, messages: 0, qualified: 0, conversionRate: 0, avgScore: 0 };
 
-  const [contactsCount, qualifiedCount, resolvedCount] = await Promise.all([
+  const [contactsCount, qualifiedCount, resolvedCount, messagesCount] = await Promise.all([
     supabase.from('contacts').select('*', { count: 'exact', head: true }),
     supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('status_funil', 'Qualificado'),
-    supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('status_funil', 'Resolvido')
+    supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('status_funil', 'Resolvido'),
+    supabase.from('messages').select('*', { count: 'exact', head: true })
   ]);
 
   const totalLeads = contactsCount.count || 0;
@@ -978,8 +979,44 @@ export const getGlobalDashboardStats = async () => {
     appointments: totalResolved,
     conversionRate: totalLeads > 0 ? Math.round((totalResolved / totalLeads) * 100) : 0,
     avgScore: 0,
-    messages: 0 
+    messages: messagesCount.count || 0 
   };
+};
+
+/**
+ * Retorna histórico de mensagens para gráficos de volume
+ */
+export const getReportsHistory = async (days: number = 30) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Em um cenário real, faríamos um RPC ou agregação pesada no banco.
+  // Para manter performance e compatibilidade, vamos buscar o volume dos últimos dias.
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select('created_at, direction')
+    .gt('created_at', startDate.toISOString())
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+
+  // Agrupar por dia
+  const groups: Record<string, { name: string, total: number, ia: number, humano: number }> = {};
+  
+  messages?.forEach(msg => {
+    const day = msg.created_at.split('T')[0];
+    if (!groups[day]) {
+      groups[day] = { name: day, total: 0, ia: 0, humano: 0 };
+    }
+    groups[day].total++;
+    if (msg.direction === 'outbound') groups[day].ia++;
+    else groups[day].humano++;
+  });
+
+  return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
 };
 
 export const getRecentActivities = async (passedUserId?: string) => {
