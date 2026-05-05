@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { getUserProfile, updateUserProfile, signInWithGoogleCalendar, disconnectGoogleCalendar, listGoogleCalendars, type UserProfile } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
+import { useFeatureContext } from '../contexts/FeatureFlagContext';
 import WhatsAppWebJsConnect from './WhatsAppWebJsConnect';
 
 interface IntegrationCardProps {
@@ -106,6 +107,7 @@ const IntegrationCard = ({
 };
 
 export default function Integrations({ user, role }: { user: User | null, role: string | null }) {
+  const { flags } = useFeatureContext();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
@@ -236,6 +238,20 @@ export default function Integrations({ user, role }: { user: User | null, role: 
       {/* Integrations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <WhatsAppWebJsConnect user={user} />
+
+        {flags.meta_official && (
+          <IntegrationCard 
+            icon={<Smartphone size={24} />}
+            iconBg="bg-teal-50"
+            iconColor="text-teal-600"
+            title="API Oficial (Meta)"
+            description="Conecte seu WABA e receba mensagens pela Cloud API Oficial da Meta com alta estabilidade."
+            status={profile?.whatsapp_provider === 'meta_official' ? 'connected' : 'disconnected'}
+            buttonText="Configurar"
+            buttonVariant="secondary"
+            onClick={() => toast.info('Configuração da API Oficial em breve!')}
+          />
+        )}
 
         <IntegrationCard 
           icon={<Calendar size={24} />}
