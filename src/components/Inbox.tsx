@@ -51,7 +51,7 @@ import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage } from '../services/whatsappService';
-import { listQuickReplies, type QuickReply, listProfessionals, type Professional } from '../services/supabaseService';
+import { listQuickReplies, type QuickReply, listProfessionals, type Professional, updateContact } from '../services/supabaseService';
 import Contacts from './Contacts';
 import KanbanBoard from './KanbanBoard';
 import ReportsDashboard from './ReportsDashboard';
