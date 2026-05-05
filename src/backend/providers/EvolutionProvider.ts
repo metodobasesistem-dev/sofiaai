@@ -176,8 +176,14 @@ export class EvolutionProvider implements IWhatsAppProvider {
     if (!messageData) return null;
 
     const from = messageData.key?.remoteJid || '';
-    const messageContent = messageData.message;
-    if (!messageContent) return null;
+    
+    // Suporte para estrutura aninhada ou direta
+    let messageContent = messageData.message || messageData;
+    
+    // Se for um wrapper com messageContextInfo, tenta pegar o conteúdo real
+    if (messageContent.messageContextInfo && Object.keys(messageContent).length > 1) {
+        // O conteúdo real está junto com o messageContextInfo
+    }
 
     let body = '';
     let type = 'text';
@@ -187,7 +193,12 @@ export class EvolutionProvider implements IWhatsAppProvider {
     let caption = undefined;
 
     // Extract content based on message type
-    if (messageContent.conversation) {
+    const reactionMsg = messageContent.reactionMessage || messageData.reactionMessage || (messageData.message && messageData.message.reactionMessage);
+
+    if (reactionMsg) {
+      body = `[Reação]: ${reactionMsg.text || ''}`;
+      type = 'reaction';
+    } else if (messageContent.conversation) {
       body = messageContent.conversation;
       type = 'text';
     } else if (messageContent.extendedTextMessage) {
@@ -222,12 +233,10 @@ export class EvolutionProvider implements IWhatsAppProvider {
     } else if (messageContent.locationMessage) {
       body = `[Localização]: ${messageContent.locationMessage.degreesLatitude}, ${messageContent.locationMessage.degreesLongitude}`;
       type = 'location';
-    } else if (messageContent.reactionMessage) {
-      body = `[Reação]: ${messageContent.reactionMessage.text || ''}`;
-      type = 'reaction';
     } else {
-      // Fallback for unknown types
-      const messageType = Object.keys(messageContent)[0];
+      // Fallback for unknown types - Pega a primeira chave que não seja metadado
+      const ignoredKeys = ['messageContextInfo', 'senderKeyDistributionMessage', 'key', 'messageTimestamp', 'pushName', 'status'];
+      const messageType = Object.keys(messageContent).find(k => !ignoredKeys.includes(k)) || Object.keys(messageContent)[0];
       body = `[Mensagem não suportada: ${messageType}]`;
       type = 'unknown';
     }
@@ -246,8 +255,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       mimeType,
       fileName,
       caption,
-      reaction: type === 'reaction' ? messageContent.reactionMessage?.text : undefined,
-      reactionTargetId: type === 'reaction' ? messageContent.reactionMessage?.key?.id : undefined,
+      reaction: reactionMsg ? reactionMsg.text : undefined,
+      reactionTargetId: reactionMsg ? reactionMsg.key?.id : undefined,
       raw: messageData
     };
   }

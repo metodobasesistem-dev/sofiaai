@@ -466,14 +466,27 @@ class WhatsAppService {
     }
   }
 
+  private async getInstanceName(userId: string): Promise<string> {
+    const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).maybeSingle();
+    return prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+  }
+
   async sendReaction(userId: string, to: string, messageId: string, emoji: string) {
     try {
-      const instanceName = `wppai_${userId.substring(0, 8)}`;
-      const provider = await WhatsAppProviderFactory.getProvider(userId);
+      let dbUserId = userId;
+      if (userId.includes('@')) {
+        const { data: prof } = await supabase.from('profiles').select('id').eq('email', userId).maybeSingle();
+        if (prof?.id) dbUserId = prof.id;
+      }
+
+      const instanceName = await this.getInstanceName(dbUserId);
+      const provider = await WhatsAppProviderFactory.getProvider(dbUserId);
       
+      console.log(`[WhatsAppService] Sending reaction "${emoji}" to ${messageId} | Instance: ${instanceName}`);
       const success = await provider.sendReaction(instanceName, to, messageId, emoji);
+      
       if (success) {
-        await agentService.updateMessageReaction(userId, messageId, emoji);
+        await agentService.updateMessageReaction(dbUserId, messageId, emoji);
       }
       return { success };
     } catch (err: any) {

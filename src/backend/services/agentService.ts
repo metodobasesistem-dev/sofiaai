@@ -393,12 +393,24 @@ export class AgentService {
   
   public async updateMessageReaction(userId: string, whatsappId: string, reaction: string) {
     try {
-      console.log(`[AgentService] 😃 Updating reaction for message ${whatsappId}: ${reaction}`);
+      let dbUserId = userId;
+
+      // [CRITICAL-HOSTINGER] Resolve UUID if email is passed
+      if (userId.includes('@')) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', userId)
+          .maybeSingle();
+        if (prof?.id) dbUserId = prof.id;
+      }
+
+      console.log(`[AgentService] 😃 Updating reaction for message ${whatsappId}: ${reaction} (User: ${dbUserId})`);
       const { error } = await supabase
         .from('messages')
         .update({ reaction: reaction })
         .eq('whatsapp_id', whatsappId)
-        .eq('user_id', userId);
+        .eq('user_id', dbUserId);
       
       if (error) throw error;
     } catch (err) {
