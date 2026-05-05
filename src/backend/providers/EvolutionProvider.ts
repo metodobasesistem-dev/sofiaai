@@ -30,7 +30,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
         instanceName: instanceId,
         token: INSTANCE_TOKEN,
         integration: 'WHATSAPP-BAILEYS',
-        qrcode: true
+        qrcode: true,
+        clientName: 'Sofia - Assistente Virtual'
       });
       
       await this.setWebhook(instanceId);
