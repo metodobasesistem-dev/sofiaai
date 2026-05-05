@@ -1973,10 +1973,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-                  className="flex-1 flex items-center gap-2 bg-white rounded-full px-4 py-1 border border-slate-200"
+                  className="flex-1 flex items-center gap-2 bg-white rounded-2xl px-4 py-1 border border-slate-200"
                 >
                   <textarea 
-                    rows={1} 
+                    rows={2} 
                     value={messageText} 
                     onPaste={handlePaste}
                     onChange={(e) => {
@@ -1998,7 +1998,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       } 
                     }} 
                     placeholder="Mensagem"
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] py-2 resize-none max-h-32 min-h-[40px]" 
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] py-2 resize-none max-h-32 min-h-[52px]" 
                   />
                   <div className="flex items-center gap-1">
                     <button 
