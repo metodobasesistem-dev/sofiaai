@@ -4,6 +4,8 @@ import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+import { normalizePhone } from '../lib/phoneHelper.js';
+
 
 const router = Router();
 
@@ -65,8 +67,9 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
   if (from.includes('@g.us')) return; // Ignore groups for now
 
-  const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+  const cleanPhone = normalizePhone(from);
   const threadId = `${userId}_${cleanPhone}`;
+
 
   // If it's fromMe, it was sent from the phone (or system echo)
   if (fromMe) {

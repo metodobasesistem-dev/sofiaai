@@ -6,6 +6,8 @@ import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fn
 import { googleCalendarService } from './googleCalendarService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+import { normalizePhone } from '../lib/phoneHelper.js';
+
 
 
 async function logToDB(userId: string, level: string, module: string, message: string, metadata: any = {}) {
@@ -62,8 +64,9 @@ export class AgentService {
 
       // 1. Thread and Status Management
       console.log('--- [DEBUG-AGENT] PROCESS_INCOMING START - VERSAO NOVA 2:00h ---');
-      const cleanNumber = from.split('@')[0].replace(/\D/g, ''); 
+      const cleanNumber = normalizePhone(from);
       const threadId = `${userId}_${cleanNumber}`;
+
       
       let threadData: any = null;
       try {
@@ -263,8 +266,9 @@ export class AgentService {
     
     // 1. Thread UPSERT FIRST
     try {
-      const cleanPhone = (displayPhone || threadId.split('_')[1] || '').replace(/\D/g, '');
+      const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId));
       const [{ data: existingThread }, { data: contact }] = await Promise.all([
+
         supabase.from('threads').select('contact_name, photo_url, unread_count, ticket_status').eq('id', threadId).maybeSingle(),
         supabase.from('contacts').select('nome, status_funil').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
       ]);
@@ -389,8 +393,9 @@ export class AgentService {
 
   private async upsertContact(userId: string, phoneNumber: string, contactName: string | undefined, lastMessage: string, incrementCount: boolean = true) {
     try {
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const cleanPhone = normalizePhone(phoneNumber);
       const contactId = `${userId}_${cleanPhone}`;
+
       const { data: existing } = await supabase.from('contacts').select('*').eq('id', contactId).maybeSingle();
 
       const contactData: any = {

@@ -7,6 +7,8 @@ import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { Queue, Worker, Job } from 'bullmq';
 import { redisService } from './redisService.js';
+import { normalizePhone } from '../lib/phoneHelper.js';
+
 
 
 const DEBUG_LOG = path.join(process.cwd(), 'audio_debug.log');
@@ -323,8 +325,9 @@ class WhatsAppService {
 
   async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente'): Promise<any> {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
-    const cleanTo = to.split('@')[0].replace(/\D/g, '');
+    const cleanTo = normalizePhone(to);
     const threadId = `${userId}_${cleanTo}`;
+
 
     // ── FASE 2: Banco PRIMEIRO, API depois ─────────────────────────────
     // Gera um ID temporário para persistir com status 'sending' imediatamente.
@@ -387,7 +390,7 @@ class WhatsAppService {
         if (error) {
           if (error.code === '23505') {
             // Webhook chegou primeiro — só atualiza o status do registro que já existe para este usuário
-            await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId).eq('user_id', userId);
+            await supabase.from('messages').update({ status: 'sent', thread_id: threadId }).eq('whatsapp_id', msgId).eq('user_id', userId);
             // Neste caso de conflito positivo, podemos deletar a temporária
             await supabase.from('messages').delete().eq('id', tempId);
           } else {
@@ -469,7 +472,7 @@ class WhatsAppService {
     const result = await provider.sendMedia(instanceName, to, audioBuffer.toString('base64'), undefined, 'audio');
     const audioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
     try {
-      const cleanTo = to.split('@')[0].replace(/\D/g, '');
+      const cleanTo = normalizePhone(to);
       await agentService.persistMessage(
         `${userId}_${cleanTo}`, 
         userId, 
@@ -499,7 +502,7 @@ class WhatsAppService {
     const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
 
     try {
-      const cleanTo = to.split('@')[0].replace(/\D/g, '');
+      const cleanTo = normalizePhone(to);
       await agentService.persistMessage(
         `${userId}_${cleanTo}`, 
         userId, 
