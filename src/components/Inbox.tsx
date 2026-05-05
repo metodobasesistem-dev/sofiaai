@@ -314,6 +314,12 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
         </div>
       </div>
       
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[10px] text-slate-400 font-mono">
+          {thread.remoteJid.split('@')[0]}
+        </span>
+      </div>
+
       <div className="flex items-center justify-between">
         <p className={(thread.unreadCount ?? 0) > 0 
           ? "text-[13px] truncate leading-tight flex-1 mr-2 font-bold text-slate-900" 
@@ -572,6 +578,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
+
+  // Estados para edição rápida de nome na barra lateral
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState('');
 
   // ─── Lógica de Busca de Fotos em Lote ──────────────────────────────────────────
   const fetchProfilePicturesInBatch = async (threadsToSync: Thread[]) => {
@@ -1084,7 +1094,48 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <User size={48} className="text-slate-200" />
               )}
             </div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight px-2">{activeThread.name}</h3>
+            {isEditingName ? (
+              <div className="flex flex-col gap-2 px-4">
+                <input 
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
+                      const contactId = `${user?.id}_${cleanPhone}`;
+                      try {
+                        await updateContact(contactId, { nome: newName });
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, name: newName } : t));
+                        setIsEditingName(false);
+                        toast.success('Nome atualizado!');
+                      } catch (err) {
+                        toast.error('Erro ao atualizar nome');
+                      }
+                    } else if (e.key === 'Escape') {
+                      setIsEditingName(false);
+                    }
+                  }}
+                  className="w-full bg-white border-2 border-blue-500 rounded-xl px-4 py-2 text-center text-sm font-bold focus:outline-none shadow-lg"
+                  autoFocus
+                />
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Pressione Enter para salvar</p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 px-4 group/name">
+                <h3 className="text-xl font-black text-slate-900 tracking-tight truncate max-w-[200px]">{activeThread.name}</h3>
+                <button 
+                  onClick={() => {
+                    setNewName(activeThread.name);
+                    setIsEditingName(true);
+                  }}
+                  className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover/name:opacity-100"
+                  title="Editar nome"
+                >
+                  <Edit2 size={14} />
+                </button>
+              </div>
+            )}
             <div className="mt-4 flex items-center justify-center gap-2">
               <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
                 ${activeThread.funilStatus === 'Lead' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
@@ -1097,6 +1148,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <Star size={10} className="fill-amber-500" /> Cliente
                 </span>
               )}
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-2 text-slate-400">
+               <Phone size={12} />
+               <span className="text-xs font-bold font-mono tracking-wider">
+                 {activeThread.remoteJid.split('@')[0]}
+               </span>
             </div>
           </div>
         </div>
