@@ -741,10 +741,14 @@ class WhatsAppService {
           
           await this.sendMessage(userId, from, part, agentData?.nome || 'Sofia', 'IA');
           
-          // Se houver mais partes, aguarda 2 segundos (simulação humana)
+          // Se houver mais partes, calcula um delay dinâmico (simulação de tempo de digitação)
           if (i < messageParts.length - 1) {
-            console.log(`[WhatsAppService] ⏳ Waiting 2s before next part for ${from}`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            const nextPart = messageParts[i + 1];
+            // 1 segundo base + 30ms por caractere da próxima mensagem (máximo 6 segundos)
+            const dynamicDelay = Math.min(Math.max(1000 + (nextPart.length * 30), 1500), 6000);
+            
+            console.log(`[WhatsAppService] ⏳ Typing simulation: waiting ${dynamicDelay}ms for next part`);
+            await new Promise(resolve => setTimeout(resolve, dynamicDelay));
           }
         }
 
