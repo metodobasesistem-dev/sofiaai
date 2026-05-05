@@ -568,6 +568,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       response_delay: agent.response_delay || 15,
       voice_mode: agent.voice_mode || 'disabled',
       voice_id: agent.voice_id || 'alloy',
+      training_mode: agent.training_mode || 'text',
       whatsapp_provider: agent.whatsapp_provider || 'evolution',
       whatsapp_provider_config: agent.whatsapp_provider_config || {}
     });
@@ -603,6 +604,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       appointmentDuration: 30,
       voice_mode: 'disabled',
       voice_id: 'alloy',
+      training_mode: 'text',
       whatsapp_provider: 'evolution',
       whatsapp_provider_config: {}
     });
@@ -655,6 +657,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
           appointmentDuration: formData.appointmentDuration || 30,
           voice_mode: formData.voice_mode || 'disabled',
           voice_id: formData.voice_id || 'alloy',
+          training_mode: formData.training_mode || 'text',
           whatsapp_provider: formData.whatsapp_provider || 'evolution',
           whatsapp_provider_config: formData.whatsapp_provider_config || {}
         });
@@ -713,7 +716,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
             company_links: formData.companyLinks,
             knowledge_base: formData.knowledgeBase,
             voice_mode: formData.voice_mode,
-            voice_id: formData.voice_id
+            voice_id: formData.voice_id,
+            training_mode: formData.training_mode
           },
           messages: newMessages
         })
