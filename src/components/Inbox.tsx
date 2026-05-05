@@ -1692,7 +1692,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       </div>
 
       {/* Right Column: Chat Area */}
-      <div className={`${selectedThreadId ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}>
+      <div className={`${selectedThreadId ? 'flex fixed inset-0 z-[60] md:relative md:inset-auto md:z-0' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}>
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
