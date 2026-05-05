@@ -332,6 +332,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
   const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({ nome: '', telefone: '' });
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
   const handleSync = async () => {
     try {
@@ -432,12 +433,30 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
     contacts.filter(c => {
       const matchSearch = c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           c.telefone.includes(searchTerm);
+      
       let matchStatus = true;
       if (filterStatus === 'Cliente') matchStatus = !!c.is_client;
       else if (filterStatus !== 'Todos') matchStatus = c.status_funil === filterStatus;
       
-      return matchSearch && matchStatus;
-    }), [contacts, searchTerm, filterStatus]);
+      let matchDate = true;
+      if (dateFilter !== 'all') {
+        const contactDate = new Date(c.data_criacao || c.primeiroContato || 0);
+        const now = new Date();
+        if (dateFilter === 'today') {
+          matchDate = contactDate.toDateString() === now.toDateString();
+        } else if (dateFilter === 'week') {
+          const weekAgo = new Date();
+          weekAgo.setDate(now.getDate() - 7);
+          matchDate = contactDate >= weekAgo;
+        } else if (dateFilter === 'month') {
+          const monthAgo = new Date();
+          monthAgo.setMonth(now.getMonth() - 1);
+          matchDate = contactDate >= monthAgo;
+        }
+      }
+      
+      return matchSearch && matchStatus && matchDate;
+    }), [contacts, searchTerm, filterStatus, dateFilter]);
 
   const stats = useMemo(() => ({
     total: contacts.length,
@@ -544,6 +563,26 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative w-full md:w-44">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+            >
+              <option value="all">Todo o período</option>
+              <option value="today">Hoje</option>
+              <option value="week">Últimos 7 dias</option>
+              <option value="month">Últimos 30 dias</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <ChevronRight size={14} className="rotate-90" />
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 no-scrollbar">
           <div className="flex-shrink-0 p-1.5 bg-gray-50 rounded-lg md:hidden">
              <Filter size={14} className="text-gray-400" />
