@@ -233,6 +233,21 @@ export class EvolutionProvider implements IWhatsAppProvider {
     } else if (messageContent.locationMessage) {
       body = `[Localização]: ${messageContent.locationMessage.degreesLatitude}, ${messageContent.locationMessage.degreesLongitude}`;
       type = 'location';
+    } else if (messageContent.templateMessage) {
+      body = '[Mensagem de Template]';
+      type = 'template';
+    } else if (messageContent.interactiveMessage) {
+      body = '[Mensagem Interativa/Botão]';
+      type = 'interactive';
+    } else if (messageContent.buttonsMessage) {
+      body = '[Mensagem com Botões]';
+      type = 'buttons';
+    } else if (messageContent.listMessage) {
+      body = '[Lista de Opções]';
+      type = 'list';
+    } else if (messageContent.pollCreationMessage) {
+      body = `[Enquete]: ${messageContent.pollCreationMessage.name || ''}`;
+      type = 'poll';
     } else {
       // Fallback for unknown types - Pega a primeira chave que não seja metadado
       const ignoredKeys = ['messageContextInfo', 'senderKeyDistributionMessage', 'key', 'messageTimestamp', 'pushName', 'status'];
