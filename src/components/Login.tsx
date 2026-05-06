@@ -192,6 +192,8 @@ export default function Login() {
     }
   };
 
+  const [logoError, setLogoError] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#020408] flex items-center justify-center p-6 relative overflow-hidden">
       {/* Background Orbs */}
@@ -206,8 +208,17 @@ export default function Login() {
       >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20">
-            <Bot size={42} />
+          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20 overflow-hidden">
+            {!logoError ? (
+              <img 
+                src="/logo.png" 
+                alt="Sofia Logo" 
+                className="w-full h-full object-cover"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <Bot size={42} />
+            )}
           </div>
           <h1 className="text-5xl font-black text-white tracking-tighter mb-2">Sofia</h1>
           <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px]">IA de Atendimento Inteligente</p>
