@@ -718,19 +718,32 @@ export default function Campaigns() {
                  <button 
                   onClick={async () => {
                     try {
+                      setIsSaving(true);
                       const { data: { user } } = await supabase.auth.getUser();
-                      const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user?.id).single();
+                      if (!user) throw new Error('Usuário não autenticado');
+
+                      const { data: profile, error: profileErr } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single();
+                      if (profileErr) throw profileErr;
                       
-                      await supabase.from('message_templates').insert({
-                        ...newTemplate,
+                      const { error: insertErr } = await supabase.from('message_templates').insert({
+                        name: newTemplate.name,
+                        category: newTemplate.category,
+                        variables_count: newTemplate.variables_count,
+                        language: newTemplate.language,
                         tenant_id: profile?.tenant_id
                       });
-                      toast.success('Modelo cadastrado!');
+
+                      if (insertErr) throw insertErr;
+
+                      toast.success('Modelo cadastrado com sucesso!');
                       setIsTemplateModalOpen(false);
                       setNewTemplate({ name: '', category: 'MARKETING', variables_count: 0, language: 'pt_BR' });
                       fetchTemplates();
-                    } catch (err) {
-                      toast.error('Erro ao salvar modelo');
+                    } catch (err: any) {
+                      console.error('[CreateTemplate] Error:', err);
+                      toast.error('Erro ao salvar modelo: ' + (err.message || 'Erro desconhecido'));
+                    } finally {
+                      setIsSaving(false);
                     }
                   }}
                   className="px-8 py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex-2 shadow-xl shadow-slate-200"
