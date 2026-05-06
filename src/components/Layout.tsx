@@ -25,7 +25,8 @@ import {
   BarChart3,
   Activity,
   Shield,
-  Zap
+  Zap,
+  Send
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
