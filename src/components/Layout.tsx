@@ -242,24 +242,19 @@ export default function Layout({
       >
         <div className="p-6 flex items-center justify-between">
           {!collapsed && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center gap-2 font-bold text-xl text-primary cursor-pointer"
-              onClick={() => handleTabClick('dashboard')}
-            >
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30">
-                <Bot size={20} />
+            <div className="flex items-center gap-2 font-bold text-xl text-primary cursor-pointer" onClick={() => handleTabClick('dashboard')}>
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30 overflow-hidden">
+                <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
               </div>
               <span className="tracking-tighter font-black">Sofia</span>
-            </motion.div>
+            </div>
           )}
           {collapsed && (
             <div 
-              className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer shadow-lg shadow-primary/30"
+              className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer shadow-lg shadow-primary/30 overflow-hidden"
               onClick={() => handleTabClick('dashboard')}
             >
-              <Bot size={20} />
+              <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
             </div>
           )}
         </div>
@@ -470,8 +465,8 @@ export default function Layout({
             >
               <div className="p-6 flex items-center justify-between border-bottom border-gray-100">
                 <div className="flex items-center gap-2 font-bold text-xl text-sofia-purple">
-                  <div className="w-8 h-8 bg-sofia-purple rounded-lg flex items-center justify-center text-white">
-                    <Bot size={20} />
+                  <div className="w-8 h-8 bg-sofia-purple rounded-lg flex items-center justify-center text-white overflow-hidden">
+                    <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
                   </div>
                   <span>Sofia</span>
                 </div>
