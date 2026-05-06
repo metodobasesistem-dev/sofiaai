@@ -381,11 +381,8 @@ export default function Campaigns() {
                     const { data: { user } } = await supabase.auth.getUser();
                     if (!user) throw new Error('Usuário não autenticado');
 
-                    // Get tenant_id from profile
-                    const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single();
-
                     const { error } = await supabase.from('campaigns').insert({
-                      tenant_id: profile?.tenant_id,
+                      tenant_id: user.id,
                       name: campaignData.name,
                       template_name: campaignData.templateName,
                       template_id: campaignData.templateId,
@@ -722,15 +719,12 @@ export default function Campaigns() {
                       const { data: { user } } = await supabase.auth.getUser();
                       if (!user) throw new Error('Usuário não autenticado');
 
-                      const { data: profile, error: profileErr } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single();
-                      if (profileErr) throw profileErr;
-                      
                       const { error: insertErr } = await supabase.from('message_templates').insert({
                         name: newTemplate.name,
                         category: newTemplate.category,
                         variables_count: newTemplate.variables_count,
                         language: newTemplate.language,
-                        tenant_id: profile?.tenant_id
+                        tenant_id: user.id
                       });
 
                       if (insertErr) throw insertErr;
