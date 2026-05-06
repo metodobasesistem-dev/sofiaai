@@ -34,7 +34,8 @@ import {
   ChevronLeft,
   ChevronLeft, 
   Calendar,
-  Trash2
+  Trash2,
+  Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret } from '../services/supabaseService';
@@ -234,6 +235,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                          flag.key === 'agent_training_audio' ? <Smartphone size={24} /> :
                          flag.key === 'ai_followup_questions' ? <Zap size={24} /> :
                          flag.key === 'meta_official' ? <Globe size={24} /> :
+                         flag.key === 'campaigns' ? <Send size={24} /> :
                          <Zap size={24} className={flag.enabled ? 'animate-pulse' : ''} />}
                       </div>
                       <button 

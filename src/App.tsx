@@ -13,6 +13,7 @@ import Reports from './components/Reports';
 import Professionals from './components/Professionals';
 import Overview from './components/Overview';
 import AdminPanel from './components/AdminPanel';
+import Campaigns from './components/Campaigns';
 import LeoApp from './pages/Leo/LeoApp';
 
  import Login from './components/Login';
@@ -222,6 +223,8 @@ export default function App() {
       case 'leo':
         if (role !== 'admin' && !leoEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <LeoApp user={user} role={role} onTabChange={handleTabChange} />;
+      case 'campaigns':
+        return <Campaigns />;
 
       default:
         return (
