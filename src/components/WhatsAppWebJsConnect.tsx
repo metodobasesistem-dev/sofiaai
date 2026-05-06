@@ -338,7 +338,30 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     }
   };
 
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    const checkExp = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from('profiles').select('trial_ends_at, plano').eq('id', user.id).maybeSingle();
+      if (profile?.trial_ends_at && profile?.plano?.toLowerCase() === 'trial') {
+        setIsExpired(new Date(profile.trial_ends_at).getTime() < Date.now());
+      } else {
+        setIsExpired(false);
+      }
+    };
+    checkExp();
+  }, [propUser?.id]);
+
   const renderBadge = () => {
+    if (isExpired) {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-2 py-1 rounded-full border border-red-100">
+          <PhoneOff size={12} /> Expirado
+        </span>
+      );
+    }
     switch (status) {
       case 'connected':
         return (
@@ -374,7 +397,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
       className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden flex flex-col h-full"
     >
       {/* Banner Superior com Efeito Glass */}
-      <div className="h-24 bg-gradient-to-r from-green-500 to-emerald-600 relative overflow-hidden">
+      <div className={`h-24 ${isExpired ? 'from-red-500 to-red-600' : 'from-green-500 to-emerald-600'} bg-gradient-to-r relative overflow-hidden transition-colors duration-500`}>
          <div className="absolute inset-0 bg-white/5 backdrop-blur-sm"></div>
          <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
          <div className="absolute left-6 bottom-4 flex items-center gap-3">
@@ -393,11 +416,14 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
 
       <div className="p-6 flex-1 flex flex-col">
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
-          Escolha o método de conexão para vincular seu dispositivo. Recomendamos o QR Code para praticidade ou Código de Pareamento se houver problemas de imagem.
+          {isExpired 
+            ? 'Seu período de teste expirou. Para continuar utilizando a automação via WhatsApp, por favor realize a assinatura de um plano.'
+            : 'Escolha o método de conexão para vincular seu dispositivo. Recomendamos o QR Code para praticidade ou Código de Pareamento se houver problemas de imagem.'
+          }
         </p>
 
         {/* Seletor de Método */}
-        {status === 'disconnected' && (
+        {status === 'disconnected' && !isExpired && (
           <div className="flex p-1 bg-gray-100 rounded-lg mb-6 self-center">
             <button 
               onClick={() => setMethod('qr')}
@@ -415,8 +441,17 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
         )}
 
         <div className="flex-1 flex flex-col justify-center items-center">
-          {/* Aba QR Code */}
-          {method === 'qr' && (
+          {isExpired ? (
+             <div className="text-center py-6 animate-in fade-in zoom-in duration-500">
+                <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-sm">
+                   <PhoneOff size={40} />
+                </div>
+                <h4 className="text-xl font-black text-slate-900 tracking-tight">Período Expirado</h4>
+                <p className="text-sm text-slate-500 max-w-[220px] mx-auto mt-1 leading-snug font-medium">
+                  Assine agora para reativar seu agente de IA no WhatsApp.
+                </p>
+             </div>
+          ) : method === 'qr' ? (
             <>
               {qr && status === 'waiting' ? (
                 <div className="flex flex-col items-center">
@@ -441,10 +476,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
                 </div>
               ) : null}
             </>
-          )}
-
-          {/* Aba Código de Pareamento */}
-          {method === 'pairing' && (
+          ) : method === 'pairing' ? (
             <div className="w-full flex flex-col items-center">
               {pairingCode ? (
                 <div className="text-center animate-in slide-in-from-bottom-4 duration-500">
@@ -471,10 +503,10 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
                 </div>
               ) : null}
             </div>
-          )}
+          ) : null}
 
           {/* Status de Carregamento Genérico */}
-          {status === 'connecting' && !qr && !pairingCode && (
+          {status === 'connecting' && !qr && !pairingCode && !isExpired && (
             <div className="flex flex-col items-center justify-center py-8 text-center animate-pulse">
               <Loader2 size={36} className="animate-spin text-primary-500 mb-3" />
               <p className="text-sm font-semibold text-gray-600">Iniciando Servidor...</p>
@@ -482,7 +514,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
             </div>
           )}
 
-          {status === 'connected' && (
+          {status === 'connected' && !isExpired && (
             <div className="text-center py-6 animate-in fade-in duration-700">
               <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100 shadow-inner">
                  <CheckCircle2 size={40} />
