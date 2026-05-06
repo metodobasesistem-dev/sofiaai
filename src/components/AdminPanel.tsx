@@ -32,10 +32,12 @@ import {
   Star,
   ToggleLeft,
   ChevronLeft,
-  Calendar
+  ChevronLeft, 
+  Calendar,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret } from '../services/supabaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -1180,6 +1182,29 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   <p className="text-[10px] text-slate-400 italic font-medium">
                     * Esta configuração sobrescreve o padrão global para este inquilino específico.
                   </p>
+                </div>
+
+                <div className="pt-8 border-t border-slate-100">
+                   <button 
+                    onClick={async () => {
+                      if (!window.confirm(`Tem certeza que deseja excluir permanentemente o usuário ${selectedUser.email}? Esta ação não pode ser desfeita.`)) return;
+                      try {
+                        setIsActionLoading(true);
+                        await deleteAdminUser(selectedUser.id);
+                        toast.success('Usuário excluído com sucesso!');
+                        setIsEditModalOpen(false);
+                        fetchData();
+                      } catch (e: any) {
+                        toast.error('Erro ao excluir: ' + e.message);
+                      } finally {
+                        setIsActionLoading(false);
+                      }
+                    }}
+                    disabled={isActionLoading}
+                    className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 transition-all active:scale-95 border border-red-100"
+                   >
+                     <Trash2 size={16} /> Excluir Usuário Permanentemente
+                   </button>
                 </div>
               </div>
 

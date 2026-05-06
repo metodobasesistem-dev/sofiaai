@@ -1403,6 +1403,18 @@ export const resetAdminUserWhatsApp = async (userId: string) => {
   if (!result.success) throw new Error(result.error);
 };
 
+export const deleteAdminUser = async (userId: string) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`/api/v2/admin/users/${userId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+};
+
 export const getAdminUserActivity = async (userId: string) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
