@@ -665,6 +665,7 @@ const FollowUpModal: React.FC<{
   const [message, setMessage] = useState('');
   const [delay, setDelay] = useState(60);
   const [isAi, setIsAi] = useState(true);
+  const [customDelay, setCustomDelay] = useState('');
 
   if (!isOpen) return null;
 
@@ -674,6 +675,8 @@ const FollowUpModal: React.FC<{
     { label: '4 horas', value: 240 },
     { label: 'Amanhã', value: 1440 },
   ];
+
+  const isCustomActive = customDelay !== '';
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -695,13 +698,33 @@ const FollowUpModal: React.FC<{
               {options.map(opt => (
                 <button
                   key={opt.value}
-                  onClick={() => setDelay(opt.value)}
+                  onClick={() => {
+                    setDelay(opt.value);
+                    setCustomDelay('');
+                  }}
                   className={`py-2.5 rounded-xl text-xs font-bold border transition-all
-                    ${delay === opt.value ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-200' : 'bg-white border-slate-200 text-slate-600 hover:border-primary-300'}`}
+                    ${delay === opt.value && !isCustomActive ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-200' : 'bg-white border-slate-200 text-slate-600 hover:border-primary-300'}`}
                 >
                   {opt.label}
                 </button>
               ))}
+            </div>
+            <div className="mt-3 relative">
+               <input 
+                type="number"
+                placeholder="Ou digite os minutos..."
+                value={customDelay}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCustomDelay(val);
+                  if (val) setDelay(parseInt(val));
+                }}
+                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold outline-none transition-all
+                  ${isCustomActive ? 'border-primary-500 ring-2 ring-primary-50 bg-white' : 'border-slate-200 focus:border-primary-300'}`}
+               />
+               {isCustomActive && (
+                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-primary-500 uppercase tracking-widest">minutos</span>
+               )}
             </div>
           </div>
 
