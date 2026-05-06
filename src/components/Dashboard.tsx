@@ -56,6 +56,7 @@ import {
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useFeatureContext } from '../contexts/FeatureFlagContext';
 
 const QuickNavCard = ({ icon: Icon, imageSrc, title, subtitle, onClick }: { icon?: any, imageSrc?: string, title: string, subtitle: string, onClick?: () => void }) => (
   <div 
@@ -89,6 +90,7 @@ const MetricCard = ({ icon: Icon, title, value }: { icon: any, title: string, va
 );
 
 export default function Dashboard({ onTabChange, role, user, plano }: { onTabChange?: (tab: string, subTab?: string) => void, role?: string, user: SupabaseUser | null, plano?: string | null }) {
+  const { flags } = useFeatureContext();
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
