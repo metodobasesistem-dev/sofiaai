@@ -203,6 +203,25 @@ class WhatsAppService {
     }
   }
 
+  private async isTrialExpired(userId: string): Promise<boolean> {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('trial_ends_at, plano')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!profile) return false;
+      if (profile.plano?.toLowerCase() !== 'trial') return false;
+      if (!profile.trial_ends_at) return false;
+
+      return new Date(profile.trial_ends_at).getTime() < Date.now();
+    } catch (err) {
+      console.error('[WhatsAppService] Error checking trial status:', err);
+      return false;
+    }
+  }
+
   private async updateProfileStatus(userId: string, data: { status: string; qr?: string }) {
     try {
       const instanceName = `wppai_${userId.substring(0, 8)}`;
@@ -225,6 +244,9 @@ class WhatsAppService {
   }
 
   async createSession(userId: string): Promise<string | null> {
+    if (await this.isTrialExpired(userId)) {
+      throw new Error('Seu período de teste expirou. Assine um plano para conectar seu WhatsApp.');
+    }
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     console.log(`[WhatsAppService] Starting WhatsApp session via Provider: ${instanceName}`);
     try {
@@ -254,6 +276,17 @@ class WhatsAppService {
     try {
       const instanceName = `wppai_${userId.substring(0, 8)}`;
       const provider = await WhatsAppProviderFactory.getProvider(userId);
+
+      // Check for trial expiration
+      if (await this.isTrialExpired(userId)) {
+        const status = await provider.getStatus(instanceName);
+        if (status.status === 'connected' || status.status === 'qrcode') {
+           console.log(`[WhatsAppService] ⚠️ Trial expired for ${userId}. Forcing logout.`);
+           await this.logout(userId).catch(() => {});
+        }
+        return { status: 'disconnected', trialExpired: true } as any;
+      }
+
       const status = await provider.getStatus(instanceName);
       
       let dbStatus = 'disconnected';
@@ -668,6 +701,11 @@ class WhatsAppService {
         const uniqueMessages = Array.from(new Set(bufferedMessages));
         finalBody = uniqueMessages.join('\n');
         console.log(`[WhatsAppService] 🧩 Grouped ${bufferedMessages.length} messages for ${from}`);
+      }
+
+      if (await this.isTrialExpired(userId)) {
+        console.log(`[WhatsAppService] 🛑 Skipping AI response for ${from}: Trial expired for user ${userId}`);
+        return;
       }
 
       const aiResponse = await agentService.processIncoming(userId, {

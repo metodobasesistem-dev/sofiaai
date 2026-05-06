@@ -103,21 +103,31 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
   const [chartData, setChartData] = useState<any[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [timeLeft, setTimeLeft] = useState({ days: 10, hours: 0, mins: 0, secs: 0 });
+  const [isExpired, setIsExpired] = useState(false);
 
   // Trial Timer Logic
   useEffect(() => {
-    if (!user?.created_at) return;
+    if (!user?.created_at && !profile?.trial_ends_at) return;
 
     const calculateTime = () => {
-      const signupDate = new Date(user.created_at);
-      const trialEndDate = new Date(signupDate.getTime() + 10 * 24 * 60 * 60 * 1000);
+      let trialEndDate: Date;
+      
+      if (profile?.trial_ends_at) {
+        trialEndDate = new Date(profile.trial_ends_at);
+      } else {
+        const signupDate = new Date(user?.created_at || Date.now());
+        trialEndDate = new Date(signupDate.getTime() + 10 * 24 * 60 * 60 * 1000);
+      }
+
       const now = new Date();
       const diff = trialEndDate.getTime() - now.getTime();
 
       if (diff <= 0) {
         setTimeLeft({ days: 0, hours: 0, mins: 0, secs: 0 });
+        setIsExpired(true);
         return;
       }
+      setIsExpired(false);
 
       setTimeLeft({
         days: Math.floor(diff / (1000 * 60 * 60 * 24)),
@@ -130,7 +140,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
     calculateTime();
     const timer = setInterval(calculateTime, 1000);
     return () => clearInterval(timer);
-  }, [user?.created_at]);
+  }, [user?.created_at, profile?.trial_ends_at]);
 
   // Real-time listener for WhatsApp status
   useEffect(() => {
@@ -242,7 +252,32 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
     };
   }, [user?.id, role]);
 
+  // Force Disconnect if Expired
+  useEffect(() => {
+    const checkAndDisconnect = async () => {
+      if (isExpired && profile?.plano?.toLowerCase() === 'trial' && whatsappStatus?.status === 'connected' && !isConnecting) {
+        console.log('[Dashboard] ⚠️ Trial expired. Forcing WhatsApp disconnection.');
+        try {
+          await handleDisconnect();
+          toast.error('Seu período de teste expirou. O WhatsApp foi desconectado.', {
+            description: 'Assine um plano para continuar usando a Sofia.'
+          });
+        } catch (e) {
+          console.error('Failed to force disconnect on expiration:', e);
+        }
+      }
+    };
+    checkAndDisconnect();
+  }, [isExpired, whatsappStatus?.status, profile?.plano]);
+
   const handleConnect = async () => {
+    if (isExpired && profile?.plano?.toLowerCase() === 'trial') {
+      toast.error('Período de teste expirado!', {
+        description: 'Escolha um plano para ativar seu WhatsApp.'
+      });
+      onTabChange?.('settings', 'subscription');
+      return;
+    }
     if (whatsappStatus?.status === 'connected') {
       toast.info('WhatsApp já está conectado.');
       return;
@@ -346,9 +381,9 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
         </div>
       </div>
 
-      {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado */}
+      {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado e NÃO estiver expirado */}
       <AnimatePresence>
-        {(whatsappStatus?.status !== 'connected') && (
+        {(whatsappStatus?.status !== 'connected' && !isExpired) && (
           <motion.div 
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
@@ -461,23 +496,27 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
       {/* 3. Banner de Plano / Upsell - Apenas para Trial ou Sem Plano */}
       {profile && (!profile?.plano || profile?.plano?.toLowerCase() === 'trial') && (
-        <div className="bg-[#f0f9f9] border border-[#d1eeee] rounded-xl p-8 relative overflow-hidden mb-8">
-          <div className="absolute top-0 right-0 p-8 text-[#2d7a7a] opacity-10">
+        <div className={`${isExpired ? 'bg-red-50 border-red-100' : 'bg-[#f0f9f9] border-[#d1eeee]'} border rounded-xl p-8 relative overflow-hidden mb-8 transition-colors`}>
+          <div className={`absolute top-0 right-0 p-8 ${isExpired ? 'text-red-900' : 'text-[#2d7a7a]'} opacity-10`}>
             <Sparkles size={120} />
           </div>
           
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 bg-[#2d7a7a] text-white text-[10px] font-bold uppercase rounded flex items-center gap-1">
-                <Zap size={10} fill="currentColor" /> Teste Grátis
+              <span className={`px-2 py-0.5 ${isExpired ? 'bg-red-600' : 'bg-[#2d7a7a]'} text-white text-[10px] font-bold uppercase rounded flex items-center gap-1`}>
+                <Zap size={10} fill="currentColor" /> {isExpired ? 'Acesso Expirado' : 'Teste Grátis'}
               </span>
             </div>
-            <h2 className="text-2xl font-black text-[#1a4d4d] mb-1">Escolha o melhor plano para você</h2>
-            <p className="text-sm text-[#2d7a7a] opacity-80 mb-8">Escolha um plano e comece a transformar seu atendimento com nossa IA hoje mesmo</p>
+            <h2 className={`text-2xl font-black ${isExpired ? 'text-red-900' : 'text-[#1a4d4d]'} mb-1`}>
+              {isExpired ? 'Seu período de teste chegou ao fim' : 'Escolha o melhor plano para você'}
+            </h2>
+            <p className={`text-sm ${isExpired ? 'text-red-700' : 'text-[#2d7a7a]'} opacity-80 mb-8`}>
+              {isExpired ? 'Conecte seu WhatsApp e reative a Sofia assinando um de nossos planos.' : 'Escolha um plano e comece a transformar seu atendimento com nossa IA hoje mesmo'}
+            </p>
   
             <div className="flex flex-col items-center justify-center mb-8">
-              <p className="text-[10px] font-bold text-[#2d7a7a] uppercase tracking-widest mb-4 flex items-center gap-2">
-                <Clock size={12} /> Tempo restante do teste grátis:
+              <p className={`text-[10px] font-bold ${isExpired ? 'text-red-700' : 'text-[#2d7a7a]'} uppercase tracking-widest mb-4 flex items-center gap-2`}>
+                <Clock size={12} /> {isExpired ? 'O teste encerrou há:' : 'Tempo restante do teste grátis:'}
               </p>
               <div className="flex gap-4">
                 {[
@@ -487,10 +526,10 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                   { val: String(timeLeft.secs).padStart(2, '0'), label: 'seg' }
                 ].map((t, i) => (
                   <div key={i} className="flex flex-col items-center">
-                    <div className="w-14 h-14 bg-white rounded-lg border border-[#d1eeee] flex items-center justify-center text-xl font-black text-[#1a4d4d] shadow-sm">
+                    <div className={`w-14 h-14 bg-white rounded-lg border ${isExpired ? 'border-red-100' : 'border-[#d1eeee]'} flex items-center justify-center text-xl font-black ${isExpired ? 'text-red-900' : 'text-[#1a4d4d]'} shadow-sm`}>
                       {t.val}
                     </div>
-                    <span className="text-[10px] font-bold text-[#2d7a7a] mt-1 uppercase">{t.label}</span>
+                    <span className={`text-[10px] font-bold ${isExpired ? 'text-red-400' : 'text-[#2d7a7a]'} mt-1 uppercase`}>{t.label}</span>
                   </div>
                 ))}
               </div>

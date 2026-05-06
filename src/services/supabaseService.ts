@@ -1427,6 +1427,13 @@ export const getGlobalSettings = async () => {
   return result.data;
 };
 
+export const getPublicSettings = async () => {
+  const res = await fetch('/api/v2/admin/settings/public');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error);
+  return result.data;
+};
+
 export const updateGlobalSettings = async (data: any) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');

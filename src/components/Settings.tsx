@@ -100,8 +100,19 @@ import {
 
 
 export default function Settings({ initialSubTab = 'account' }: { initialSubTab?: string }) {
-  const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState(initialSubTab || 'account');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isExpired, setIsExpired] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
+
+  useEffect(() => {
+    if (profile?.trial_ends_at && profile?.plano?.toLowerCase() === 'trial') {
+      const expired = new Date(profile.trial_ends_at).getTime() < Date.now();
+      setIsExpired(expired);
+    } else {
+      setIsExpired(false);
+    }
+  }, [profile]);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -137,6 +148,13 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
   }, [isWhatsAppModalOpen]);
 
   const handleConnectWpp = async () => {
+    if (isExpired) {
+      toast.error('Período de teste expirado!', {
+        description: 'Assine um plano para conectar seu WhatsApp.'
+      });
+      setActiveSubTab('subscription');
+      return;
+    }
     try {
       setIsConnecting(true);
       await connectWhatsApp();
@@ -798,7 +816,23 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                 </div>
 
                 <div className="p-8">
-                  {channels.length === 0 ? (
+                  {isExpired ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
+                      <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-red-100">
+                        <Lock size={40} />
+                      </div>
+                      <h4 className="text-xl font-black text-gray-900">Período de Teste Expirado</h4>
+                      <p className="text-sm text-gray-500 max-w-sm mt-2 leading-relaxed">
+                        Seu acesso gratuito chegou ao fim. Para continuar utilizando a Sofia e seus canais de atendimento, escolha um dos nossos planos.
+                      </p>
+                      <button 
+                        onClick={() => setActiveSubTab('subscription')}
+                        className="mt-8 px-10 py-4 bg-primary-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-primary-700 transition-all shadow-xl shadow-primary-500/20"
+                      >
+                        Ativar Assinatura
+                      </button>
+                    </div>
+                  ) : channels.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                       <p className="text-sm">Nenhum canal encontrado. Adicione um novo canal para começar.</p>
                     </div>

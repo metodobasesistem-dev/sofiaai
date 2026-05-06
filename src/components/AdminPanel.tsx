@@ -827,6 +827,30 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         </button>
                       </div>
                     ))}
+
+                    {/* Novo Campo: Dias de Teste */}
+                    <div className="p-5 bg-sofia-purple/5 border border-sofia-purple/10 rounded-3xl group">
+                       <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-sofia-purple text-white flex items-center justify-center shadow-lg shadow-sofia-purple/20">
+                             <Clock size={20} />
+                          </div>
+                          <div>
+                             <p className="text-sm font-black text-slate-900">Dias de Teste Grátis</p>
+                             <p className="text-[10px] text-sofia-purple font-bold uppercase tracking-widest">Regra de Novos Leads</p>
+                          </div>
+                       </div>
+                       <div className="relative">
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="90"
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3.5 text-sm font-black text-slate-700 focus:border-sofia-purple outline-none transition-all pr-12"
+                            value={globalSettings.trial_days || 10}
+                            onChange={(e) => setGlobalSettings({...globalSettings, trial_days: parseInt(e.target.value) || 0})}
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 uppercase">Dias</span>
+                       </div>
+                    </div>
                  </div>
               </div>
 

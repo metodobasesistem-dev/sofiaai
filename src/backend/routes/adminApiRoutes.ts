@@ -10,7 +10,33 @@ import { requireAuth, requireAdmin, AuthenticatedRequest } from '../middleware/a
 
 const router = Router();
 
-// All routes require authentication AND admin role
+// ─── GET /api/v2/admin/settings/public ───────────────────────────────────
+// Public endpoint for signup rules and maintenance status
+router.get('/settings/public', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('global_settings')
+      .select('trial_days, maintenance_mode, allow_signups')
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    
+    // Default values if not set
+    const settings = data || {
+      trial_days: 10,
+      maintenance_mode: false,
+      allow_signups: true
+    };
+
+    res.json({ success: true, data: settings });
+  } catch (err: any) {
+    console.error('[AdminAPI] Public Settings Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// All subsequent routes require authentication AND admin role
 router.use(requireAuth as any);
 router.use(requireAdmin as any);
 

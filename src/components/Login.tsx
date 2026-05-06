@@ -130,6 +130,16 @@ export default function Login() {
         }
 
         console.log('[Auth] Attempting signUp with metadata...');
+        
+        let trialDays = 10;
+        try {
+          const { getPublicSettings } = await import('../services/supabaseService');
+          const settings = await getPublicSettings();
+          trialDays = settings.trial_days || 10;
+        } catch (e) {
+          console.warn('[Login] Failed to fetch trial days, using default 10.');
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -141,7 +151,7 @@ export default function Login() {
               nicho: nicho,
               role: 'client',
               plano: 'Trial',
-              trial_ends_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
+              trial_ends_at: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString()
             }
           }
         });
