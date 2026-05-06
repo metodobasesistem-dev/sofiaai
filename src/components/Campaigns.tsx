@@ -702,7 +702,7 @@ export default function Campaigns() {
                        </select>
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variáveis ({{1}}, {{2}}...)</label>
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variáveis {'{{1}}, {{2}}...'}</label>
                        <input 
                          type="number" 
                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 font-bold"
