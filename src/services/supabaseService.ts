@@ -1029,25 +1029,67 @@ export const getReportsHistory = async (days: number = 30) => {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
-  const { data: messages, error } = await supabase
+  // Tenta buscar as mensagens com a nova coluna is_ai, caso não exista, busca sem.
+  let messages;
+  const { data: messagesWithAI, error: errorWithAI } = await supabase
     .from('messages')
-    .select('created_at, direction')
+    .select('created_at, direction, is_ai')
     .gt('created_at', startDate.toISOString())
     .eq('user_id', user.id);
 
-  if (error) throw error;
+  if (errorWithAI && errorWithAI.code === 'PGRST204') {
+    // Coluna is_ai não existe ainda (fallback para migração pendente)
+    const { data: fallbackMessages, error: fallbackError } = await supabase
+      .from('messages')
+      .select('created_at, direction')
+      .gt('created_at', startDate.toISOString())
+      .eq('user_id', user.id);
+      
+    if (fallbackError) throw fallbackError;
+    messages = fallbackMessages;
+  } else if (errorWithAI) {
+    // Tenta fallback genérico por precaução
+    const { data: fallbackMessages } = await supabase
+      .from('messages')
+      .select('created_at, direction')
+      .gt('created_at', startDate.toISOString())
+      .eq('user_id', user.id);
+    messages = fallbackMessages || [];
+  } else {
+    messages = messagesWithAI;
+  }
+
+  // Verifica se o agente está ativo (fallback caso is_ai seja null)
+  const { data: agent } = await supabase.from('agents').select('status').eq('user_id', user.id).maybeSingle();
+  const isAgentActive = agent?.status === 'active';
 
   // Agrupar por dia
   const groups: Record<string, { name: string, total: number, ia: number, humano: number }> = {};
   
-  messages?.forEach(msg => {
+  messages?.forEach((msg: any) => {
     const day = msg.created_at.split('T')[0];
     if (!groups[day]) {
       groups[day] = { name: day, total: 0, ia: 0, humano: 0 };
     }
     groups[day].total++;
-    if (msg.direction === 'outbound') groups[day].ia++;
-    else groups[day].humano++;
+    
+    if (msg.direction === 'outbound') {
+      if (msg.is_ai === true) {
+        groups[day].ia++;
+      } else if (msg.is_ai === false) {
+        groups[day].humano++;
+      } else {
+        // Fallback antigo: se não tem is_ai definido na mensagem, 
+        // só atribui à IA se a IA estiver ligada.
+        if (isAgentActive) groups[day].ia++;
+        else groups[day].humano++;
+      }
+    } else {
+      // Inbound = Leads (Não deve somar em Humano pois Humano = Equipe)
+      // Vamos manter a estrutura para não quebrar o gráfico, mas o correto seria o gráfico mostrar "Equipe vs Sofia"
+      // Como o gráfico soma IA + Humano = Total Outbound, não vamos somar inbound aqui se o foco é quem atendeu.
+      // Vou ajustar para que o gráfico seja realmente "Atendimento Sofia vs Atendimento Humano"
+    }
   });
 
   return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
