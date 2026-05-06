@@ -563,6 +563,29 @@ export default function Campaigns() {
                     const { data: { user } } = await supabase.auth.getUser();
                     if (!user) throw new Error('Usuário não autenticado');
 
+                    // Pré-calcula o total de contatos para exibir na interface corretamente antes do envio
+                    let finalContacts: any[] = [];
+                    const allContactsQuery = await supabase.from('contacts').select('*');
+                    const allContacts = allContactsQuery.data || [];
+
+                    if (campaignData.targetType === 'labels' && campaignData.selectedLabels) {
+                      const { data: threads } = await supabase.from('threads').select('remoteJid, labels');
+                      if (threads && threads.length > 0) {
+                        const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaignData.selectedLabels));
+                        const phonesWithLabel = matchingThreads.map(t => (t.remoteJid || '').split('@')[0].replace(/\D/g, ''));
+                        finalContacts = allContacts.filter(c => {
+                          const cleanContactPhone = (c.telefone || '').replace(/\D/g, '');
+                          return phonesWithLabel.some(p => cleanContactPhone.includes(p) || p.includes(cleanContactPhone));
+                        });
+                      }
+                    } else if (campaignData.targetType === 'funnel') {
+                      finalContacts = allContacts.filter(c => c.status_funil === campaignData.selectedFunnelStatus);
+                    } else {
+                      finalContacts = allContacts;
+                    }
+
+                    const calculatedTotal = finalContacts.length;
+
                     const campaignPayload = {
                       tenant_id: user.id,
                       name: campaignData.name,
@@ -573,7 +596,7 @@ export default function Campaigns() {
                       selected_funnel_status: campaignData.targetType === 'funnel' ? campaignData.selectedFunnelStatus : null,
                       variables: campaignData.variables,
                       status: 'pending',
-                      total_contacts: 0,
+                      total_contacts: calculatedTotal,
                       sent_count: 0,
                       error_count: 0
                     };
