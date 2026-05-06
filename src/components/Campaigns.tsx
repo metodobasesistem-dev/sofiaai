@@ -144,22 +144,14 @@ export default function Campaigns() {
       const allContacts = allContactsQuery.data || [];
 
       if (campaign.target_type === 'labels' && campaign.selected_labels) {
-         // Etiquetas ficam na tabela 'threads'.
-         // Vamos buscar as threads que contêm a etiqueta e extrair os números.
-         const { data: threads } = await supabase.from('threads').select('remoteJid, labels');
-         
+         const { data: threads } = await supabase.from('threads').select('id, remoteJid, contact_name, labels');
          if (threads && threads.length > 0) {
-            // Filtra threads que tem a etiqueta exata
             const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaign.selected_labels));
-            
-            // Extrai só os números limpos
-            const phonesWithLabel = matchingThreads.map(t => (t.remoteJid || '').split('@')[0].replace(/\D/g, ''));
-            
-            // Filtra a tabela de contatos
-            finalContacts = allContacts.filter(c => {
-               const cleanContactPhone = (c.telefone || '').replace(/\D/g, '');
-               return phonesWithLabel.some(p => cleanContactPhone.includes(p) || p.includes(cleanContactPhone));
-            });
+            finalContacts = matchingThreads.map(t => ({
+               id: t.id,
+               telefone: (t.remoteJid || '').split('@')[0].replace(/\D/g, ''),
+               nome: t.contact_name || 'Lead'
+            }));
          }
       } else if (campaign.target_type === 'funnel') {
         finalContacts = allContacts.filter(c => c.status_funil === campaign.selected_funnel_status);
@@ -190,9 +182,11 @@ export default function Campaigns() {
             return contact[field as keyof typeof contact] || '';
           });
 
+          const phoneToSend = contact.telefone || contact.phone;
+
           if (provider === 'meta_official') {
             // Oficial Meta API
-            await sendTemplateMessage(contact.phone, campaign.template_name, mappedVars);
+            await sendTemplateMessage(phoneToSend, campaign.template_name, mappedVars);
           } else {
             // Evolution API ou Uazapi (Protocolo Web)
             if (!templateBody) {
@@ -207,7 +201,7 @@ export default function Campaigns() {
 
             // Need to import sendMessage from whatsappService
             const { sendMessage } = await import('../services/whatsappService');
-            await sendMessage(contact.phone, finalMessage);
+            await sendMessage(phoneToSend, finalMessage);
           }
 
           sentCount++;
@@ -569,14 +563,14 @@ export default function Campaigns() {
                     const allContacts = allContactsQuery.data || [];
 
                     if (campaignData.targetType === 'labels' && campaignData.selectedLabels) {
-                      const { data: threads } = await supabase.from('threads').select('remoteJid, labels');
+                      const { data: threads } = await supabase.from('threads').select('id, remoteJid, contact_name, labels');
                       if (threads && threads.length > 0) {
                         const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaignData.selectedLabels));
-                        const phonesWithLabel = matchingThreads.map(t => (t.remoteJid || '').split('@')[0].replace(/\D/g, ''));
-                        finalContacts = allContacts.filter(c => {
-                          const cleanContactPhone = (c.telefone || '').replace(/\D/g, '');
-                          return phonesWithLabel.some(p => cleanContactPhone.includes(p) || p.includes(cleanContactPhone));
-                        });
+                        finalContacts = matchingThreads.map(t => ({
+                           id: t.id,
+                           telefone: (t.remoteJid || '').split('@')[0].replace(/\D/g, ''),
+                           nome: t.contact_name || 'Lead'
+                        }));
                       }
                     } else if (campaignData.targetType === 'funnel') {
                       finalContacts = allContacts.filter(c => c.status_funil === campaignData.selectedFunnelStatus);
@@ -753,8 +747,8 @@ export default function Campaigns() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                      {campaign.status === 'pending' && (
-                        <div className="flex items-center gap-2 mr-2">
+                      <div className="flex items-center gap-2 mr-2">
+                        {campaign.status === 'pending' && (
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -765,18 +759,18 @@ export default function Campaigns() {
                           >
                             <Edit2 size={16} />
                           </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteCampaign(campaign.id);
-                            }}
-                            title="Excluir Campanha"
-                            className="p-2.5 text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteCampaign(campaign.id);
+                          }}
+                          title="Excluir Campanha"
+                          className="p-2.5 text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
 
                       {campaign.status === 'pending' && (
                         <button 
