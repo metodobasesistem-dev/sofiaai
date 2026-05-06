@@ -808,6 +808,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [showDetails, setShowDetails] = useState(true);
+  const [predefinedLabels, setPredefinedLabels] = useState<string[]>([]);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -914,6 +915,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           setLoadingThreads(false);
           return;
         }
+
+        // Fetch Predefined Labels from Profile
+        const { data: profile } = await supabase.from('profiles').select('predefined_labels').eq('id', userId).single();
+        if (profile?.predefined_labels) {
+          setPredefinedLabels(profile.predefined_labels);
+        }
         
         // Ensure we have a session before proceeding
         const { data: { session } } = await supabase.auth.getSession();
@@ -974,6 +981,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               is_client: contact?.is_client || false,
               priority: contact?.priority,
               profilePictureUrl: d.profile_picture_url,
+              labels: d.labels || [],
               pending_followup: d.pending_followup
             };
           });
@@ -1508,23 +1516,66 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <p className="text-[11px] text-slate-400 font-medium">Nenhuma etiqueta</p>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-3">
               <input 
                 type="text" 
-                placeholder="Adicionar..."
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl text-[12px] px-4 py-2.5 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all"
+                placeholder="Criar nova etiqueta..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[12px] px-4 py-2.5 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all"
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter') {
                     const val = e.currentTarget.value.trim();
-                    if (val && (!activeThread.labels || !activeThread.labels.includes(val))) {
-                      const newLabels = [...(activeThread.labels || []), val];
-                      await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
-                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                    if (val) {
+                      // Se não existe na lista global, adiciona
+                      if (!predefinedLabels.includes(val)) {
+                        const newGlobal = [...predefinedLabels, val];
+                        await supabase.from('profiles').update({ predefined_labels: newGlobal }).eq('id', user?.id);
+                        setPredefinedLabels(newGlobal);
+                      }
+                      
+                      // Adiciona ao contato atual
+                      if (!activeThread.labels || !activeThread.labels.includes(val)) {
+                        const newLabels = [...(activeThread.labels || []), val];
+                        await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                      }
                       e.currentTarget.value = '';
                     }
                   }
                 }}
               />
+              
+              {predefinedLabels.length > 0 && (
+                <div className="pt-2 border-t border-slate-100">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Suas Etiquetas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {predefinedLabels.map((lbl, idx) => {
+                      const isActive = activeThread.labels && activeThread.labels.includes(lbl);
+                      return (
+                        <button
+                          key={idx}
+                          onClick={async () => {
+                            let newLabels = [...(activeThread.labels || [])];
+                            if (isActive) {
+                              newLabels = newLabels.filter(l => l !== lbl);
+                            } else {
+                              newLabels.push(lbl);
+                            }
+                            await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border ${
+                            isActive 
+                              ? 'bg-primary-500 text-white border-primary-500 shadow-md shadow-primary-500/20' 
+                              : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300 hover:text-primary-600'
+                          }`}
+                        >
+                          {lbl}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
