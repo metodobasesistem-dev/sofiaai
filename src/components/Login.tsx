@@ -211,7 +211,7 @@ export default function Login() {
           <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20 overflow-hidden">
             {!logoError ? (
               <img 
-                src="/logo.png" 
+                src="/sofiamini.png" 
                 alt="Sofia Logo" 
                 className="w-full h-full object-cover"
                 onError={() => setLogoError(true)}
