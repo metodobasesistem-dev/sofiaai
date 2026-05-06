@@ -73,7 +73,7 @@ async function getAISettings(userId?: string) {
  */
 export async function generateAIResponse(
   systemPrompt: string,
-  messages: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; [key: string]: any }[],
+  messages: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; mediaUrl?: string; mediaMimeType?: string; [key: string]: any }[],
   tools?: any[],
   toolChoice: 'auto' | 'none' | 'required' = 'auto',
   userId?: string
@@ -100,15 +100,27 @@ export async function generateAIResponse(
       throw new Error('OpenAI key missing');
     }
     
-    const maskedKey = `${key.substring(0, 7)}...${key.substring(key.length - 4)}`;
-    console.log(`[AIService] 🔑 Utilizando chave OpenAI: ${maskedKey}`);
+    const client = new OpenAI({ apiKey: key });
+
+    // Preparar mensagens multimodais para OpenAI
+    const formattedMessages = messages.map(m => {
+      if (m.role === 'user' && m.mediaUrl) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'text', text: m.content || 'Analise esta imagem' },
+            { type: 'image_url', image_url: { url: m.mediaUrl } }
+          ]
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
 
     try {
       const startTime = Date.now();
-      const client = new OpenAI({ apiKey: key });
       const completion = await client.chat.completions.create({
         model: model,
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        messages: [{ role: 'system', content: systemPrompt }, ...formattedMessages as any],
         temperature: 0.7,
         max_tokens: 1000,
         tools: tools?.length ? tools : undefined,
@@ -158,13 +170,36 @@ export async function generateAIResponse(
       const genAI = new GoogleGenerativeAI(key);
       const geminiModel = genAI.getGenerativeModel({ model: model });
       
-      // Convert OpenAI message format to Gemini
-      const contents = messages.map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
+      // Convert OpenAI message format to Gemini (Multimodal support)
+      const contents = await Promise.all(messages.map(async m => {
+        const parts: any[] = [{ text: m.content || '' }];
+
+        if (m.role === 'user' && m.mediaUrl) {
+          try {
+            console.log(`[AIService] 📥 Fetching image for Gemini: ${m.mediaUrl}`);
+            const imgRes = await fetch(m.mediaUrl);
+            const arrayBuffer = await imgRes.arrayBuffer();
+            const base64 = Buffer.from(arrayBuffer).toString('base64');
+            const mimeType = m.mediaMimeType || imgRes.headers.get('content-type') || 'image/jpeg';
+
+            parts.push({
+              inlineData: {
+                data: base64,
+                mimeType: mimeType
+              }
+            });
+          } catch (imgErr) {
+            console.error('[AIService] Failed to download image for Gemini:', imgErr);
+          }
+        }
+
+        return {
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: parts
+        };
       }));
 
-      console.log(`[AIService] 🚀 Chamando Google Gemini...`);
+      console.log(`[AIService] 🚀 Chamando Google Gemini Multimodal...`);
 
       const result = await geminiModel.generateContent({
         contents: contents,

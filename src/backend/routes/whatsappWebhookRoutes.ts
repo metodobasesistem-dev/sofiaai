@@ -167,9 +167,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
       if (type === 'audio' && transcription) {
         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
       } else if (type === 'image' || type === 'video') {
-         if (caption) {
-           await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption, contactName, cleanPhone, messageId, false);
-         }
+         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption || (type === 'image' ? '[Imagem]' : '[Vídeo]'), contactName, cleanPhone, messageId, false, mediaUrl, mimeType);
       }
     }
   } catch (err) {

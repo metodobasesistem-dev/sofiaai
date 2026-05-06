@@ -36,9 +36,11 @@ export class AgentService {
     messageId: string,
     displayPhone?: string,
     skipPersist?: boolean,
-    isAudioRequest?: boolean
+    isAudioRequest?: boolean,
+    mediaUrl?: string,
+    mediaMimeType?: string
   }): Promise<{ text: string; audioBuffer?: Buffer } | string | null> {
-    const { from, body, contactName, messageId, displayPhone, skipPersist = false, isAudioRequest = false } = incomingData;
+    const { from, body, contactName, messageId, displayPhone, skipPersist = false, isAudioRequest = false, mediaUrl, mediaMimeType } = incomingData;
 
     try {
       let dbUserId = userId;
@@ -147,7 +149,7 @@ export class AgentService {
         ...history
           .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
           .map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: body }
+        { role: 'user', content: body, mediaUrl, mediaMimeType }
       ];
 
       let finalUsage = null;

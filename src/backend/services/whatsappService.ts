@@ -602,7 +602,7 @@ class WhatsAppService {
 
 
   // Novo método para ser chamado pelo Webhook (Agora via BullMQ)
-  async triggerAIResponseViaWebhook(userId: string, from: string, body: string, contactName: string, cleanPhone: string, messageId: string, isAudio: boolean = false) {
+  async triggerAIResponseViaWebhook(userId: string, from: string, body: string, contactName: string, cleanPhone: string, messageId: string, isAudio: boolean = false, mediaUrl?: string, mediaMimeType?: string) {
     const jobId = `pending_ai:${userId}:${from}`;
     
     const cacheKey = `agent_config:${userId}`;
@@ -654,7 +654,9 @@ class WhatsAppService {
       contactName,
       displayPhone: cleanPhone,
       messageId,
-      isAudio
+      isAudio,
+      mediaUrl,
+      mediaMimeType
     }, {
       jobId,
       delay: delaySeconds * 1000,
@@ -666,7 +668,7 @@ class WhatsAppService {
 
   // Método interno que processa a lógica de IA (chamado pelo Worker do BullMQ)
   private async processAIResponse(data: any) {
-    const { userId, from, body, contactName, displayPhone, messageId, isAudio } = data;
+    const { userId, from, body, contactName, displayPhone, messageId, isAudio, mediaUrl, mediaMimeType } = data;
     const instanceName = `wppai_${userId.substring(0, 8)}`;
 
     try {
@@ -712,7 +714,9 @@ class WhatsAppService {
         from, body: finalBody, contactName, messageId,
         displayPhone: displayPhone,
         skipPersist: true,
-        isAudioRequest: isAudio
+        isAudioRequest: isAudio,
+        mediaUrl,
+        mediaMimeType
       });
 
       // 🛡️ PROTEÇÃO: Se a IA não retornou resposta (ex: modo humano ou ignorado), para por aqui sem quebrar
