@@ -86,6 +86,7 @@ const FUNIL_STYLES: Record<string, { label: string; className: string; icon: Rea
   Qualificado:{ label: 'Qualificado',className: 'bg-green-50 text-green-700 border-green-200',   icon: <CheckCircle2 size={10} /> },
   Cliente:    { label: 'Cliente',    className: 'bg-amber-50 text-amber-700 border-amber-200',   icon: <Star size={10} /> },
   Trial:      { label: 'Em Teste',    className: 'bg-blue-50 text-blue-700 border-blue-200',   icon: <Clock size={10} /> },
+  Starter:    { label: 'Plano Starter', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <Zap size={10} /> },
   Pro:        { label: 'Plano Pro',  className: 'bg-purple-50 text-purple-700 border-purple-200', icon: <Zap size={10} /> },
 };
 
@@ -267,10 +268,11 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
         const profiles = await listAdminUsers();
         const mapped = profiles.map(p => ({
           ...p,
-          nome: p.nome_completo || p.name || p.email.split('@')[0],
+          nome: p.nome_completo || p.name || p.full_name || p.email.split('@')[0],
           telefone: p.notification_phone || '',
           data_criacao: p.created_at,
-          status_funil: p.plano === 'Pro' ? 'Pro' : 'Trial',
+          status_funil: p.plano || 'Trial',
+          whatsapp_status: p.whatsapp_status,
           is_admin_view: true
         }));
         setContacts(mapped);
@@ -465,8 +467,11 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
                         </td>
                         <td className="px-6 py-5 hidden md:table-cell">
                           <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                            <Phone size={13} className="text-gray-400" />
-                            {formatPhone(client.telefone)}
+                            <div className={`w-2 h-2 rounded-full ${client.whatsapp_status === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              {client.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado'}
+                            </span>
+                            {client.telefone && <span className="ml-2">{formatPhone(client.telefone)}</span>}
                           </div>
                         </td>
                         <td className="px-6 py-5 hidden sm:table-cell">
