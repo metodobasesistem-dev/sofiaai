@@ -322,7 +322,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            {role === 'admin' ? 'Painel Geral SaaS' : `Olá, ${(profile?.nome_completo || profile?.name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0]) || 'Usuário'}!`}
+            {role === 'admin' ? 'Painel Geral da Sofia' : `Olá, ${(profile?.nome_completo || profile?.name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0]) || 'Usuário'}!`}
           </h1>
           <p className="text-slate-500 font-medium mt-1 flex items-center gap-2">
             {role === 'admin' ? 'Visão global de todos os clientes e métricas da plataforma.' : 'Aqui está o que aconteceu no seu CRM hoje.'}
