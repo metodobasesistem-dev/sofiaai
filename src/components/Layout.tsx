@@ -95,7 +95,8 @@ export default function Layout({
   activeTab: string, 
   onTabChange: (tab: string, subTab?: string) => void,
   user: User | null,
-  role: string | null
+  role: string | null,
+  plano: string | null
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -170,11 +171,11 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-    { 
       id: 'leo', 
       icon: <Zap size={20} className="text-amber-500" />, 
       label: 'Leo',
-      flag: 'leo_ai'
+      flag: 'leo_ai',
+      minPlan: 'Starter'
     },
     ...(role === 'admin' ? [
       {
@@ -193,11 +194,11 @@ export default function Layout({
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada', flag: 'chat' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos', flag: 'crm' },
     { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA' },
-    { 
       id: 'agendas', 
       icon: <Calendar size={20} />, 
       label: 'Agendas',
       flag: 'agendas',
+      minPlan: 'Starter',
       subItems: [
         { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
@@ -210,7 +211,20 @@ export default function Layout({
   // Filtra itens com base nas flags (Admin sempre vê tudo)
   const filteredMenuItems = menuItems.filter(item => {
     if (role === 'admin') return true;
+    
+    // 1. Feature Flag Check
     if (item.flag && flags[item.flag] === false) return false;
+    
+    // 2. Plan Restriction Check
+    if (item.minPlan) {
+      const plans = ['Trial', 'Starter', 'Pro', 'Enterprise'];
+      const userPlanIdx = plans.indexOf(plano || 'Trial');
+      const minPlanIdx = plans.indexOf(item.minPlan);
+      
+      // If user plan is below required plan, hide it
+      if (userPlanIdx < minPlanIdx) return false;
+    }
+
     return true;
   });
 

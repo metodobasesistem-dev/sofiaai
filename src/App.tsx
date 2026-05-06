@@ -28,6 +28,7 @@ export default function App() {
   const [settingsSubTab, setSettingsSubTab] = useState('account');
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [plano, setPlano] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   // Track current user ID to prevent unnecessary re-renders from onAuthStateChange
@@ -129,15 +130,17 @@ export default function App() {
         
         const { data: userRows, error: profileError } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, plano')
           .eq('id', user.id)
           .maybeSingle();
         
         if (profileError) {
           console.error('[App] Profile fetch error:', profileError);
           setRole('client');
+          setPlano('Trial');
         } else {
           setRole(userRows?.role || 'client');
+          setPlano(userRows?.plano || 'Trial');
         }
       } catch (err) {
         console.error('[App] Role fetch exception:', err);
@@ -183,7 +186,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
+        return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} plano={plano} />;
       case 'admin_hub':
         return <AdminPanel initialView="hub" onTabChange={handleTabChange} />;
       case 'admin':
@@ -241,8 +244,14 @@ export default function App() {
           <Inbox user={user} role={role} isFullscreen={true} />
         </div>
       ) : (
-        <Layout activeTab={activeTab} onTabChange={handleTabChange} user={user} role={role}>
-          {renderContent()}
+        <Layout 
+      activeTab={activeTab} 
+      onTabChange={handleTabChange} 
+      user={user} 
+      role={role}
+      plano={plano}
+    >
+      {renderContent()}
         </Layout>
       )}
       <Toaster position="top-right" richColors />

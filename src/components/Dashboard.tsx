@@ -88,7 +88,7 @@ const MetricCard = ({ icon: Icon, title, value }: { icon: any, title: string, va
   </div>
 );
 
-export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (tab: string, subTab?: string) => void, role?: string, user: SupabaseUser | null }) {
+export default function Dashboard({ onTabChange, role, user, plano }: { onTabChange?: (tab: string, subTab?: string) => void, role?: string, user: SupabaseUser | null, plano?: string | null }) {
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -448,54 +448,74 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
 
       {/* 2. Grid de Navegação Rápida */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <QuickNavCard 
-          imageSrc="/sofiamini.png" 
-          title="Agentes" 
-          subtitle="Configure seu agente" 
-          onClick={() => onTabChange?.('agents')}
-        />
-        <QuickNavCard 
-          icon={MessageSquare} 
-          title="Chats" 
-          subtitle="Acompanhe suas conversas" 
-          onClick={() => onTabChange?.('inbox')}
-        />
-        <QuickNavCard 
-          icon={Calendar} 
-          title="Agendamentos" 
-          subtitle="Veja seus agendamentos" 
-          onClick={() => onTabChange?.('schedule')}
-        />
-        <QuickNavCard 
-          icon={Users} 
-          title="Contatos" 
-          subtitle="Gerencie seus contatos" 
-          onClick={() => onTabChange?.('contacts')}
-        />
-        <QuickNavCard 
-          icon={Clock} 
-          title="Disponibilidade" 
-          subtitle="Defina seus horários" 
-          onClick={() => onTabChange?.('availability')}
-        />
-        <QuickNavCard 
-          icon={Radio} 
-          title="Canais" 
-          subtitle="Gerencie seus canais" 
-          onClick={() => onTabChange?.('settings', 'channels')}
-        />
-        <QuickNavCard 
-          icon={Plug} 
-          title="Integrações" 
-          subtitle="Conecte suas ferramentas" 
-          onClick={() => onTabChange?.('integrations')}
-        />
-        <QuickNavCard 
-          icon={BarChart3} 
-          title="Relatórios" 
-          subtitle="Confira seus resultados" 
-          onClick={() => onTabChange?.('reports')}
-        />
+        {(() => {
+          const checkPlan = (minPlan: string) => {
+            if (role === 'admin') return true;
+            const plans = ['Trial', 'Starter', 'Pro', 'Enterprise'];
+            const userPlanIdx = plans.indexOf(plano || 'Trial');
+            const minPlanIdx = plans.indexOf(minPlan);
+            return userPlanIdx >= minPlanIdx;
+          };
+
+          return (
+            <>
+              <QuickNavCard 
+                imageSrc="/sofiamini.png" 
+                title="Agentes" 
+                subtitle="Configure seu agente" 
+                onClick={() => onTabChange?.('agents')}
+              />
+              <QuickNavCard 
+                icon={MessageSquare} 
+                title="Chats" 
+                subtitle="Acompanhe suas conversas" 
+                onClick={() => onTabChange?.('inbox')}
+              />
+              <QuickNavCard 
+                icon={Calendar} 
+                title="Agendamentos" 
+                subtitle="Veja seus agendamentos" 
+                onClick={() => onTabChange?.('schedule')}
+              />
+              <QuickNavCard 
+                icon={Users} 
+                title="Contatos" 
+                subtitle="Gerencie seus contatos" 
+                onClick={() => onTabChange?.('contacts')}
+              />
+              <QuickNavCard 
+                icon={Clock} 
+                title="Disponibilidade" 
+                subtitle="Defina seus horários" 
+                onClick={() => onTabChange?.('availability')}
+              />
+              {checkPlan('Starter') && (
+                <QuickNavCard 
+                  icon={Radio} 
+                  title="Canais" 
+                  subtitle="Gerencie seus canais" 
+                  onClick={() => onTabChange?.('settings', 'channels')}
+                />
+              )}
+              {checkPlan('Starter') && (
+                <QuickNavCard 
+                  icon={Plug} 
+                  title="Integrações" 
+                  subtitle="Conecte suas ferramentas" 
+                  onClick={() => onTabChange?.('integrations')}
+                />
+              )}
+              {checkPlan('Starter') && (
+                <QuickNavCard 
+                  icon={BarChart3} 
+                  title="Relatórios" 
+                  subtitle="Confira seus resultados" 
+                  onClick={() => onTabChange?.('reports')}
+                />
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* 3. Banner de Plano / Upsell - Apenas para Trial ou Sem Plano */}
