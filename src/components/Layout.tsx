@@ -204,7 +204,7 @@ export default function Layout({
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
       ]
     },
-    { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações' },
+    { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações', flag: 'official_api' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
   ];
 

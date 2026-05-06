@@ -465,30 +465,38 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                 subtitle="Configure seu agente" 
                 onClick={() => onTabChange?.('agents')}
               />
-              <QuickNavCard 
-                icon={MessageSquare} 
-                title="Chats" 
-                subtitle="Acompanhe suas conversas" 
-                onClick={() => onTabChange?.('inbox')}
-              />
-              <QuickNavCard 
-                icon={Calendar} 
-                title="Agendamentos" 
-                subtitle="Veja seus agendamentos" 
-                onClick={() => onTabChange?.('schedule')}
-              />
-              <QuickNavCard 
-                icon={Users} 
-                title="Contatos" 
-                subtitle="Gerencie seus contatos" 
-                onClick={() => onTabChange?.('contacts')}
-              />
-              <QuickNavCard 
-                icon={Clock} 
-                title="Disponibilidade" 
-                subtitle="Defina seus horários" 
-                onClick={() => onTabChange?.('availability')}
-              />
+              {flags['chat'] !== false && (
+                <QuickNavCard 
+                  icon={MessageSquare} 
+                  title="Chats" 
+                  subtitle="Acompanhe suas conversas" 
+                  onClick={() => onTabChange?.('inbox')}
+                />
+              )}
+              {flags['agendas'] !== false && (
+                <QuickNavCard 
+                  icon={Calendar} 
+                  title="Agendamentos" 
+                  subtitle="Veja seus agendamentos" 
+                  onClick={() => onTabChange?.('schedule')}
+                />
+              )}
+              {flags['crm'] !== false && (
+                <QuickNavCard 
+                  icon={Users} 
+                  title="Contatos" 
+                  subtitle="Gerencie seus contatos" 
+                  onClick={() => onTabChange?.('contacts')}
+                />
+              )}
+              {flags['agendas'] !== false && (
+                <QuickNavCard 
+                  icon={Clock} 
+                  title="Disponibilidade" 
+                  subtitle="Defina seus horários" 
+                  onClick={() => onTabChange?.('availability')}
+                />
+              )}
               {checkPlan('Starter') && (
                 <QuickNavCard 
                   icon={Radio} 
@@ -497,7 +505,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('settings', 'channels')}
                 />
               )}
-              {checkPlan('Starter') && (
+              {checkPlan('Starter') && flags['official_api'] !== false && (
                 <QuickNavCard 
                   icon={Plug} 
                   title="Integrações" 
@@ -505,7 +513,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('integrations')}
                 />
               )}
-              {checkPlan('Starter') && (
+              {checkPlan('Starter') && flags['reports'] !== false && (
                 <QuickNavCard 
                   icon={BarChart3} 
                   title="Relatórios" 
