@@ -173,7 +173,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'preview' | 'advanced' | 'knowledge' | 'voice'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'preview' | 'automation' | 'advanced' | 'knowledge' | 'voice'>('profile');
 
   // Form State
   const [formData, setFormData] = useState<Partial<Agent>>({
@@ -1983,20 +1983,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                   </div>
                 )}
 
-                {activeTab === 'advanced' && (
+                {activeTab === 'automation' && (
                   <div className="space-y-12">
-                    {/* WhatsApp Provider - Moved to Tenant Settings */}
-                    <div className="p-8 bg-slate-50 border border-slate-100 rounded-[2rem] flex flex-col items-center text-center gap-4">
-                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-300 shadow-sm">
-                        <Smartphone size={24} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-black text-slate-900">Configuração de Infraestrutura</h3>
-                        <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">
-                          As configurações de provedor WhatsApp agora são gerenciadas centralmente no Painel Administrativo pelo nível de Inquilino.
-                        </p>
-                      </div>
-                    </div>
                     {/* Agendamentos */}
                     <div className="space-y-6">
                       <div className="flex items-center gap-2 text-gray-900">
@@ -2285,6 +2273,23 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                           <Plus size={16} />
                           Adicionar lembrete
                         </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'advanced' && (
+                  <div className="space-y-12">
+                    {/* WhatsApp Provider - Moved to Tenant Settings */}
+                    <div className="p-8 bg-slate-50 border border-slate-100 rounded-[2rem] flex flex-col items-center text-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-300 shadow-sm">
+                        <Smartphone size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Configuração de Infraestrutura</h3>
+                        <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">
+                          As configurações de provedor WhatsApp agora são gerenciadas centralmente no Painel Administrativo pelo nível de Inquilino.
+                        </p>
                       </div>
                     </div>
                   </div>
