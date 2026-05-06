@@ -266,10 +266,10 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
     <button
       type="button"
       onClick={startRecording}
-      className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-300 shadow-sm active:scale-90"
+      className="w-11 h-11 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:text-blue-600 hover:bg-blue-50 transition-all duration-300 shadow-sm active:scale-90 shrink-0"
       title="Gravar áudio"
     >
-      <Mic size={22} />
+      <Mic size={20} />
     </button>
   );
 };
@@ -2070,7 +2070,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-                  className="flex-1 flex items-center gap-2 bg-white rounded-2xl px-4 py-1 border border-slate-200"
+                  className="flex-1 min-w-0 flex items-center gap-2 bg-white rounded-2xl px-4 py-1 border border-slate-200"
                 >
                   <textarea 
                     rows={2} 
