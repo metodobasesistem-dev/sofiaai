@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 import { InstagramStatus } from '../../types/leo';
 import { supabase } from '../../lib/supabase';
+import LeoInsights from '../../components/LeoInsights';
 
 export default function LeoInstagram({ role }: any) {
   const isAdmin = role === 'admin';
@@ -27,6 +28,7 @@ export default function LeoInstagram({ role }: any) {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [history, setHistory] = useState<{ comments: any[], dms: any[] }>({ comments: [], dms: [] });
   const [localSettings, setLocalSettings] = useState<any>(null);
+  const [insights, setInsights] = useState<any>(null);
   const [triggers, setTriggers] = useState<any[]>([]);
   const [newTrigger, setNewTrigger] = useState({ palavra_chave: '', mensagem_dm: '', resposta_comentario: '' });
   const [showAddTrigger, setShowAddTrigger] = useState(false);
@@ -76,10 +78,21 @@ export default function LeoInstagram({ role }: any) {
     }
   };
 
+  const fetchInsights = async () => {
+    try {
+      const res = await authFetch('/api/leo/instagram/insights');
+      const data = await res.json();
+      setInsights(data);
+    } catch (error) {
+      console.error('Failed to fetch Instagram insights:', error);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchHistory();
     fetchTriggers();
+    fetchInsights();
 
     // Verificar retorno do OAuth
     const params = new URLSearchParams(window.location.search);
@@ -266,33 +279,8 @@ export default function LeoInstagram({ role }: any) {
 
       {status?.connected && (
         <>
-          {/* Account Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard 
-              icon={<Users size={20} className="text-primary-500" />} 
-              label="Seguidores" 
-              value={status.account?.followers_count?.toLocaleString() || '0'} 
-              color="bg-primary-50"
-            />
-            <MetricCard 
-              icon={<Activity size={20} className="text-emerald-500" />} 
-              label="Postagens" 
-              value={status.account?.media_count?.toLocaleString() || '0'} 
-              color="bg-emerald-50"
-            />
-            <MetricCard 
-              icon={<MessageSquare size={20} className="text-purple-500" />} 
-              label="Conversas Leo" 
-              value={history.dms.length.toString()} 
-              color="bg-purple-50"
-            />
-            <MetricCard 
-              icon={<Shield size={20} className="text-amber-500" />} 
-              label="Status" 
-              value="Ativo" 
-              color="bg-amber-50"
-            />
-          </div>
+          {/* Advanced Analytics Dashboard */}
+          <LeoInsights insights={insights} />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">

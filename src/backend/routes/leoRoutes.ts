@@ -54,6 +54,15 @@ router.post('/instagram/refresh-token', requireAuth, requireAdmin, async (req: A
   }
 });
 
+router.get('/instagram/insights', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const insights = await leoInstagramService.getInsights(req.userId!);
+    res.json(insights);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/instagram/history', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const history = await leoInstagramService.getHistory(req.userId!);

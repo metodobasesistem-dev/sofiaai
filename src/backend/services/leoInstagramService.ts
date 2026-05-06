@@ -513,6 +513,92 @@ export const leoInstagramService = {
     return data || [];
   },
 
+  async getInsights(companyId: string) {
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('instagram_access_token, instagram_account_id')
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (!config?.instagram_access_token || !config?.instagram_account_id) {
+      return { metrics: [], summary: {} };
+    }
+
+    const accessToken = decrypt(config.instagram_access_token);
+    const igId = config.instagram_account_id;
+
+    // 1. Métricas Internas (Últimos 7 dias)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Buscar leads da empresa
+    const { data: leads } = await supabase.from('leo_leads').select('id').eq('company_id', companyId);
+    const leadIds = leads?.map(l => l.id) || [];
+
+    const { data: interacoes } = await supabase
+      .from('leo_instagram_interacoes')
+      .select('tipo, created_at')
+      .in('lead_id', leadIds)
+      .gte('created_at', sevenDaysAgo.toISOString());
+
+    // 2. Métricas Externas (Meta Insights)
+    let metaInsights: any[] = [];
+    try {
+      const res = await fetch(`https://graph.facebook.com/v19.0/${igId}/insights?metric=reach,impressions,profile_views&period=day&access_token=${accessToken}`);
+      const data = await res.json();
+      metaInsights = data.data || [];
+    } catch (err) {
+      console.error('[LeoInstagramService] Meta Insights Error:', err);
+    }
+
+    // 3. Agregação por Dia
+    const dailyStats: Record<string, any> = {};
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return d.toISOString().split('T')[0];
+    }).reverse();
+
+    days.forEach(day => {
+      dailyStats[day] = {
+        name: day,
+        comentarios: 0,
+        dms: 0,
+        alcance: 0,
+        visitas: 0
+      };
+    });
+
+    // Somar interações internas
+    interacoes?.forEach(int => {
+      const day = int.created_at.split('T')[0];
+      if (dailyStats[day]) {
+        if (int.tipo === 'comentario') dailyStats[day].comentarios++;
+        else if (int.tipo === 'dm_enviada') dailyStats[day].dms++;
+      }
+    });
+
+    // Mapear Meta Insights
+    metaInsights.forEach(metric => {
+      metric.values?.forEach((val: any) => {
+        const day = val.end_time.split('T')[0];
+        if (dailyStats[day]) {
+          if (metric.name === 'reach') dailyStats[day].alcance = val.value;
+          if (metric.name === 'profile_views') dailyStats[day].visitas = val.value;
+        }
+      });
+    });
+
+    return {
+      metrics: Object.values(dailyStats),
+      summary: {
+        total_comentarios: interacoes?.filter(i => i.tipo === 'comentario').length || 0,
+        total_dms: interacoes?.filter(i => i.tipo === 'dm_enviada').length || 0,
+        today_reach: dailyStats[days[days.length - 1]]?.alcance || 0
+      }
+    };
+  },
+
   async addTrigger(companyId: string, trigger: any) {
     const { data, error } = await supabase
       .from('leo_insta_gatilhos')
