@@ -467,7 +467,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                 subtitle="Configure seu agente" 
                 onClick={() => onTabChange?.('agents')}
               />
-              {flags['chat'] !== false && (
+              {(role === 'admin' || flags['chat'] !== false) && (
                 <QuickNavCard 
                   icon={MessageSquare} 
                   title="Chats" 
@@ -475,7 +475,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('inbox')}
                 />
               )}
-              {flags['agendas'] !== false && (
+              {(role === 'admin' || flags['agendas'] !== false) && (
                 <QuickNavCard 
                   icon={Calendar} 
                   title="Agendamentos" 
@@ -483,7 +483,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('schedule')}
                 />
               )}
-              {flags['crm'] !== false && (
+              {(role === 'admin' || flags['crm'] !== false) && (
                 <QuickNavCard 
                   icon={Users} 
                   title="Contatos" 
@@ -491,7 +491,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('contacts')}
                 />
               )}
-              {flags['agendas'] !== false && (
+              {(role === 'admin' || flags['agendas'] !== false) && (
                 <QuickNavCard 
                   icon={Clock} 
                   title="Disponibilidade" 
@@ -499,7 +499,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('availability')}
                 />
               )}
-              {checkPlan('Starter') && (
+              {checkPlan('Starter') && (role === 'admin' || flags['official_api'] !== false) && (
                 <QuickNavCard 
                   icon={Radio} 
                   title="Canais" 
@@ -507,7 +507,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('settings', 'channels')}
                 />
               )}
-              {checkPlan('Starter') && flags['official_api'] !== false && (
+              {checkPlan('Starter') && (role === 'admin' || flags['official_api'] !== false) && (
                 <QuickNavCard 
                   icon={Plug} 
                   title="Integrações" 
@@ -515,7 +515,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('integrations')}
                 />
               )}
-              {checkPlan('Starter') && flags['reports'] !== false && (
+              {checkPlan('Starter') && (role === 'admin' || flags['reports'] !== false) && (
                 <QuickNavCard 
                   icon={BarChart3} 
                   title="Relatórios" 
