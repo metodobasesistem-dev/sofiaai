@@ -179,14 +179,15 @@ export default function Login() {
       const msg = error.message || 'Erro inesperado';
       
       let displayMsg = 'Erro: ' + msg;
-      if (error.status === 429 || msg.includes('rate limit')) {
-        displayMsg = 'Muitas tentativas! Por favor, aguarde alguns minutos antes de tentar novamente ou use outro e-mail.';
-      } else if (msg.includes('nome_completo')) {
-        displayMsg = 'Erro no banco: A coluna nome_completo não foi encontrada. Por favor, execute o script SQL novamente.';
-      }
-
       setFormError(displayMsg);
-      toast.error(displayMsg);
+      
+      // Se o erro for de e-mail não confirmado, mostra a tela de sucesso/verificação
+      if (msg.includes('Email not confirmed') || msg.includes('identity_not_confirmed')) {
+        setRegistrationSuccess(true);
+        toast.info('Sua conta ainda não foi confirmada. Verifique seu e-mail!');
+      } else {
+        toast.error(displayMsg);
+      }
     } finally {
       setIsLoading(false);
     }

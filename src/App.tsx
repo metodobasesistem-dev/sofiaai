@@ -89,6 +89,15 @@ export default function App() {
         setLoading(false);
         currentUserIdRef.current = null;
       } else {
+        // SEGURANÇA: Se o e-mail não estiver confirmado, desloga imediatamente
+        if (!currentUser.email_confirmed_at) {
+          console.warn('[App] Unconfirmed email detected. Access denied.');
+          supabase.auth.signOut();
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
         setUser(currentUser);
         currentUserIdRef.current = currentUser.id;
         if (event === 'TOKEN_REFRESHED') setLoading(false);
