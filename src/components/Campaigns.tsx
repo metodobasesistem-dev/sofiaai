@@ -6,6 +6,7 @@ import {
   Filter, 
   MoreVertical, 
   Trash2, 
+  Edit2,
   AlertCircle, 
   CheckCircle2, 
   Clock, 
@@ -80,6 +81,7 @@ export default function Campaigns() {
   ];
 
   const [processingCampaignId, setProcessingCampaignId] = useState<string | null>(null);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
 
   // Fetch Templates
   const fetchTemplates = async () => {
@@ -257,6 +259,33 @@ export default function Campaigns() {
     } finally {
       setProcessingCampaignId(null);
     }
+  };
+
+  const deleteCampaign = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta campanha?')) return;
+    try {
+      const { error } = await supabase.from('campaigns').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Campanha excluída com sucesso!');
+      fetchCampaigns();
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + err.message);
+    }
+  };
+
+  const handleEditCampaign = (campaign: Campaign) => {
+    setEditingCampaignId(campaign.id);
+    setCampaignData({
+      name: campaign.name,
+      targetType: campaign.target_type || 'all',
+      selectedLabels: campaign.selected_labels || '',
+      selectedFunnelStatus: campaign.selected_funnel_status || '',
+      templateId: campaign.template_id || '',
+      templateName: campaign.template_name || '',
+      variables: campaign.variables || {}
+    });
+    setCurrentStep(1);
+    setIsModalOpen(true);
   };
 
   useEffect(() => {
@@ -534,7 +563,7 @@ export default function Campaigns() {
                     const { data: { user } } = await supabase.auth.getUser();
                     if (!user) throw new Error('Usuário não autenticado');
 
-                    const { error } = await supabase.from('campaigns').insert({
+                    const campaignPayload = {
                       tenant_id: user.id,
                       name: campaignData.name,
                       template_name: campaignData.templateName,
@@ -544,15 +573,23 @@ export default function Campaigns() {
                       selected_funnel_status: campaignData.targetType === 'funnel' ? campaignData.selectedFunnelStatus : null,
                       variables: campaignData.variables,
                       status: 'pending',
-                      total_contacts: 0, // This is calculated dynamically when processing starts
+                      total_contacts: 0,
                       sent_count: 0,
                       error_count: 0
-                    });
+                    };
 
-                    if (error) throw error;
+                    if (editingCampaignId) {
+                       const { error } = await supabase.from('campaigns').update(campaignPayload).eq('id', editingCampaignId);
+                       if (error) throw error;
+                       toast.success('Campanha atualizada com sucesso!');
+                    } else {
+                       const { error } = await supabase.from('campaigns').insert(campaignPayload);
+                       if (error) throw error;
+                       toast.success('Campanha criada com sucesso!');
+                    }
 
-                    toast.success('Campanha criada com sucesso!');
                     setIsModalOpen(false);
+                    setEditingCampaignId(null);
                     fetchCampaigns();
                   } catch (err: any) {
                     toast.error('Erro ao criar campanha: ' + err.message);
@@ -598,6 +635,8 @@ export default function Campaigns() {
         <div className="flex items-center gap-3 relative z-10">
           <button 
             onClick={() => {
+              setEditingCampaignId(null);
+              setCampaignData({ name: '', targetType: 'all', selectedLabels: '', selectedFunnelStatus: '', templateId: '', templateName: '', variables: {} });
               setCurrentStep(1);
               setIsModalOpen(true);
             }}
@@ -690,7 +729,32 @@ export default function Campaigns() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-4">
+                      {campaign.status === 'pending' && (
+                        <div className="flex items-center gap-2 mr-2">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditCampaign(campaign);
+                            }}
+                            title="Editar Campanha"
+                            className="p-2.5 text-slate-400 bg-slate-50 hover:bg-primary-50 hover:text-primary-600 rounded-xl transition-all"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteCampaign(campaign.id);
+                            }}
+                            title="Excluir Campanha"
+                            className="p-2.5 text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+
                       {campaign.status === 'pending' && (
                         <button 
                           onClick={(e) => {
