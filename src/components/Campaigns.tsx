@@ -37,11 +37,22 @@ interface Campaign {
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'templates'>('campaigns');
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  
+  const [newTemplate, setNewTemplate] = useState({
+    name: '',
+    category: 'MARKETING',
+    variables_count: 0,
+    language: 'pt_BR'
+  });
+
   const [campaignData, setCampaignData] = useState({
     name: '',
     targetType: 'all' as 'all' | 'labels' | 'funnel',
@@ -63,11 +74,19 @@ export default function Campaigns() {
     { id: 'status_funil', label: 'Status do Funil' }
   ];
 
-  const mockTemplates = [
-    { id: '1', name: 'saudacao_cliente_novo', category: 'Marketing', lang: 'PT_BR', vars: 1 },
-    { id: '2', name: 'lembrete_agendamento_v2', category: 'Utilidade', lang: 'PT_BR', vars: 2 },
-    { id: '3', name: 'recuperacao_carrinho_sofia', category: 'Marketing', lang: 'PT_BR', vars: 0 }
-  ];
+  // Fetch Templates
+  const fetchTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('message_templates')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (err: any) {
+      toast.error('Erro ao carregar modelos: ' + err.message);
+    }
+  };
 
   // Fetch Campaigns
   const fetchCampaigns = async () => {
@@ -89,6 +108,7 @@ export default function Campaigns() {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchTemplates();
   }, []);
 
   const getStatusBadge = (status: string) => {
@@ -227,13 +247,17 @@ export default function Campaigns() {
           </div>
         );
       case 2:
-        const selectedTemplate = mockTemplates.find(t => t.id === campaignData.templateId);
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="space-y-4">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Selecione o Modelo</label>
               <div className="grid grid-cols-1 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                {mockTemplates.map(template => (
+                {templates.length === 0 ? (
+                  <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                     <p className="text-sm font-bold text-slate-400">Nenhum modelo cadastrado.</p>
+                     <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Vá em "Gerenciar Modelos" primeiro.</p>
+                  </div>
+                ) : templates.map(template => (
                   <button
                     key={template.id}
                     onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
@@ -245,7 +269,11 @@ export default function Campaigns() {
                   >
                     <div>
                       <p className="text-sm font-black text-slate-900">{template.name}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
+                      <div className="flex items-center gap-3">
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
+                         <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</p>
+                      </div>
                     </div>
                     {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
                   </button>
@@ -253,34 +281,41 @@ export default function Campaigns() {
               </div>
             </div>
 
-            {selectedTemplate && selectedTemplate.vars > 0 && (
-              <div className="p-6 bg-slate-900 rounded-[2rem] space-y-6 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
-                <div className="flex items-center gap-2 text-white">
-                   <Sparkles className="text-amber-400" size={20} />
-                   <h4 className="text-sm font-black">Personalização da Mensagem</h4>
-                </div>
+            {campaignData.templateId && (
+              (() => {
+                const selectedTemplate = templates.find(t => t.id === campaignData.templateId);
+                if (!selectedTemplate || selectedTemplate.variables_count === 0) return null;
                 
-                <div className="space-y-4">
-                  {Array.from({ length: selectedTemplate.vars }).map((_, i) => (
-                    <div key={i} className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variável {"{{"}{i+1}{"}}"}</label>
-                      <select
-                        value={campaignData.variables[`var${i+1}`] || ''}
-                        onChange={e => setCampaignData({
-                          ...campaignData, 
-                          variables: { ...campaignData.variables, [`var${i+1}`]: e.target.value }
-                        })}
-                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary-500 outline-none transition-all font-bold"
-                      >
-                        <option value="">Selecione o campo do contato...</option>
-                        {contactFields.map(field => (
-                          <option key={field.id} value={field.id}>{field.label}</option>
-                        ))}
-                      </select>
+                return (
+                  <div className="p-6 bg-slate-900 rounded-[2rem] space-y-6 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
+                    <div className="flex items-center gap-2 text-white">
+                       <Sparkles className="text-amber-400" size={20} />
+                       <h4 className="text-sm font-black">Personalização da Mensagem</h4>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    
+                    <div className="space-y-4">
+                      {Array.from({ length: selectedTemplate.variables_count }).map((_, i) => (
+                        <div key={i} className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variável {"{{"}{i+1}{"}}"}</label>
+                          <select
+                            value={campaignData.variables[`var${i+1}`] || ''}
+                            onChange={e => setCampaignData({
+                              ...campaignData, 
+                              variables: { ...campaignData.variables, [`var${i+1}`]: e.target.value }
+                            })}
+                            className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary-500 outline-none transition-all font-bold"
+                          >
+                            <option value="">Selecione o campo do contato...</option>
+                            {contactFields.map(field => (
+                              <option key={field.id} value={field.id}>{field.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()
             )}
 
             <div className="flex items-center gap-4 pt-4">
@@ -402,129 +437,178 @@ export default function Campaigns() {
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Campanhas Oficiais</h1>
           </div>
           <p className="text-slate-500 max-w-md">
-            Dispare mensagens em massa utilizando modelos aprovados pela Meta com segurança e alta taxa de entrega.
+            Gerencie seus modelos e dispare mensagens em massa com segurança Meta.
           </p>
         </div>
 
-        <button 
-          onClick={() => {
-            setCurrentStep(1);
-            setIsModalOpen(true);
-          }}
-          className="relative z-10 flex items-center justify-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 group"
+        <div className="flex items-center gap-3 relative z-10">
+          <button 
+            onClick={() => {
+              setCurrentStep(1);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center justify-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 group"
+          >
+            <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+            Nova Campanha
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl w-fit">
+        <button
+          onClick={() => setActiveTab('campaigns')}
+          className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activeTab === 'campaigns' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+          }`}
         >
-          <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-          Nova Campanha
+          Disparos
+        </button>
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activeTab === 'templates' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Modelos de Mensagem
         </button>
       </div>
 
-      {/* Warning Banner */}
-      <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-start gap-4">
-        <div className="p-2 bg-white rounded-xl text-amber-600 shadow-sm shrink-0">
-          <Info size={20} />
-        </div>
-        <div className="text-sm text-amber-900 leading-relaxed">
-          <p className="font-black uppercase tracking-wider text-[10px] mb-1">Compliance e Segurança</p>
-          <p>Para evitar bloqueios, o disparo oficial só permite o uso de **Modelos (Templates)** previamente aprovados pela Meta. Mensagens fora de padrão não serão enviadas.</p>
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" size={20} />
-          <input 
-            type="text" 
-            placeholder="Pesquisar campanhas..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 transition-all text-sm font-medium"
-          />
-        </div>
-      </div>
-
-      {/* Campaigns List */}
-      <div className="grid grid-cols-1 gap-4">
-        {isLoading ? (
-          Array(3).fill(0).map((_, i) => (
-            <div key={i} className="h-32 bg-white rounded-2xl border border-slate-100 animate-pulse" />
-          ))
-        ) : campaigns.length === 0 ? (
-          <div className="py-20 flex flex-col items-center justify-center text-center bg-white rounded-3xl border border-dashed border-slate-200">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-6">
-              <Send size={40} />
+      {activeTab === 'campaigns' ? (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          {/* Search and Filters */}
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" size={20} />
+              <input 
+                type="text" 
+                placeholder="Pesquisar campanhas..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 transition-all text-sm font-medium"
+              />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Nenhuma campanha criada</h2>
-            <p className="text-slate-500 max-w-sm">Você ainda não realizou nenhum disparo oficial. Clique em "Nova Campanha" para começar.</p>
           </div>
-        ) : (
-          campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((campaign) => (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              key={campaign.id}
-              className="group bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary-200 hover:shadow-xl hover:shadow-primary-500/5 transition-all cursor-pointer"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-5 flex-1 min-w-0">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${
-                    campaign.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                    campaign.status === 'failed' ? 'bg-red-50 text-red-600 border-red-100' :
-                    'bg-slate-50 text-slate-600 border-slate-100'
-                  }`}>
-                    <Layout size={24} />
-                  </div>
-                  
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="font-bold text-slate-900 truncate">{campaign.name}</h3>
-                      {getStatusBadge(campaign.status)}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-slate-400 font-medium">
-                      <span className="flex items-center gap-1"><Sparkles size={14}/> Template: {campaign.template_name}</span>
-                      <span className="flex items-center gap-1"><Users size={14}/> {campaign.total_contacts} contatos</span>
-                      <span className="flex items-center gap-1"><Clock size={14}/> {new Date(campaign.created_at).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-8">
-                  <div className="hidden md:flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Enviadas</p>
-                      <p className="text-lg font-black text-slate-900 tabular-nums">{campaign.sent_count}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Erros</p>
-                      <p className={`text-lg font-black tabular-nums ${campaign.error_count > 0 ? 'text-red-500' : 'text-slate-900'}`}>{campaign.error_count}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-2 text-slate-300 group-hover:text-primary-500 group-hover:translate-x-1 transition-all">
-                    <ChevronRight size={24} />
-                  </div>
+          {/* Campaigns List */}
+          <div className="grid grid-cols-1 gap-4">
+            {isLoading ? (
+              Array(3).fill(0).map((_, i) => (
+                <div key={i} className="h-32 bg-white rounded-2xl border border-slate-100 animate-pulse" />
+              ))
+            ) : campaigns.length === 0 ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center bg-white rounded-3xl border border-dashed border-slate-200">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-6">
+                  <Send size={40} />
                 </div>
+                <h2 className="text-xl font-bold text-slate-900 mb-2">Nenhuma campanha criada</h2>
+                <p className="text-slate-500 max-w-sm">Você ainda não realizou nenhum disparo oficial. Clique em "Nova Campanha" para começar.</p>
               </div>
+            ) : (
+              campaigns.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((campaign) => (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={campaign.id}
+                  className="group bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary-200 hover:shadow-xl hover:shadow-primary-500/5 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-5 flex-1 min-w-0">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${
+                        campaign.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                        campaign.status === 'failed' ? 'bg-red-50 text-red-600 border-red-100' :
+                        'bg-slate-50 text-slate-600 border-slate-100'
+                      }`}>
+                        <Layout size={24} />
+                      </div>
+                      
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="font-bold text-slate-900 truncate">{campaign.name}</h3>
+                          {getStatusBadge(campaign.status)}
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-slate-400 font-medium">
+                          <span className="flex items-center gap-1"><Sparkles size={14}/> Template: {campaign.template_name}</span>
+                          <span className="flex items-center gap-1"><Users size={14}/> {campaign.total_contacts} contatos</span>
+                          <span className="flex items-center gap-1"><Clock size={14}/> {new Date(campaign.created_at).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      </div>
+                    </div>
 
-              {campaign.status === 'sending' && (
-                <div className="mt-6 pt-6 border-t border-slate-50">
-                   <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                     <span>Progresso do Disparo</span>
-                     <span>{Math.round((campaign.sent_count / campaign.total_contacts) * 100)}%</span>
+                    <div className="flex items-center gap-8">
+                      <div className="hidden md:flex items-center gap-6">
+                        <div className="text-right">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Enviadas</p>
+                          <p className="text-lg font-black text-slate-900 tabular-nums">{campaign.sent_count}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Erros</p>
+                          <p className={`text-lg font-black tabular-nums ${campaign.error_count > 0 ? 'text-red-500' : 'text-slate-900'}`}>{campaign.error_count}</p>
+                        </div>
+                      </div>
+
+                      <div className="p-2 text-slate-300 group-hover:text-primary-500 group-hover:translate-x-1 transition-all">
+                        <ChevronRight size={24} />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6 animate-in fade-in duration-500">
+           <div className="flex items-center justify-between">
+              <h2 className="text-xl font-black text-slate-900">Modelos Cadastrados</h2>
+              <button 
+                onClick={() => setIsTemplateModalOpen(true)}
+                className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+              >
+                <Plus size={16} /> Novo Modelo
+              </button>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {templates.length === 0 ? (
+                <div className="col-span-full py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-center">
+                   <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
+                      <Layout size={32} />
                    </div>
-                   <div className="h-1.5 bg-slate-50 rounded-full overflow-hidden">
-                     <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(campaign.sent_count / campaign.total_contacts) * 100}%` }}
-                        className="h-full bg-primary-500"
-                     />
+                   <p className="text-sm font-bold text-slate-500">Nenhum modelo cadastrado ainda.</p>
+                   <p className="text-xs text-slate-400 mt-1">Cadastre seus modelos da Meta aqui primeiro.</p>
+                </div>
+              ) : templates.map(template => (
+                <div key={template.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group relative">
+                   <div className="flex items-center justify-between mb-4">
+                      <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
+                         <Layout size={20} />
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          if (confirm('Deseja excluir este modelo?')) {
+                            await supabase.from('message_templates').delete().eq('id', template.id);
+                            fetchTemplates();
+                            toast.success('Modelo excluído');
+                          }
+                        }}
+                        className="p-2 text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                         <Trash2 size={18} />
+                      </button>
+                   </div>
+                   <h3 className="font-black text-slate-900 mb-1 truncate">{template.name}</h3>
+                   <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-primary-600 bg-primary-50 px-2 py-0.5 rounded uppercase tracking-widest">{template.category}</span>
+                      <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</span>
                    </div>
                 </div>
-              )}
-            </motion.div>
-          ))
-        )}
-      </div>
+              ))}
+           </div>
+        </div>
+      )}
 
       {/* Modal - New Campaign Wizard */}
       <AnimatePresence>
@@ -571,6 +655,88 @@ export default function Campaigns() {
 
               <div className="p-10">
                  {renderWizard()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal - New Template */}
+      <AnimatePresence>
+        {isTemplateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden p-10 space-y-8"
+            >
+              <div>
+                <h2 className="text-2xl font-black text-slate-900">Novo Modelo</h2>
+                <p className="text-sm text-slate-400">Cadastre o nome exato do modelo aprovado na Meta.</p>
+              </div>
+
+              <div className="space-y-6">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Modelo (Exatamente como na Meta)</label>
+                    <input 
+                      type="text" 
+                      placeholder="saudacao_cliente_v1"
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 font-bold"
+                      value={newTemplate.name}
+                      onChange={e => setNewTemplate({...newTemplate, name: e.target.value})}
+                    />
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoria</label>
+                       <select 
+                         className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 font-bold"
+                         value={newTemplate.category}
+                         onChange={e => setNewTemplate({...newTemplate, category: e.target.value})}
+                       >
+                          <option value="MARKETING">Marketing</option>
+                          <option value="UTILITY">Utilidade</option>
+                          <option value="AUTHENTICATION">Autenticação</option>
+                       </select>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variáveis ({{1}}, {{2}}...)</label>
+                       <input 
+                         type="number" 
+                         className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 font-bold"
+                         value={newTemplate.variables_count}
+                         onChange={e => setNewTemplate({...newTemplate, variables_count: parseInt(e.target.value) || 0})}
+                       />
+                    </div>
+                 </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                 <button onClick={() => setIsTemplateModalOpen(false)} className="px-8 py-5 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all flex-1">Cancelar</button>
+                 <button 
+                  onClick={async () => {
+                    try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user?.id).single();
+                      
+                      await supabase.from('message_templates').insert({
+                        ...newTemplate,
+                        tenant_id: profile?.tenant_id
+                      });
+                      toast.success('Modelo cadastrado!');
+                      setIsTemplateModalOpen(false);
+                      setNewTemplate({ name: '', category: 'MARKETING', variables_count: 0, language: 'pt_BR' });
+                      fetchTemplates();
+                    } catch (err) {
+                      toast.error('Erro ao salvar modelo');
+                    }
+                  }}
+                  className="px-8 py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex-2 shadow-xl shadow-slate-200"
+                 >
+                   Salvar Modelo
+                 </button>
               </div>
             </motion.div>
           </div>
