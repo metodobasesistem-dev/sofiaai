@@ -184,7 +184,7 @@ export default function Overview() {
               {globalStatus}
             </div>
           </h1>
-          <p className="text-slate-500 font-medium mt-1">Torre de controle e clareza operacional do WppAI.</p>
+          <p className="text-slate-500 font-medium mt-1">Torre de controle e clareza operacional da Sofia.</p>
         </div>
         
         <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
@@ -234,7 +234,7 @@ export default function Overview() {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <div className="w-2 h-2 rounded-full bg-primary-500" />
                 <span className="text-[10px] font-bold text-slate-600 uppercase">IA</span>
               </div>
               <div className="flex items-center gap-1.5">

@@ -99,7 +99,7 @@ const SpecificDateModal = ({ isOpen, onClose, onSave }: { isOpen: boolean, onClo
           key={day} 
           onClick={() => setSelectedDate(date)}
           className={`py-2 rounded-lg cursor-pointer transition-all font-medium text-center
-            ${isSelected ? 'bg-emerald-500 text-white shadow-md' : isToday ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'hover:bg-white hover:shadow-sm text-gray-600'}`}
+            ${isSelected ? 'bg-emerald-500 text-white shadow-md' : isToday ? 'bg-primary-50 text-primary-600 border border-primary-200' : 'hover:bg-white hover:shadow-sm text-gray-600'}`}
         >
           {day}
         </div>

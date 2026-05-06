@@ -40,7 +40,7 @@ const AppointmentCard: React.FC<{
       {/* Date & Time Section (Clickable) */}
       <div 
         onClick={() => onViewDetails(appointment)}
-        className="flex flex-row sm:flex-col items-center justify-center bg-blue-50 rounded-xl p-4 min-w-[100px] text-blue-600 border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors group"
+        className="flex flex-row sm:flex-col items-center justify-center bg-primary-50 rounded-xl p-4 min-w-[100px] text-primary-600 border border-primary-100 cursor-pointer hover:bg-primary-100 transition-colors group"
       >
         <span className="text-xs font-bold uppercase tracking-wider opacity-70 group-hover:scale-110 transition-transform">{appointment.dateLabel.split(' ')[0]}</span>
         <span className="text-2xl font-black leading-none my-1 group-hover:scale-110 transition-transform">{appointment.dateLabel.split(' ')[1]}</span>
@@ -59,7 +59,7 @@ const AppointmentCard: React.FC<{
           </span>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Bot size={14} className="text-blue-500" />
+          <Bot size={14} className="text-primary-500" />
           <span>Marcado por <span className="font-semibold text-gray-700">{appointment.agent}</span></span>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
           <button 
             onClick={() => setView('list')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all
-              ${view === 'list' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-gray-500 hover:bg-gray-50'}`}
+              ${view === 'list' ? 'bg-primary-600 text-white shadow-md shadow-primary-200' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <List size={18} />
             Lista
@@ -248,7 +248,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
           <button 
             onClick={() => setView('calendar')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all
-              ${view === 'calendar' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-gray-500 hover:bg-gray-50'}`}
+              ${view === 'calendar' ? 'bg-primary-600 text-white shadow-md shadow-primary-200' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <CalendarIcon size={18} />
             Calendário
@@ -305,7 +305,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
           {/* Empty State / Load More */}
           {appointments.length > 0 && (
             <div className="pt-4 flex justify-center">
-              <button className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-2">
+              <button className="text-sm font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-2">
                 Ver agendamentos passados
               </button>
             </div>
@@ -351,7 +351,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                 <div 
                   key={day.toString()}
                   className={`min-h-[100px] p-2 border-r border-b border-gray-50 transition-colors
-                    ${!isSameMonth(day, monthStart) ? 'bg-gray-50/50' : 'bg-white hover:bg-blue-50/10'}`}
+                    ${!isSameMonth(day, monthStart) ? 'bg-gray-50/50' : 'bg-white hover:bg-primary-50/10'}`}
                 >
                   <span className={`text-xs font-bold ${!isSameMonth(day, monthStart) ? 'text-gray-300' : 'text-gray-500'}`}>
                     {format(day, 'd')}
@@ -361,7 +361,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                       <div 
                         key={app.id}
                         onClick={() => openDetailsModal(app)}
-                        className="text-[9px] font-bold p-1 bg-blue-100 text-blue-700 rounded truncate cursor-pointer hover:bg-blue-200 transition-colors"
+                        className="text-[9px] font-bold p-1 bg-primary-100 text-primary-700 rounded truncate cursor-pointer hover:bg-primary-200 transition-colors"
                       >
                         {app.time} - {app.clientName}
                       </div>
@@ -396,7 +396,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                   type="text"
                   value={editFormData.clientName}
                   onChange={e => setEditFormData({...editFormData, clientName: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 outline-none text-sm"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 outline-none text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -406,7 +406,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                     type="date"
                     value={editFormData.date}
                     onChange={e => setEditFormData({...editFormData, date: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 outline-none text-sm"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 outline-none text-sm"
                   />
                 </div>
                 <div>
@@ -415,7 +415,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                     type="time"
                     value={editFormData.time}
                     onChange={e => setEditFormData({...editFormData, time: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 outline-none text-sm"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 outline-none text-sm"
                   />
                 </div>
               </div>
@@ -430,7 +430,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
               </button>
               <button 
                 onClick={handleSaveEdit}
-                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all"
+                className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 shadow-lg shadow-primary-200 transition-all"
               >
                 Salvar Alterações
               </button>
@@ -447,7 +447,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
           >
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-blue-600 text-white">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary-600 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">
                   {selectedAppointment.clientName[0]}
@@ -468,7 +468,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                 <div>
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Data da Reunião</label>
                   <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <CalendarDays size={16} className="text-blue-500" />
+                    <CalendarDays size={16} className="text-primary-500" />
                     {selectedAppointment.dateLabel} às {selectedAppointment.time}
                   </p>
                 </div>
@@ -484,7 +484,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
               {/* Context Summary */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-gray-900">
-                  <MessageSquare size={18} className="text-blue-500" />
+                  <MessageSquare size={18} className="text-primary-500" />
                   <h4 className="font-bold">Contexto do Atendimento</h4>
                 </div>
                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
@@ -545,7 +545,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
           >
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-blue-600 text-white">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary-600 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">
                   {selectedAppointment.clientName[0]}
@@ -566,7 +566,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
                 <div>
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Data da Reunião</label>
                   <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <CalendarDays size={16} className="text-blue-500" />
+                    <CalendarDays size={16} className="text-primary-500" />
                     {selectedAppointment.dateLabel} às {selectedAppointment.time}
                   </p>
                 </div>
@@ -582,7 +582,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
               {/* Context Summary */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-gray-900">
-                  <MessageSquare size={18} className="text-blue-500" />
+                  <MessageSquare size={18} className="text-primary-500" />
                   <h4 className="font-bold">Contexto do Atendimento</h4>
                 </div>
                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">

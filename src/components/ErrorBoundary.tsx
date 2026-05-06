@@ -56,11 +56,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
           {/* Background Decorative Elements */}
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/50 rounded-full blur-[120px]" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100/50 rounded-full blur-[120px]" />
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-100/50 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-100/50 rounded-full blur-[120px]" />
 
-          <div className="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-white p-10 text-center relative z-10">
-            <div className="w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-blue-500/20">
+          <div className="max-w-md w-full bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-2xl shadow-primary-900/5 border border-white p-10 text-center relative z-10">
+            <div className="w-20 h-20 bg-gradient-to-tr from-primary-600 to-primary-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-primary-500/20">
               <RotateCcw size={40} className="animate-spin" style={{ animationDuration: '3s' }} />
             </div>
             
@@ -79,7 +79,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </button>
 
             <div className="mt-8 pt-8 border-t border-slate-100">
-               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest italic">WppAI Ecosystem v3.0</p>
+               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest italic">Sofia Ecosystem v3.0</p>
             </div>
           </div>
         </div>

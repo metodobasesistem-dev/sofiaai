@@ -94,7 +94,7 @@ export default function Reports() {
   if (loading) {
     return (
       <div className="h-[60vh] flex items-center justify-center">
-        <Loader2 size={40} className="animate-spin text-blue-600" />
+        <Loader2 size={40} className="animate-spin text-primary-600" />
       </div>
     );
   }
@@ -276,7 +276,7 @@ export default function Reports() {
         <ReportCard title="Distribuição de Qualidade" subtitle="Nível de Interesse dos Leads" icon={Sparkles}>
           <div className="flex items-center justify-center h-[200px] gap-12">
             <div className="text-center">
-              <div className="text-4xl font-black text-blue-600 mb-1">{stats.contacts}</div>
+              <div className="text-4xl font-black text-primary-600 mb-1">{stats.contacts}</div>
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Leads Totais</div>
             </div>
             <div className="w-px h-12 bg-slate-100" />
@@ -300,11 +300,11 @@ export default function Reports() {
             <div>
               <div className="flex justify-between text-xs font-bold mb-2">
                 <span className="text-slate-600">Alcançar 20% de Conversão</span>
-                <span className="text-blue-600">{stats.conversionRate}% / 20%</span>
+                <span className="text-primary-600">{stats.conversionRate}% / 20%</span>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-blue-500 transition-all duration-1000" 
+                  className="h-full bg-primary-500 transition-all duration-1000" 
                   style={{ width: `${Math.min(100, (stats.conversionRate / 20) * 100)}%` }}
                 />
               </div>

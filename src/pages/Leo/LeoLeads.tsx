@@ -13,7 +13,7 @@ export default function LeoLeads() {
       novo: 'bg-gray-100 text-gray-600',
       qualificado: 'bg-amber-100 text-amber-600',
       passado_sofia: 'bg-emerald-100 text-emerald-600',
-      convertido: 'bg-blue-100 text-blue-600',
+      convertido: 'bg-primary-100 text-primary-600',
       perdido: 'bg-red-100 text-red-600',
     };
     return <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${styles[status]}`}>{status.replace('_', ' ')}</span>;

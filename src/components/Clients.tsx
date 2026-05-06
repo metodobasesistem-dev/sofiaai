@@ -71,13 +71,13 @@ const getInitials = (name: string) => {
 };
 
 const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500',
+  'bg-violet-500', 'bg-primary-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-cyan-500', 'bg-primary-500', 'bg-teal-500',
 ];
 const getAvatarColor = (id: string) => AVATAR_COLORS[(id.charCodeAt(0) + id.charCodeAt(1)) % AVATAR_COLORS.length];
 
 const FUNIL_STYLES: Record<Contact['status_funil'], { label: string; className: string; icon: React.ReactNode }> = {
-  Lead:       { label: 'Lead',       className: 'bg-blue-50 text-blue-700 border-blue-200',     icon: <Zap size={10} /> },
+  Lead:       { label: 'Lead',       className: 'bg-primary-50 text-primary-700 border-primary-200',     icon: <Zap size={10} /> },
   Qualificado:{ label: 'Qualificado',className: 'bg-green-50 text-green-700 border-green-200',   icon: <CheckCircle2 size={10} /> },
   Cliente:    { label: 'Cliente',    className: 'bg-amber-50 text-amber-700 border-amber-200',   icon: <Star size={10} /> },
 };
@@ -236,9 +236,9 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
           ) : (
             <div className="space-y-2">
               {appointments.map((appt) => (
-                <div key={appt.id} className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                  <p className="text-xs font-bold text-blue-800">{appt.date} às {appt.time}</p>
-                  <p className="text-xs text-blue-600">{appt.summary || appt.niche || 'Consulta'}</p>
+                <div key={appt.id} className="bg-primary-50 border border-primary-100 rounded-xl p-3">
+                  <p className="text-xs font-bold text-primary-800">{appt.date} às {appt.time}</p>
+                  <p className="text-xs text-primary-600">{appt.summary || appt.niche || 'Consulta'}</p>
                 </div>
               ))}
             </div>
@@ -275,7 +275,7 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
       <div className="p-4 border-t border-gray-100 flex gap-3">
         <button
           onClick={openInbox}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm shadow-primary-200"
         >
           <MessageSquare size={16} /> Abrir Chat
         </button>
@@ -394,9 +394,9 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
             <p className="text-3xl font-black text-gray-900">{contacts.length}</p>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-2 text-blue-600 mb-2">
+            <div className="flex items-center gap-2 text-primary-600 mb-2">
               <MessageSquare size={16} />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500">Conversas Ativas</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-primary-500">Conversas Ativas</span>
             </div>
             <p className="text-3xl font-black text-gray-900">{contacts.filter(c => c.totalMensagens && c.totalMensagens > 0).length}</p>
           </div>
@@ -495,7 +495,7 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={(e) => { e.stopPropagation(); openInbox(client.telefone); }}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
                               title="Conversar"
                             >
                               <MessageSquare size={18} />

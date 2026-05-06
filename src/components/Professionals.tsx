@@ -148,7 +148,7 @@ export default function Professionals() {
           </p>
           <button 
             onClick={handleAddNew}
-            className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+            className="px-8 py-3 bg-primary-600 text-white rounded-2xl font-bold text-sm hover:bg-primary-700 transition-all shadow-lg shadow-primary-100"
           >
             Cadastrar Primeiro Membro
           </button>
@@ -183,7 +183,7 @@ export default function Professionals() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEdit(p)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                  <button onClick={() => handleEdit(p)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all">
                     <Edit2 size={16} />
                   </button>
                   <button onClick={() => handleDelete(p.id!)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
@@ -205,7 +205,7 @@ export default function Professionals() {
                 </div>
 
                 {p.googleCalendarId && (
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 p-2 rounded-xl">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-primary-600 bg-primary-50 p-2 rounded-xl">
                     <Calendar size={14} /> Agenda Google Vinculada
                   </div>
                 )}
@@ -246,7 +246,7 @@ export default function Professionals() {
                     value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
                     placeholder="Ex: João da Silva"
-                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:bg-white transition-all font-medium text-slate-900"
+                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-600/10 focus:bg-white transition-all font-medium text-slate-900"
                   />
                 </div>
 
@@ -257,7 +257,7 @@ export default function Professionals() {
                     value={formData.specialties}
                     onChange={e => setFormData({...formData, specialties: e.target.value})}
                     placeholder="Ex: Corte de Cabelo, Barba, Sobrancelha"
-                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:bg-white transition-all font-medium text-slate-900"
+                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-600/10 focus:bg-white transition-all font-medium text-slate-900"
                   />
                 </div>
 
@@ -268,7 +268,7 @@ export default function Professionals() {
                       href="https://calendar.google.com/calendar/u/0/r/settings" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                      className="text-[9px] font-bold text-primary-600 hover:underline flex items-center gap-1"
                     >
                       Como achar o ID?
                     </a>
@@ -278,7 +278,7 @@ export default function Professionals() {
                     value={formData.googleCalendarId}
                     onChange={e => setFormData({...formData, googleCalendarId: e.target.value})}
                     placeholder="ex: barbeiro.joao@gmail.com ou ID secundário"
-                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:bg-white transition-all font-medium text-slate-900"
+                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-600/10 focus:bg-white transition-all font-medium text-slate-900"
                   />
                   <p className="text-[10px] text-slate-400 mt-2 italic">
                     * Use o e-mail do profissional ou o "ID da agenda" nas configurações do Google Calendar. 
@@ -293,7 +293,7 @@ export default function Professionals() {
                     value={formData.bio}
                     onChange={e => setFormData({...formData, bio: e.target.value})}
                     placeholder="Ex: Especialista em cortes clássicos com mais de 10 anos de experiência..."
-                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600/10 focus:bg-white transition-all font-medium text-slate-900 resize-none"
+                    className="w-full px-5 py-4 bg-slate-50 rounded-2xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-600/10 focus:bg-white transition-all font-medium text-slate-900 resize-none"
                   />
                 </div>
 
@@ -301,7 +301,7 @@ export default function Professionals() {
                   <button 
                     type="submit" 
                     disabled={isSaving}
-                    className="flex-1 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                    className="flex-1 px-8 py-4 bg-primary-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-primary-100 hover:bg-primary-700 transition-all flex items-center justify-center gap-2"
                   >
                     {isSaving ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />}
                     {editingProf ? 'Salvar Alterações' : 'Finalizar Cadastro'}

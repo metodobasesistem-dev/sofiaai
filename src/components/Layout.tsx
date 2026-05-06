@@ -469,11 +469,11 @@ export default function Layout({
               className="fixed inset-y-0 left-0 w-64 bg-white z-50 md:hidden flex flex-col shadow-2xl"
             >
               <div className="p-6 flex items-center justify-between border-bottom border-gray-100">
-                <div className="flex items-center gap-2 font-bold text-xl text-blue-600">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                <div className="flex items-center gap-2 font-bold text-xl text-sofia-purple">
+                  <div className="w-8 h-8 bg-sofia-purple rounded-lg flex items-center justify-center text-white">
                     <Bot size={20} />
                   </div>
-                  <span>WppAI</span>
+                  <span>Sofia</span>
                 </div>
                 <button onClick={() => setMobileMenuOpen(false)} className="hidden">
                   <X size={24} />
@@ -504,7 +504,7 @@ export default function Layout({
                             onClick={() => handleTabClick(sub.id)}
                             className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
                               ${activeTab === sub.id 
-                                ? 'text-blue-600 font-semibold' 
+                                ? 'text-primary-600 font-semibold' 
                                 : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                               }`}
                           >
@@ -614,7 +614,7 @@ export default function Layout({
                   </AnimatePresence>
                   
                   <div className="mt-4 px-4 pb-2">
-                    <p className="text-[10px] text-gray-300 font-medium text-center">WppAi System v1.0.5</p>
+                    <p className="text-[10px] text-gray-300 font-medium text-center">Sofia System v1.0.5</p>
                   </div>
                 </div>
               </div>
@@ -743,7 +743,7 @@ export default function Layout({
 
         <button 
           onClick={() => onTabChange('integrations')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-blue-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-primary-600' : 'text-slate-400'}`}
         >
           <Layers size={22} />
           <span className="text-[10px] font-bold uppercase tracking-wider">Integrações</span>
@@ -760,7 +760,7 @@ export default function Layout({
         {role === 'admin' && (
           <button 
             onClick={() => onTabChange('admin_hub')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'admin_hub' ? 'text-indigo-600' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'admin_hub' ? 'text-primary-600' : 'text-slate-400'}`}
           >
             <Shield size={22} fill={activeTab === 'admin_hub' ? 'currentColor' : 'none'} className={activeTab === 'admin_hub' ? 'opacity-20' : ''} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Admin</span>

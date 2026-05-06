@@ -53,10 +53,10 @@ interface PlanCardProps {
 
 const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps) => (
   <div className={`relative bg-white p-8 rounded-2xl border-2 transition-all flex flex-col h-full
-    ${popular ? 'border-teal-600 shadow-xl shadow-teal-100 scale-105 z-10' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+    ${popular ? 'border-primary-600 shadow-xl shadow-primary-100 scale-105 z-10' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
     
     {popular && (
-      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-full shadow-lg">
+      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary-600 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-full shadow-lg">
         Mais Popular
       </div>
     )}
@@ -72,7 +72,7 @@ const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps)
     <ul className="space-y-4 mb-8 flex-1">
       {benefits.map((benefit, index) => (
         <li key={index} className="flex items-start gap-3 text-sm text-gray-600">
-          <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${popular ? 'bg-teal-100 text-teal-600' : 'bg-gray-100 text-gray-400'}`}>
+          <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${popular ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-400'}`}>
             <Check size={12} />
           </div>
           {benefit}
@@ -82,7 +82,7 @@ const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps)
 
     <button className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
       ${popular 
-        ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-md shadow-teal-200' 
+        ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-md shadow-primary-200' 
         : 'bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
       {buttonText}
       <ArrowRight size={16} />
@@ -399,7 +399,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-teal-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -444,7 +444,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
                       <User size={20} />
                     </div>
                     <div>
@@ -463,7 +463,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={formData.nome_completo}
                         onChange={e => setFormData({...formData, nome_completo: e.target.value})}
                         placeholder="Seu nome completo"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                     <div>
@@ -483,7 +483,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={formData.nome_empresa}
                         onChange={e => setFormData({...formData, nome_empresa: e.target.value})}
                         placeholder="Nome da sua empresa"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                     <div>
@@ -493,7 +493,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={formData.whatsapp_organizacao}
                         onChange={e => setFormData({...formData, whatsapp_organizacao: e.target.value})}
                         placeholder="Ex: 5511999999999"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                     <div>
@@ -503,7 +503,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={formData.notification_phone}
                         onChange={e => setFormData({...formData, notification_phone: e.target.value})}
                         placeholder="Ex: 5511999999999"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -512,7 +512,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     <button 
                       onClick={handleSaveProfile}
                       disabled={isSaving}
-                      className="px-6 py-2.5 bg-teal-500/50 hover:bg-teal-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2 disabled:opacity-50"
+                      className="px-6 py-2.5 bg-primary-500/50 hover:bg-primary-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                       Salvar alterações
@@ -525,7 +525,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
                       <Zap size={20} />
                     </div>
                     <div>
@@ -544,7 +544,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         onChange={e => setFormData({...formData, descricao_empresa: e.target.value})}
                         placeholder="Ex: Somos uma agência de marketing digital focada em tráfego pago para negócios locais..."
                         rows={3}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm resize-none"
                       />
                     </div>
                     <div>
@@ -554,7 +554,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         onChange={e => setFormData({...formData, produtos_servicos: e.target.value})}
                         placeholder="Ex: Gestão de Google Ads (R$ 500/mês), Criação de Landing Pages (R$ 800)..."
                         rows={3}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm resize-none"
                       />
                     </div>
                     <div>
@@ -564,7 +564,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         onChange={e => setFormData({...formData, faq: e.target.value})}
                         placeholder="Ex: P: Qual o horário? R: Seg a Sex das 09h às 18h..."
                         rows={4}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm resize-none"
                       />
                     </div>
                     <div>
@@ -574,7 +574,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={formData.links_importantes}
                         onChange={e => setFormData({...formData, links_importantes: e.target.value})}
                         placeholder="Ex: Site: www.site.com, Localização: bit.ly/mapa..."
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -583,7 +583,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     <button 
                       onClick={handleSaveProfile}
                       disabled={isSaving}
-                      className="px-6 py-2.5 bg-teal-500/50 hover:bg-teal-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2 disabled:opacity-50"
+                      className="px-6 py-2.5 bg-primary-500/50 hover:bg-primary-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                       Salvar Conhecimento
@@ -596,7 +596,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
                       <Lock size={20} />
                     </div>
                     <div>
@@ -614,7 +614,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       value={passwordData.currentPassword}
                       onChange={e => setPasswordData({...passwordData, currentPassword: e.target.value})}
                       placeholder="Sua senha atual"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                     />
                   </div>
 
@@ -626,7 +626,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={passwordData.newPassword}
                         onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
                         placeholder="Mínimo 8 caracteres"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                     <div>
@@ -636,14 +636,14 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                         value={passwordData.confirmPassword}
                         onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
                         placeholder="Repita a nova senha"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       />
                     </div>
                   </div>
 
                   <div className="flex justify-end pt-4">
                     <button 
-                      className="px-6 py-2.5 bg-teal-500/50 hover:bg-teal-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                      className="px-6 py-2.5 bg-primary-500/50 hover:bg-primary-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
                       <Key size={18} />
                       Atualizar senha
@@ -657,14 +657,14 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
 
               {/* App Mobile Section */}
 
-              <div className="bg-teal-50 rounded-2xl border border-teal-100 p-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="bg-primary-50 rounded-2xl border border-primary-100 p-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-teal-100 text-teal-600 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center">
                     <Smartphone size={24} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-teal-900">Aplicativo Mobile</h3>
-                    <p className="text-sm text-teal-600/70">Instale o WppAi na sua tela inicial para acesso rápido e notificações melhores.</p>
+                    <h3 className="text-lg font-bold text-primary-900">Aplicativo Mobile</h3>
+                    <p className="text-sm text-primary-600/70">Instale a Sofia na sua tela inicial para acesso rápido e notificações melhores.</p>
                   </div>
                 </div>
                 <button 
@@ -680,7 +680,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       toast.info('Para instalar: Clique nos 3 pontos do navegador e selecione "Instalar Aplicativo" ou "Adicionar à tela de início".');
                     }
                   }}
-                  className="px-8 py-3 bg-teal-600 text-white rounded-xl text-sm font-bold hover:bg-teal-700 transition-all shadow-lg shadow-teal-200 flex items-center gap-2"
+                  className="px-8 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-lg shadow-primary-200 flex items-center gap-2"
                 >
                   <Smartphone size={18} />
                   Instalar Aplicativo
@@ -713,18 +713,18 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
           {activeSubTab === 'subscription' && (
             <div className="space-y-8">
               {/* Current Plan Banner */}
-              <div className="bg-gradient-to-r from-teal-600 to-teal-800 rounded-2xl p-8 text-white shadow-xl shadow-teal-100 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-8 text-white shadow-xl shadow-primary-100 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-6">
                   <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
                     <Zap size={32} className="text-white" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-teal-100 text-xs font-bold uppercase tracking-widest">Plano Atual</span>
+                      <span className="text-primary-100 text-xs font-bold uppercase tracking-widest">Plano Atual</span>
                       <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{profile?.plano || 'Starter'}</span>
                     </div>
                     <h2 className="text-2xl font-bold">Você está no plano {profile?.plano || 'Starter'}</h2>
-                    <p className="text-teal-100 text-sm opacity-80 mt-1">Sua próxima cobrança será em 15 de Abril, 2024.</p>
+                    <p className="text-primary-100 text-sm opacity-80 mt-1">Sua próxima cobrança será em 15 de Abril, 2024.</p>
                   </div>
                 </div>
                 <button className="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-xl text-sm font-bold transition-all">
@@ -780,7 +780,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
                       <Smartphone size={20} />
                     </div>
                     <div>
@@ -790,7 +790,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   </div>
                   <button 
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-bold hover:bg-teal-700 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-bold hover:bg-primary-700 transition-all"
                   >
                     <Plus size={18} />
                     Novo Canal
@@ -805,7 +805,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {channels.map((channel) => (
-                        <div key={channel.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 hover:border-teal-200 transition-all group relative">
+                        <div key={channel.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 hover:border-primary-200 transition-all group relative">
                           <button 
                             onClick={() => handleDeleteChannel(channel.id!)}
                             className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
@@ -814,7 +814,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                           </button>
                           
                           <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-teal-600">
+                            <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-primary-600">
                               {channel.tipo === 'whatsapp' ? <Smartphone size={24} /> : channel.tipo === 'chat' ? <Globe size={24} /> : <Send size={24} />}
                             </div>
                             <div>
@@ -880,10 +880,10 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       <button
                         onClick={() => setFormData({...formData, llm_provider: 'openai'})}
                         className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left
-                          ${formData.llm_provider === 'openai' ? 'border-teal-600 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}
+                          ${formData.llm_provider === 'openai' ? 'border-primary-600 bg-primary-50' : 'border-gray-100 hover:border-gray-200'}`}
                       >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl 
-                          ${formData.llm_provider === 'openai' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                          ${formData.llm_provider === 'openai' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
                           O
                         </div>
                         <div>
@@ -895,10 +895,10 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       <button
                         onClick={() => setFormData({...formData, llm_provider: 'gemini'})}
                         className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left
-                          ${formData.llm_provider === 'gemini' ? 'border-teal-600 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}
+                          ${formData.llm_provider === 'gemini' ? 'border-primary-600 bg-primary-50' : 'border-gray-100 hover:border-gray-200'}`}
                       >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl 
-                          ${formData.llm_provider === 'gemini' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                          ${formData.llm_provider === 'gemini' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
                           G
                         </div>
                         <div>
@@ -921,7 +921,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                               value={formData.openai_api_key}
                               onChange={e => setFormData({...formData, openai_api_key: e.target.value})}
                               placeholder="sk-..."
-                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                             />
                             <Key size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                           </div>
@@ -936,7 +936,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                               value={formData.gemini_api_key}
                               onChange={e => setFormData({...formData, gemini_api_key: e.target.value})}
                               placeholder="AIza..."
-                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                             />
                             <Key size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                           </div>
@@ -950,7 +950,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       <select
                         value={formData.default_ai_model}
                         onChange={e => setFormData({...formData, default_ai_model: e.target.value})}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm appearance-none bg-white font-bold"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm appearance-none bg-white font-bold"
                       >
                         <option value="">Selecione um modelo...</option>
                         {formData.llm_provider === 'openai' ? (
@@ -969,16 +969,16 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6">
+                  <div className="bg-primary-50 border border-primary-100 rounded-2xl p-6">
                     <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-blue-600 shrink-0 shadow-sm">
+                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-primary-600 shrink-0 shadow-sm">
                         <ShieldCheck size={20} />
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-gray-900">Uso da sua própria chave</h4>
                         <p className="text-xs text-gray-600 leading-relaxed mt-1">
-                          Ao configurar sua própria chave, você terá custo zero de processamento no WppAI. 
-                          As cobranças da OpenAI/Google virão diretamente para você, e o WppAI não descontará créditos de mensagens do seu plano.
+                          Ao configurar sua própria chave, você terá custo zero de processamento na Sofia. 
+                          As cobranças da OpenAI/Google virão diretamente para você, e a Sofia não descontará créditos de mensagens do seu plano.
                         </p>
                       </div>
                     </div>
@@ -988,7 +988,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     <button 
                       onClick={handleSaveProfile}
                       disabled={isSaving}
-                      className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-teal-100 disabled:opacity-50"
+                      className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-primary-100 disabled:opacity-50"
                     >
                       {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                       Salvar Configuração IA
@@ -1018,7 +1018,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       value={newReplyData.title}
                       onChange={e => setNewReplyData({...newReplyData, title: e.target.value})}
                       placeholder="Nome curto do botão"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-sm transition-all"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none text-sm transition-all"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1028,14 +1028,14 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       value={newReplyData.content}
                       onChange={e => setNewReplyData({...newReplyData, content: e.target.value})}
                       placeholder="Texto completo que será enviado"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-sm transition-all resize-none"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none text-sm transition-all resize-none"
                     />
                   </div>
                 </div>
                 <button 
                   onClick={handleCreateQuickReply}
                   disabled={isCreatingReply}
-                  className="mt-4 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-md shadow-teal-200"
+                  className="mt-4 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-md shadow-primary-200"
                 >
                   {isCreatingReply ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
                   Salvar Atalho
@@ -1049,7 +1049,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   </div>
                 ) : (
                   quickReplies.map(reply => (
-                    <div key={reply.id} className="bg-white border border-gray-100 rounded-xl p-6 flex items-center justify-between group hover:border-teal-100 transition-all shadow-sm">
+                    <div key={reply.id} className="bg-white border border-gray-100 rounded-xl p-6 flex items-center justify-between group hover:border-primary-100 transition-all shadow-sm">
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-gray-900">{reply.title}</h4>
                         <p className="text-xs text-gray-500">{reply.content}</p>
@@ -1183,7 +1183,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     value={newChannelData.nome}
                     onChange={e => setNewChannelData({...newChannelData, nome: e.target.value})}
                     placeholder="Ex: WhatsApp Principal, Atendimento Site"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                   />
                 </div>
 
@@ -1192,7 +1192,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   <select 
                     value={newChannelData.agentId}
                     onChange={e => setNewChannelData({...newChannelData, agentId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm appearance-none bg-white"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm appearance-none bg-white"
                   >
                     <option value="">Selecione um agente</option>
                     {agents.map(agent => (
@@ -1207,9 +1207,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     <button 
                       onClick={() => setNewChannelData({...newChannelData, tipo: 'whatsapp'})}
                       className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 text-left
-                        ${newChannelData.tipo === 'whatsapp' ? 'border-teal-600 bg-teal-50/50' : 'border-gray-100 hover:border-gray-200'}`}
+                        ${newChannelData.tipo === 'whatsapp' ? 'border-primary-600 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200'}`}
                     >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${newChannelData.tipo === 'whatsapp' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${newChannelData.tipo === 'whatsapp' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
                         <Smartphone size={20} />
                       </div>
                       <div>
@@ -1250,7 +1250,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                 <button 
                   onClick={handleCreateChannel}
                   disabled={isCreatingChannel}
-                  className="px-8 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold hover:bg-teal-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-8 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all disabled:opacity-50 flex items-center gap-2"
                 >
                   {isCreatingChannel && <Loader2 size={18} className="animate-spin" />}
                   Criar Canal

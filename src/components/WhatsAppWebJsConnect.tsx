@@ -354,7 +354,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
         );
       case 'connecting':
         return (
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-primary-600 bg-primary-50 px-2 py-1 rounded-full border border-primary-100">
             <Loader2 size={12} className="animate-spin" /> Conectando
           </span>
         );
@@ -401,13 +401,13 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
           <div className="flex p-1 bg-gray-100 rounded-lg mb-6 self-center">
             <button 
               onClick={() => setMethod('qr')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all text-xs font-semibold ${method === 'qr' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all text-xs font-semibold ${method === 'qr' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <QrCode size={14} /> QR Code
             </button>
             <button 
               onClick={() => setMethod('pairing')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all text-xs font-semibold ${method === 'pairing' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all text-xs font-semibold ${method === 'pairing' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
                Código Numérico
             </button>
@@ -433,7 +433,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
                 </div>
               ) : status === 'disconnected' ? (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                  <div className="w-16 h-16 bg-primary-50 text-primary-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary-100">
                     <QrCode size={32} />
                   </div>
                   <p className="text-sm text-gray-600 font-medium">Pronto para conectar</p>
@@ -464,7 +464,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
                       placeholder="Ex: 5511999999999"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all group-hover:border-gray-300"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white transition-all group-hover:border-gray-300"
                     />
                   </div>
                   <p className="text-[10px] text-gray-400 mt-2">DICA: Use o formato DDI + DDD + NÚMERO (sem espaços).</p>
@@ -476,7 +476,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
           {/* Status de Carregamento Genérico */}
           {status === 'connecting' && !qr && !pairingCode && (
             <div className="flex flex-col items-center justify-center py-8 text-center animate-pulse">
-              <Loader2 size={36} className="animate-spin text-blue-500 mb-3" />
+              <Loader2 size={36} className="animate-spin text-primary-500 mb-3" />
               <p className="text-sm font-semibold text-gray-600">Iniciando Servidor...</p>
               <p className="text-xs text-gray-400 mt-1">Isso pode levar alguns segundos</p>
             </div>
@@ -512,7 +512,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
               <button
                 onClick={handleSync}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-100 transition-all hover:shadow-lg hover:shadow-blue-50 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-primary-50 border border-primary-100 text-primary-600 hover:bg-primary-100 transition-all hover:shadow-lg hover:shadow-primary-50 disabled:opacity-50"
               >
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <><RefreshCw size={18} /> Sincronizar Conexão</>}
               </button>
@@ -539,7 +539,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
             <button
               onClick={method === 'qr' ? handleConnect : handlePairingCode}
               disabled={loading || status === 'connecting' || (method === 'pairing' && !phoneNumber)}
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-bold bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-200 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:shadow-none"
             >
               {loading ? (
                 <Loader2 className="animate-spin" size={18} />

@@ -281,7 +281,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
             {/* Stats Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { label: 'Total Inquilinos', value: stats.totalUsers, icon: <Globe />, color: 'from-blue-600 to-indigo-600', trend: '+5%' },
+                { label: 'Total Inquilinos', value: stats.totalUsers, icon: <Globe />, color: 'from-primary-600 to-primary-600', trend: '+5%' },
                 { label: 'Sessões Ativas', value: stats.activeSessions, icon: <Zap />, color: 'from-emerald-500 to-teal-500', trend: 'Saudável' },
                 { label: 'Mensagens / Mês', value: stats.totalMessages, icon: <MessageSquare />, color: 'from-purple-600 to-violet-600', trend: '+12%' },
                 { label: 'Agentes Online', value: stats.totalAgents, icon: <Bot />, color: 'from-amber-500 to-orange-500', trend: 'Estável' }
@@ -293,7 +293,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   key={stat.label}
                   className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all"
                 >
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color} text-white flex items-center justify-center mb-4 shadow-lg shadow-blue-500/10`}>
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color} text-white flex items-center justify-center mb-4 shadow-lg shadow-primary-500/10`}>
                     {stat.icon}
                   </div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{stat.label}</p>
@@ -383,7 +383,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       <input 
                         type="text" 
                         placeholder="Pesquisar por nome ou email..." 
-                        className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
+                        className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all shadow-inner"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
@@ -425,7 +425,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                              </td>
                              <td className="px-8 py-5">
                                 <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                                  user.plano === 'Pro' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-100'
+                                  user.plano === 'Pro' ? 'bg-primary-50 text-primary-600 border-primary-100' : 'bg-slate-50 text-slate-500 border-slate-100'
                                 }`}>
                                    {user.plano || 'Starter'}
                                 </span>
@@ -437,7 +437,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                                 <div className="flex items-center justify-end gap-2">
                                    <button 
                                       onClick={() => handleViewActivity(user.id)}
-                                      className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                      className="p-2.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all"
                                       title="Logs"
                                    >
                                       <FileText size={18} />
@@ -451,7 +451,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                                    </button>
                                    <button 
                                       onClick={() => { setSelectedUser(user); setIsEditModalOpen(true); }}
-                                      className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                      className="p-2.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all"
                                       title="Editar"
                                    >
                                       <Settings size={18} />
@@ -477,7 +477,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 
                 <div className="relative z-10">
                   <div className="flex items-center gap-4 mb-8">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <div className="w-12 h-12 rounded-2xl bg-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20">
                       <Zap size={24} />
                     </div>
                     <div>
@@ -496,11 +496,11 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         onClick={() => setGlobalSettings({...globalSettings, llm_provider: p.id})}
                         className={`p-5 rounded-3xl border transition-all text-left flex items-start gap-4 ${
                           globalSettings.llm_provider === p.id 
-                            ? 'bg-indigo-600 border-indigo-400' 
+                            ? 'bg-primary-600 border-primary-400' 
                             : 'bg-slate-800 border-white/5 opacity-40 hover:opacity-100 hover:bg-slate-800/80'
                         }`}
                       >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${p.id === 'openai' ? 'bg-white text-black' : 'bg-blue-500 text-white'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${p.id === 'openai' ? 'bg-white text-black' : 'bg-primary-500 text-white'}`}>
                           {p.icon}
                         </div>
                         <div>
@@ -520,7 +520,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           <input 
                             type="password" 
                             placeholder="sk-..." 
-                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-primary-500 outline-none transition-all"
                             value={globalSettings.openai_api_key || ''}
                             onChange={(e) => setGlobalSettings({...globalSettings, openai_api_key: e.target.value})}
                           />
@@ -533,7 +533,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           <input 
                             type="password" 
                             placeholder="AIza..." 
-                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-primary-500 outline-none transition-all"
                             value={globalSettings.gemini_api_key || ''}
                             onChange={(e) => setGlobalSettings({...globalSettings, gemini_api_key: e.target.value})}
                           />
@@ -547,7 +547,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         <div className="relative">
                           <Bot className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                           <select 
-                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all appearance-none"
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-primary-500 outline-none transition-all appearance-none"
                             value={globalSettings.default_ai_model}
                             onChange={(e) => setGlobalSettings({...globalSettings, default_ai_model: e.target.value})}
                           >
@@ -572,7 +572,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           <input 
                             type="number" 
                             step="0.01"
-                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-primary-500 outline-none transition-all"
                             value={globalSettings.usd_brl_rate}
                             onChange={(e) => setGlobalSettings({...globalSettings, usd_brl_rate: parseFloat(e.target.value)})}
                           />
@@ -609,18 +609,18 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         onClick={() => setGlobalSettings({...globalSettings, whatsapp_provider: p.id})}
                         className={`p-5 rounded-3xl border-2 text-left transition-all relative group flex flex-col gap-2 ${
                           globalSettings.whatsapp_provider === p.id 
-                            ? 'border-indigo-600 bg-indigo-50/30' 
+                            ? 'border-primary-600 bg-primary-50/30' 
                             : 'border-slate-100 bg-white hover:border-slate-200'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Provedor</span>
                           {globalSettings.whatsapp_provider === p.id && (
-                            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-primary-600 rounded-full animate-pulse"></div>
                           )}
                         </div>
                         <div>
-                          <p className={`text-sm font-black ${globalSettings.whatsapp_provider === p.id ? 'text-indigo-900' : 'text-slate-700'}`}>{p.label}</p>
+                          <p className={`text-sm font-black ${globalSettings.whatsapp_provider === p.id ? 'text-primary-900' : 'text-slate-700'}`}>{p.label}</p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-tight">{p.desc}</p>
                         </div>
                       </button>
@@ -646,7 +646,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
               <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
                 <div className="relative z-10">
                   <div className="flex items-center gap-4 mb-8">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm border border-blue-100">
+                    <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center shadow-sm border border-primary-100">
                       <Smartphone size={24} />
                     </div>
                     <div>
@@ -663,7 +663,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         <input 
                           type="text" 
                           placeholder="Ex: 5511999999999" 
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-primary-500 outline-none transition-all"
                           value={globalSettings.support_whatsapp || ''}
                           onChange={(e) => setGlobalSettings({...globalSettings, support_whatsapp: e.target.value})}
                         />
@@ -675,7 +675,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   <button 
                     onClick={handleSaveSettings}
                     disabled={isActionLoading}
-                    className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-blue-500/10"
+                    className="w-full py-5 bg-primary-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-primary-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-primary-500/10"
                   >
                     {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
                       <>
@@ -707,7 +707,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         <input 
                           type="text" 
                           placeholder="Ex: 5511999999999" 
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-primary-500 outline-none transition-all"
                           value={globalSettings.admin_notification_phone || ''}
                           onChange={(e) => setGlobalSettings({...globalSettings, admin_notification_phone: e.target.value})}
                         />
@@ -720,7 +720,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         <input 
                           type="text" 
                           placeholder="UUID do usuário que enviará o alerta" 
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-700 focus:border-primary-500 outline-none transition-all"
                           value={globalSettings.admin_notification_user_id || ''}
                           onChange={(e) => setGlobalSettings({...globalSettings, admin_notification_user_id: e.target.value})}
                         />
@@ -746,7 +746,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
               <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden group">
                 <div className="relative z-10">
                   <div className="flex items-center gap-4 mb-8">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm border border-indigo-100">
+                    <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center shadow-sm border border-primary-100">
                       <FileText size={24} />
                     </div>
                     <div>
@@ -768,7 +768,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       <div className="relative">
                         <textarea 
                           rows={12}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm text-slate-700 focus:border-indigo-500 outline-none transition-all font-mono leading-relaxed"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm text-slate-700 focus:border-primary-500 outline-none transition-all font-mono leading-relaxed"
                           value={globalSettings.knowledge_analysis_prompt || ''}
                           onChange={(e) => setGlobalSettings({...globalSettings, knowledge_analysis_prompt: e.target.value})}
                           placeholder="Digite o prompt do sistema aqui..."
@@ -786,7 +786,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   <button 
                     onClick={handleSaveSettings}
                     disabled={isActionLoading}
-                    className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-indigo-500/10"
+                    className="w-full py-5 bg-primary-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-primary-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-primary-500/10"
                   >
                     {isActionLoading ? <RefreshCw className="animate-spin" size={20} /> : (
                       <>
@@ -830,11 +830,11 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                  </div>
               </div>
 
-              <div className="bg-indigo-50/50 rounded-[2rem] p-8 border border-indigo-100 border-dashed">
-                 <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <div className="bg-primary-50/50 rounded-[2rem] p-8 border border-primary-100 border-dashed">
+                 <h4 className="text-xs font-black text-primary-900 uppercase tracking-widest mb-3 flex items-center gap-2">
                    <Info size={14} /> Nota Técnica
                  </h4>
-                 <p className="text-[11px] text-indigo-700 font-medium leading-relaxed italic">
+                 <p className="text-[11px] text-primary-700 font-medium leading-relaxed italic">
                    Estas configurações são aplicadas instantaneamente a todos os inquilinos que não possuem chaves API próprias configuradas. O modo de manutenção desativa as APIs externas para controle de custos ou reparos emergenciais.
                  </p>
               </div>
@@ -845,12 +845,12 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
       case 'billing':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-             <div className="bg-indigo-600 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+             <div className="bg-primary-600 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-all"><CreditCard size={180} /></div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10">
                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-2">Gasto Consolidado (Mês)</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-primary-200 mb-2">Gasto Consolidado (Mês)</p>
                       <h2 className="text-6xl font-black mb-6 flex items-baseline gap-2 tabular-nums">
                         <span className="text-2xl opacity-50">R$</span>{financeStats.totalCostBrl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </h2>
@@ -858,7 +858,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         <div className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widst border border-white/10">
                           {financeStats.totalTokens?.toLocaleString()} Tokens
                         </div>
-                        <div className="text-indigo-200 text-xs font-medium italic underline">Ver relatório detalhado</div>
+                        <div className="text-primary-200 text-xs font-medium italic underline">Ver relatório detalhado</div>
                       </div>
                    </div>
                    
@@ -872,7 +872,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                                   <span className="text-xs font-bold">{u.nome_completo || u.full_name || u.name || u.email.split('@')[0]}</span>
 
                               </div>
-                              <span className="text-sm font-black text-indigo-100">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR')}</span>
+                              <span className="text-sm font-black text-primary-100">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR')}</span>
                            </div>
                          ))}
                       </div>
@@ -884,9 +884,9 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 <h3 className="text-xl font-black text-slate-900 mb-6 px-2">Detalhamento por Inquilino</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {profiles.filter(p => (financeStats.userCosts[p.id] || 0) > 0).map((u, i) => (
-                    <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 transition-all hover:bg-white group cursor-default">
+                    <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-primary-200 transition-all hover:bg-white group cursor-default">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-black text-slate-300 group-hover:text-indigo-500 transition-colors">
+                          <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-black text-slate-300 group-hover:text-primary-500 transition-colors">
                             {u.email[0].toUpperCase()}
                           </div>
                           <div>
@@ -896,8 +896,8 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-black text-indigo-600">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <ArrowRight className="text-slate-200 inline-block group-hover:translate-x-1 group-hover:text-indigo-400 transition-all" size={16} />
+                          <p className="text-lg font-black text-primary-600">R$ {financeStats.userCosts[u.id]?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <ArrowRight className="text-slate-200 inline-block group-hover:translate-x-1 group-hover:text-primary-400 transition-all" size={16} />
                         </div>
                     </div>
                   ))}
@@ -912,14 +912,14 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     <div className="p-6 md:p-10 space-y-10 pb-32 overflow-y-auto h-screen custom-scrollbar">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">Administração</h2>
-        <p className="text-slate-500 font-medium">Gestão centralizada da plataforma WppAI.</p>
+        <p className="text-slate-500 font-medium">Gestão centralizada da plataforma Sofia.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
-          { id: 'overview_global', label: 'Dashboard Global', icon: <Activity size={24} />, desc: 'Status e atividade em tempo real', color: 'bg-blue-600', tab: 'overview', type: 'external' },
+          { id: 'overview_global', label: 'Dashboard Global', icon: <Activity size={24} />, desc: 'Status e atividade em tempo real', color: 'bg-primary-600', tab: 'overview', type: 'external' },
           { id: 'users', label: 'Gestão de Inquilinos', icon: <Users size={24} />, desc: 'Controle de usuários e instâncias', color: 'bg-emerald-600', tab: 'users', type: 'internal' },
-          { id: 'reports', label: 'Relatórios de Uso', icon: <BarChart3 size={24} />, desc: 'Analytics e performance da rede', color: 'bg-indigo-600', tab: 'reports', type: 'external' },
+          { id: 'reports', label: 'Relatórios de Uso', icon: <BarChart3 size={24} />, desc: 'Analytics e performance da rede', color: 'bg-primary-600', tab: 'reports', type: 'external' },
           { id: 'config', label: 'Configurações Globais', icon: <Settings size={24} />, desc: 'API Keys, Modelos e Prompts', color: 'bg-amber-500', tab: 'config', type: 'internal' },
           { id: 'clients', label: 'Carteira Master', icon: <Star size={24} />, desc: 'Visão CRM de toda a base', color: 'bg-pink-500', tab: 'clients', type: 'external' },
           { id: 'flags_hub', label: 'Funcionalidades', icon: <ToggleLeft size={24} />, desc: 'Feature Flags & Releases', color: 'bg-teal-500', tab: 'flags', type: 'internal' },
@@ -936,7 +936,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 setCurrentView('standard');
               }
             }}
-            className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-5 hover:border-indigo-200 transition-all cursor-pointer group"
+            className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-5 hover:border-primary-200 transition-all cursor-pointer group"
           >
             <div className={`w-16 h-16 rounded-[1.25rem] ${item.color} text-white flex items-center justify-center shadow-lg transition-transform group-hover:scale-110`}>
               {item.icon}
@@ -945,13 +945,13 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
               <h3 className="font-black text-lg text-slate-900 leading-tight">{item.label}</h3>
               <p className="text-[10px] text-slate-400 font-bold truncate uppercase tracking-widest mt-1.5">{item.desc}</p>
             </div>
-            <ChevronRight size={20} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+            <ChevronRight size={20} className="text-slate-300 group-hover:text-primary-500 transition-colors" />
           </motion.div>
         ))}
       </div>
       
       <div className="bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 flex flex-col items-center text-center shadow-2xl relative overflow-hidden">
-        <div className="absolute -right-20 -top-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl"></div>
         <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center text-white shadow-sm mb-6 relative z-10">
            <Shield size={40} />
         </div>
@@ -983,7 +983,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                Restrito: Administrador
              </div>
              <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-               Painel do <span className="text-indigo-600">Ecossistema</span>.
+               Painel do <span className="text-primary-600">Ecossistema</span>.
              </h1>
              <p className="text-slate-500 mt-2 font-medium">Controle central de instâncias, usuários e provedores de IA.</p>
           </div>
@@ -1014,7 +1014,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
         {isLoading ? (
           <div className="h-[400px] flex items-center justify-center bg-white rounded-[2.5rem] border border-slate-100">
              <div className="flex flex-col items-center gap-4">
-                <RefreshCw size={32} className="text-indigo-600 animate-spin" />
+                <RefreshCw size={32} className="text-primary-600 animate-spin" />
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Sincronizando Ecossistema...</p>
              </div>
           </div>
@@ -1055,7 +1055,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         onClick={() => setSelectedUser({ ...selectedUser, plano: p })}
                         className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                           selectedUser.plano === p 
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100' 
+                            ? 'bg-primary-600 text-white border-primary-600 shadow-xl shadow-primary-100' 
                             : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-white hover:border-slate-200'
                         }`}
                       >
@@ -1087,7 +1087,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 {/* WhatsApp Infrastructure Section */}
                 <div className="pt-8 border-t border-slate-100 space-y-6">
                   <div className="flex items-center gap-2 text-slate-900">
-                    <Smartphone size={20} className="text-indigo-600" />
+                    <Smartphone size={20} className="text-primary-600" />
                     <h4 className="text-sm font-black uppercase tracking-tight">Infraestrutura WhatsApp</h4>
                   </div>
                   
@@ -1103,18 +1103,18 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                         onClick={() => setSelectedUser({...selectedUser, whatsapp_provider: provider.id as any})}
                         className={`p-4 rounded-2xl border-2 text-left transition-all relative group flex flex-col gap-1 ${
                           selectedUser.whatsapp_provider === provider.id 
-                            ? 'border-indigo-600 bg-indigo-50/30' 
+                            ? 'border-primary-600 bg-primary-50/30' 
                             : 'border-slate-100 bg-white hover:border-slate-200'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${selectedUser.whatsapp_provider === provider.id ? 'text-indigo-600' : 'text-slate-400'}`}>
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${selectedUser.whatsapp_provider === provider.id ? 'text-primary-600' : 'text-slate-400'}`}>
                             {provider.label}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 font-medium">{provider.desc}</p>
                         {selectedUser.whatsapp_provider === provider.id && (
-                          <div className="absolute top-4 right-4 text-indigo-600">
+                          <div className="absolute top-4 right-4 text-primary-600">
                             <CheckCircle2 size={16} />
                           </div>
                         )}
@@ -1135,7 +1135,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           value={selectedUser.whatsapp_phone_number_id || ''}
                           onChange={e => setSelectedUser({...selectedUser, whatsapp_phone_number_id: e.target.value})}
                           placeholder="Ex: 1029384756..."
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none transition-all text-sm"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1148,7 +1148,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           value={metaAccessToken}
                           onChange={e => setMetaAccessToken(e.target.value)}
                           placeholder="EAA..."
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none transition-all text-sm"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
                         />
                       </div>
                     </motion.div>
@@ -1193,7 +1193,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                     }
                   }}
                   disabled={isActionLoading}
-                  className="flex-1 py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50"
+                  className="flex-1 py-5 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 shadow-xl shadow-primary-100 transition-all active:scale-95 disabled:opacity-50"
                 >
                   {isActionLoading ? <RefreshCw className="animate-spin mx-auto" /> : 'Confirmar'}
                 </button>
@@ -1236,14 +1236,14 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   userActivity.map((log, i) => (
                     <div key={i} className="flex gap-4">
                        <div className="flex flex-col items-center gap-2">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${log.role === 'assistant' ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-200'}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${log.role === 'assistant' ? 'bg-primary-600 text-white border-primary-500' : 'bg-white text-slate-400 border-slate-200'}`}>
                              {log.role === 'assistant' ? <Bot size={20} /> : <Users size={20} />}
                           </div>
                           <div className="w-0.5 flex-1 bg-slate-200 rounded-full"></div>
                        </div>
                        <div className="flex-1 pb-8">
                           <div className="flex items-center justify-between mb-2">
-                             <span className={`text-[10px] font-black uppercase tracking-widest ${log.role === 'assistant' ? 'text-indigo-600' : 'text-slate-400'}`}>
+                             <span className={`text-[10px] font-black uppercase tracking-widest ${log.role === 'assistant' ? 'text-primary-600' : 'text-slate-400'}`}>
                                {log.role === 'assistant' ? '🤖 Sofia (IA)' : '👤 Cliente'}
                              </span>
                              <span className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>

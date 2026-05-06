@@ -75,8 +75,8 @@ export default function ReportsDashboard() {
       value: stats.messages.toLocaleString(), 
       change: '+12%', 
       icon: <MessageSquare size={20} />, 
-      color: 'text-blue-600', 
-      bg: 'bg-blue-50',
+      color: 'text-primary-600', 
+      bg: 'bg-primary-50',
       desc: 'Fluxo total de interações'
     },
     { 
@@ -93,8 +93,8 @@ export default function ReportsDashboard() {
       value: `${stats.conversionRate}%`, 
       change: '+4.2%', 
       icon: <TrendingUp size={20} />, 
-      color: 'text-indigo-600', 
-      bg: 'bg-indigo-50',
+      color: 'text-primary-600', 
+      bg: 'bg-primary-50',
       desc: 'Leads → Clientes'
     },
     { 
@@ -112,7 +112,7 @@ export default function ReportsDashboard() {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50/50">
         <div className="text-center">
-          <Loader2 size={40} className="animate-spin text-blue-600 mx-auto mb-4" />
+          <Loader2 size={40} className="animate-spin text-primary-600 mx-auto mb-4" />
           <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Carregando métricas...</p>
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function ReportsDashboard() {
       <div className="p-6 md:p-8 border-b border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
-            <BarChart3 className="text-blue-600" />
+            <BarChart3 className="text-primary-600" />
             Relatórios e Métricas
           </h1>
           <p className="text-gray-500 text-sm mt-1 font-medium">Acompanhe a inteligência e conversão do seu atendimento.</p>
@@ -140,7 +140,7 @@ export default function ReportsDashboard() {
             <button 
               key={item.val}
               onClick={() => setPeriod(item.val)}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${period === item.val ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${period === item.val ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
             >
               {item.label}
             </button>
@@ -180,14 +180,14 @@ export default function ReportsDashboard() {
              <div className="flex items-center justify-between mb-8">
                <div>
                  <h3 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
-                   <Activity size={18} className="text-blue-500" />
+                   <Activity size={18} className="text-primary-500" />
                    Volume de Atendimento
                  </h3>
                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Interações Sofia vs Humano</p>
                </div>
                <div className="flex gap-4">
                  <div className="flex items-center gap-1.5">
-                   <div className="w-2 h-2 rounded-full bg-blue-500" />
+                   <div className="w-2 h-2 rounded-full bg-primary-500" />
                    <span className="text-[10px] font-bold text-gray-500 uppercase">Sofia (IA)</span>
                  </div>
                  <div className="flex items-center gap-1.5">
@@ -241,7 +241,7 @@ export default function ReportsDashboard() {
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 flex flex-col h-[450px]">
              <div className="mb-8">
                <h3 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
-                 <PieIcon size={18} className="text-indigo-500" />
+                 <PieIcon size={18} className="text-primary-500" />
                  Saúde do CRM
                </h3>
                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Distribuição de contatos</p>
@@ -298,21 +298,21 @@ export default function ReportsDashboard() {
         {/* Value Prop Banner */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.98 }} whileInView={{ opacity: 1, scale: 1 }}
-          className="bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative"
+          className="bg-primary-600 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative"
         >
           <div className="relative z-10">
             <h3 className="text-2xl font-black tracking-tight mb-2">Performance de Automação Sofia</h3>
-            <p className="text-indigo-100 font-medium max-w-md">
+            <p className="text-primary-100 font-medium max-w-md">
               Sua inteligência artificial está processando uma parcela significativa do volume total de atendimento de forma autônoma.
             </p>
           </div>
           <div className="flex gap-4 relative z-10">
             <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10 text-center min-w-[120px]">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-200 mb-1">Horas Poupadas</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary-200 mb-1">Horas Poupadas</p>
               <p className="text-2xl font-black">~{Math.round(stats.messages * 0.05)}h</p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10 text-center min-w-[120px]">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-200 mb-1">Eficiência IA</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary-200 mb-1">Eficiência IA</p>
               <p className="text-2xl font-black">Alta</p>
             </div>
           </div>

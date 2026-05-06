@@ -185,8 +185,8 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-6 relative overflow-hidden">
       {/* Background Orbs */}
-      <div className="absolute top-0 -left-20 w-96 h-96 bg-blue-600/20 blur-[100px] rounded-full"></div>
-      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-indigo-600/20 blur-[100px] rounded-full"></div>
+      <div className="absolute top-0 -left-20 w-96 h-96 bg-sofia-purple/20 blur-[100px] rounded-full"></div>
+      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-sofia-glow/20 blur-[100px] rounded-full"></div>
 
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
@@ -195,11 +195,11 @@ export default function Login() {
       >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl flex items-center justify-center text-white mb-4 shadow-2xl shadow-blue-500/20 ring-4 ring-white/5">
+          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-4 shadow-2xl shadow-sofia-purple/20 ring-4 ring-white/5">
             <Bot size={40} />
           </div>
-          <h1 className="text-3xl font-black text-white tracking-tight">WppAI</h1>
-          <p className="text-slate-400 font-medium">Automação Inteligente de WhatsApp</p>
+          <h1 className="text-4xl font-black text-white tracking-tight">Sofia</h1>
+          <p className="text-slate-400 font-medium">Sua IA de Atendimento Inteligente</p>
         </div>
 
         {/* Main Card */}
@@ -223,7 +223,7 @@ export default function Login() {
                 <div className="space-y-4">
                   <button
                     onClick={() => window.location.reload()}
-                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all"
+                    className="w-full py-4 bg-sofia-purple hover:bg-[#7C3AED] text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all"
                   >
                     Já confirmei, entrar agora <ChevronRight size={18} />
                   </button>
@@ -240,25 +240,25 @@ export default function Login() {
                 {/* Tabs */}
                 {step === 1 && (
                   <div className="flex p-1 bg-slate-900/50 rounded-2xl mb-10 border border-white/5" onClick={() => setFormError(null)}>
-                    <button
-                      type="button"
-                      onClick={() => setMode('login')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                        mode === 'login' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <LogIn size={18} /> Entrar
-                    </button>
-                    {allowSignups ? (
                       <button
                         type="button"
-                        onClick={() => setMode('register')}
+                        onClick={() => setMode('login')}
                         className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                          mode === 'register' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                          mode === 'login' ? 'bg-sofia-purple text-white shadow-lg' : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <UserPlus size={18} /> Cadastrar
+                        <LogIn size={18} /> Entrar
                       </button>
+                      {allowSignups ? (
+                        <button
+                          type="button"
+                          onClick={() => setMode('register')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
+                            mode === 'register' ? 'bg-sofia-purple text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <UserPlus size={18} /> Cadastrar
+                        </button>
                     ) : (
                       <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-not-allowed">
                         <Lock size={14} /> Inscrições Off
@@ -295,7 +295,7 @@ export default function Login() {
                             <input
                               type="text"
                               placeholder="Como deseja ser chamado?"
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all outline-none"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={nomeCompleto}
                               onChange={(e) => setNomeCompleto(e.target.value)}
                               required
@@ -310,7 +310,7 @@ export default function Login() {
                             <input
                               type="tel"
                               placeholder="Ex: 5511999999999"
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all outline-none"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={whatsapp}
                               onChange={(e) => setWhatsapp(e.target.value)}
                               required
@@ -325,7 +325,7 @@ export default function Login() {
                             <input
                               type="text"
                               placeholder="Sua empresa ou marca"
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all outline-none"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={nomeEmpresa}
                               onChange={(e) => setNomeEmpresa(e.target.value)}
                               required
@@ -340,7 +340,7 @@ export default function Login() {
                             <input
                               type="text"
                               placeholder="Ex: Imobiliária, Estética, TI..."
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all outline-none"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={nicho}
                               onChange={(e) => setNicho(e.target.value)}
                               required
@@ -363,7 +363,7 @@ export default function Login() {
                             <input
                               type="email"
                               placeholder="exemplo@email.com"
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all outline-none"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
                               required
@@ -378,7 +378,7 @@ export default function Login() {
                               <button 
                                 type="button" 
                                 onClick={handleForgotPassword}
-                                className="text-xs font-bold text-blue-500 hover:text-blue-400 transition-colors"
+                                className="text-xs font-bold text-sofia-purple hover:text-[#7C3AED] transition-colors"
                               >
                                 Esqueceu a senha?
                               </button>
@@ -389,7 +389,7 @@ export default function Login() {
                             <input
                               type="password"
                               placeholder="••••••••"
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all outline-none"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={password}
                               onChange={(e) => setPassword(e.target.value)}
                               required
@@ -403,7 +403,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all shadow-xl shadow-blue-600/20 active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
+                    className="w-full py-4 bg-sofia-purple hover:bg-[#7C3AED] text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all shadow-xl shadow-sofia-purple/20 active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
                   >
                     {isLoading ? (
                       <Loader2 size={20} className="animate-spin" />
@@ -463,7 +463,7 @@ export default function Login() {
         <p className="mt-8 text-center text-slate-500 text-xs font-medium">
           Precisa de ajuda? {supportWhatsapp ? (
             <a 
-              href={`https://wa.me/${supportWhatsapp.replace(/\D/g, '')}?text=Olá, preciso de ajuda com meu login no WppAI.`}
+              href={`https://wa.me/${supportWhatsapp.replace(/\D/g, '')}?text=Olá, preciso de ajuda com meu login na Sofia.`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-slate-300 hover:text-white transition-colors underline underline-offset-4"

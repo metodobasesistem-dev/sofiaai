@@ -216,7 +216,7 @@ export default function LeoInstagram({ role }: any) {
               <h3 className="font-black text-2xl text-gray-900 tracking-tight">
                 {status?.connected ? status.account?.name : 'Instagram não conectado'}
               </h3>
-              {status?.connected && <Shield size={16} className="text-blue-500" />}
+              {status?.connected && <Shield size={16} className="text-primary-500" />}
             </div>
             <p className="text-sm text-gray-400 font-medium">
               {status?.connected ? `@${status.account?.username} • Business Account` : 'Conecte sua conta comercial para habilitar o Leo'}
@@ -269,10 +269,10 @@ export default function LeoInstagram({ role }: any) {
           {/* Account Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard 
-              icon={<Users size={20} className="text-blue-500" />} 
+              icon={<Users size={20} className="text-primary-500" />} 
               label="Seguidores" 
               value={status.account?.followers_count?.toLocaleString() || '0'} 
-              color="bg-blue-50"
+              color="bg-primary-50"
             />
             <MetricCard 
               icon={<Activity size={20} className="text-emerald-500" />} 
@@ -344,7 +344,7 @@ export default function LeoInstagram({ role }: any) {
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
+                    <div className="w-10 h-10 bg-primary-100 rounded-2xl flex items-center justify-center text-primary-600">
                       <Zap size={20} />
                     </div>
                     <div>
@@ -354,7 +354,7 @@ export default function LeoInstagram({ role }: any) {
                   </div>
                   <button 
                     onClick={() => setShowAddTrigger(!showAddTrigger)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-xs font-bold rounded-xl hover:bg-primary-700 transition-all"
                   >
                     <Plus size={14} />
                     Novo Gatilho
@@ -363,39 +363,39 @@ export default function LeoInstagram({ role }: any) {
 
                 <div className="p-6">
                   {showAddTrigger && (
-                    <div className="mb-8 p-6 bg-blue-50/50 border border-blue-100 rounded-3xl space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="mb-8 p-6 bg-primary-50/50 border border-primary-100 rounded-3xl space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="text-[10px] font-black text-blue-600 uppercase mb-1 block">Palavra-Chave</label>
+                          <label className="text-[10px] font-black text-primary-600 uppercase mb-1 block">Palavra-Chave</label>
                           <input 
                             value={newTrigger.palavra_chave}
                             onChange={(e) => setNewTrigger({ ...newTrigger, palavra_chave: e.target.value })}
-                            className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            className="w-full bg-white border border-primary-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-primary-500/20 outline-none"
                             placeholder="Ex: QUERO, SISTEMA, OI"
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] font-black text-blue-600 uppercase mb-1 block">Resposta no Comentário (Público)</label>
+                          <label className="text-[10px] font-black text-primary-600 uppercase mb-1 block">Resposta no Comentário (Público)</label>
                           <input 
                             value={newTrigger.resposta_comentario}
                             onChange={(e) => setNewTrigger({ ...newTrigger, resposta_comentario: e.target.value })}
-                            className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            className="w-full bg-white border border-primary-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-primary-500/20 outline-none"
                             placeholder="Ex: Te mandei no direct! 😉"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-blue-600 uppercase mb-1 block">Mensagem no Direct (Privado)</label>
+                        <label className="text-[10px] font-black text-primary-600 uppercase mb-1 block">Mensagem no Direct (Privado)</label>
                         <textarea 
                           value={newTrigger.mensagem_dm}
                           onChange={(e) => setNewTrigger({ ...newTrigger, mensagem_dm: e.target.value })}
-                          className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none min-h-[80px]"
+                          className="w-full bg-white border border-primary-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-primary-500/20 outline-none min-h-[80px]"
                           placeholder="Olá! Vi que você quer saber mais sobre o sistema..."
                         />
                       </div>
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setShowAddTrigger(false)} className="px-4 py-2 text-xs font-bold text-gray-500">Cancelar</button>
-                        <button onClick={handleAddTrigger} className="px-6 py-2 bg-blue-600 text-white text-xs font-black rounded-xl hover:bg-blue-700">Criar Gatilho</button>
+                        <button onClick={handleAddTrigger} className="px-6 py-2 bg-primary-600 text-white text-xs font-black rounded-xl hover:bg-primary-700">Criar Gatilho</button>
                       </div>
                     </div>
                   )}
@@ -403,10 +403,10 @@ export default function LeoInstagram({ role }: any) {
                   <div className="space-y-4">
                     {triggers.length > 0 ? (
                       triggers.map((trigger) => (
-                        <div key={trigger.id} className="p-5 border border-gray-50 rounded-2xl bg-white hover:border-blue-200 transition-all flex items-start justify-between group">
+                        <div key={trigger.id} className="p-5 border border-gray-50 rounded-2xl bg-white hover:border-primary-200 transition-all flex items-start justify-between group">
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-black rounded-md uppercase tracking-wider">
+                              <span className="px-2 py-0.5 bg-primary-600 text-white text-[10px] font-black rounded-md uppercase tracking-wider">
                                 {trigger.palavra_chave}
                               </span>
                               {trigger.resposta_comentario && (
@@ -556,7 +556,7 @@ function DMItem({ user, status, time }: any) {
   return (
     <div className="p-5 hover:bg-gray-50 transition-all flex items-center justify-between group">
       <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isEnviada ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isEnviada ? 'bg-emerald-50 text-emerald-600' : 'bg-primary-50 text-primary-600'}`}>
           {isEnviada ? <CheckCircle2 size={16} /> : <MessageCircle size={16} />}
         </div>
         <div>
@@ -565,7 +565,7 @@ function DMItem({ user, status, time }: any) {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className={`text-[10px] font-black uppercase tracking-tighter ${isEnviada ? 'text-emerald-500' : 'text-blue-500'}`}>
+        <span className={`text-[10px] font-black uppercase tracking-tighter ${isEnviada ? 'text-emerald-500' : 'text-primary-500'}`}>
           {status}
         </span>
       </div>

@@ -63,7 +63,7 @@ const QuickNavCard = ({ icon: Icon, title, subtitle, onClick }: { icon: any, tit
     className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
   >
     <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
+      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-primary-600 group-hover:bg-primary-50 transition-colors">
         <Icon size={20} />
       </div>
       <div>
@@ -357,23 +357,23 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           >
             <div className="bg-green-50 border border-green-200 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-5">
-                <div className={`w-14 h-14 ${whatsappStatus?.status === 'connecting' ? 'bg-blue-500' : 'bg-green-500'} rounded-full flex items-center justify-center text-white shadow-lg ${whatsappStatus?.status === 'connecting' ? 'shadow-blue-200' : 'shadow-green-200'} transition-colors`}>
+                <div className={`w-14 h-14 ${whatsappStatus?.status === 'connecting' ? 'bg-primary-500' : 'bg-green-500'} rounded-full flex items-center justify-center text-white shadow-lg ${whatsappStatus?.status === 'connecting' ? 'shadow-primary-200' : 'shadow-green-200'} transition-colors`}>
                   {whatsappStatus?.status === 'connecting' ? <Loader2 size={32} className="animate-spin" /> : <MessageCircle size={32} fill="currentColor" />}
                 </div>
                 <div className="space-y-1">
-                  <h2 className={`text-xl font-black ${whatsappStatus?.status === 'connecting' ? 'text-blue-900' : 'text-green-900'}`}>
+                  <h2 className={`text-xl font-black ${whatsappStatus?.status === 'connecting' ? 'text-primary-900' : 'text-green-900'}`}>
                     {whatsappStatus?.status === 'connecting' ? 'Restaurando conexão...' : 'Ative sua assistente no WhatsApp'}
                   </h2>
-                  <p className={`text-sm ${whatsappStatus?.status === 'connecting' ? 'text-blue-700' : 'text-green-700'} opacity-80`}>
+                  <p className={`text-sm ${whatsappStatus?.status === 'connecting' ? 'text-primary-700' : 'text-green-700'} opacity-80`}>
                     {whatsappStatus?.status === 'connecting' 
                       ? 'Estamos acordando sua IA para retomar o atendimento. Isso leva alguns segundos.' 
                       : 'Conecte seu WhatsApp e deixe a IA cuidar do atendimento e dos agendamentos.'}
                   </p>
                   <div className="flex gap-2 mt-2">
-                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-blue-200' : 'border-green-200'} flex items-center gap-1`}>
+                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-primary-200' : 'border-green-200'} flex items-center gap-1`}>
                       <Zap size={10} /> {whatsappStatus?.status === 'connecting' ? 'Recuperação automática' : 'Ativação instantânea'}
                     </span>
-                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-blue-200' : 'border-green-200'} flex items-center gap-1`}>
+                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-primary-200' : 'border-green-200'} flex items-center gap-1`}>
                       <Clock size={10} /> Atendimento 24h
                     </span>
                   </div>
@@ -385,7 +385,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                   disabled={isConnecting || whatsappStatus?.status === 'connecting'}
                   className={`whitespace-nowrap px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 
                     ${whatsappStatus?.status === 'connecting' 
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 cursor-not-allowed' 
+                      ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-200 cursor-not-allowed' 
                       : 'bg-green-600 hover:bg-green-700 text-white shadow-green-200'}`}
                 >
                   { (isConnecting || whatsappStatus?.status === 'connecting') ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
@@ -395,7 +395,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                 {whatsappStatus?.status === 'connecting' && (
                   <button 
                     onClick={handleReset}
-                    className="whitespace-nowrap px-6 py-3 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                    className="whitespace-nowrap px-6 py-3 bg-white border border-primary-200 text-primary-600 hover:bg-primary-50 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
                   >
                     <RefreshCw size={18} />
                     Resetar
@@ -606,14 +606,14 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               <h3 className="text-xl font-black text-slate-900 tracking-tight">Crescimento da Operação</h3>
               <button 
                 onClick={() => onTabChange?.('reports')}
-                className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1 hover:underline flex items-center gap-1"
+                className="text-[10px] text-primary-600 font-bold uppercase tracking-widest mt-1 hover:underline flex items-center gap-1"
               >
                 Análise de Performance Semanal <ArrowUpRight size={10} />
               </button>
             </div>
             <div className="flex items-center gap-6 bg-slate-50/50 p-2 rounded-2xl border border-slate-100">
               <div className="flex items-center gap-2 px-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-lg shadow-blue-200" />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary-500 shadow-lg shadow-primary-200" />
                 <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Leads</span>
               </div>
               <div className="flex items-center gap-2 px-3">
@@ -745,7 +745,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                </div>
                
                {/* Decorative Gradient Overlay */}
-               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 blur-3xl -mr-16 -mt-16" />
+               <div className="absolute top-0 right-0 w-32 h-32 bg-primary-600/20 blur-3xl -mr-16 -mt-16" />
             </div>
 
             {/* Funnel de Vendas Modernizado */}
@@ -840,7 +840,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
           <div className="p-4 bg-gray-50/50 border-t border-gray-50 text-center">
             <button 
               onClick={() => onTabChange?.('schedule')}
-              className="text-xs font-bold text-gray-500 hover:text-blue-600 transition-colors"
+              className="text-xs font-bold text-gray-500 hover:text-primary-600 transition-colors"
             >
               Ver todos os agendamentos
             </button>
@@ -869,7 +869,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                   className="flex items-start gap-4 p-4 rounded-xl border border-gray-50 hover:bg-gray-50 transition-all cursor-pointer group"
                 >
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 relative ${
-                    activity.type === 'contact' ? 'bg-blue-100 text-blue-600' : 'bg-teal-100 text-teal-600'
+                    activity.type === 'contact' ? 'bg-primary-100 text-primary-600' : 'bg-teal-100 text-teal-600'
                   }`}>
                     {activity.type === 'contact' ? <User size={20} /> : <Calendar size={20} />}
                     <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center border border-gray-100">
@@ -882,11 +882,11 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                       {activity.description}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-bold text-blue-600 truncate">{activity.name} {activity.phone}</span>
+                      <span className="text-[10px] font-bold text-primary-600 truncate">{activity.name} {activity.phone}</span>
                       <span className="text-[10px] text-gray-400 shrink-0">• {new Date(activity.time).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500 transition-colors mt-2" />
+                  <ChevronRight size={18} className="text-gray-300 group-hover:text-primary-500 transition-colors mt-2" />
                 </div>
               ))
             )}
@@ -915,7 +915,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
               <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
-                    selectedItem.type === 'contact' ? 'bg-blue-500' : 'bg-emerald-500'
+                    selectedItem.type === 'contact' ? 'bg-primary-500' : 'bg-emerald-500'
                   }`}>
                     {selectedItem.type === 'contact' ? <User size={20} /> : <Calendar size={20} />}
                   </div>
@@ -945,20 +945,20 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                       <span className="text-xs text-gray-500">Telefone:</span>
-                      <span className="text-sm font-bold text-blue-600">{selectedItem.phone}</span>
+                      <span className="text-sm font-bold text-primary-600">{selectedItem.phone}</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Resumo da Atividade</h4>
-                  <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
+                  <div className="bg-primary-50/50 border border-primary-100 rounded-2xl p-5">
                     <p className="text-sm text-gray-700 leading-relaxed italic">
                       "{selectedItem.description}"
                     </p>
                     {selectedItem.summary && (
-                      <div className="mt-4 pt-4 border-t border-blue-100">
-                        <p className="text-xs text-blue-600 font-bold mb-1 uppercase tracking-tight">Observações:</p>
+                      <div className="mt-4 pt-4 border-t border-primary-100">
+                        <p className="text-xs text-primary-600 font-bold mb-1 uppercase tracking-tight">Observações:</p>
                         <p className="text-sm text-gray-600">{selectedItem.summary}</p>
                       </div>
                     )}
@@ -981,7 +981,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
                     onTabChange?.('inbox');
                     setSelectedItem(null);
                   }}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-200 transition-all"
+                  className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary-200 transition-all"
                 >
                   <MessageSquare size={18} />
                   Abrir Chat

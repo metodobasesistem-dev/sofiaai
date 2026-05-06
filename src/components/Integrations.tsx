@@ -61,7 +61,7 @@ const IntegrationCard = ({
             <CheckCircle2 size={12} /> Conectado
           </span>
         ) : status === 'connecting' ? (
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-primary-600 bg-primary-50 px-2 py-1 rounded-full border border-primary-100">
             <Loader2 size={12} className="animate-spin" /> Conectando
           </span>
         ) : (
@@ -84,7 +84,7 @@ const IntegrationCard = ({
           disabled={isLoading}
           className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-sm font-black transition-all duration-300 disabled:opacity-70 active:scale-95
           ${buttonVariant === 'primary' 
-            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200' 
+            ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-200' 
             : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -232,7 +232,7 @@ export default function Integrations({ user, role }: { user: User | null, role: 
       {/* Header Section */}
       <div>
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">Integrações</h1>
-        <p className="text-slate-500 font-medium mt-1">Conecte seus canais e ferramentas ao WppAI para automatizar seu fluxo de trabalho.</p>
+        <p className="text-slate-500 font-medium mt-1">Conecte seus canais e ferramentas à Sofia para automatizar seu fluxo de trabalho.</p>
       </div>
 
       {/* Integrations Grid */}
@@ -255,8 +255,8 @@ export default function Integrations({ user, role }: { user: User | null, role: 
 
         <IntegrationCard 
           icon={<Calendar size={24} />}
-          iconBg="bg-blue-50"
-          iconColor="text-blue-600"
+          iconBg="bg-primary-50"
+          iconColor="text-primary-600"
           title="Google Calendar"
           description={profile?.google_calendar_email 
             ? `Sincronizado com: ${profile.google_calendar_email}`
@@ -273,7 +273,7 @@ export default function Integrations({ user, role }: { user: User | null, role: 
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-blue-600 rounded-3xl p-6 mt-[-32px] border-t-0 rounded-t-none relative z-0 shadow-xl shadow-blue-100"
+            className="bg-primary-600 rounded-3xl p-6 mt-[-32px] border-t-0 rounded-t-none relative z-0 shadow-xl shadow-primary-100"
           >
             <label className="block text-[10px] font-black text-white/70 uppercase tracking-widest mb-3 px-1">
               Agenda Sincronizada

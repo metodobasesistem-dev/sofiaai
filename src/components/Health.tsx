@@ -150,7 +150,7 @@ export default function Health() {
         {/* Supabase Status */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
           <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+            <div className="p-3 bg-primary-50 text-primary-600 rounded-2xl">
               <Server size={24} />
             </div>
             <div>
@@ -158,11 +158,11 @@ export default function Health() {
               <h3 className="text-lg font-black text-slate-900">Supabase Cloud</h3>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-blue-600 mb-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-primary-600 mb-4">
             <CheckCircle2 size={14} /> Latência: {dbLatency}ms
           </div>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className={`h-full bg-blue-500 transition-all duration-1000`} style={{ width: `${Math.max(10, 100 - (dbLatency / 10))}%` }} />
+            <div className={`h-full bg-primary-500 transition-all duration-1000`} style={{ width: `${Math.max(10, 100 - (dbLatency / 10))}%` }} />
           </div>
         </div>
 

@@ -64,7 +64,7 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${status === 'active' ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${status === 'active' ? 'bg-primary-50 text-primary-600' : 'bg-gray-50 text-gray-400'}`}>
             <Bot size={24} />
           </div>
           <div>
@@ -156,7 +156,7 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
         {/* Toggle Switch */}
         <button 
           onClick={onToggle}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${status === 'active' ? 'bg-blue-600' : 'bg-gray-200'}`}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${status === 'active' ? 'bg-primary-600' : 'bg-gray-200'}`}
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${status === 'active' ? 'translate-x-6' : 'translate-x-1'}`}
@@ -237,7 +237,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
           key={i}
           animate={{ scale: [1, 1.3, 1], opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-          className="w-2 h-2 bg-indigo-500 rounded-full"
+          className="w-2 h-2 bg-primary-500 rounded-full"
         />
       ))}
     </div>
@@ -752,7 +752,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
         
         <button 
           onClick={handleAddNew}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm shadow-primary-200"
         >
           <Plus size={18} />
           Novo Agente
@@ -780,7 +780,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
           {/* Empty State / Add New Placeholder */}
           <button 
             onClick={handleAddNew}
-            className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50/50 transition-all group min-h-[220px]"
+            className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-300 hover:text-primary-500 hover:bg-primary-50/50 transition-all group min-h-[220px]"
           >
             <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
               <Plus size={24} />
@@ -1141,14 +1141,14 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                         <motion.div 
                           animate={{ scale: [1, 1.2, 1] }}
                           transition={{ duration: 2, repeat: Infinity }}
-                          className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center border border-indigo-500/30"
+                          className="w-32 h-32 bg-primary-500/20 rounded-full flex items-center justify-center border border-primary-500/30"
                         >
-                          <Sparkles size={48} className="text-indigo-400" />
+                          <Sparkles size={48} className="text-primary-400" />
                         </motion.div>
                         <motion.div 
                           animate={{ rotate: 360 }}
                           transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                          className="absolute -inset-4 border-t-2 border-indigo-500 rounded-full"
+                          className="absolute -inset-4 border-t-2 border-primary-500 rounded-full"
                         />
                       </div>
                       <h3 className="text-3xl font-black mb-4">Analisando seu negócio...</h3>
@@ -1166,12 +1166,12 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                       {/* Header */}
                       <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between shrink-0">
                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white">
+                            <div className="w-10 h-10 bg-primary-600 rounded-2xl flex items-center justify-center text-white">
                                <Bot size={20} />
                             </div>
                             <div>
                                <h3 className="font-black text-slate-900 leading-tight">Refinamento IA</h3>
-                               <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Aprimorando Agente</p>
+                               <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest">Aprimorando Agente</p>
                             </div>
                          </div>
                          <div className="text-[11px] font-black text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
@@ -1200,7 +1200,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                  </div>
                               </div>
                               <div className="flex justify-end">
-                                 <div className="max-w-[85%] bg-indigo-600 text-white rounded-[24px] rounded-tr-none p-4 shadow-md text-[15px] leading-relaxed">
+                                 <div className="max-w-[85%] bg-primary-600 text-white rounded-[24px] rounded-tr-none p-4 shadow-md text-[15px] leading-relaxed">
                                     {item.r}
                                  </div>
                               </div>
@@ -1230,7 +1230,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                          )}
                          
                          {isTranscribing && recordingTarget === 'followup' && (
-                           <div className="flex justify-end items-center gap-2 text-indigo-600">
+                           <div className="flex justify-end items-center gap-2 text-primary-600">
                               <span className="text-xs font-black uppercase tracking-widest">Processando sua voz...</span>
                               <Loader2 size={16} className="animate-spin" />
                            </div>
@@ -1252,7 +1252,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                  className={`w-20 h-20 rounded-full flex items-center justify-center shadow-xl transition-all ${
                                    isRecording && recordingTarget === 'followup'
                                    ? 'bg-red-500 ring-4 ring-red-100'
-                                   : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                                   : 'bg-primary-600 hover:bg-primary-700 shadow-primary-500/20'
                                  }`}
                                >
                                  {isRecording && recordingTarget === 'followup' ? (
@@ -1274,12 +1274,12 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                  onChange={(e) => setFollowUpTextResponse(e.target.value)}
                                  onKeyPress={(e) => e.key === 'Enter' && handleFollowUpAnswer(followUpTextResponse)}
                                  placeholder="Ou digite sua resposta..."
-                                 className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm outline-none focus:border-indigo-500 transition-all"
+                                 className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm outline-none focus:border-primary-500 transition-all"
                                />
                                <button 
                                  onClick={() => handleFollowUpAnswer(followUpTextResponse)}
                                  disabled={!followUpTextResponse.trim() || isTranscribing}
-                                 className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-indigo-700 transition-all disabled:opacity-50"
+                                 className="w-14 h-14 bg-primary-600 text-white rounded-2xl flex items-center justify-center hover:bg-primary-700 transition-all disabled:opacity-50"
                                >
                                  <Send size={20} />
                                </button>
@@ -1355,7 +1355,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                       >
                          <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-4">
-                               <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                               <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center">
                                   <Settings2 size={24} />
                                </div>
                                <div>
@@ -1392,7 +1392,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                <button 
                                  onClick={handleUpdateKnowledge}
                                  disabled={isSavingEdit || !knowledgeEditContent.trim()}
-                                 className="flex-[2] py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                 className="flex-[2] py-4 bg-primary-600 text-white font-bold rounded-2xl hover:bg-primary-700 shadow-lg shadow-primary-100 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                                >
                                  {isSavingEdit ? (
                                    <Loader2 size={20} className="animate-spin" />
@@ -1424,22 +1424,22 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                              onClick={() => setFormData({...formData, training_mode: 'text'})}
                              className={`p-6 rounded-3xl border-2 transition-all text-left flex flex-col gap-3 group ${
                                formData.training_mode === 'text' 
-                               ? 'border-blue-600 bg-blue-50/30' 
+                               ? 'border-primary-600 bg-primary-50/30' 
                                : 'border-slate-100 bg-white hover:border-slate-200'
                              }`}
                            >
                               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-                                formData.training_mode === 'text' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                                formData.training_mode === 'text' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
                               }`}>
                                  <FileText size={24} />
                               </div>
                               <div>
-                                 <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'text' ? 'text-blue-600' : 'text-slate-400'}`}>Modo Texto</h4>
+                                 <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'text' ? 'text-primary-600' : 'text-slate-400'}`}>Modo Texto</h4>
                                  <p className="text-[11px] text-slate-500 font-medium mt-1">Preencha os campos de empresa, serviços e FAQ manualmente.</p>
                               </div>
                               {formData.training_mode === 'text' && (
                                 <div className="mt-auto pt-2">
-                                   <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 px-2 py-1 bg-blue-100 rounded-full">Ativo</span>
+                                   <span className="text-[9px] font-black uppercase tracking-widest text-primary-600 px-2 py-1 bg-primary-100 rounded-full">Ativo</span>
                                 </div>
                               )}
                            </button>
@@ -1449,22 +1449,22 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                onClick={() => setFormData({...formData, training_mode: 'audio'})}
                                className={`p-6 rounded-3xl border-2 transition-all text-left flex flex-col gap-3 group ${
                                  formData.training_mode === 'audio' 
-                                 ? 'border-indigo-600 bg-indigo-50/30' 
+                                 ? 'border-primary-600 bg-primary-50/30' 
                                  : 'border-slate-100 bg-white hover:border-slate-200'
                                }`}
                              >
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-                                  formData.training_mode === 'audio' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                                  formData.training_mode === 'audio' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
                                 }`}>
                                    <Mic size={24} />
                                 </div>
                                 <div>
-                                   <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'audio' ? 'text-indigo-600' : 'text-slate-400'}`}>Modo Áudio</h4>
+                                   <h4 className={`font-black uppercase tracking-widest text-xs ${formData.training_mode === 'audio' ? 'text-primary-600' : 'text-slate-400'}`}>Modo Áudio</h4>
                                    <p className="text-[11px] text-slate-500 font-medium mt-1">Grave sua voz para ensinar o agente sobre seu negócio.</p>
                                 </div>
                                 {formData.training_mode === 'audio' && (
                                   <div className="mt-auto pt-2">
-                                     <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 px-2 py-1 bg-indigo-100 rounded-full">Ativo</span>
+                                     <span className="text-[9px] font-black uppercase tracking-widest text-primary-600 px-2 py-1 bg-primary-100 rounded-full">Ativo</span>
                                   </div>
                                 )}
                              </button>
@@ -1559,7 +1559,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                           setKnowledgeEditContent(item.content);
                                           setIsKnowledgeEditModalOpen(true);
                                        }}
-                                       className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                       className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
                                        title="Editar conteúdo"
                                      >
                                        <Settings2 size={16} />
@@ -1730,7 +1730,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                             <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 {item.type === 'qa' ? (
-                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded uppercase">FAQ</span>
+                                  <span className="px-2 py-0.5 bg-primary-50 text-primary-600 text-[10px] font-bold rounded uppercase">FAQ</span>
                                 ) : (
                                   <span className="px-2 py-0.5 bg-teal-50 text-teal-600 text-[10px] font-bold rounded uppercase">Texto Livre</span>
                                 )}
@@ -1910,7 +1910,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                             {formData.nome?.[0] || 'A'}
                           </div>
                           <span className="font-bold text-gray-900">{formData.nome || 'Agente'}</span>
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded uppercase">
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-600 text-[10px] font-bold rounded uppercase">
                             <MessageSquare size={10} /> Atendimento
                           </span>
                           <span className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded uppercase">

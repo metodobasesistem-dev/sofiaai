@@ -125,24 +125,24 @@ const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOu
 
   return (
     <div className={`flex items-center gap-3 py-1 px-2 rounded-2xl min-w-[200px] mb-1
-      ${isOutbound ? 'bg-white/10' : 'bg-blue-50/50'}`}>
+      ${isOutbound ? 'bg-white/10' : 'bg-primary-50/50'}`}>
       <button 
         onClick={togglePlay}
         className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm
-          ${isOutbound ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}
+          ${isOutbound ? 'bg-white text-primary-600' : 'bg-primary-600 text-white'}`}
       >
         {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
       </button>
       <div className="flex-1 space-y-1">
         <div className="h-1 bg-black/10 rounded-full overflow-hidden">
           <motion.div 
-            className={`h-full ${isOutbound ? 'bg-white' : 'bg-blue-600'}`}
+            className={`h-full ${isOutbound ? 'bg-white' : 'bg-primary-600'}`}
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
           />
         </div>
         <div className={`flex justify-between text-[8px] font-bold uppercase tracking-tighter
-          ${isOutbound ? 'text-blue-100' : 'text-slate-400'}`}>
+          ${isOutbound ? 'text-primary-100' : 'text-slate-400'}`}>
           <span>{playing ? 'Reproduzindo' : 'Mensagem de voz'}</span>
           <span>{duration ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, '0')}` : '--:--'}</span>
         </div>
@@ -243,7 +243,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
             {[1, 2, 3, 4, 5, 6].map(i => (
               <motion.div 
                 key={i}
-                className="w-0.5 bg-blue-400 rounded-full"
+                className="w-0.5 bg-primary-400 rounded-full"
                 animate={{ height: [4, 12, 4] }}
                 transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
               />
@@ -253,7 +253,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
 
         <button 
           onClick={stopAndSend}
-          className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all"
+          className="p-2.5 bg-primary-600 text-white rounded-xl shadow-lg shadow-primary-500/20 hover:bg-primary-700 active:scale-95 transition-all"
           title="Enviar áudio"
         >
           <Send size={18} />
@@ -266,7 +266,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
     <button
       type="button"
       onClick={startRecording}
-      className="w-11 h-11 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:text-blue-600 hover:bg-blue-50 transition-all duration-300 shadow-sm active:scale-90 shrink-0"
+      className="w-11 h-11 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:text-primary-600 hover:bg-primary-50 transition-all duration-300 shadow-sm active:scale-90 shrink-0"
       title="Gravar áudio"
     >
       <Mic size={20} />
@@ -283,7 +283,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
     <div className="relative shrink-0">
       <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="lg" />
       {thread.status === 'ia' && (
-        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-blue-500 border-2 border-white rounded-full z-10" />
+        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-primary-500 border-2 border-white rounded-full z-10" />
       )}
     </div>
 
@@ -404,7 +404,7 @@ const ChatBubble: React.FC<{
         return (
           <div onClick={() => onPreview({ url: message.media_url, type: 'document', name: message.media_filename })}
              className="flex items-center gap-3 p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-colors cursor-pointer">
-            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-primary-500 flex items-center justify-center text-white shrink-0">
               <FileText size={20} />
             </div>
             <div className="min-w-0">
@@ -438,11 +438,11 @@ const ChatBubble: React.FC<{
       case 'location':
         return (
           <div className="space-y-2">
-             <div className="flex items-center gap-2 text-blue-600 font-bold">
+             <div className="flex items-center gap-2 text-primary-600 font-bold">
                <MapPin size={16} /> Localização enviada
              </div>
              <p className="text-xs">{message.text}</p>
-             <a href={`https://www.google.com/maps/search/?api=1&query=${message.text.split(': ')[1]}`} target="_blank" className="text-blue-500 underline text-xs">
+             <a href={`https://www.google.com/maps/search/?api=1&query=${message.text.split(': ')[1]}`} target="_blank" className="text-primary-500 underline text-xs">
                Ver no mapa
              </a>
           </div>
@@ -508,7 +508,7 @@ const ChatBubble: React.FC<{
         <div className={`flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="relative group/emoji">
             <button 
-              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+              className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
               title="Reagir"
             >
               <Smile size={14} />
@@ -1117,7 +1117,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       setIsEditingName(false);
                     }
                   }}
-                  className="w-full bg-white border-2 border-blue-500 rounded-xl px-4 py-2 text-center text-sm font-bold focus:outline-none shadow-lg"
+                  className="w-full bg-white border-2 border-primary-500 rounded-xl px-4 py-2 text-center text-sm font-bold focus:outline-none shadow-lg"
                   autoFocus
                 />
                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Pressione Enter para salvar</p>
@@ -1130,7 +1130,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     setNewName(activeThread.name);
                     setIsEditingName(true);
                   }}
-                  className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover/name:opacity-100"
+                  className="p-1.5 text-slate-300 hover:text-primary-500 hover:bg-primary-50 rounded-lg transition-all opacity-0 group-hover/name:opacity-100"
                   title="Editar nome"
                 >
                   <Edit2 size={14} />
@@ -1139,8 +1139,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             )}
             <div className="mt-4 flex items-center justify-center gap-2">
               <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
-                ${activeThread.funilStatus === 'Lead' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-                  activeThread.funilStatus === 'Qualificado' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
+                ${activeThread.funilStatus === 'Lead' ? 'bg-primary-50 text-primary-600 border-primary-100' : 
+                  activeThread.funilStatus === 'Qualificado' ? 'bg-primary-50 text-primary-600 border-primary-100' : 
                   'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
                 {activeThread.funilStatus || 'Lead'}
               </span>
@@ -1163,7 +1163,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Bookmark size={14} className="text-blue-500" /> Contexto do Ticket
+              <Bookmark size={14} className="text-primary-500" /> Contexto do Ticket
             </h4>
             <div className="space-y-3">
               <div className="flex flex-col gap-1.5">
@@ -1175,7 +1175,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     await supabase.from('threads').update({ priority: val }).eq('id', activeThread.id);
                     setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, priority: val } : t));
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
                 >
                   <option value="low">Baixa 🟢</option>
                   <option value="normal">Normal ⚪</option>
@@ -1193,7 +1193,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, assignedTo: val } : t));
                     toast.success(val ? 'Conversa atribuída!' : 'Atribuição removida.');
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
                 >
                   <option value="">Não atribuído</option>
                   <option value={user?.id || 'me'}>Você ({user?.email?.split('@')[0]})</option>
@@ -1227,12 +1227,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {/* Etiquetas (Labels) */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Tag size={14} className="text-blue-500" /> Etiquetas
+              <Tag size={14} className="text-primary-500" /> Etiquetas
             </h4>
             <div className="flex flex-wrap gap-2 mb-3">
               {activeThread.labels && activeThread.labels.length > 0 ? (
                 activeThread.labels.map((label, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-xl text-[11px] font-bold text-blue-700 group shadow-sm">
+                  <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 border border-primary-100 rounded-xl text-[11px] font-bold text-primary-700 group shadow-sm">
                     {label}
                     <button 
                       onClick={async () => {
@@ -1254,7 +1254,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               <input 
                 type="text" 
                 placeholder="Adicionar..."
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl text-[12px] px-4 py-2.5 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl text-[12px] px-4 py-2.5 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all"
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter') {
                     const val = e.currentTarget.value.trim();
@@ -1273,11 +1273,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {/* Dados do Contato */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-              <Info size={14} className="text-blue-500" /> Informações
+              <Info size={14} className="text-primary-500" /> Informações
             </h4>
             <div className="space-y-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-primary-50 flex items-center justify-center text-primary-600 shrink-0 border border-primary-100 shadow-sm">
                   <Phone size={18} />
                 </div>
                 <div>
@@ -1287,7 +1287,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
               
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-primary-50 flex items-center justify-center text-primary-600 shrink-0 border border-primary-100 shadow-sm">
                   <Clock size={18} />
                 </div>
                 <div>
@@ -1303,15 +1303,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {/* Agendamentos */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-2"><Calendar size={14} className="text-blue-500" /> Agendamentos</span>
-              <span className="bg-blue-600 text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg shadow-blue-500/20">{appointments.length}</span>
+              <span className="flex items-center gap-2"><Calendar size={14} className="text-primary-500" /> Agendamentos</span>
+              <span className="bg-primary-600 text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg shadow-primary-500/20">{appointments.length}</span>
             </h4>
             <div className="space-y-4">
               {appointments.length > 0 ? (
                 appointments.map((app, idx) => (
-                  <div key={idx} className="p-5 bg-slate-50/50 rounded-[2rem] border border-slate-100 hover:border-blue-200 transition-all group relative overflow-hidden">
+                  <div key={idx} className="p-5 bg-slate-50/50 rounded-[2rem] border border-slate-100 hover:border-primary-200 transition-all group relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-2">
-                       <Calendar size={48} className="text-blue-500/5 -mr-4 -mt-4 rotate-12" />
+                       <Calendar size={48} className="text-primary-500/5 -mr-4 -mt-4 rotate-12" />
                     </div>
                     <div className="flex justify-between items-start mb-3 relative z-10">
                       <p className="text-[14px] font-black text-slate-900 truncate flex-1">{app.service || 'Procedimento'}</p>
@@ -1321,7 +1321,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold relative z-10 bg-white/50 w-fit px-3 py-1 rounded-full border border-slate-100/50">
-                      <Clock size={12} className="text-blue-500" />
+                      <Clock size={12} className="text-primary-500" />
                       {new Date(app.start_time).toLocaleDateString('pt-BR')} • {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
@@ -1340,7 +1340,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {/* Gestão do Funil */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-              <CreditCard size={14} className="text-blue-500" /> Gestão de Funil
+              <CreditCard size={14} className="text-primary-500" /> Gestão de Funil
             </h4>
             <div className="flex flex-col gap-2">
               {(['Lead', 'Qualificado', 'Resolvido'] as const).map((status) => {
@@ -1367,17 +1367,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     }}
                     className={`group w-full flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all
                       ${isActive 
-                        ? 'bg-blue-50 border-blue-500 shadow-xl shadow-blue-500/10 scale-[1.02]' 
-                        : 'bg-white border-slate-100 hover:border-blue-200'}`}
+                        ? 'bg-primary-50 border-primary-500 shadow-xl shadow-primary-500/10 scale-[1.02]' 
+                        : 'bg-white border-slate-100 hover:border-primary-200'}`}
                   >
                     <div className="flex items-center gap-4">
                       <div className={`w-3 h-3 rounded-full shadow-sm
-                        ${status === 'Lead' ? 'bg-blue-500' : 
-                          status === 'Qualificado' ? 'bg-indigo-500' : 'bg-emerald-500'}`} 
+                        ${status === 'Lead' ? 'bg-primary-500' : 
+                          status === 'Qualificado' ? 'bg-primary-500' : 'bg-emerald-500'}`} 
                       />
-                      <span className={`text-[14px] font-bold ${isActive ? 'text-blue-700' : 'text-slate-600'}`}>{status}</span>
+                      <span className={`text-[14px] font-bold ${isActive ? 'text-primary-700' : 'text-slate-600'}`}>{status}</span>
                     </div>
-                    {isActive && <Check size={18} className="text-blue-600" strokeWidth={3} />}
+                    {isActive && <Check size={18} className="text-primary-600" strokeWidth={3} />}
                   </button>
                 );
               })}
@@ -1697,7 +1697,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }>
       {isFullscreen && (
         <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 hidden md:flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold mb-8 shadow-lg shadow-blue-500/20">
+          <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold mb-8 shadow-lg shadow-primary-500/20">
             W
           </div>
           
@@ -1705,45 +1705,45 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <button 
               onClick={() => setActiveTab('conversations')}
               className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
-                ${activeTab === 'conversations' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                ${activeTab === 'conversations' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Conversas"
             >
-              <MessageCircle size={22} className={activeTab === 'conversations' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              <MessageCircle size={22} className={activeTab === 'conversations' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Conversas</span>}
-              {activeTab === 'conversations' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+              {activeTab === 'conversations' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
             
             <button 
               onClick={() => setActiveTab('contacts')}
               className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
-                ${activeTab === 'contacts' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                ${activeTab === 'contacts' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Contatos"
             >
-              <Users size={22} className={activeTab === 'contacts' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              <Users size={22} className={activeTab === 'contacts' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Contatos</span>}
-              {activeTab === 'contacts' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+              {activeTab === 'contacts' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
 
             <button 
               onClick={() => setActiveTab('kanban')}
               className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
-                ${activeTab === 'kanban' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                ${activeTab === 'kanban' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Kanban"
             >
-              <LayoutDashboard size={22} className={activeTab === 'kanban' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              <LayoutDashboard size={22} className={activeTab === 'kanban' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Kanban</span>}
-              {activeTab === 'kanban' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+              {activeTab === 'kanban' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
 
             <button 
               onClick={() => setActiveTab('reports')}
               className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
-                ${activeTab === 'reports' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                ${activeTab === 'reports' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
               title="Relatórios"
             >
-              <BarChart3 size={22} className={activeTab === 'reports' ? 'fill-blue-400/20 shrink-0' : 'shrink-0'} />
+              <BarChart3 size={22} className={activeTab === 'reports' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Relatórios</span>}
-              {activeTab === 'reports' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />}
+              {activeTab === 'reports' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
           </div>
 
@@ -1786,14 +1786,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         <div className="p-4 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
-              <MessageCircle size={14} className="text-blue-600" />
+              <MessageCircle size={14} className="text-primary-600" />
               Conversas
             </h2>
             <div className="flex items-center gap-1">
               {!isFullscreen && (
                 <button
                   onClick={() => window.open('/?fullscreen=true', '_blank')}
-                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                  className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
                   title="Abrir em Nova Janela"
                 >
                   <ExternalLink size={14} />
@@ -1817,7 +1817,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               placeholder="Pesquisar..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] placeholder-slate-400 focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] placeholder-slate-400 focus:bg-white focus:border-primary-300 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
             />
           </div>
 
@@ -1828,7 +1828,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 onClick={() => setFilterStatus(f)}
                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0
                   ${filterStatus === f 
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border border-blue-500' 
+                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-200 border border-primary-500' 
                     : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'}`}
               >
                 {f}
@@ -1870,7 +1870,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setSelectedThreadId(null)}
-                  className="md:hidden p-2 -ml-2 text-slate-500 hover:text-blue-600 transition-colors"
+                  className="md:hidden p-2 -ml-2 text-slate-500 hover:text-primary-600 transition-colors"
                 >
                   <ArrowLeft size={20} />
                 </button>
@@ -1937,14 +1937,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       setShowDetails(!showDetails);
                     }
                   }}
-                  className={`p-2 rounded-lg transition-all ${showDetails ? 'text-blue-600 bg-blue-50 border border-blue-100' : 'text-slate-400 hover:bg-slate-50 border border-transparent'}`}
+                  className={`p-2 rounded-lg transition-all ${showDetails ? 'text-primary-600 bg-primary-50 border border-primary-100' : 'text-slate-400 hover:bg-slate-50 border border-transparent'}`}
                   title={showDetails ? "Esconder Detalhes" : "Mostrar Detalhes"}
                 >
                   <Info size={18} />
                 </button>
 
                 <div className="hidden sm:flex items-center gap-1">
-                  <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Phone size={18} /></button>
+                  <button className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"><Phone size={18} /></button>
                   <button 
                     onClick={() => handleDeleteThread(activeThread)}
                     className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
@@ -1962,7 +1962,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               {loadingMessages ? (
                 <div className="space-y-6">
                   <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
-                  <Skeleton variant="rect" width="40%" height={40} className="rounded-2xl rounded-tr-none bg-blue-100 self-end" />
+                  <Skeleton variant="rect" width="40%" height={40} className="rounded-2xl rounded-tr-none bg-primary-100 self-end" />
                 </div>
               ) : (
                 <>
@@ -1984,7 +1984,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <button
                     key={reply.id}
                     onClick={() => setMessageText(reply.content)}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full text-[11px] font-bold transition-all whitespace-nowrap border border-blue-100 shadow-sm"
+                    className="px-3 py-1.5 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-full text-[11px] font-bold transition-all whitespace-nowrap border border-primary-100 shadow-sm"
                   >
                     {reply.title}
                   </button>
@@ -2011,11 +2011,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                           setShowSlashMenu(false);
                         }}
                         className={`w-full text-left px-4 py-3 border-b border-slate-50 last:border-0 transition-all
-                          ${slashIndex === idx ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                          ${slashIndex === idx ? 'bg-primary-50' : 'hover:bg-slate-50'}`}
                         onMouseEnter={() => setSlashIndex(idx)}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[13px] font-bold ${slashIndex === idx ? 'text-blue-700' : 'text-slate-800'}`}>
+                          <span className={`text-[13px] font-bold ${slashIndex === idx ? 'text-primary-700' : 'text-slate-800'}`}>
                             {reply.title}
                           </span>
                         </div>
@@ -2029,7 +2029,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <button 
                   type="button" 
                   onClick={() => fileInputRef.current?.click()} 
-                  className="p-2 text-slate-500 hover:text-blue-600 transition-all"
+                  className="p-2 text-slate-500 hover:text-primary-600 transition-all"
                   title="Anexar"
                 >
                   <Paperclip size={22} />
@@ -2038,7 +2038,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <button 
                     type="button" 
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                    className={`p-2 transition-all ${showEmojiPicker ? 'text-blue-600' : 'text-slate-500 hover:text-blue-600'}`}
+                    className={`p-2 transition-all ${showEmojiPicker ? 'text-primary-600' : 'text-slate-500 hover:text-primary-600'}`}
                     title="Emojis"
                   >
                     <Smile size={22} />
@@ -2053,7 +2053,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                             setMessageText(prev => prev + emoji);
                             setShowEmojiPicker(false);
                           }}
-                          className="w-10 h-10 flex items-center justify-center hover:bg-blue-50 rounded-xl transition-all text-[20px] hover:scale-125 active:scale-95"
+                          className="w-10 h-10 flex items-center justify-center hover:bg-primary-50 rounded-xl transition-all text-[20px] hover:scale-125 active:scale-95"
                         >
                           {emoji}
                         </button>
@@ -2112,7 +2112,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <button 
                     type="submit" 
                     onClick={handleSendMessage}
-                    className="w-11 h-11 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-md shrink-0"
+                    className="w-11 h-11 bg-primary-600 text-white rounded-full flex items-center justify-center shadow-md shrink-0"
                   >
                     <Send size={18} className="ml-0.5" />
                   </button>
@@ -2128,8 +2128,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
             
             <div className="relative z-10 flex flex-col items-center">
-              <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mb-6 shadow-xl shadow-blue-500/10 border border-slate-100/50">
-                <MessageCircle size={56} className="text-blue-500/80" />
+              <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mb-6 shadow-xl shadow-primary-500/10 border border-slate-100/50">
+                <MessageCircle size={56} className="text-primary-500/80" />
               </div>
               <h3 className="text-[22px] font-bold text-slate-800 mb-3 tracking-tight">Sua Caixa de Entrada</h3>
               <p className="max-w-sm text-[14px] text-slate-500 leading-relaxed">
@@ -2137,7 +2137,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </p>
               <div className="mt-10 flex gap-4">
                  <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200/60 shadow-sm text-[12px] font-semibold text-slate-500 flex items-center gap-2">
-                    <Bot size={16} className="text-blue-500" /> IA Ativa
+                    <Bot size={16} className="text-primary-500" /> IA Ativa
                  </div>
                  <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200/60 shadow-sm text-[12px] font-semibold text-slate-500 flex items-center gap-2">
                     <Users size={16} className="text-emerald-500" /> CRM Integrado
@@ -2176,7 +2176,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                <ArrowLeft size={24} />
                <span className="font-bold text-slate-800">Detalhes do Lead</span>
              </button>
-             <button className="p-2 text-slate-400 hover:text-blue-600 rounded-full transition-all">
+             <button className="p-2 text-slate-400 hover:text-primary-600 rounded-full transition-all">
                 <MoreVertical size={20} />
              </button>
           </div>
@@ -2195,7 +2195,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           ${selectedThreadId ? 'hidden' : 'flex'}`}>
           <button 
             onClick={() => { setActiveTab('conversations'); setSelectedThreadId(null); }}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'conversations' ? 'text-blue-600' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'conversations' ? 'text-primary-600' : 'text-slate-400'}`}
           >
             <MessageCircle size={24} fill={activeTab === 'conversations' ? 'currentColor' : 'none'} className={activeTab === 'conversations' ? 'opacity-20' : ''} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Conversas</span>
@@ -2203,7 +2203,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           
           <button 
             onClick={() => setActiveTab('contacts')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-blue-600' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'contacts' ? 'text-primary-600' : 'text-slate-400'}`}
           >
             <Users size={24} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Contatos</span>
@@ -2211,7 +2211,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
           <button 
             onClick={() => setActiveTab('integrations')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-blue-600' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-primary-600' : 'text-slate-400'}`}
           >
             <Layers size={24} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Integrações</span>
@@ -2219,7 +2219,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
           <button 
             onClick={() => setActiveTab('reports')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-blue-600' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-primary-600' : 'text-slate-400'}`}
           >
             <BarChart3 size={24} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Analytics</span>
@@ -2233,7 +2233,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             {/* Header */}
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <Paperclip size={18} className="text-blue-500" />
+                <Paperclip size={18} className="text-primary-500" />
                 Enviar Imagem Colada
               </h3>
               <button 
@@ -2269,7 +2269,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   placeholder="Escreva uma legenda para a imagem..."
                   value={pasteCaption}
                   onChange={(e) => setPasteCaption(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-50 outline-none transition-all resize-none"
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-primary-400 focus:ring-4 focus:ring-primary-50 outline-none transition-all resize-none"
                   rows={2}
                   autoFocus
                 />
@@ -2292,7 +2292,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               <button
                 onClick={handleSendPastedImage}
                 disabled={isUploadingPaste}
-                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-primary-500/20 hover:bg-primary-700 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
               >
                 {isUploadingPaste ? (
                   <>
@@ -2335,7 +2335,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
             {previewMedia.type === 'document' && (
                <div className="bg-white rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in duration-300 max-w-sm w-full">
-                  <div className="w-24 h-24 rounded-2xl bg-blue-500 flex items-center justify-center text-white">
+                  <div className="w-24 h-24 rounded-2xl bg-primary-500 flex items-center justify-center text-white">
                     <FileText size={48} />
                   </div>
                   <div className="text-center">
@@ -2346,7 +2346,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     href={previewMedia.url} 
                     target="_blank" 
                     download={previewMedia.name}
-                    className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg"
+                    className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold transition-all shadow-lg"
                   >
                     <Download size={18} /> Download Arquivo
                   </a>

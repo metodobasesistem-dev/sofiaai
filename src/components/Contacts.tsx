@@ -77,8 +77,8 @@ const formatRelative = (date: any): string => {
 // ── Status Badge ────────────────────────────────────────────────────────────────
 
 const FUNIL_STYLES: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-  Lead:       { label: 'Lead',       className: 'bg-blue-50 text-blue-700 border-blue-200',     icon: <Zap size={10} /> },
-  Qualificado:{ label: 'Qualificado',className: 'bg-indigo-50 text-indigo-700 border-indigo-200',   icon: <CheckCircle2 size={10} /> },
+  Lead:       { label: 'Lead',       className: 'bg-primary-50 text-primary-700 border-primary-200',     icon: <Zap size={10} /> },
+  Qualificado:{ label: 'Qualificado',className: 'bg-primary-50 text-primary-700 border-primary-200',   icon: <CheckCircle2 size={10} /> },
   Resolvido:  { label: 'Resolvido',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200',   icon: <CheckCircle2 size={10} /> },
 };
 
@@ -185,7 +185,7 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => onEdit(contact)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+          <button onClick={() => onEdit(contact)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all">
             <Edit2 size={18} />
           </button>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
@@ -271,9 +271,9 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
           ) : (
             <div className="space-y-2">
               {appointments.map((appt) => (
-                <div key={appt.id} className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                  <p className="text-xs font-bold text-blue-800">{appt.date} às {appt.time}</p>
-                  <p className="text-xs text-blue-600">{appt.summary || appt.niche || 'Consulta'}</p>
+                <div key={appt.id} className="bg-primary-50 border border-primary-100 rounded-xl p-3">
+                  <p className="text-xs font-bold text-primary-800">{appt.date} às {appt.time}</p>
+                  <p className="text-xs text-primary-600">{appt.summary || appt.niche || 'Consulta'}</p>
                 </div>
               ))}
             </div>
@@ -310,7 +310,7 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
       <div className="p-4 border-t border-gray-100 flex gap-3">
         <button
           onClick={openInbox}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm shadow-primary-200"
         >
           <MessageSquare size={16} /> Abrir Chat
         </button>
@@ -510,7 +510,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                 setFormData({ nome: '', telefone: '' }); 
                 setIsModalOpen(true); 
               }}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-xs font-black hover:bg-primary-700 transition-colors shadow-lg shadow-primary-100"
             >
               <Plus size={16} /> Novo Contato
             </button>
@@ -535,14 +535,14 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
         >
           {[
             { label: 'Total', value: stats.total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', status: 'Todos' },
-            { label: 'Leads', value: stats.leads, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100', status: 'Lead' },
+            { label: 'Leads', value: stats.leads, color: 'text-primary-700', bg: 'bg-primary-50', border: 'border-primary-100', status: 'Lead' },
             { label: 'Clientes', value: stats.clientes, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-100', status: 'Cliente' },
             { label: 'Resolvidos', value: stats.resolvidos, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', status: 'Resolvido' },
           ].map((s, i) => (
             <button
               key={i}
               onClick={() => setFilterStatus(s.status as any)}
-              className={`flex-shrink-0 w-32 md:w-auto ${s.bg} border ${s.border} rounded-2xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-blue-400' : ''}`}
+              className={`flex-shrink-0 w-32 md:w-auto ${s.bg} border ${s.border} rounded-2xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-primary-400' : ''}`}
             >
               <p className={`text-xl md:text-2xl font-black ${s.color}`}>{s.value}</p>
               <p className="text-[10px] md:text-xs font-bold text-gray-500 mt-0.5 uppercase tracking-wider">{s.label}</p>
@@ -558,7 +558,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
           <input 
             type="text" 
             placeholder="Buscar por nome ou número..." 
-            className="w-full pl-11 pr-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-sm focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all"
+            className="w-full pl-11 pr-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-sm focus:bg-white focus:ring-4 focus:ring-primary-500/5 focus:border-primary-500 outline-none transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -570,7 +570,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as any)}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+              className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:bg-white focus:ring-4 focus:ring-primary-500/5 focus:border-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="all">Todo o período</option>
               <option value="today">Hoje</option>
@@ -592,7 +592,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             <button
               key={f}
               onClick={() => setFilterStatus(f as any)}
-              className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all ${filterStatus === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all ${filterStatus === f ? 'bg-primary-600 text-white shadow-lg shadow-primary-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
             >
               {f}
             </button>
@@ -625,7 +625,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             {contacts.length === 0 && (
               <button 
                 onClick={() => setIsModalOpen(true)}
-                className="mt-6 flex items-center gap-2 px-4 py-2 text-blue-600 font-semibold text-sm hover:bg-blue-50 rounded-lg transition-colors"
+                className="mt-6 flex items-center gap-2 px-4 py-2 text-primary-600 font-semibold text-sm hover:bg-primary-50 rounded-lg transition-colors"
               >
                 <Plus size={18} /> Adicionar primeiro contato
               </button>
@@ -651,7 +651,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                       <tr 
                         key={contact.id} 
                         onClick={() => setSelectedContact(contact)}
-                        className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                        className="hover:bg-primary-50/30 transition-colors cursor-pointer group"
                       >
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
@@ -711,7 +711,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
-                              className="p-2 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                              className="p-2 text-gray-300 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all"
                               title="Ver detalhes"
                             >
                               <ChevronRight size={18} />
@@ -824,7 +824,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             >
               <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-200">
+                  <div className="w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center shadow-lg shadow-primary-200">
                     {editingContactId ? <Edit2 size={20} /> : <UserPlus size={20} />}
                   </div>
                   <h3 className="text-lg font-bold text-gray-900">{editingContactId ? 'Editar Contato' : 'Novo Contato'}</h3>
@@ -839,7 +839,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Nome Completo</label>
                     <input 
                       type="text" required placeholder="Ex: João Silva"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       value={formData.nome}
                       onChange={e => setFormData({...formData, nome: e.target.value})}
                     />
@@ -848,7 +848,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">WhatsApp (com DDD)</label>
                     <input 
                       type="tel" required placeholder="Ex: 11 99999-9999"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
                       value={formData.telefone}
                       onChange={e => setFormData({...formData, telefone: e.target.value})}
                     />
@@ -863,7 +863,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                   </button>
                   <button 
                     type="submit" disabled={isSaving}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-70"
+                    className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary-200 flex items-center justify-center gap-2 disabled:opacity-70"
                   >
                     {isSaving ? <><Loader2 size={18} className="animate-spin" /> Salvando...</> : 'Salvar Contato'}
                   </button>

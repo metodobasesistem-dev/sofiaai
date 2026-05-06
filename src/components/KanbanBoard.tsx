@@ -35,12 +35,12 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
   const columns = viewMode === 'funil' 
     ? [
         { id: 'Lead', title: 'Leads', color: 'bg-slate-100', borderColor: 'border-slate-200', titleColor: 'text-slate-600' },
-        { id: 'Qualificado', title: 'Qualificados', color: 'bg-indigo-50', borderColor: 'border-indigo-100', titleColor: 'text-indigo-600' },
+        { id: 'Qualificado', title: 'Qualificados', color: 'bg-primary-50', borderColor: 'border-primary-100', titleColor: 'text-primary-600' },
         { id: 'Resolvido', title: 'Resolvidos', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
       ]
     : [
         { id: 'open', title: 'Abertos', color: 'bg-amber-50', borderColor: 'border-amber-100', titleColor: 'text-amber-600' },
-        { id: 'pending', title: 'Pendentes', color: 'bg-blue-50', borderColor: 'border-blue-100', titleColor: 'text-blue-600' },
+        { id: 'pending', title: 'Pendentes', color: 'bg-primary-50', borderColor: 'border-primary-100', titleColor: 'text-primary-600' },
         { id: 'resolved', title: 'Resolvidos', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
       ];
 
@@ -157,7 +157,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
       <div className="p-6 md:p-8 border-b border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <LayoutGrid className="text-blue-600" />
+            <LayoutGrid className="text-primary-600" />
             Kanban Board
           </h1>
           <p className="text-gray-500 text-sm mt-1">Gerencie seus contatos e tickets de forma visual.</p>
@@ -172,7 +172,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
               placeholder="Buscar card..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
             />
           </div>
 
@@ -181,13 +181,13 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
             <div className="flex bg-white rounded-lg shadow-sm p-0.5 border border-gray-100">
               <button 
                 onClick={() => setDateType('updated')}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'updated' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'updated' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 Atualização
               </button>
               <button 
                 onClick={() => setDateType('created')}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'created' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'created' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 Criação
               </button>
@@ -196,9 +196,9 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
             <div className="relative">
               <button 
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-blue-300 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-primary-300 transition-all shadow-sm"
               >
-                <Calendar size={14} className="text-blue-500" />
+                <Calendar size={14} className="text-primary-500" />
                 {dateFilter === 'all' ? 'Todo o período' : 
                  dateFilter === 'today' ? 'Hoje' :
                  dateFilter === 'yesterday' ? 'Ontem' :
@@ -219,7 +219,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                           if (f !== 'custom') setShowDatePicker(false);
                         }}
                         className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors
-                          ${dateFilter === f ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                          ${dateFilter === f ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}
                       >
                         {f === 'all' ? 'Todo o período' : 
                          f === 'today' ? 'Hoje' :
@@ -237,7 +237,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                             type="date" 
                             value={customRange.start}
                             onChange={e => setCustomRange(prev => ({ ...prev, start: e.target.value }))}
-                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-blue-300"
+                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-primary-300"
                           />
                         </div>
                         <div className="space-y-1">
@@ -246,7 +246,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                             type="date" 
                             value={customRange.end}
                             onChange={e => setCustomRange(prev => ({ ...prev, end: e.target.value }))}
-                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-blue-300"
+                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-primary-300"
                           />
                         </div>
                       </div>
@@ -261,13 +261,13 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
           <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
             <button 
               onClick={() => setViewMode('funil')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'funil' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'funil' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Filter size={16} /> <span className="whitespace-nowrap">Por Funil</span>
             </button>
             <button 
               onClick={() => setViewMode('ticket')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'ticket' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'ticket' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Ticket size={16} /> <span className="whitespace-nowrap">Por Ticket</span>
             </button>
@@ -306,11 +306,11 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                         key={card.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, card.id)}
-                        className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all cursor-grab active:cursor-grabbing group
+                        className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-primary-200 transition-all cursor-grab active:cursor-grabbing group
                           ${draggedCardId === card.id ? 'opacity-50 scale-95' : ''}`}
                       >
                         <div className="flex justify-between items-start mb-3">
-                          <h4 className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1 flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-gray-900 group-hover:text-primary-600 transition-colors line-clamp-1 flex items-center gap-2">
                             {card.name}
                             {card.is_client && <span className="text-amber-500" title="Cliente">⭐</span>}
                           </h4>
@@ -329,7 +329,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                         </div>
                         <div className="flex items-center justify-between pt-3 border-t border-gray-50">
                           <div className="flex items-center gap-1.5">
-                             <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold overflow-hidden">
+                             <div className="w-5 h-5 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-[9px] font-bold overflow-hidden">
                                {card.photo_url ? (
                                  <img src={card.photo_url} alt={card.name} className="w-full h-full object-cover" />
                                ) : (
@@ -338,7 +338,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                              </div>
                              <span className="text-[10px] font-semibold text-gray-400">{card.agent_name || 'Robô'}</span>
                           </div>
-                          <button className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-blue-600 transition-all">
+                          <button className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-primary-600 transition-all">
                             <ArrowRight size={14} />
                           </button>
                         </div>
