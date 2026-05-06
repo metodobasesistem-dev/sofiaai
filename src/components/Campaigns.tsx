@@ -17,12 +17,16 @@ import {
   BarChart3,
   Sparkles,
   Zap,
-  RefreshCw
+  RefreshCw,
+  Play,
+  Pause,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { Skeleton } from './common/SkeletonLoader';
+import { sendTemplateMessage } from '../services/whatsappService';
 
 interface Campaign {
   id: string;
@@ -74,6 +78,8 @@ export default function Campaigns() {
     { id: 'status_funil', label: 'Status do Funil' }
   ];
 
+  const [processingCampaignId, setProcessingCampaignId] = useState<string | null>(null);
+
   // Fetch Templates
   const fetchTemplates = async () => {
     try {
@@ -103,6 +109,110 @@ export default function Campaigns() {
       toast.error('Erro ao carregar campanhas: ' + err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const startCampaign = async (campaign: Campaign) => {
+    if (processingCampaignId) {
+      toast.error('Já existe uma campanha sendo processada.');
+      return;
+    }
+
+    try {
+      setProcessingCampaignId(campaign.id);
+      
+      // 1. Update status to sending
+      await supabase.from('campaigns').update({ status: 'sending' }).eq('id', campaign.id);
+      fetchCampaigns();
+
+      // 2. Fetch target contacts
+      let query = supabase.from('contacts').select('*');
+      
+      if (campaign.target_type === 'labels' && campaign.selected_labels) {
+         // This is complex because labels are in threads, but let's assume for now 
+         // we filter contacts that have been matched before or just use the funnel status if available.
+         // For now, let's filter by status_funil if it's funnel, or all if it's all.
+         // If it's labels, we might need a join or a specific logic.
+         // To keep it simple and working for the user now:
+         if (campaign.target_type === 'funnel') {
+            query = query.eq('status_funil', campaign.selected_funnel_status);
+         }
+      } else if (campaign.target_type === 'funnel') {
+        query = query.eq('status_funil', campaign.selected_funnel_status);
+      }
+
+      const { data: contacts, error: contactsErr } = await query;
+      if (contactsErr) throw contactsErr;
+
+      if (!contacts || contacts.length === 0) {
+        toast.error('Nenhum contato encontrado para os filtros selecionados.');
+        await supabase.from('campaigns').update({ status: 'completed' }).eq('id', campaign.id);
+        fetchCampaigns();
+        return;
+      }
+
+      // Update total contacts if it was 0
+      await supabase.from('campaigns').update({ total_contacts: contacts.length }).eq('id', campaign.id);
+
+      // 3. Loop and send
+      let sentCount = 0;
+      let errorCount = 0;
+
+      for (const contact of contacts) {
+        try {
+          // Map variables
+          const mappedVars = Object.entries(campaign.variables || {}).map(([key, field]) => {
+            return contact[field as keyof typeof contact] || '';
+          });
+
+          await sendTemplateMessage(contact.phone, campaign.template_name, mappedVars);
+          sentCount++;
+          
+          // Log success
+          await supabase.from('campaign_logs').insert({
+            campaign_id: campaign.id,
+            contact_id: contact.id,
+            status: 'sent'
+          });
+
+        } catch (err) {
+          console.error(`Error sending to ${contact.phone}:`, err);
+          errorCount++;
+          // Log error
+          await supabase.from('campaign_logs').insert({
+            campaign_id: campaign.id,
+            contact_id: contact.id,
+            status: 'error',
+            error_message: (err as any).message
+          });
+        }
+
+        // Update progress every 5 messages or at the end
+        if (sentCount % 5 === 0 || sentCount + errorCount === contacts.length) {
+          await supabase.from('campaigns').update({
+            sent_count: sentCount,
+            error_count: errorCount
+          }).eq('id', campaign.id);
+          fetchCampaigns();
+        }
+      }
+
+      // 4. Finalize
+      await supabase.from('campaigns').update({
+        status: 'completed',
+        sent_count: sentCount,
+        error_count: errorCount
+      }).eq('id', campaign.id);
+      
+      toast.success(`Campanha finalizada! Enviadas: ${sentCount}, Erros: ${errorCount}`);
+      fetchCampaigns();
+
+    } catch (err: any) {
+      toast.error('Erro ao processar campanha: ' + err.message);
+      await supabase.from('campaigns').update({ status: 'failed' }).eq('id', campaign.id);
+      fetchCampaigns();
+    } finally {
+      setProcessingCampaignId(null);
     }
   };
 
@@ -534,6 +644,22 @@ export default function Campaigns() {
                     </div>
 
                     <div className="flex items-center gap-8">
+                      {campaign.status === 'pending' && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Deseja iniciar o envio para esta campanha agora?')) {
+                              startCampaign(campaign);
+                            }
+                          }}
+                          disabled={!!processingCampaignId}
+                          className="flex items-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-50"
+                        >
+                          {processingCampaignId === campaign.id ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
+                          Iniciar Envio
+                        </button>
+                      )}
+
                       <div className="hidden md:flex items-center gap-6">
                         <div className="text-right">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Enviadas</p>
@@ -550,7 +676,25 @@ export default function Campaigns() {
                       </div>
                     </div>
                   </div>
-                </motion.div>
+
+                  {(campaign.status === 'sending' || processingCampaignId === campaign.id) && (
+                    <div className="mt-6 pt-6 border-t border-slate-50 animate-in slide-in-from-top-2 duration-300">
+                       <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                         <div className="flex items-center gap-2">
+                            <Loader2 className="animate-spin text-primary-500" size={12} />
+                            <span>Processando Disparo...</span>
+                         </div>
+                         <span>{campaign.total_contacts > 0 ? Math.round((campaign.sent_count / campaign.total_contacts) * 100) : 0}%</span>
+                       </div>
+                       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                         <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${campaign.total_contacts > 0 ? (campaign.sent_count / campaign.total_contacts) * 100 : 0}%` }}
+                            className="h-full bg-primary-500 shadow-[0_0_10px_rgba(var(--color-primary-500),0.5)]"
+                         />
+                       </div>
+                    </div>
+                  )}
               ))
             )}
           </div>

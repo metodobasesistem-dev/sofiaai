@@ -121,6 +121,34 @@ export const sendMessage = async (to: string, message: string) => {
 };
 
 /**
+ * Send a WhatsApp Template message via the backend API.
+ */
+export const sendTemplateMessage = async (to: string, templateName: string, variables: any[]) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
+
+  const response = await fetch('/api/messages/send-template', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      userId: user.id,
+      to,
+      templateName,
+      variables,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to send template message');
+  }
+
+  return response.json();
+};
+
+/**
  * Disconnect/Logout WhatsApp session.
  */
 export const disconnectWhatsApp = async (): Promise<{ success: boolean }> => {
