@@ -197,7 +197,6 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     }
   };
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
