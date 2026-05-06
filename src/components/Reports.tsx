@@ -34,7 +34,7 @@ import {
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getDashboardStats } from '../services/supabaseService';
+import { getDashboardStats, getDashboardGrowth } from '../services/supabaseService';
 
 const ReportCard = ({ children, title, subtitle, icon: Icon }: { children: React.ReactNode, title: string, subtitle?: string, icon?: any }) => (
   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -71,17 +71,15 @@ export default function Reports() {
         const s = await getDashboardStats();
         setStats(s as any);
 
-        // Mock historical data for visual impact
-        const data = Array.from({ length: 15 }).map((_, i) => {
-          const date = subDays(new Date(), 14 - i);
-          const baseLeads = s.contacts / 10;
-          const baseAppts = s.appointments / 10;
-          return {
-            name: format(date, 'dd MMM', { locale: ptBR }),
-            leads: Math.max(0, Math.floor(baseLeads + Math.random() * 5)),
-            agendamentos: Math.max(0, Math.floor(baseAppts + Math.random() * 3))
-          };
-        });
+        // Fetch real historical data for the chart
+        const growthData = await getDashboardGrowth();
+        
+        const data = growthData.map((d: any) => ({
+          name: format(new Date(d.date + 'T12:00:00'), 'dd MMM', { locale: ptBR }),
+          leads: d.leads || 0,
+          agendamentos: d.resolvidos || d.agendamentos || 0
+        }));
+        
         setChartData(data);
       } catch (error) {
         console.error('Failed to fetch report stats:', error);
