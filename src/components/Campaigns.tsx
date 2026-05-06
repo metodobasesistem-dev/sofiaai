@@ -137,23 +137,35 @@ export default function Campaigns() {
       const { data: templateData } = await supabase.from('message_templates').select('body').eq('id', campaign.template_id).single();
       const templateBody = templateData?.body || '';
 
-      let query = supabase.from('contacts').select('*');
-      
+      let finalContacts: any[] = [];
+      const allContactsQuery = await supabase.from('contacts').select('*');
+      const allContacts = allContactsQuery.data || [];
+
       if (campaign.target_type === 'labels' && campaign.selected_labels) {
-         // This is complex because labels are in threads, but let's assume for now 
-         // we filter contacts that have been matched before or just use the funnel status if available.
-         // For now, let's filter by status_funil if it's funnel, or all if it's all.
-         // If it's labels, we might need a join or a specific logic.
-         // To keep it simple and working for the user now:
-         if (campaign.target_type === 'funnel') {
-            query = query.eq('status_funil', campaign.selected_funnel_status);
+         // Etiquetas ficam na tabela 'threads'.
+         // Vamos buscar as threads que contêm a etiqueta e extrair os números.
+         const { data: threads } = await supabase.from('threads').select('remoteJid, labels');
+         
+         if (threads && threads.length > 0) {
+            // Filtra threads que tem a etiqueta exata
+            const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaign.selected_labels));
+            
+            // Extrai só os números limpos
+            const phonesWithLabel = matchingThreads.map(t => (t.remoteJid || '').split('@')[0].replace(/\D/g, ''));
+            
+            // Filtra a tabela de contatos
+            finalContacts = allContacts.filter(c => {
+               const cleanContactPhone = (c.telefone || '').replace(/\D/g, '');
+               return phonesWithLabel.some(p => cleanContactPhone.includes(p) || p.includes(cleanContactPhone));
+            });
          }
       } else if (campaign.target_type === 'funnel') {
-        query = query.eq('status_funil', campaign.selected_funnel_status);
+        finalContacts = allContacts.filter(c => c.status_funil === campaign.selected_funnel_status);
+      } else {
+        finalContacts = allContacts;
       }
 
-      const { data: contacts, error: contactsErr } = await query;
-      if (contactsErr) throw contactsErr;
+      const contacts = finalContacts;
 
       if (!contacts || contacts.length === 0) {
         toast.error('Nenhum contato encontrado para os filtros selecionados.');
@@ -527,8 +539,12 @@ export default function Campaigns() {
                       name: campaignData.name,
                       template_name: campaignData.templateName,
                       template_id: campaignData.templateId,
+                      target_type: campaignData.targetType,
+                      selected_labels: campaignData.targetType === 'labels' ? campaignData.selectedLabels : null,
+                      selected_funnel_status: campaignData.targetType === 'funnel' ? campaignData.selectedFunnelStatus : null,
+                      variables: campaignData.variables,
                       status: 'pending',
-                      total_contacts: 0, // In a real scenario, this would be calculated on backend
+                      total_contacts: 0, // This is calculated dynamically when processing starts
                       sent_count: 0,
                       error_count: 0
                     });
