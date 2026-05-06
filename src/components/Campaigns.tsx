@@ -44,15 +44,15 @@ export default function Campaigns() {
   const [currentStep, setCurrentStep] = useState(1);
   const [campaignData, setCampaignData] = useState({
     name: '',
-    targetType: 'all' as 'all' | 'tags' | 'funnel',
-    selectedTags: [] as string[],
+    targetType: 'all' as 'all' | 'labels' | 'funnel',
+    selectedLabels: [] as string[],
     selectedFunnelStatus: '',
     templateId: '',
     templateName: '',
     variables: {} as Record<string, string>
   });
 
-  const [tags, setTags] = useState<string[]>([]);
+  const [labels, setLabels] = useState<string[]>([]);
   const [funnelStatuses, setFunnelStatuses] = useState<string[]>([]);
 
   const contactFields = [
