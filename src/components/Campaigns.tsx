@@ -13,6 +13,7 @@ import {
   Info,
   Users,
   Layout,
+  Layers,
   BarChart3,
   Sparkles,
   Zap,
