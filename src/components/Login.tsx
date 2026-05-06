@@ -193,10 +193,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-[#020408] flex items-center justify-center p-6 relative overflow-hidden">
       {/* Background Orbs */}
-      <div className="absolute top-0 -left-20 w-96 h-96 bg-sofia-purple/20 blur-[100px] rounded-full"></div>
-      <div className="absolute bottom-0 -right-20 w-96 h-96 bg-sofia-glow/20 blur-[100px] rounded-full"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-sofia-purple/20 blur-[120px] rounded-full animate-pulse-soft"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-sofia-glow/10 blur-[120px] rounded-full animate-pulse-soft" style={{ animationDelay: '1s' }}></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(124,58,237,0.05)_0%,transparent_70%)]"></div>
 
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
@@ -205,11 +206,11 @@ export default function Login() {
       >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-4 shadow-2xl shadow-sofia-purple/20 ring-4 ring-white/5">
-            <Bot size={40} />
+          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20">
+            <Bot size={42} />
           </div>
-          <h1 className="text-4xl font-black text-white tracking-tight">Sofia</h1>
-          <p className="text-slate-400 font-medium">Sua IA de Atendimento Inteligente</p>
+          <h1 className="text-5xl font-black text-white tracking-tighter mb-2">Sofia</h1>
+          <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px]">IA de Atendimento Inteligente</p>
         </div>
 
         {/* Main Card */}
