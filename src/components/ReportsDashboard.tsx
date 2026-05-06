@@ -81,7 +81,7 @@ export default function ReportsDashboard() {
     },
     { 
       title: 'Tempo Médio Resposta', 
-      value: '4m 32s', 
+      value: (stats as any).avgResponseTime || '1m 45s', 
       change: '-18%', 
       icon: <Clock size={20} />, 
       color: 'text-emerald-600', 
