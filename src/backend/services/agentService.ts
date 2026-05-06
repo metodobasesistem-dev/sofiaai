@@ -72,10 +72,15 @@ export class AgentService {
       
       let threadData: any = null;
       try {
-        const { data } = await supabase.from('threads').select('*').eq('id', threadId).maybeSingle();
-        threadData = data;
+        const cleanPhone = normalizePhone(from);
+        const contactId = `${userId}_${cleanPhone}`;
+        const [{ data: tData }, { data: cData }] = await Promise.all([
+          supabase.from('threads').select('*').eq('id', threadId).maybeSingle(),
+          supabase.from('contacts').select('ad_tracking').eq('id', contactId).maybeSingle()
+        ]);
+        threadData = tData ? { ...tData, ad_tracking: cData?.ad_tracking } : null;
       } catch (err) {
-        console.warn(`[AgentService] Thread check failed.`);
+        console.warn(`[AgentService] Thread/Contact check failed.`);
       }
 
       const currentStatus = threadData?.status || 'ia';
@@ -522,6 +527,12 @@ export class AgentService {
 OBJETIVO: Atendimento consultivo e agendamento.
 NOME DO CLIENTE: ${leadName || 'Pergunte o nome se ainda não souber'}.
 MODO DE TREINAMENTO ATUAL: ${trainingMode.toUpperCase()}.
+
+${threadData?.ad_tracking ? `ORIGEM DO LEAD (ANÚNCIO):
+- Plataforma: ${threadData.ad_tracking.source || 'Meta Ads'}
+- Campanha: ${threadData.ad_tracking.headline || 'N/A'}
+- Conteúdo: ${threadData.ad_tracking.body || 'N/A'}
+DICA: O cliente veio deste anúncio. Você pode usar isso como contexto se ele perguntar algo específico.` : ''}
 
 CONTEXTO TEMPORAL:
 - Hoje é ${dayStr}, dia ${dateStr}.
@@ -979,6 +990,24 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       }
     ];
   }
+  public async updateContactTracking(userId: string, phoneNumber: string, trackingData: any) {
+    try {
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const contactId = `${userId}_${cleanPhone}`;
+      
+      console.log(`[AgentService] 🎯 Updating tracking for contact ${contactId}`);
+      
+      const { error } = await supabase
+        .from('contacts')
+        .update({ ad_tracking: trackingData })
+        .eq('id', contactId);
+        
+      if (error) throw error;
+    } catch (err) {
+      console.error('[AgentService] Error updating contact tracking:', err);
+    }
+  }
+
   public async syncProfilePicture(userId: string, threadId: string, remoteJid: string, force = false) {
     try {
       const cleanPhone = remoteJid.split('@')[0].replace(/\D/g, '');

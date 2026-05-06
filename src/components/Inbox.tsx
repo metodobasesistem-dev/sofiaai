@@ -42,7 +42,10 @@ import {
   Star,
   Ban,
   Smile,
-  Edit2
+  Edit2,
+  Globe,
+  Instagram,
+  Download
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -80,6 +83,7 @@ interface Thread {
     scheduled_at: string;
     type: 'ai' | 'manual';
   };
+  ad_tracking?: any;
 }
 
 interface Message {
@@ -544,6 +548,114 @@ const ChatBubble: React.FC<{
   );
 };
 
+const TrackingModal: React.FC<{ 
+  isOpen: boolean, 
+  onClose: () => void, 
+  trackingData: any 
+}> = ({ isOpen, onClose, trackingData }) => {
+  if (!isOpen || !trackingData) return null;
+
+  return (
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white">
+              <Globe size={18} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 leading-tight">Rastreamento de Origem</h3>
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Informações de onde o contato veio</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-red-500 rounded-xl transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+          {/* Main Card */}
+          <div className="bg-gradient-to-br from-primary-50/50 to-white border border-primary-100 rounded-3xl p-6 relative overflow-hidden">
+             <div className="flex items-start gap-4 relative z-10">
+                <div className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center shrink-0 border border-slate-100">
+                   {trackingData.source === 'Meta Ads' ? (
+                     <Instagram className="text-pink-600" size={32} />
+                   ) : (
+                     <Globe className="text-primary-600" size={32} />
+                   )}
+                </div>
+                <div className="flex-1 min-w-0">
+                   <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 bg-primary-600 text-white text-[9px] font-black uppercase rounded-md tracking-widest">
+                        {trackingData.source || 'Plataforma'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold">Origem do contato</span>
+                   </div>
+                   <h4 className="text-lg font-black text-slate-900 leading-tight mb-2">
+                     {trackingData.headline || 'Campanha Direta'}
+                   </h4>
+                   <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                     {trackingData.body || 'O lead iniciou uma conversa através de um link direto ou anúncio sem descrição adicional.'}
+                   </p>
+                </div>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-2 mb-2 text-slate-400">
+                   <Layers size={14} />
+                   <span className="text-[9px] font-black uppercase tracking-widest">Plataforma</span>
+                </div>
+                <p className="text-sm font-bold text-slate-800">{trackingData.source || 'Instagram / Facebook'}</p>
+             </div>
+             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-2 mb-2 text-slate-400">
+                   <Bot size={14} />
+                   <span className="text-[9px] font-black uppercase tracking-widest">Campanha</span>
+                </div>
+                <p className="text-sm font-bold text-slate-800 truncate">{trackingData.headline || 'N/A'}</p>
+             </div>
+          </div>
+
+          {trackingData.sourceUrl && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-slate-400 px-1">
+                 <ExternalLink size={14} />
+                 <span className="text-[9px] font-black uppercase tracking-widest">Link do Anúncio</span>
+              </div>
+              <div className="p-4 bg-primary-50/30 border border-primary-100 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-primary-50 transition-all"
+                   onClick={() => window.open(trackingData.sourceUrl, '_blank')}>
+                 <span className="text-xs font-medium text-primary-600 truncate flex-1 mr-4">{trackingData.sourceUrl}</span>
+                 <ExternalLink size={14} className="text-primary-400 group-hover:text-primary-600" />
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-slate-400 px-1">
+               <Info size={14} />
+               <span className="text-[9px] font-black uppercase tracking-widest">Dados Técnicos (JSON)</span>
+            </div>
+            <pre className="p-4 bg-slate-900 rounded-2xl text-[10px] text-emerald-400 font-mono overflow-x-auto">
+               {JSON.stringify(trackingData, null, 2)}
+            </pre>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-center">
+          <button 
+            onClick={onClose}
+            className="w-full py-3 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const FollowUpModal: React.FC<{ 
   isOpen: boolean, 
   onClose: () => void, 
@@ -664,6 +776,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [pastedImageUrl, setPastedImageUrl] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
 
   useEffect(() => {
     contactsRef.current = contacts;
@@ -1185,8 +1298,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const renderContactDetails = () => {
     if (!activeThread) return null;
     
+    // Check if we have tracking data from the contact or thread
+    const trackingData = selectedContact?.ad_tracking || activeThread.ad_tracking;
+
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white relative">
         {/* Perfil Header */}
         <div className="p-8 border-b border-slate-100 text-center bg-slate-50/30 relative overflow-hidden">
           {/* Background decoration */}
@@ -1261,6 +1377,19 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                <span className="text-xs font-bold font-mono tracking-wider">
                  {activeThread.remoteJid.split('@')[0]}
                </span>
+            </div>
+            <div className="mt-6 px-8">
+               <button 
+                onClick={() => setShowTrackingModal(true)}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[11px] transition-all
+                  ${trackingData 
+                    ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-200 hover:bg-primary-700' 
+                    : 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed'}`}
+                disabled={!trackingData}
+               >
+                 <Globe size={16} />
+                 {trackingData ? 'Ver Tracking de Origem' : 'Sem Dados de Origem'}
+               </button>
             </div>
           </div>
         </div>
@@ -2542,6 +2671,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         onClose={() => setShowFollowUpModal(false)}
         onSchedule={handleScheduleFollowUp}
         contactName={activeThread?.name || ''}
+      />
+
+      <TrackingModal 
+        isOpen={showTrackingModal}
+        onClose={() => setShowTrackingModal(false)}
+        trackingData={selectedContact?.ad_tracking || activeThread?.ad_tracking}
       />
     </div>
   );

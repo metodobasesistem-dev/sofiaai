@@ -109,6 +109,21 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
   // Persist Text and Trigger AI (only if inbound)
   try {
+    // 3. Rastreamento de Anúncios (Click-to-WhatsApp)
+    const referral = raw?.message?.referral;
+    if (referral) {
+      console.log(`[Webhook] 🎯 Ad Referral detected for ${from}:`, referral.headline);
+      await agentService.updateContactTracking(userId, cleanPhone, {
+        source: 'Meta Ads',
+        type: referral.sourceType,
+        sourceId: referral.sourceId,
+        sourceUrl: referral.sourceUrl,
+        headline: referral.headline,
+        body: referral.body,
+        mediaUrl: referral.imageUrl || referral.videoUrl
+      }).catch(err => console.error('[Webhook] Error updating tracking:', err));
+    }
+
     // 1. PRIMEIRO PERSISTE (Bug 1: Garante ordem e sucesso)
     await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe);
     
