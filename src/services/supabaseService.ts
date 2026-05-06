@@ -1074,13 +1074,15 @@ export const getReportsHistory = async (days: number = 30) => {
     groups[day].total++;
     
     if (msg.direction === 'outbound') {
+      const isBeforeMigration = new Date(msg.created_at) < new Date('2026-05-06T00:00:00Z');
+      
       if (msg.is_ai === true) {
         groups[day].ia++;
-      } else if (msg.is_ai === false) {
+      } else if (msg.is_ai === false && !isBeforeMigration) {
         groups[day].humano++;
       } else {
-        // Fallback antigo: se não tem is_ai definido na mensagem, 
-        // só atribui à IA se a IA estiver ligada.
+        // Fallback para mensagens antigas que receberam FALSE por causa do DEFAULT FALSE do banco,
+        // ou que não têm a coluna is_ai. Mantém o comportamento original para não zerar o histórico.
         if (isAgentActive) groups[day].ia++;
         else groups[day].humano++;
       }
