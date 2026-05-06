@@ -171,6 +171,7 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    {
       id: 'leo', 
       icon: <Zap size={20} className="text-amber-500" />, 
       label: 'Leo',
@@ -194,6 +195,7 @@ export default function Layout({
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada', flag: 'chat' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos', flag: 'crm' },
     { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA' },
+    {
       id: 'agendas', 
       icon: <Calendar size={20} />, 
       label: 'Agendas',
