@@ -75,6 +75,11 @@ interface Thread {
   is_client?: boolean;
   priority?: string;
   profilePictureUrl?: string;
+  pending_followup?: {
+    message: string;
+    scheduled_at: string;
+    type: 'ai' | 'manual';
+  };
 }
 
 interface Message {
@@ -539,6 +544,103 @@ const ChatBubble: React.FC<{
   );
 };
 
+const FollowUpModal: React.FC<{ 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onSchedule: (message: string, delay: number, isAi: boolean) => void,
+  contactName: string
+}> = ({ isOpen, onClose, onSchedule, contactName }) => {
+  const [message, setMessage] = useState('');
+  const [delay, setDelay] = useState(60);
+  const [isAi, setIsAi] = useState(true);
+
+  if (!isOpen) return null;
+
+  const options = [
+    { label: '15 min', value: 15 },
+    { label: '1 hora', value: 60 },
+    { label: '4 horas', value: 240 },
+    { label: 'Amanhã', value: 1440 },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <Clock size={18} className="text-primary-500" />
+            Agendar Follow-up
+          </h3>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-red-500 rounded-xl transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">Quanto tempo depois?</label>
+            <div className="grid grid-cols-2 gap-2">
+              {options.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setDelay(opt.value)}
+                  className={`py-2.5 rounded-xl text-xs font-bold border transition-all
+                    ${delay === opt.value ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-200' : 'bg-white border-slate-200 text-slate-600 hover:border-primary-300'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">Tipo de Mensagem</label>
+            <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+              <button 
+                onClick={() => setIsAi(true)}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2
+                  ${isAi ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Bot size={14} /> Sofia (IA)
+              </button>
+              <button 
+                onClick={() => setIsAi(false)}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2
+                  ${!isAi ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <MessageCircle size={14} /> Texto Fixo
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">
+              {isAi ? 'Instrução para a Sofia' : 'Mensagem de Follow-up'}
+            </label>
+            <textarea
+              placeholder={isAi ? "Ex: Seja amigável e pergunte se ele conseguiu ler a proposta..." : "Ex: Olá! Passando para saber se ficou alguma dúvida..."}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:border-primary-400 focus:ring-4 focus:ring-primary-50 outline-none transition-all resize-none"
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
+          <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700">Cancelar</button>
+          <button
+            onClick={() => onSchedule(message, delay, isAi)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-primary-500/20 hover:bg-primary-700"
+          >
+            Confirmar Agendamento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser | null, role: string | null, isFullscreen?: boolean }) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -561,6 +663,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [isUploadingPaste, setIsUploadingPaste] = useState(false);
   const [pastedImageUrl, setPastedImageUrl] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
 
   useEffect(() => {
     contactsRef.current = contacts;
@@ -734,7 +837,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               funilStatus: contact?.status_funil || 'Lead',
               is_client: contact?.is_client || false,
               priority: contact?.priority,
-              profilePictureUrl: d.profile_picture_url
+              profilePictureUrl: d.profile_picture_url,
+              pending_followup: d.pending_followup
             };
           });
           setThreads(formatted);
@@ -787,7 +891,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : 0,
                   ticketStatus: payload.new.ticket_status || 'open',
                   funilStatus: resolved.funilStatus,
-                  profilePictureUrl: payload.new.profile_picture_url
+                  profilePictureUrl: payload.new.profile_picture_url,
+                  pending_followup: payload.new.pending_followup
                 };
                 return [newThread as any, ...prev];
               });
@@ -809,7 +914,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
                   funilStatus: resolved.funilStatus,
-                  profilePictureUrl: payload.new.profile_picture_url || baseThread?.profilePictureUrl
+                  profilePictureUrl: payload.new.profile_picture_url || baseThread?.profilePictureUrl,
+                  pending_followup: payload.new.pending_followup ?? baseThread?.pending_followup
                 };
 
                 // BUG 1 FIX: Só move para o topo se a última mensagem mudou
@@ -1616,6 +1722,39 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
   };
 
+  const handleScheduleFollowUp = async (msg: string, delay: number, isAi: boolean) => {
+    if (!selectedThreadId || !activeThread) return;
+    
+    try {
+      const response = await fetch('/api/whatsapp/followup/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.id,
+          remoteJid: activeThread.remoteJid,
+          message: msg,
+          delayMinutes: delay,
+          isAi
+        })
+      });
+
+      if (!response.ok) throw new Error('Falha ao agendar follow-up');
+      
+      toast.success('Follow-up agendado com sucesso!');
+      setShowFollowUpModal(false);
+      
+      // Update local state to show the banner immediately
+      const scheduledAt = new Date(Date.now() + delay * 60 * 1000).toISOString();
+      setThreads(prev => prev.map(t => t.id === selectedThreadId ? {
+        ...t,
+        pending_followup: { message: msg, scheduled_at: scheduledAt, type: isAi ? 'ai' : 'manual' }
+      } : t));
+
+    } catch (err) {
+      toast.error('Erro ao agendar follow-up');
+    }
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
@@ -1913,6 +2052,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <span className="hidden sm:inline">{activeThread.ticketStatus === 'resolved' ? 'Resolvido' : 'Marcar Resolvido'}</span>
                 </button>
 
+                <button 
+                  onClick={() => setShowFollowUpModal(true)}
+                  className={`p-1.5 rounded-lg transition-all border shadow-sm flex items-center gap-1.5
+                    ${activeThread.pending_followup 
+                      ? 'bg-amber-50 text-amber-600 border-amber-200' 
+                      : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}
+                  title="Agendar Follow-up"
+                >
+                  <Clock size={16} className={activeThread.pending_followup ? 'text-amber-500 animate-pulse' : ''} />
+                </button>
+
                 <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block"></div>
 
                 <button 
@@ -1956,6 +2106,29 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               </div>
             </div>
+
+            {/* Follow-up Active Banner */}
+            {activeThread.pending_followup && (
+              <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                  <p className="text-[11px] font-bold text-amber-700">
+                    Follow-up {activeThread.pending_followup.type === 'ai' ? 'IA' : 'Manual'} agendado para as {new Date(activeThread.pending_followup.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                <button 
+                  onClick={async () => {
+                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                    await supabase.from('threads').update({ pending_followup: null }).eq('id', activeThread.id);
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, pending_followup: undefined } : t));
+                    toast.success('Agendamento cancelado');
+                  }}
+                  className="text-[10px] font-black text-amber-800 hover:underline uppercase tracking-widest"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 space-y-4">
@@ -2363,6 +2536,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
         </div>
       )}
+
+      <FollowUpModal 
+        isOpen={showFollowUpModal}
+        onClose={() => setShowFollowUpModal(false)}
+        onSchedule={handleScheduleFollowUp}
+        contactName={activeThread?.name || ''}
+      />
     </div>
   );
 }

@@ -71,7 +71,7 @@ class WhatsAppService {
 
   private setupFollowUpWorker(connection: any) {
     this.followUpWorker = new Worker('whatsapp-followups', async (job: Job) => {
-      console.log(`[FollowUp] ⏰ Processing level ${job.data.level + 1} for ${job.data.from}`);
+      console.log(`[FollowUp] ⏰ Processing ${job.name} for ${job.data.from}`);
       await this.processFollowUp(job.data);
     }, { connection, concurrency: 2 });
 
@@ -97,19 +97,11 @@ class WhatsAppService {
     let dbUserId = userId;
     
     try {
-      // [CRITICAL] Resolv e UUID se o userId for um email (Hostinger compatibility)
       if (userId.includes('@')) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', userId)
-          .maybeSingle();
+        const { data: prof } = await supabase.from('profiles').select('id').eq('email', userId).maybeSingle();
         if (prof?.id) dbUserId = prof.id;
       }
 
-      console.log(`[FollowUp] 🔍 Searching config for level ${level} (User: ${dbUserId}, From: ${from})`);
-
-      // 1. Buscar configuração do agente
       const { data: agent } = await supabase
         .from('agents')
         .select('follow_ups')
@@ -117,23 +109,15 @@ class WhatsAppService {
         .eq('status_ativo', true)
         .maybeSingle();
 
-      if (!agent?.follow_ups || !agent.follow_ups[level]) {
-        console.log(`[FollowUp] 🛑 No configuration found for level ${level}`);
-        return;
-      }
+      if (!agent?.follow_ups || !agent.follow_ups[level]) return;
 
       const config = agent.follow_ups[level];
       const delayMinutes = config.delayMinutes || 60;
       const delayMs = delayMinutes * 60 * 1000;
 
-      // 2. Remover qualquer follow-up pendente anterior
       const existingJob = await this.followUpQueue.getJob(jobId);
-      if (existingJob) {
-        await existingJob.remove();
-        console.log(`[FollowUp] 🔄 Resetting previous job for ${from}`);
-      }
+      if (existingJob) await existingJob.remove();
 
-      // 3. Adicionar novo job com o delay configurado
       await this.followUpQueue.add('send-followup', {
         userId: dbUserId,
         from,
@@ -146,9 +130,50 @@ class WhatsAppService {
         attempts: 2
       });
 
-      console.log(`[FollowUp] ✅ Level ${level + 1} scheduled for ${from} in ${delayMinutes}m`);
+      console.log(`[FollowUp] ✅ Auto level ${level + 1} scheduled for ${from} in ${delayMinutes}m`);
     } catch (err) {
-      console.error('[FollowUp] Error scheduling:', err);
+      console.error('[FollowUp] Error scheduling auto:', err);
+    }
+  }
+
+  async scheduleManualFollowUp(userId: string, from: string, message: string, delayMinutes: number, isAi: boolean = false) {
+    const cleanPhone = normalizePhone(from);
+    const threadId = `${userId}_${cleanPhone}`;
+    const jobId = `followup:manual:${userId}:${cleanPhone}`;
+    const delayMs = delayMinutes * 60 * 1000;
+    const scheduledAt = new Date(Date.now() + delayMs).toISOString();
+
+    try {
+      // 1. Atualizar banco para controle visual no Front
+      await supabase.from('threads').update({
+        pending_followup: {
+          message,
+          scheduled_at: scheduledAt,
+          type: isAi ? 'ai' : 'manual'
+        }
+      }).eq('id', threadId);
+
+      // 2. Remover anterior se existir
+      const existing = await this.followUpQueue.getJob(jobId);
+      if (existing) await existing.remove();
+
+      // 3. Agendar no BullMQ
+      await this.followUpQueue.add('send-followup-manual', {
+        userId,
+        from,
+        message,
+        isAi,
+        isManual: true
+      }, {
+        jobId,
+        delay: delayMs,
+        removeOnComplete: true,
+        attempts: 2
+      });
+
+      console.log(`[FollowUp] ⏲️ Manual follow-up scheduled for ${from} in ${delayMinutes}m (AI: ${isAi})`);
+    } catch (err) {
+      console.error('[FollowUp] Error scheduling manual:', err);
     }
   }
 
@@ -156,13 +181,25 @@ class WhatsAppService {
    * Cancela qualquer follow-up pendente para o contato (ex: quando ele responde)
    */
   async cancelFollowUp(userId: string, from: string) {
-    const jobId = `followup:${userId}:${from}`;
+    const cleanPhone = normalizePhone(from);
+    const threadId = `${userId}_${cleanPhone}`;
+    const autoJobId = `followup:${userId}:${from}`;
+    const manualJobId = `followup:manual:${userId}:${cleanPhone}`;
+
     try {
-      const job = await this.followUpQueue.getJob(jobId);
-      if (job) {
-        await job.remove();
-        console.log(`[FollowUp] 🛑 Cancelled for ${from} (customer replied)`);
+      // Cancela Job Automático
+      const autoJob = await this.followUpQueue.getJob(autoJobId);
+      if (autoJob) await autoJob.remove();
+
+      // Cancela Job Manual
+      const manualJob = await this.followUpQueue.getJob(manualJobId);
+      if (manualJob) {
+        await manualJob.remove();
+        // Limpa visual no banco se for manual
+        await supabase.from('threads').update({ pending_followup: null }).eq('id', threadId);
       }
+
+      console.log(`[FollowUp] 🛑 Cancelled all follow-ups for ${from} (customer replied)`);
     } catch (err) {}
   }
 
@@ -815,39 +852,38 @@ class WhatsAppService {
   }
 
   /**
-   * Processa a execução do Follow-up (Níveis configurados)
+   * Processa a execução do Follow-up (Níveis configurados ou Manual)
    */
   private async processFollowUp(data: any) {
-    const { userId, from, level, config } = data;
+    const { userId, from, level, config, message, isAi, isManual } = data;
     const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+    const threadId = `${userId}_${cleanPhone}`;
 
     try {
-      // 1. Verificar se o último status da thread ainda permite follow-up
-      // (Se o cliente já respondeu ou se foi assumido por humano, paramos)
-      const cleanPhone = from.split('@')[0].replace(/\D/g, '');
-      const threadId = `${userId}_${cleanPhone}`;
-      
+      // 1. Verificar status da thread
       const { data: thread } = await supabase
         .from('threads')
-        .select('status, last_message_time')
+        .select('status, pending_followup')
         .eq('id', threadId)
         .maybeSingle();
 
-      if (!thread || thread.status !== 'ia') {
-        console.log(`[FollowUp] 🛑 Skipping for ${from}: Thread status is ${thread?.status || 'unknown'}`);
+      if (!thread || (thread.status !== 'ia' && !isManual)) {
+        console.log(`[FollowUp] 🛑 Skipping for ${from}: Thread is in human mode and job is not manual.`);
         return;
       }
 
-      // 2. Definir a mensagem (IA ou Fixa)
-      let finalMessage = config.message;
+      // 2. Definir a mensagem
+      let finalMessage = message || config?.message;
 
-      if (config.type === 'ai') {
-        console.log(`[FollowUp] 🧠 Generating AI message for re-engagement...`);
-        const { data: agent } = await supabase.from('agents').select('*').eq('user_id', userId).maybeSingle();
+      if (isAi || (config?.type === 'ai')) {
+        console.log(`[FollowUp] 🧠 Generating AI message (Manual: ${!!isManual})...`);
         
         const aiResponse = await agentService.processIncoming(userId, {
           from,
-          body: `[SISTEMA: O cliente parou de responder. Envie um follow-up de reengajamento seguindo esta instrução: ${config.extraPrompt}]`,
+          body: isManual 
+            ? `[SISTEMA: O cliente parou de responder. Envie um follow-up de reengajamento agora. Instrução do humano: ${message || 'Seja amigável'}]`
+            : `[SISTEMA: O cliente parou de responder. Envie um follow-up de reengajamento seguindo esta instrução: ${config.extraPrompt}]`,
           contactName: 'Cliente',
           messageId: `followup-gen-${Date.now()}`,
           displayPhone: cleanPhone,
@@ -860,11 +896,15 @@ class WhatsAppService {
 
       if (!finalMessage) return;
 
-      // 3. Enviar a mensagem (O sendMessage centralizado já faz o envio e a persistência única)
-      await this.sendMessage(userId, from, finalMessage, 'IA (FOLLOW-UP)', 'IA');
+      // 3. Enviar
+      await this.sendMessage(userId, from, finalMessage, isManual ? 'Follow-up' : 'IA (FOLLOW-UP)', 'IA');
 
-      // 4. Agendar o PRÓXIMO nível, se existir
-      await this.scheduleFollowUp(userId, from, level + 1);
+      // 4. Limpar banco e agendar próximo nível se for automático
+      if (isManual) {
+        await supabase.from('threads').update({ pending_followup: null }).eq('id', threadId);
+      } else {
+        await this.scheduleFollowUp(userId, from, level + 1);
+      }
 
     } catch (err) {
       console.error(`[FollowUp] Error processing for ${from}:`, err);

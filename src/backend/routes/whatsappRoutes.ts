@@ -53,4 +53,20 @@ router.post('/sync', async (req, res) => {
   }
 });
 
+router.post('/followup/manual', async (req, res) => {
+  const { userId, remoteJid, message, delayMinutes, isAi } = req.body;
+  
+  if (!userId || !remoteJid || delayMinutes === undefined) {
+    return res.status(400).json({ error: 'Parâmetros userId, remoteJid e delayMinutes são obrigatórios.' });
+  }
+
+  try {
+    await whatsappService.scheduleManualFollowUp(userId, remoteJid, message, delayMinutes, isAi);
+    res.json({ success: true, message: 'Follow-up agendado com sucesso!' });
+  } catch (err: any) {
+    console.error('[WhatsappRoutes] Erro ao agendar follow-up manual:', err);
+    res.status(500).json({ error: err.message || 'Erro ao agendar follow-up.' });
+  }
+});
+
 export default router;
