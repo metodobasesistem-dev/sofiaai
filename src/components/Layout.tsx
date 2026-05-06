@@ -325,138 +325,20 @@ export default function Layout({
           </div>
         )}
 
-        <div className="p-4 border-t border-gray-100 space-y-2">
-          {/* Profile Section with Dropdown */}
-          <div className="relative" ref={profileRef}>
-            <div 
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className={`flex items-center p-2 rounded-xl cursor-pointer transition-all hover:bg-gray-50 group
-                ${isProfileOpen ? 'bg-gray-50' : ''}`}
-            >
-              <div className="w-10 h-10 rounded-lg bg-sofia-purple flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
-                {user?.user_metadata?.avatar_url ? (
-                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
-                ) : (
-                  getInitials(user?.user_metadata?.full_name || user?.email)
-                )}
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
-              </div>
-              {!collapsed && (
-                <div className="ml-3 flex-1 min-w-0 flex items-center justify-between">
-                  <div className="truncate">
-                    <p className="text-sm font-bold text-gray-900 truncate">
-                      {user?.user_metadata?.full_name || 'Usuário'}
-                    </p>
-                    <p className="text-[10px] text-gray-400 truncate">
-                      {user?.email}
-                    </p>
-                  </div>
-                  <div className="text-gray-400 group-hover:text-gray-600 transition-colors">
-                    {isProfileOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Dropdown Menu */}
-            <AnimatePresence>
-              {isProfileOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className={`absolute bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50
-                    ${collapsed ? 'left-0 w-64' : 'left-0 right-0 w-64'}`}
-                >
-                  {/* Header */}
-                  <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">
-                      {getInitials(user?.user_metadata?.full_name || user?.email)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">
-                        {user?.user_metadata?.full_name || 'Usuário'}
-                      </p>
-                      <p className="text-[11px] text-gray-400 truncate">
-                        {user?.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Menu Items */}
-                  <div className="p-2">
-                    <button 
-                      onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                    >
-                      <Sparkles size={18} className="text-gray-400" />
-                      Upgrade to Pro
-                    </button>
-                    <div className="h-px bg-gray-50 my-1 mx-2" />
-                    <button 
-                      onClick={() => { onTabChange('settings', 'account'); setIsProfileOpen(false); }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                    >
-                      <UserIcon size={18} className="text-gray-400" />
-                      Minha Conta
-                    </button>
-                    <button 
-                      onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                    >
-                      <CreditCard size={18} className="text-gray-400" />
-                      Assinatura
-                    </button>
-                    <button 
-                      onClick={() => { onTabChange('settings', 'channels'); setIsProfileOpen(false); }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                    >
-                      <MessageSquare size={18} className="text-gray-400" />
-                      Canais
-                    </button>
-                    <div className="h-px bg-gray-50 my-1 mx-2" />
-                    <button 
-                      type="button"
-                      onClick={async () => { 
-                         setIsProfileOpen(false); 
-                         console.log('[Layout] Logging out safely...');
-                         try {
-                           // 1. Limpa o localStorage do Supabase manualmente para garantir
-                           Object.keys(localStorage).forEach(key => {
-                             if (key.includes('supabase.auth.token') || key.includes('-auth-token')) {
-                               localStorage.removeItem(key);
-                             }
-                           });
-                           
-                           // 2. Chama o signOut (com timeout de segurança)
-                           await Promise.race([
-                             supabase.auth.signOut(),
-                             new Promise((_, reject) => setTimeout(() => reject(new Error('SignOut Timeout')), 2000))
-                           ]);
-                         } catch (e) {
-                           console.warn('[Logout] Fallback triggered', e);
-                         } finally {
-                           // 3. Força o recarregamento para a tela de login
-                           window.location.href = '/'; 
-                         }
-                      }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer group"
-                    >
-                      <LogOut size={18} className="text-gray-400 group-hover:text-red-600" />
-                      Log out
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
+        <div className="p-4 border-t border-gray-100">
           <button 
             onClick={() => setCollapsed(!collapsed)}
-            className="w-full flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            className="w-full flex items-center justify-center p-2.5 rounded-xl text-gray-400 hover:bg-slate-50 hover:text-slate-900 transition-all border border-transparent hover:border-slate-100 group"
             title={collapsed ? "Expandir menu" : "Recolher menu"}
           >
-            {collapsed ? <ChevronRight size={20} /> : <div className="flex items-center gap-2"><ChevronLeft size={20} /> <span className="text-sm font-medium">Recolher menu</span></div>}
+            {collapsed ? (
+              <ChevronRight size={20} />
+            ) : (
+              <div className="flex items-center gap-2 w-full px-2">
+                <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> 
+                <span className="text-sm font-bold">Recolher menu</span>
+              </div>
+            )}
           </button>
         </div>
       </motion.aside>
@@ -529,105 +411,8 @@ export default function Layout({
                 ))}
               </nav>
 
-              <div className="p-4 border-t border-gray-100">
-                <div className="relative" ref={profileRef}>
-                  <div 
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className={`flex items-center p-2 rounded-xl cursor-pointer transition-all hover:bg-gray-50 group
-                      ${isProfileOpen ? 'bg-gray-50' : ''}`}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-sofia-purple flex items-center justify-center text-white font-bold shrink-0 shadow-sm relative">
-                      {user?.user_metadata?.avatar_url ? (
-                        <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-lg" />
-                      ) : (
-                        getInitials(user?.user_metadata?.full_name || user?.email)
-                      )}
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
-                    </div>
-                    <div className="ml-3 flex-1 min-w-0 flex items-center justify-between">
-                      <div className="truncate">
-                        <p className="text-sm font-bold text-gray-900 truncate">
-                          {user?.user_metadata?.full_name || 'Usuário'}
-                        </p>
-                        <p className="text-[10px] text-gray-400 truncate">
-                          {user?.email}
-                        </p>
-                      </div>
-                      <div className="text-gray-400 group-hover:text-gray-600 transition-colors">
-                        {isProfileOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dropdown Menu Mobile */}
-                  <AnimatePresence>
-                    {isProfileOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50"
-                      >
-                        <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">
-                            {getInitials(user?.user_metadata?.full_name || user?.email)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-gray-900 truncate">
-                              {user?.user_metadata?.full_name || 'Usuário'}
-                            </p>
-                            <p className="text-[11px] text-gray-400 truncate">
-                              {user?.email}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="p-2">
-                          <button 
-                            onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                          >
-                            <Sparkles size={18} className="text-gray-400" />
-                            Upgrade to Pro
-                          </button>
-                          <div className="h-px bg-gray-50 my-1 mx-2" />
-                          <button 
-                            onClick={() => { onTabChange('settings', 'account'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                          >
-                            <UserIcon size={18} className="text-gray-400" />
-                            Minha Conta
-                          </button>
-                          <button 
-                            onClick={() => { onTabChange('settings', 'subscription'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                          >
-                            <CreditCard size={18} className="text-gray-400" />
-                            Assinatura
-                          </button>
-                          <button 
-                            onClick={() => { onTabChange('settings', 'channels'); setIsProfileOpen(false); setMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all"
-                          >
-                            <MessageSquare size={18} className="text-gray-400" />
-                            Canais
-                          </button>
-                          <div className="h-px bg-gray-50 my-1 mx-2" />
-                          <button 
-                            onClick={handleLogout}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-all border border-red-200 mt-2"
-                          >
-                            <LogOut size={18} className="text-red-600" />
-                            Sair da Conta
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  
-                  <div className="mt-4 px-4 pb-2">
-                    <p className="text-[10px] text-gray-300 font-medium text-center">Sofia System v1.0.5</p>
-                  </div>
-                </div>
+              <div className="p-6 border-t border-gray-100 flex flex-col items-center gap-2">
+                <p className="text-[10px] text-gray-300 font-medium text-center">Sofia System v1.0.5</p>
               </div>
             </motion.aside>
           </>
@@ -701,11 +486,33 @@ export default function Layout({
                     </div>
                     <div className="p-2">
                       <button 
+                        onClick={() => { onTabChange('settings', 'subscription'); setIsHeaderProfileOpen(false); }}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                      >
+                        <Sparkles size={18} className="text-gray-400" />
+                        Upgrade to Pro
+                      </button>
+                      <div className="h-px bg-gray-50 my-1 mx-2" />
+                      <button 
                         onClick={() => { onTabChange('settings', 'account'); setIsHeaderProfileOpen(false); }}
                         className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
                       >
                         <UserIcon size={18} className="text-gray-400" />
                         Minha Conta
+                      </button>
+                      <button 
+                        onClick={() => { onTabChange('settings', 'subscription'); setIsHeaderProfileOpen(false); }}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                      >
+                        <CreditCard size={18} className="text-gray-400" />
+                        Assinatura
+                      </button>
+                      <button 
+                        onClick={() => { onTabChange('settings', 'channels'); setIsHeaderProfileOpen(false); }}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                      >
+                        <MessageSquare size={18} className="text-gray-400" />
+                        Canais
                       </button>
                       <div className="h-px bg-gray-50 my-1 mx-2" />
                       <button 
