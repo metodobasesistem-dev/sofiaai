@@ -191,10 +191,11 @@ export default function Layout({
         ]
       }
     ] : []),
-    { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
-    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada', flag: 'chat' },
-    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos', flag: 'crm' },
+    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
+    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+    { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', flag: 'crm' },
     { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA' },
+    { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
     {
       id: 'agendas', 
       icon: <Calendar size={20} />, 
