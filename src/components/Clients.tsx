@@ -15,7 +15,8 @@ import {
   X,
   Zap,
   CheckCircle2,
-  Hash
+  Hash,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -23,8 +24,10 @@ import {
   listContactAppointments,
   updateContactFunilStatus,
   deleteContact,
+  listAdminUsers,
   type Contact,
-  type Appointment
+  type Appointment,
+  type UserProfile
 } from '../services/supabaseService';
 import { toast } from 'sonner';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -32,6 +35,7 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 // ── Helpers ──
 
 const formatPhone = (phone: string) => {
+  if (!phone) return '—';
   const p = phone.replace(/\D/g, '');
   if (p.length === 13) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9)}`;
   if (p.length === 12) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,8)}-${p.slice(8)}`;
@@ -64,6 +68,7 @@ const formatRelative = (date: any): string => {
 };
 
 const getInitials = (name: string) => {
+  if (!name) return '?';
   const parts = name.trim().split(' ').filter(Boolean);
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0][0].toUpperCase();
@@ -76,13 +81,15 @@ const AVATAR_COLORS = [
 ];
 const getAvatarColor = (id: string) => AVATAR_COLORS[(id.charCodeAt(0) + id.charCodeAt(1)) % AVATAR_COLORS.length];
 
-const FUNIL_STYLES: Record<Contact['status_funil'], { label: string; className: string; icon: React.ReactNode }> = {
+const FUNIL_STYLES: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   Lead:       { label: 'Lead',       className: 'bg-primary-50 text-primary-700 border-primary-200',     icon: <Zap size={10} /> },
   Qualificado:{ label: 'Qualificado',className: 'bg-green-50 text-green-700 border-green-200',   icon: <CheckCircle2 size={10} /> },
   Cliente:    { label: 'Cliente',    className: 'bg-amber-50 text-amber-700 border-amber-200',   icon: <Star size={10} /> },
+  Trial:      { label: 'Em Teste',    className: 'bg-blue-50 text-blue-700 border-blue-200',   icon: <Clock size={10} /> },
+  Pro:        { label: 'Plano Pro',  className: 'bg-purple-50 text-purple-700 border-purple-200', icon: <Zap size={10} /> },
 };
 
-const StatusBadge = ({ status, onClick }: { status: Contact['status_funil']; onClick?: () => void }) => {
+const StatusBadge = ({ status, onClick }: { status: string; onClick?: () => void }) => {
   const s = FUNIL_STYLES[status] || FUNIL_STYLES['Lead'];
   return (
     <button
@@ -97,28 +104,32 @@ const StatusBadge = ({ status, onClick }: { status: Contact['status_funil']; onC
 // ── Side Panel ──
 
 interface SidePanelProps {
-  contact: Contact;
+  contact: any;
   onClose: () => void;
   onTabChange?: (tab: string) => void;
-  onStatusChange: (contactId: string, status: Contact['status_funil']) => void;
+  onStatusChange: (contactId: string, status: any) => void;
+  isAdminMode?: boolean;
 }
 
-const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelProps) => {
+const SidePanel = ({ contact, onClose, onTabChange, onStatusChange, isAdminMode }: SidePanelProps) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
-    if (!contact.telefone) return;
+    if (!contact.telefone || isAdminMode) {
+      setLoadingAppts(false);
+      return;
+    }
     setLoadingAppts(true);
     listContactAppointments(contact.telefone)
       .then(setAppointments)
       .catch(console.error)
       .finally(() => setLoadingAppts(false));
-  }, [contact.telefone]);
+  }, [contact.telefone, isAdminMode]);
 
   const handleUpdateStatus = async (newStatus: Contact['status_funil']) => {
-    if (!contact.id || updatingStatus || contact.status_funil === newStatus) return;
+    if (!contact.id || updatingStatus || contact.status_funil === newStatus || isAdminMode) return;
     setUpdatingStatus(true);
     try {
       await updateContactFunilStatus(contact.id, newStatus);
@@ -132,6 +143,7 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
   };
 
   const openInbox = () => {
+    if (!contact.telefone) return;
     const jid = `${contact.telefone.replace(/\D/g, '')}@c.us`;
     const url = new URL(window.location.href);
     url.searchParams.set('jid', jid);
@@ -139,7 +151,7 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
     if (onTabChange) onTabChange('inbox');
   };
 
-  const color = getAvatarColor(contact.id || contact.telefone);
+  const color = getAvatarColor(contact.id || contact.telefone || 'default');
 
   return (
     <motion.div
@@ -157,11 +169,11 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
           </div>
           <div>
             <h3 className="text-lg font-black text-gray-900 leading-tight">{contact.nome}</h3>
-            <p className="text-sm text-gray-500">{formatPhone(contact.telefone)}</p>
+            <p className="text-sm text-gray-500">{contact.email || formatPhone(contact.telefone)}</p>
             <div className="mt-1.5">
               <StatusBadge 
-                status={contact.status_funil} 
-                onClick={() => {
+                status={isAdminMode ? (contact.plano || 'Trial') : contact.status_funil} 
+                onClick={isAdminMode ? undefined : () => {
                   const order: Contact['status_funil'][] = ['Lead', 'Qualificado', 'Cliente'];
                   const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
                   handleUpdateStatus(next);
@@ -178,13 +190,13 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
       {/* Stats */}
       <div className="grid grid-cols-3 gap-0 border-b border-gray-100">
         {[
-          { label: 'Mensagens', value: contact.totalMensagens ?? 0, icon: <MessageSquare size={14} /> },
-          { label: 'Agendamentos', value: appointments.length, icon: <Calendar size={14} /> },
-          { label: 'Desde', value: formatDate(contact.primeiroContato || contact.data_criacao), icon: <Clock size={12} /> },
+          { label: isAdminMode ? 'WhatsApp' : 'Mensagens', value: isAdminMode ? (contact.whatsapp_status === 'connected' ? 'OK' : 'OFF') : (contact.totalMensagens ?? 0), icon: <MessageSquare size={14} /> },
+          { label: isAdminMode ? 'Plano' : 'Agendamentos', value: isAdminMode ? (contact.plano || 'Trial') : appointments.length, icon: isAdminMode ? <Zap size={14} /> : <Calendar size={14} /> },
+          { label: 'Desde', value: formatDate(contact.primeiroContato || contact.data_criacao || contact.created_at), icon: <Clock size={12} /> },
         ].map((stat, i) => (
           <div key={i} className="flex flex-col items-center py-4 border-r last:border-r-0 border-gray-100">
             <span className="text-gray-400 mb-1">{stat.icon}</span>
-            <span className="text-base font-black text-gray-900">{stat.value}</span>
+            <span className={`text-base font-black ${stat.value === 'OK' ? 'text-emerald-600' : 'text-gray-900'}`}>{stat.value}</span>
             <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">{stat.label}</span>
           </div>
         ))}
@@ -192,26 +204,15 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
 
       {/* Info */}
       <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-        {/* Last message */}
-        {contact.ultimaMensagem && (
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Última mensagem</p>
-            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-              <p className="text-sm text-gray-700 line-clamp-3">{contact.ultimaMensagem}</p>
-              <p className="text-[10px] text-gray-400 mt-1">{formatRelative(contact.ultimaInteracao)}</p>
-            </div>
-          </div>
-        )}
-
         {/* Details */}
         <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Informações</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Informações Detalhadas</p>
           <div className="space-y-2">
             {[
-              { icon: <Phone size={13} />, label: 'WhatsApp', value: formatPhone(contact.telefone) },
-              { icon: <Clock size={13} />, label: 'Última interação', value: formatRelative(contact.ultimaInteracao) },
-              { icon: <Calendar size={13} />, label: 'Primeiro contato', value: formatDate(contact.primeiroContato || contact.data_criacao) },
-              { icon: <Hash size={13} />, label: 'Origem', value: contact.source === 'whatsapp' ? 'WhatsApp' : 'Manual' },
+              { icon: <User size={13} />, label: 'Email', value: contact.email || '—' },
+              { icon: <Phone size={13} />, label: 'WhatsApp', value: contact.telefone ? formatPhone(contact.telefone) : 'Não configurado' },
+              { icon: <Calendar size={13} />, label: 'Criado em', value: formatDate(contact.data_criacao || contact.created_at) },
+              { icon: <Zap size={13} />, label: 'Status IA', value: contact.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado' },
             ].map((item, i) => (
               <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <span className="flex items-center gap-2 text-xs text-gray-500">
@@ -224,62 +225,27 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
           </div>
         </div>
 
-        {/* Appointments */}
-        <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Agendamentos</p>
-          {loadingAppts ? (
-            <div className="flex items-center gap-2 text-gray-400 text-xs py-2">
-              <Loader2 size={12} className="animate-spin" /> Carregando...
-            </div>
-          ) : appointments.length === 0 ? (
-            <p className="text-xs text-gray-400 py-2">Nenhum agendamento encontrado.</p>
-          ) : (
-            <div className="space-y-2">
-              {appointments.map((appt) => (
-                <div key={appt.id} className="bg-primary-50 border border-primary-100 rounded-xl p-3">
-                  <p className="text-xs font-bold text-primary-800">{appt.date} às {appt.time}</p>
-                  <p className="text-xs text-primary-600">{appt.summary || appt.niche || 'Consulta'}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Manual Status Change */}
-        <div className="pt-2">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Mudar Status (Funil)</p>
-          <div className="grid grid-cols-3 gap-2">
-            {(['Lead', 'Qualificado', 'Cliente'] as const).map((status) => {
-              const isActive = contact.status_funil === status;
-              const s = FUNIL_STYLES[status];
-              return (
-                <button
-                  key={status}
-                  onClick={() => handleUpdateStatus(status)}
-                  disabled={updatingStatus}
-                  className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border text-[10px] font-bold transition-all relative
-                    ${isActive 
-                      ? `${s.className} ring-2 ring-offset-1 ring-current` 
-                      : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
-                >
-                  {s.icon}
-                  {s.label}
-                  {isActive && <div className="absolute -top-1 -right-1 w-3 h-3 bg-current rounded-full border-2 border-white" />}
-                </button>
-              );
-            })}
+        {isAdminMode && contact.trial_ends_at && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+             <div className="flex items-center gap-2 text-blue-700 mb-1">
+                <Clock size={16} />
+                <span className="text-xs font-bold uppercase">Período de Teste</span>
+             </div>
+             <p className="text-sm text-blue-900 font-medium">O teste expira em {formatDate(contact.trial_ends_at)}</p>
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="p-4 border-t border-gray-100 flex gap-3">
-        <button
-          onClick={openInbox}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm shadow-primary-200"
-        >
-          <MessageSquare size={16} /> Abrir Chat
-        </button>
-      </div>
+      {!isAdminMode && (
+        <div className="p-4 border-t border-gray-100 flex gap-3">
+          <button
+            onClick={openInbox}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm shadow-primary-200"
+          >
+            <MessageSquare size={16} /> Abrir Chat
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -287,22 +253,38 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange }: SidePanelP
 // ── Main Component ──
 
 export default function Clients({ onTabChange, user, role }: { onTabChange?: (tab: string) => void, user: SupabaseUser | null, role: string | null }) {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedContact, setSelectedContact] = useState<any | null>(null);
 
   const fetchClients = async () => {
     try {
       setIsLoading(true);
-      const data = await listContacts();
-      const clients = data.filter(c => c.status_funil === 'Cliente');
-      const sorted = clients.sort((a, b) => {
-        const aTime = new Date(a.ultimaInteracao || a.data_criacao || 0).getTime();
-        const bTime = new Date(b.ultimaInteracao || b.data_criacao || 0).getTime();
-        return bTime - aTime;
-      });
-      setContacts(sorted);
+      
+      if (role === 'admin') {
+        // Modo Admin: Busca Inquilinos (Tenants)
+        const profiles = await listAdminUsers();
+        const mapped = profiles.map(p => ({
+          ...p,
+          nome: p.nome_completo || p.name || p.email.split('@')[0],
+          telefone: p.notification_phone || '',
+          data_criacao: p.created_at,
+          status_funil: p.plano === 'Pro' ? 'Pro' : 'Trial',
+          is_admin_view: true
+        }));
+        setContacts(mapped);
+      } else {
+        // Modo Cliente: Busca Contatos do WhatsApp
+        const data = await listContacts();
+        const clients = data.filter(c => c.status_funil === 'Cliente');
+        const sorted = clients.sort((a, b) => {
+          const aTime = new Date(a.ultimaInteracao || a.data_criacao || 0).getTime();
+          const bTime = new Date(b.ultimaInteracao || b.data_criacao || 0).getTime();
+          return bTime - aTime;
+        });
+        setContacts(sorted);
+      }
     } catch (error) {
       console.error('Failed to fetch clients:', error);
       toast.error('Erro ao carregar lista de clientes');
@@ -311,7 +293,7 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
     }
   };
 
-  useEffect(() => { fetchClients(); }, []);
+  useEffect(() => { fetchClients(); }, [role]);
 
   const filteredClients = useMemo(() => 
     contacts.filter(c => 
@@ -452,9 +434,9 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50/50 border-b border-gray-100">
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cliente</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden md:table-cell">WhatsApp</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">Última Interação</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{role === 'admin' ? 'Empresa / Email' : 'Cliente'}</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden md:table-cell">{role === 'admin' ? 'WhatsApp' : 'WhatsApp'}</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">{role === 'admin' ? 'Status' : 'Última Interação'}</th>
                     <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Ações</th>
                   </tr>
                 </thead>
@@ -475,7 +457,9 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
                             </div>
                             <div>
                               <p className="text-sm font-black text-gray-900">{client.nome}</p>
-                              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">Cliente desde {formatDate(client.data_criacao)}</p>
+                              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">
+                                {role === 'admin' ? client.email : `Cliente desde ${formatDate(client.data_criacao)}`}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -486,27 +470,44 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
                           </div>
                         </td>
                         <td className="px-6 py-5 hidden sm:table-cell">
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Clock size={13} className="text-gray-400" />
-                            {formatRelative(client.ultimaInteracao || client.data_criacao)}
-                          </div>
+                          {role === 'admin' ? (
+                            <StatusBadge status={client.plano || 'Trial'} />
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <Clock size={13} className="text-gray-400" />
+                              {formatRelative(client.ultimaInteracao || client.data_criacao)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-5 text-right">
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); openInbox(client.telefone); }}
-                              className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
-                              title="Conversar"
-                            >
-                              <MessageSquare size={18} />
-                            </button>
-                            <button 
-                              onClick={(e) => handleDeleteClient(e, client)}
-                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                              title="Remover"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            {role !== 'admin' && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); openInbox(client.telefone); }}
+                                className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
+                                title="Conversar"
+                              >
+                                <MessageSquare size={18} />
+                              </button>
+                            )}
+                            {role !== 'admin' && (
+                              <button 
+                                onClick={(e) => handleDeleteClient(e, client)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                title="Remover"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
+                            {role === 'admin' && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); onTabChange?.('admin'); }}
+                                className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
+                                title="Ver no Painel Admin"
+                              >
+                                <ExternalLink size={18} />
+                              </button>
+                            )}
                             <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all">
                               <ChevronRight size={20} />
                             </button>
@@ -538,6 +539,7 @@ export default function Clients({ onTabChange, user, role }: { onTabChange?: (ta
               onClose={() => setSelectedContact(null)}
               onTabChange={onTabChange}
               onStatusChange={handleStatusChange}
+              isAdminMode={role === 'admin'}
             />
           </>
         )}
