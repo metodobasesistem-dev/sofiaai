@@ -57,14 +57,18 @@ import {
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const QuickNavCard = ({ icon: Icon, title, subtitle, onClick }: { icon: any, title: string, subtitle: string, onClick?: () => void }) => (
+const QuickNavCard = ({ icon: Icon, imageSrc, title, subtitle, onClick }: { icon?: any, imageSrc?: string, title: string, subtitle: string, onClick?: () => void }) => (
   <div 
     onClick={onClick}
     className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
   >
     <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-primary-600 group-hover:bg-primary-50 transition-colors">
-        <Icon size={20} />
+      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-primary-600 group-hover:bg-primary-50 transition-colors overflow-hidden">
+        {imageSrc ? (
+          <img src={imageSrc} alt={title} className="w-full h-full object-cover" />
+        ) : Icon && (
+          <Icon size={20} />
+        )}
       </div>
       <div>
         <h4 className="text-sm font-bold text-gray-900">{title}</h4>
@@ -445,7 +449,7 @@ export default function Dashboard({ onTabChange, role, user }: { onTabChange?: (
       {/* 2. Grid de Navegação Rápida */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <QuickNavCard 
-          icon={Bot} 
+          imageSrc="/sofiamini.png" 
           title="Agentes" 
           subtitle="Configure seu agente" 
           onClick={() => onTabChange?.('agents')}

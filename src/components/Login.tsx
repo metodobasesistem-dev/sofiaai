@@ -208,17 +208,16 @@ export default function Login() {
       >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-2xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20 overflow-hidden">
+          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20 overflow-hidden">
             {!logoError ? (
               <img 
                 src="/sofiamini.png" 
                 alt="Sofia Logo" 
                 className="w-full h-full object-cover"
-                style={{ imageRendering: 'auto' }}
                 onError={() => setLogoError(true)}
               />
             ) : (
-              <Bot size={28} />
+              <Bot size={42} />
             )}
           </div>
           <h1 className="text-5xl font-black text-white tracking-tighter mb-2">Sofia</h1>

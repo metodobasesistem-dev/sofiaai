@@ -192,7 +192,7 @@ export default function Layout({
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada', flag: 'chat' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos', flag: 'crm' },
-    { id: 'agents', icon: <Bot size={20} />, label: 'Agentes de IA' },
+    { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA' },
     { 
       id: 'agendas', 
       icon: <Calendar size={20} />, 
@@ -748,7 +748,13 @@ export default function Layout({
           onClick={() => onTabChange('agents')}
           className={`flex flex-col items-center gap-1 ${activeTab === 'agents' ? 'text-primary' : 'text-slate-400'}`}
         >
-          <Bot size={22} fill={activeTab === 'agents' ? 'currentColor' : 'none'} className={activeTab === 'agents' ? 'opacity-20' : ''} />
+          <div className="w-[22px] h-[22px] overflow-hidden rounded-md">
+            <img 
+              src="/sofiamini.png" 
+              alt="Agentes" 
+              className={`w-full h-full object-cover ${activeTab === 'agents' ? '' : 'grayscale opacity-60'}`} 
+            />
+          </div>
           <span className="text-[10px] font-bold uppercase tracking-wider">Agentes</span>
         </button>
 
