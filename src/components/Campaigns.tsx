@@ -109,15 +109,24 @@ export default function Campaigns() {
   // Load Filters
   useEffect(() => {
     const loadFilters = async () => {
-      const { data: contactData } = await supabase.from('contacts').select('tags, status_funil');
+      // Load Labels from threads
+      const { data: threadData } = await supabase.from('threads').select('labels');
+      // Load Status from contacts
+      const { data: contactData } = await supabase.from('contacts').select('status_funil');
+      
+      if (threadData) {
+        const allLabels = new Set<string>();
+        threadData.forEach(t => {
+          if (t.labels) t.labels.forEach((l: string) => allLabels.add(l));
+        });
+        setLabels(Array.from(allLabels));
+      }
+
       if (contactData) {
-        const allTags = new Set<string>();
         const allStatuses = new Set<string>();
         contactData.forEach(c => {
-          if (c.tags) c.tags.forEach((t: string) => allTags.add(t));
           if (c.status_funil) allStatuses.add(c.status_funil);
         });
-        setTags(Array.from(allTags));
         setFunnelStatuses(Array.from(allStatuses));
       }
     };
@@ -146,7 +155,7 @@ export default function Campaigns() {
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { id: 'all', label: 'Todos', icon: <Users size={18} /> },
-                  { id: 'tags', label: 'Por Tags', icon: <Filter size={18} /> },
+                  { id: 'labels', label: 'Etiquetas', icon: <Filter size={18} /> },
                   { id: 'funnel', label: 'Funil', icon: <Layers size={18} /> }
                 ].map(type => (
                   <button
@@ -165,26 +174,26 @@ export default function Campaigns() {
               </div>
             </div>
 
-            {campaignData.targetType === 'tags' && (
+            {campaignData.targetType === 'labels' && (
               <div className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecione as Tags</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecione as Etiquetas</p>
                 <div className="flex flex-wrap gap-2">
-                  {tags.map(tag => (
+                  {labels.map(label => (
                     <button
-                      key={tag}
+                      key={label}
                       onClick={() => {
-                        const newTags = campaignData.selectedTags.includes(tag)
-                          ? campaignData.selectedTags.filter(t => t !== tag)
-                          : [...campaignData.selectedTags, tag];
-                        setCampaignData({...campaignData, selectedTags: newTags});
+                        const newLabels = campaignData.selectedLabels.includes(label)
+                          ? campaignData.selectedLabels.filter(l => l !== label)
+                          : [...campaignData.selectedLabels, label];
+                        setCampaignData({...campaignData, selectedLabels: newLabels});
                       }}
                       className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                        campaignData.selectedTags.includes(tag)
+                        campaignData.selectedLabels.includes(label)
                           ? 'bg-primary-500 text-white border-primary-400 shadow-lg shadow-primary-500/20'
                           : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'
                       }`}
                     >
-                      {tag}
+                      {label}
                     </button>
                   ))}
                 </div>
