@@ -142,7 +142,7 @@ export default function LeoInsights({ insights }: { insights: any }) {
         <InsightCard 
           title="Directs Enviados (Leo)"
           value={summary.total_dms?.toLocaleString() || '0'}
-          change={22.1}
+          change={0}
           icon={<ArrowUpRight size={20} />}
           data={metrics}
           dataKey="dms"
@@ -152,8 +152,8 @@ export default function LeoInsights({ insights }: { insights: any }) {
 
         <InsightCard 
           title="Cliques no Link"
-          value="856"
-          change={100}
+          value={summary.total_cliques?.toLocaleString() || '0'}
+          change={0}
           icon={<MousePointer2 size={20} />}
           data={metrics}
           dataKey="cliques"
@@ -163,8 +163,8 @@ export default function LeoInsights({ insights }: { insights: any }) {
 
         <InsightCard 
           title="Novos Seguidores"
-          value="339"
-          change={4.2}
+          value={summary.total_seguidores?.toLocaleString() || '0'}
+          change={0}
           icon={<Users size={20} />}
           data={metrics}
           dataKey="seguidores"

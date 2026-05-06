@@ -544,7 +544,7 @@ export const leoInstagramService = {
     // 2. Métricas Externas (Meta Insights)
     let metaInsights: any[] = [];
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/${igId}/insights?metric=reach,impressions,profile_views&period=day&access_token=${accessToken}`);
+      const res = await fetch(`https://graph.facebook.com/v19.0/${igId}/insights?metric=reach,impressions,profile_views,website_clicks,follower_count&period=day&access_token=${accessToken}`);
       const data = await res.json();
       metaInsights = data.data || [];
     } catch (err) {
@@ -565,7 +565,9 @@ export const leoInstagramService = {
         comentarios: 0,
         dms: 0,
         alcance: 0,
-        visitas: 0
+        visitas: 0,
+        cliques: 0,
+        seguidores: 0
       };
     });
 
@@ -585,6 +587,8 @@ export const leoInstagramService = {
         if (dailyStats[day]) {
           if (metric.name === 'reach') dailyStats[day].alcance = val.value;
           if (metric.name === 'profile_views') dailyStats[day].visitas = val.value;
+          if (metric.name === 'website_clicks') dailyStats[day].cliques = val.value;
+          if (metric.name === 'follower_count') dailyStats[day].seguidores = val.value;
         }
       });
     });
@@ -594,6 +598,8 @@ export const leoInstagramService = {
       summary: {
         total_comentarios: interacoes?.filter(i => i.tipo === 'comentario').length || 0,
         total_dms: interacoes?.filter(i => i.tipo === 'dm_enviada').length || 0,
+        total_cliques: Object.values(dailyStats).reduce((acc, curr) => acc + curr.cliques, 0),
+        total_seguidores: Object.values(dailyStats).reduce((acc, curr) => acc + curr.seguidores, 0),
         today_reach: dailyStats[days[days.length - 1]]?.alcance || 0
       }
     };
