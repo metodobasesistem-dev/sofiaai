@@ -508,13 +508,6 @@ export default function Layout({
                         <CreditCard size={18} className="text-gray-400" />
                         Assinatura
                       </button>
-                      <button 
-                        onClick={() => { onTabChange('settings', 'channels'); setIsHeaderProfileOpen(false); }}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
-                      >
-                        <MessageSquare size={18} className="text-gray-400" />
-                        Canais
-                      </button>
                       <div className="h-px bg-gray-50 my-1 mx-2" />
                       <button 
                         onClick={handleLogout}
