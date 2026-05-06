@@ -54,7 +54,8 @@ export default function Campaigns() {
     name: '',
     category: 'MARKETING',
     variables_count: 0,
-    language: 'pt_BR'
+    language: 'pt_BR',
+    body: ''
   });
 
   const [campaignData, setCampaignData] = useState({
@@ -125,7 +126,17 @@ export default function Campaigns() {
       await supabase.from('campaigns').update({ status: 'sending' }).eq('id', campaign.id);
       fetchCampaigns();
 
-      // 2. Fetch target contacts
+      // 2. Fetch target contacts and user profile (provider)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+      
+      const { data: profile } = await supabase.from('profiles').select('whatsapp_provider').eq('id', user.id).single();
+      const provider = profile?.whatsapp_provider || 'evolution';
+
+      // 2.1 Fetch the template body for Web providers
+      const { data: templateData } = await supabase.from('message_templates').select('body').eq('id', campaign.template_id).single();
+      const templateBody = templateData?.body || '';
+
       let query = supabase.from('contacts').select('*');
       
       if (campaign.target_type === 'labels' && campaign.selected_labels) {
@@ -160,13 +171,33 @@ export default function Campaigns() {
 
       for (const contact of contacts) {
         try {
-          // Map variables
+          // Map variables based on the contact fields
           const mappedVars = Object.entries(campaign.variables || {}).map(([key, field]) => {
             return contact[field as keyof typeof contact] || '';
           });
 
-          await sendTemplateMessage(contact.phone, campaign.template_name, mappedVars);
+          if (provider === 'meta_official') {
+            // Oficial Meta API
+            await sendTemplateMessage(contact.phone, campaign.template_name, mappedVars);
+          } else {
+            // Evolution API ou Uazapi (Protocolo Web)
+            if (!templateBody) {
+               throw new Error('O corpo da mensagem não foi cadastrado neste modelo.');
+            }
+            
+            // Replace {{1}}, {{2}}... with actual values
+            let finalMessage = templateBody;
+            mappedVars.forEach((val, index) => {
+              finalMessage = finalMessage.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), String(val));
+            });
+
+            // Need to import sendMessage from whatsappService
+            const { sendMessage } = await import('../services/whatsappService');
+            await sendMessage(contact.phone, finalMessage);
+          }
+
           sentCount++;
+
           
           // Log success
           await supabase.from('campaign_logs').insert({
@@ -695,6 +726,7 @@ export default function Campaigns() {
                        </div>
                     </div>
                   )}
+                </motion.div>
               ))
             )}
           </div>
@@ -852,6 +884,17 @@ export default function Campaigns() {
                        />
                     </div>
                  </div>
+
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Corpo da Mensagem (Para Evolution/Uazapi)</label>
+                    <textarea 
+                      placeholder="Olá {{1}}, temos uma novidade..."
+                      rows={4}
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 font-bold resize-none custom-scrollbar"
+                      value={newTemplate.body}
+                      onChange={e => setNewTemplate({...newTemplate, body: e.target.value})}
+                    />
+                 </div>
               </div>
 
               <div className="flex items-center gap-4">
@@ -868,6 +911,7 @@ export default function Campaigns() {
                         category: newTemplate.category,
                         variables_count: newTemplate.variables_count,
                         language: newTemplate.language,
+                        body: newTemplate.body,
                         tenant_id: user.id
                       });
 
@@ -875,7 +919,7 @@ export default function Campaigns() {
 
                       toast.success('Modelo cadastrado com sucesso!');
                       setIsTemplateModalOpen(false);
-                      setNewTemplate({ name: '', category: 'MARKETING', variables_count: 0, language: 'pt_BR' });
+                      setNewTemplate({ name: '', category: 'MARKETING', variables_count: 0, language: 'pt_BR', body: '' });
                       fetchTemplates();
                     } catch (err: any) {
                       console.error('[CreateTemplate] Error:', err);
