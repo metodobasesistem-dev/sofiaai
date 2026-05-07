@@ -517,7 +517,23 @@ class WhatsAppService {
          await provider.deleteMessage(instanceName, remoteJid, msg.whatsapp_id || messageId, true);
       }
 
-      // 3. Marcamos como apagada no banco (estilo WhatsApp)
+      // 3. Se houver mídia (URL do Storage), apaga o arquivo físico para economizar espaço
+      const storageUrl = msg.media_url || msg.audio_url;
+      if (storageUrl && storageUrl.includes('chat-audios/')) {
+        try {
+          // Extrai o path relativo após o nome do bucket 'chat-audios/'
+          const filePath = storageUrl.split('chat-audios/').pop();
+          if (filePath) {
+            console.log(`[WhatsAppService] Deleting physical file from storage: ${filePath}`);
+            await supabase.storage.from('chat-audios').remove([filePath]);
+          }
+        } catch (storageErr) {
+          // Falha no storage não deve impedir a deleção lógica da mensagem
+          console.warn('[WhatsAppService] Failed to delete file from storage (ignoring):', storageErr);
+        }
+      }
+
+      // 4. Marcamos como apagada no banco (estilo WhatsApp)
       const { error } = await supabase
         .from('messages')
         .update({ 
