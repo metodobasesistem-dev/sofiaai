@@ -144,12 +144,12 @@ export default function Campaigns() {
       const allContacts = allContactsQuery.data || [];
 
       if (campaign.target_type === 'labels' && campaign.selected_labels) {
-         const { data: threads } = await supabase.from('threads').select('id, remoteJid, contact_name, labels');
+         const { data: threads } = await supabase.from('threads').select('id, remote_jid, contact_name, labels');
          if (threads && threads.length > 0) {
             const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaign.selected_labels));
             finalContacts = matchingThreads.map(t => ({
                id: t.id,
-               telefone: (t.remoteJid || '').split('@')[0].replace(/\D/g, ''),
+               telefone: (t.remote_jid || '').split('@')[0].replace(/\D/g, ''),
                nome: t.contact_name || 'Lead'
             }));
          }
@@ -563,12 +563,12 @@ export default function Campaigns() {
                     const allContacts = allContactsQuery.data || [];
 
                     if (campaignData.targetType === 'labels' && campaignData.selectedLabels) {
-                      const { data: threads } = await supabase.from('threads').select('id, remoteJid, contact_name, labels');
+                      const { data: threads } = await supabase.from('threads').select('id, remote_jid, contact_name, labels');
                       if (threads && threads.length > 0) {
                         const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaignData.selectedLabels));
                         finalContacts = matchingThreads.map(t => ({
                            id: t.id,
-                           telefone: (t.remoteJid || '').split('@')[0].replace(/\D/g, ''),
+                           telefone: (t.remote_jid || '').split('@')[0].replace(/\D/g, ''),
                            nome: t.contact_name || 'Lead'
                         }));
                       }
