@@ -2217,8 +2217,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
-            <div className="h-16 px-4 md:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
-              <div className="flex items-center gap-3">
+            <div className="h-16 px-2 md:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                 <button 
                   onClick={() => setSelectedThreadId(null)}
                   className="md:hidden p-2 -ml-2 text-slate-500 hover:text-primary-600 transition-colors"
@@ -2239,7 +2239,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 md:gap-3">
+              <div className="flex items-center gap-1 md:gap-3 shrink-0">
                 <button
                   onClick={async () => {
                     const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
@@ -2255,7 +2255,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, ticketStatus: newStatus, funilStatus: newFunil } : t));
                     if (newStatus === 'resolved') toast.success('Conversa marcada como resolvida!');
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-1.5
+                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-1.5
                     ${activeThread.ticketStatus === 'resolved' 
                       ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700' 
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
@@ -2279,7 +2279,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
                 <button 
                   onClick={toggleThreadStatus}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-2
+                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-2
                     ${activeThread.status === 'ia' 
                       ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
                       : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}
