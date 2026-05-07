@@ -39,7 +39,8 @@ export default function ReportsDashboard() {
     appointments: 0, 
     messages: 0, 
     qualified: 0, 
-    conversionRate: 0 
+    conversionRate: 0,
+    avgFirstResponseTime: '0s'
   });
   const [history, setHistory] = useState<any[]>([]);
 
@@ -87,6 +88,15 @@ export default function ReportsDashboard() {
       color: 'text-emerald-600', 
       bg: 'bg-emerald-50',
       desc: 'Tempo médio Sofia/Equipe'
+    },
+    { 
+      title: 'Tempo 1ª Resposta', 
+      value: (stats as any).avgFirstResponseTime || '0s', 
+      change: 'Imediato', 
+      icon: <Zap size={20} />, 
+      color: 'text-purple-600', 
+      bg: 'bg-purple-50',
+      desc: 'Agilidade da IA Sofia'
     },
     { 
       title: 'Conversão de Leads', 
@@ -150,7 +160,7 @@ export default function ReportsDashboard() {
 
       <div className="p-6 md:p-8 space-y-8">
         {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
           {kpis.map((kpi, i) => (
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}

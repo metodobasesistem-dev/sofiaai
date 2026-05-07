@@ -974,6 +974,8 @@ export const getDashboardStats = async (passedUserId?: string) => {
 
   // Cálculo real do tempo médio de resposta
   let avgResponseTimeStr = '0s';
+  let avgFirstResponseTimeStr = '0s';
+
   try {
     const { data: recentMessages } = await supabase
       .from('messages')
@@ -985,41 +987,67 @@ export const getDashboardStats = async (passedUserId?: string) => {
     if (recentMessages && recentMessages.length > 0) {
       // Ordenar por data crescente para o cálculo
       const msgs = [...recentMessages].reverse();
+      
+      // Para o tempo médio GERAL (de todas as interações)
       const lastInboundByThread: Record<string, number> = {};
       let totalDiff = 0;
       let count = 0;
 
+      // Para o tempo médio de PRIMEIRA RESPOSTA (da conversa)
+      const firstInboundByThread: Record<string, number> = {};
+      const firstResponseByThread: Record<string, number> = {};
+      let totalFirstDiff = 0;
+      let firstCount = 0;
+
       msgs.forEach(msg => {
         const time = new Date(msg.created_at).getTime();
+        
+        // Lógica Geral
         if (msg.direction === 'inbound') {
           if (!lastInboundByThread[msg.thread_id]) {
             lastInboundByThread[msg.thread_id] = time;
           }
+          if (!firstInboundByThread[msg.thread_id]) {
+            firstInboundByThread[msg.thread_id] = time;
+          }
         } else if (msg.direction === 'outbound') {
+          // Geral
           if (lastInboundByThread[msg.thread_id]) {
             totalDiff += (time - lastInboundByThread[msg.thread_id]);
             count++;
             delete lastInboundByThread[msg.thread_id];
           }
+          // Primeira Resposta
+          if (firstInboundByThread[msg.thread_id] && !firstResponseByThread[msg.thread_id]) {
+            firstResponseByThread[msg.thread_id] = time;
+            totalFirstDiff += (time - firstInboundByThread[msg.thread_id]);
+            firstCount++;
+          }
         }
       });
 
+      // Formata tempo GERAL
       if (count > 0) {
         const avgMs = totalDiff / count;
         const totalSeconds = Math.floor(avgMs / 1000);
         const mins = Math.floor(totalSeconds / 60);
         const secs = totalSeconds % 60;
-        
-        if (mins > 0) {
-          avgResponseTimeStr = `${mins}m ${secs.toString().padStart(2, '0')}s`;
-        } else {
-          avgResponseTimeStr = `${secs}s`;
-        }
+        avgResponseTimeStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
+      }
+
+      // Formata tempo de PRIMEIRA RESPOSTA
+      if (firstCount > 0) {
+        const avgFirstMs = totalFirstDiff / firstCount;
+        const totalSeconds = Math.floor(avgFirstMs / 1000);
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        avgFirstResponseTimeStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
       }
     }
   } catch (err) {
-    console.error('[DashboardStats] Error calculating real response time:', err);
+    console.error('[DashboardStats] Error calculating response times:', err);
     avgResponseTimeStr = '---';
+    avgFirstResponseTimeStr = '---';
   }
 
   return {
@@ -1029,7 +1057,8 @@ export const getDashboardStats = async (passedUserId?: string) => {
     conversionRate: totalLeads > 0 ? Math.round((totalResolved / totalLeads) * 100) : 0,
     avgScore: 0,
     messages: totalMessages,
-    avgResponseTime: avgResponseTimeStr
+    avgResponseTime: avgResponseTimeStr,
+    avgFirstResponseTime: avgFirstResponseTimeStr
   };
 };
 
