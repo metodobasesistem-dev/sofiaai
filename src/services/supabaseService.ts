@@ -1018,21 +1018,28 @@ export const getDashboardStats = async (passedUserId?: string) => {
         } else if (msg.direction === 'outbound') {
           // Geral
           if (lastInboundByThread[msg.thread_id]) {
-            totalDiff += (time - lastInboundByThread[msg.thread_id]);
-            count++;
+            const diff = time - lastInboundByThread[msg.thread_id];
+            if (diff < 2 * 60 * 60 * 1000) {
+              totalDiff += diff;
+              count++;
+            }
             delete lastInboundByThread[msg.thread_id];
           }
-          // Primeira Resposta (Categorizada)
           if (firstInboundByThread[msg.thread_id] && !firstResponseByThread[msg.thread_id]) {
             const diff = time - firstInboundByThread[msg.thread_id];
-            firstResponseByThread[msg.thread_id] = { time, is_ai: isAI };
             
-            if (isAI) {
-              totalFirstDiffIA += diff;
-              countFirstIA++;
-            } else {
-              totalFirstDiffHuman += diff;
-              countFirstHuman++;
+            // Ignorar outliers (mensagens respondidas após muito tempo, ex: > 2 horas)
+            // para não distorcer a média de performance real da IA
+            if (diff < 2 * 60 * 60 * 1000) {
+              firstResponseByThread[msg.thread_id] = { time, is_ai: isAI };
+              
+              if (isAI) {
+                totalFirstDiffIA += diff;
+                countFirstIA++;
+              } else {
+                totalFirstDiffHuman += diff;
+                countFirstHuman++;
+              }
             }
           }
         }
