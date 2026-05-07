@@ -21,7 +21,11 @@ import {
   RefreshCw,
   Play,
   Pause,
-  Loader2
+  Pause,
+  Loader2,
+  Upload,
+  FileText,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -38,6 +42,13 @@ interface Campaign {
   sent_count: number;
   error_count: number;
   created_at: string;
+  target_type?: 'all' | 'labels' | 'funnel' | 'manual' | 'upload';
+  selected_labels?: any;
+  selected_funnel_status?: string;
+  manual_list?: string;
+  uploaded_contacts?: any[];
+  template_id?: string;
+  variables?: any;
 }
 
 export default function Campaigns() {
@@ -61,9 +72,11 @@ export default function Campaigns() {
 
   const [campaignData, setCampaignData] = useState({
     name: '',
-    targetType: 'all' as 'all' | 'labels' | 'funnel',
+    targetType: 'all' as 'all' | 'labels' | 'funnel' | 'manual' | 'upload',
     selectedLabels: [] as string[],
     selectedFunnelStatus: '',
+    manualList: '',
+    uploadedContacts: [] as any[],
     templateId: '',
     templateName: '',
     variables: {} as Record<string, string>
@@ -170,6 +183,15 @@ export default function Campaigns() {
          }
       } else if (campaign.target_type === 'funnel') {
         finalContacts = (allContacts || []).filter(c => c.status_funil === campaign.selected_funnel_status);
+      } else if (campaign.target_type === 'manual') {
+        const numbers = (campaign.manual_list || '').split('\n').map(n => n.trim()).filter(n => n);
+        finalContacts = numbers.map(n => ({ id: 'manual-' + n, telefone: n.replace(/\D/g, ''), nome: 'Lead Manual' }));
+      } else if (campaign.target_type === 'upload') {
+        finalContacts = (campaign.uploaded_contacts || []).map((c: any) => ({
+           id: 'upload-' + (c.telefone || c.number),
+           telefone: (c.telefone || c.number || '').replace(/\D/g, ''),
+           nome: c.nome || c.name || 'Lead Planilha'
+        }));
       } else {
         finalContacts = allContacts || [];
       }
@@ -287,8 +309,10 @@ export default function Campaigns() {
     setCampaignData({
       name: campaign.name,
       targetType: campaign.target_type || 'all',
-      selectedLabels: campaign.selected_labels || '',
+      selectedLabels: Array.isArray(campaign.selected_labels) ? campaign.selected_labels : (campaign.selected_labels ? [campaign.selected_labels] : []),
       selectedFunnelStatus: campaign.selected_funnel_status || '',
+      manualList: campaign.manual_list || '',
+      uploadedContacts: campaign.uploaded_contacts || [],
       templateId: campaign.template_id || '',
       templateName: campaign.template_name || '',
       variables: campaign.variables || {}
@@ -363,69 +387,180 @@ export default function Campaigns() {
 
             <div className="space-y-4">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Quem deve receber?</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {[
                   { id: 'all', label: 'Todos', icon: <Users size={18} /> },
                   { id: 'labels', label: 'Etiquetas', icon: <Filter size={18} /> },
-                  { id: 'funnel', label: 'Funil', icon: <Layers size={18} /> }
+                  { id: 'funnel', label: 'Funil', icon: <Layers size={18} /> },
+                  { id: 'manual', label: 'Manual', icon: <ClipboardList size={18} /> },
+                  { id: 'upload', label: 'Planilha', icon: <Upload size={18} /> }
                 ].map(type => (
                   <button
                     key={type.id}
                     onClick={() => setCampaignData({...campaignData, targetType: type.id as any})}
-                    className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
                       campaignData.targetType === type.id 
-                        ? 'border-primary-500 bg-primary-50/30 text-primary-900' 
+                        ? 'border-primary-500 bg-primary-50/30 text-primary-900 shadow-lg shadow-primary-500/10' 
                         : 'border-slate-50 bg-white text-slate-400 hover:border-slate-100'
                     }`}
                   >
                     {type.icon}
-                    <span className="text-xs font-black">{type.label}</span>
+                    <span className="text-[10px] font-black uppercase">{type.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {campaignData.targetType === 'labels' && (
-              <div className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecione as Etiquetas</p>
-                <div className="flex flex-wrap gap-2">
-                  {labels.map(label => (
-                    <button
-                      key={label}
-                      onClick={() => {
-                        const newLabels = campaignData.selectedLabels.includes(label)
-                          ? campaignData.selectedLabels.filter(l => l !== label)
-                          : [...campaignData.selectedLabels, label];
-                        setCampaignData({...campaignData, selectedLabels: newLabels});
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                        campaignData.selectedLabels.includes(label)
-                          ? 'bg-primary-500 text-white border-primary-400 shadow-lg shadow-primary-500/20'
-                          : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {campaignData.targetType === 'funnel' && (
-              <div className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status do Funil</p>
-                <select
-                  value={campaignData.selectedFunnelStatus}
-                  onChange={e => setCampaignData({...campaignData, selectedFunnelStatus: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white font-bold"
+            <AnimatePresence mode="wait">
+              {campaignData.targetType === 'labels' && (
+                <motion.div 
+                  key="labels"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100"
                 >
-                  <option value="">Selecione um status...</option>
-                  {funnelStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecione as Etiquetas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {labels.map(label => (
+                      <button
+                        key={label}
+                        onClick={() => {
+                          const newLabels = campaignData.selectedLabels.includes(label)
+                            ? campaignData.selectedLabels.filter(l => l !== label)
+                            : [...campaignData.selectedLabels, label];
+                          setCampaignData({...campaignData, selectedLabels: newLabels});
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          campaignData.selectedLabels.includes(label)
+                            ? 'bg-primary-500 text-white border-primary-400 shadow-lg shadow-primary-500/20'
+                            : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {campaignData.targetType === 'funnel' && (
+                <motion.div 
+                  key="funnel"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100"
+                >
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status do Funil</p>
+                  <select
+                    value={campaignData.selectedFunnelStatus}
+                    onChange={e => setCampaignData({...campaignData, selectedFunnelStatus: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white font-bold"
+                  >
+                    <option value="">Selecione um status...</option>
+                    {funnelStatuses.map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </motion.div>
+              )}
+
+              {campaignData.targetType === 'manual' && (
+                <motion.div 
+                  key="manual"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100"
+                >
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lista de Números (Um por linha)</p>
+                    <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded-lg">Inclua o DDI (Ex: 55)</span>
+                  </div>
+                  <textarea 
+                    value={campaignData.manualList}
+                    onChange={e => setCampaignData({...campaignData, manualList: e.target.value})}
+                    placeholder="5511999999999&#10;5511888888888"
+                    className="w-full h-40 px-4 py-3 rounded-2xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white font-bold resize-none font-mono"
+                  />
+                </motion.div>
+              )}
+
+              {campaignData.targetType === 'upload' && (
+                <motion.div 
+                  key="upload"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="space-y-4"
+                >
+                  <div className="relative border-2 border-dashed border-slate-200 rounded-[2.5rem] p-10 text-center hover:border-primary-500/50 transition-all bg-white group overflow-hidden">
+                    <input 
+                      type="file" 
+                      accept=".csv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const text = event.target?.result as string;
+                            const lines = text.split('\n').filter(l => l.trim());
+                            if (lines.length < 2) {
+                              toast.error('Planilha vazia ou inválida.');
+                              return;
+                            }
+                            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                            const data = lines.slice(1).map(line => {
+                              const values = line.split(',').map(v => v.trim());
+                              const obj: any = {};
+                              headers.forEach((h, i) => {
+                                if (h.includes('nome') || h.includes('name')) obj.nome = values[i];
+                                if (h.includes('fone') || h.includes('phone') || h.includes('number') || h.includes('telefone')) obj.telefone = values[i];
+                              });
+                              return obj;
+                            });
+                            setCampaignData({ ...campaignData, uploadedContacts: data });
+                            toast.success(`${data.length} contatos carregados com sucesso!`);
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-20 h-20 bg-primary-50 text-primary-600 rounded-[2rem] flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                        <Upload size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-black text-slate-800">Clique para selecionar .CSV</p>
+                        <p className="text-xs text-slate-400 font-medium">Colunas recomendadas: Nome, Telefone</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {campaignData.uploadedContacts.length > 0 && (
+                    <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center">
+                          <CheckCircle2 size={20} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-emerald-900">{campaignData.uploadedContacts.length} contatos importados</p>
+                          <p className="text-[10px] font-bold text-emerald-600">Pronto para o disparo</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setCampaignData({...campaignData, uploadedContacts: []})}
+                        className="p-2 text-emerald-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <button 
               disabled={!campaignData.name}
@@ -581,7 +716,7 @@ export default function Campaigns() {
 
                     if (contactsErr) throw new Error('Erro ao buscar contatos: ' + contactsErr.message);
 
-                    if (campaignData.targetType === 'labels' && campaignData.selectedLabels) {
+                    if (campaignData.targetType === 'labels' && campaignData.selectedLabels[0]) {
                       const { data: threads, error: threadsErr } = await supabase
                         .from('threads')
                         .select('id, remote_jid, contact_name, labels')
@@ -590,7 +725,7 @@ export default function Campaigns() {
                       if (threadsErr) throw new Error('Erro ao buscar conversas: ' + threadsErr.message);
 
                       if (threads && threads.length > 0) {
-                        const targetLabel = campaignData.selectedLabels.trim().toLowerCase();
+                        const targetLabel = campaignData.selectedLabels[0].trim().toLowerCase();
                         const matchingThreads = threads.filter(t => 
                           t.labels && Array.isArray(t.labels) && 
                           t.labels.some(l => String(l).trim().toLowerCase() === targetLabel)
@@ -604,6 +739,15 @@ export default function Campaigns() {
                       }
                     } else if (campaignData.targetType === 'funnel') {
                       finalContacts = (allContacts || []).filter(c => c.status_funil === campaignData.selectedFunnelStatus);
+                    } else if (campaignData.targetType === 'manual') {
+                      const numbers = (campaignData.manualList || '').split('\n').map(n => n.trim()).filter(n => n);
+                      finalContacts = numbers.map(n => ({ id: 'manual-' + n, telefone: n.replace(/\D/g, ''), nome: 'Lead Manual' }));
+                    } else if (campaignData.targetType === 'upload') {
+                      finalContacts = (campaignData.uploadedContacts || []).map((c: any) => ({
+                         id: 'upload-' + (c.telefone || c.number),
+                         telefone: (c.telefone || c.number || '').replace(/\D/g, ''),
+                         nome: c.nome || c.name || 'Lead Planilha'
+                      }));
                     } else {
                       finalContacts = allContacts || [];
                     }
@@ -616,8 +760,10 @@ export default function Campaigns() {
                       template_name: campaignData.templateName,
                       template_id: campaignData.templateId,
                       target_type: campaignData.targetType,
-                      selected_labels: campaignData.targetType === 'labels' ? campaignData.selectedLabels : null,
+                      selected_labels: campaignData.targetType === 'labels' ? campaignData.selectedLabels[0] : null,
                       selected_funnel_status: campaignData.targetType === 'funnel' ? campaignData.selectedFunnelStatus : null,
+                      manual_list: campaignData.targetType === 'manual' ? campaignData.manualList : null,
+                      uploaded_contacts: campaignData.targetType === 'upload' ? campaignData.uploadedContacts : null,
                       variables: campaignData.variables,
                       status: 'pending',
                       total_contacts: calculatedTotal,
@@ -683,7 +829,17 @@ export default function Campaigns() {
           <button 
             onClick={() => {
               setEditingCampaignId(null);
-              setCampaignData({ name: '', targetType: 'all', selectedLabels: '', selectedFunnelStatus: '', templateId: '', templateName: '', variables: {} });
+              setCampaignData({ 
+                name: '', 
+                targetType: 'all', 
+                selectedLabels: [], 
+                selectedFunnelStatus: '', 
+                manualList: '',
+                uploadedContacts: [],
+                templateId: '', 
+                templateName: '', 
+                variables: {} 
+              });
               setCurrentStep(1);
               setIsModalOpen(true);
             }}
