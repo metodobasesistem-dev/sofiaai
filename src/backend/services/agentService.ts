@@ -779,18 +779,24 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         .eq('is_active', true);
 
       // 2. Prepare System Prompt
-      const { data: knowledgeBlocks } = await supabase
-        .from('agent_knowledge')
-        .select('*')
-        .eq('agent_id', agentData.id)
-        .eq('is_active', true);
+      let knowledgeBlocks: any[] = [];
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(agentData.id || '');
+      
+      if (agentData.id && isUuid) {
+        const { data } = await supabase
+          .from('agent_knowledge')
+          .select('*')
+          .eq('agent_id', agentData.id)
+          .eq('is_active', true);
+        knowledgeBlocks = data || [];
+      }
 
       const systemPrompt = this.buildSystemPrompt(agentData, { lead_name: 'Cliente Teste' }, professionals || [], knowledgeBlocks || []);
       const dateContext = `\n[CONTEXTO TEMPORAL/SIMULAÇÃO]\nHOJE: ${format(new Date(), 'dd/MM/yyyy')}\nDATA ATUAL: ${format(new Date(), 'yyyy-MM-dd')}\n`;
       const fullPrompt = systemPrompt + dateContext;
 
       // 3. AI Execution Loop
-      const tools = this.getSchedulingTools();
+      const tools = this.getAgentTools();
       let currentMessages = [...messages];
       let aiFinalText: string | null = null;
 
