@@ -140,13 +140,28 @@ export default function Campaigns() {
       const templateBody = templateData?.body || '';
 
       let finalContacts: any[] = [];
-      const allContactsQuery = await supabase.from('contacts').select('*');
-      const allContacts = allContactsQuery.data || [];
+      const { data: allContacts, error: contactsErr } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (contactsErr) throw new Error('Erro ao buscar contatos: ' + contactsErr.message);
 
       if (campaign.target_type === 'labels' && campaign.selected_labels) {
-         const { data: threads } = await supabase.from('threads').select('id, remote_jid, contact_name, labels');
+         const { data: threads, error: threadsErr } = await supabase
+           .from('threads')
+           .select('id, remote_jid, contact_name, labels')
+           .eq('user_id', user.id);
+         
+         if (threadsErr) throw new Error('Erro ao buscar conversas: ' + threadsErr.message);
+
          if (threads && threads.length > 0) {
-            const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaign.selected_labels));
+            const targetLabel = campaign.selected_labels.trim().toLowerCase();
+            const matchingThreads = threads.filter(t => 
+              t.labels && Array.isArray(t.labels) && 
+              t.labels.some(l => String(l).trim().toLowerCase() === targetLabel)
+            );
+
             finalContacts = matchingThreads.map(t => ({
                id: t.id,
                telefone: (t.remote_jid || '').split('@')[0].replace(/\D/g, ''),
@@ -154,9 +169,9 @@ export default function Campaigns() {
             }));
          }
       } else if (campaign.target_type === 'funnel') {
-        finalContacts = allContacts.filter(c => c.status_funil === campaign.selected_funnel_status);
+        finalContacts = (allContacts || []).filter(c => c.status_funil === campaign.selected_funnel_status);
       } else {
-        finalContacts = allContacts;
+        finalContacts = allContacts || [];
       }
 
       const contacts = finalContacts;
@@ -559,13 +574,28 @@ export default function Campaigns() {
 
                     // Pré-calcula o total de contatos para exibir na interface corretamente antes do envio
                     let finalContacts: any[] = [];
-                    const allContactsQuery = await supabase.from('contacts').select('*');
-                    const allContacts = allContactsQuery.data || [];
+                    const { data: allContacts, error: contactsErr } = await supabase
+                      .from('contacts')
+                      .select('*')
+                      .eq('user_id', user.id);
+
+                    if (contactsErr) throw new Error('Erro ao buscar contatos: ' + contactsErr.message);
 
                     if (campaignData.targetType === 'labels' && campaignData.selectedLabels) {
-                      const { data: threads } = await supabase.from('threads').select('id, remote_jid, contact_name, labels');
+                      const { data: threads, error: threadsErr } = await supabase
+                        .from('threads')
+                        .select('id, remote_jid, contact_name, labels')
+                        .eq('user_id', user.id);
+                      
+                      if (threadsErr) throw new Error('Erro ao buscar conversas: ' + threadsErr.message);
+
                       if (threads && threads.length > 0) {
-                        const matchingThreads = threads.filter(t => t.labels && t.labels.includes(campaignData.selectedLabels));
+                        const targetLabel = campaignData.selectedLabels.trim().toLowerCase();
+                        const matchingThreads = threads.filter(t => 
+                          t.labels && Array.isArray(t.labels) && 
+                          t.labels.some(l => String(l).trim().toLowerCase() === targetLabel)
+                        );
+
                         finalContacts = matchingThreads.map(t => ({
                            id: t.id,
                            telefone: (t.remote_jid || '').split('@')[0].replace(/\D/g, ''),
@@ -573,9 +603,9 @@ export default function Campaigns() {
                         }));
                       }
                     } else if (campaignData.targetType === 'funnel') {
-                      finalContacts = allContacts.filter(c => c.status_funil === campaignData.selectedFunnelStatus);
+                      finalContacts = (allContacts || []).filter(c => c.status_funil === campaignData.selectedFunnelStatus);
                     } else {
-                      finalContacts = allContacts;
+                      finalContacts = allContacts || [];
                     }
 
                     const calculatedTotal = finalContacts.length;
