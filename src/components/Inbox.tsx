@@ -797,7 +797,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'Abertos' | 'Resolvidos' | 'Todos' | 'Lead' | 'Qualificado' | 'Cliente'>('Abertos');
+  const [filterStatus, setFilterStatus] = useState<'Abertos' | 'Resolvidos' | 'Todos' | 'Lead' | 'Qualificado' | 'Cliente' | 'Não Lidos'>('Abertos');
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -2056,6 +2056,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
     else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
     else if (filterStatus === 'Cliente') matchesFilter = !!t.is_client;
+    else if (filterStatus === 'Não Lidos') matchesFilter = (t.unreadCount || 0) > 0;
     else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -2192,7 +2193,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
-            {(['Abertos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+            {(['Abertos', 'Não Lidos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f)}

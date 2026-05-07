@@ -222,8 +222,13 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [highlightedKnowledgeId, setHighlightedKnowledgeId] = useState<string | null>(null);
   const [selectedKnowledge, setSelectedKnowledge] = useState<AgentKnowledge | null>(null);
   const [isKnowledgeEditModalOpen, setIsKnowledgeEditModalOpen] = useState(false);
+  const [isKbEditModalOpen, setIsKbEditModalOpen] = useState(false);
   const [knowledgeEditContent, setKnowledgeEditContent] = useState('');
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [kbEditItem, setKbEditItem] = useState<KnowledgeItem | null>(null);
+  const [kbEditQuestion, setKbEditQuestion] = useState('');
+  const [kbEditAnswer, setKbEditAnswer] = useState('');
+  const [kbEditTitle, setKbEditTitle] = useState('');
+  const [kbEditContent, setKbEditContent] = useState('');
   const [metaAccessToken, setMetaAccessToken] = useState('');
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -244,26 +249,46 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   );
 
   const handleUpdateKnowledge = async () => {
-    if (!selectedKnowledge || !knowledgeEditContent.trim()) return;
-
+    if (!editingAgent?.id || !selectedKnowledge?.id) return;
+    
+    setIsSavingEdit(true);
     try {
-      setIsSavingEdit(true);
-      await updateAgentKnowledge(selectedKnowledge.id, {
-        content: knowledgeEditContent.trim()
-      });
-      
-      setAudioKnowledge(prev => prev.map(k => 
-        k.id === selectedKnowledge.id ? { ...k, content: knowledgeEditContent.trim() } : k
-      ));
-      
+      await updateAgentKnowledge(editingAgent.id, selectedKnowledge.id, { content: knowledgeEditContent });
+      setAudioKnowledge(prev => prev.map(k => k.id === selectedKnowledge.id ? { ...k, content: knowledgeEditContent } : k));
       toast.success('Conhecimento atualizado!');
       setIsKnowledgeEditModalOpen(false);
-    } catch (error) {
-      console.error('Update knowledge error:', error);
+    } catch (err) {
       toast.error('Erro ao atualizar conhecimento.');
     } finally {
       setIsSavingEdit(false);
     }
+  };
+
+  const handleUpdateKbItem = () => {
+    if (!kbEditItem) return;
+
+    const newKb = [...(formData.knowledgeBase || [])];
+    const index = newKb.findIndex(item => item.id === kbEditItem.id);
+    
+    if (index === -1) return;
+
+    if (kbEditItem.type === 'qa') {
+      newKb[index] = {
+        ...newKb[index],
+        question: kbEditQuestion,
+        answer: kbEditAnswer
+      };
+    } else {
+      newKb[index] = {
+        ...newKb[index],
+        title: kbEditTitle,
+        content: kbEditContent
+      };
+    }
+
+    setFormData({ ...formData, knowledgeBase: newKb });
+    setIsKbEditModalOpen(false);
+    toast.success('Item atualizado localmente. Salve o agente para persistir.');
   };
 
   const fetchAgents = async () => {
@@ -1409,6 +1434,111 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                     </div>
                   )}
                 </AnimatePresence>
+                
+                {/* --- EDIT KB ITEM MODAL (FAQ/TEXT) --- */}
+                <AnimatePresence>
+                  {isKbEditModalOpen && (
+                    <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center">
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsKbEditModalOpen(false)}
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                      />
+                      <motion.div 
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        className="bg-white w-full max-w-2xl rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 relative z-10 shadow-2xl overflow-hidden"
+                      >
+                         <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-4">
+                               <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center">
+                                  <Sparkles size={24} />
+                               </div>
+                               <div>
+                                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                                    {kbEditItem?.type === 'qa' ? 'Editar Pergunta e Resposta' : 'Editar Bloco de Texto'}
+                                  </h3>
+                                  <p className="text-slate-500 text-[11px] font-bold uppercase tracking-widest">Base de Inteligência</p>
+                               </div>
+                            </div>
+                            <button 
+                              onClick={() => setIsKbEditModalOpen(false)}
+                              className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-100 transition-all"
+                            >
+                               <X size={20} />
+                            </button>
+                         </div>
+
+                         <div className="space-y-6">
+                            {kbEditItem?.type === 'qa' ? (
+                              <>
+                                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Pergunta</label>
+                                   <input 
+                                     type="text"
+                                     value={kbEditQuestion}
+                                     onChange={(e) => setKbEditQuestion(e.target.value)}
+                                     className="w-full bg-transparent text-slate-900 font-bold outline-none"
+                                     placeholder="Digite a pergunta..."
+                                   />
+                                </div>
+                                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Resposta</label>
+                                   <textarea 
+                                     value={kbEditAnswer}
+                                     onChange={(e) => setKbEditAnswer(e.target.value)}
+                                     className="w-full h-32 bg-transparent text-slate-700 font-medium leading-relaxed outline-none resize-none custom-scrollbar"
+                                     placeholder="Digite a resposta..."
+                                   />
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Título do Bloco</label>
+                                   <input 
+                                     type="text"
+                                     value={kbEditTitle}
+                                     onChange={(e) => setKbEditTitle(e.target.value)}
+                                     className="w-full bg-transparent text-slate-900 font-bold outline-none"
+                                     placeholder="Ex: Sobre a Empresa"
+                                   />
+                                </div>
+                                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Conteúdo</label>
+                                   <textarea 
+                                     value={kbEditContent}
+                                     onChange={(e) => setKbEditContent(e.target.value)}
+                                     className="w-full h-48 bg-transparent text-slate-700 font-medium leading-relaxed outline-none resize-none custom-scrollbar"
+                                     placeholder="Edite o conteúdo aqui..."
+                                   />
+                                </div>
+                              </>
+                            )}
+
+                            <div className="flex gap-4">
+                               <button 
+                                 onClick={() => setIsKbEditModalOpen(false)}
+                                 className="flex-1 py-4 bg-slate-100 text-slate-500 font-bold rounded-2xl hover:bg-slate-200 transition-all"
+                               >
+                                 Cancelar
+                               </button>
+                               <button 
+                                 onClick={handleUpdateKbItem}
+                                 className="flex-[2] py-4 bg-teal-600 text-white font-bold rounded-2xl hover:bg-teal-700 shadow-lg shadow-teal-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                               >
+                                 <Check size={20} />
+                                 Confirmar Alteração
+                               </button>
+                            </div>
+                         </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
 
                 {activeTab === 'knowledge' && (
                    <div className="space-y-8">
@@ -1736,16 +1866,36 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                 )}
                                 <span className="text-gray-400 text-[10px]">{new Date(item.createdAt).toLocaleDateString()}</span>
                               </div>
-                              <button 
-                                onClick={() => {
-                                  const newKb = [...(formData.knowledgeBase || [])];
-                                  newKb.splice(index, 1);
-                                  setFormData({...formData, knowledgeBase: newKb});
-                                }}
-                                className="text-gray-400 hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => {
+                                    setKbEditItem(item);
+                                    if (item.type === 'qa') {
+                                      setKbEditQuestion(item.question || '');
+                                      setKbEditAnswer(item.answer || '');
+                                    } else {
+                                      setKbEditTitle(item.title || '');
+                                      setKbEditContent(item.content || '');
+                                    }
+                                    setIsKbEditModalOpen(true);
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all"
+                                  title="Editar"
+                                >
+                                  <Settings2 size={16} />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const newKb = [...(formData.knowledgeBase || [])];
+                                    newKb.splice(index, 1);
+                                    setFormData({...formData, knowledgeBase: newKb});
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                  title="Excluir"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </div>
                             
                             <div className="p-5 space-y-4">
