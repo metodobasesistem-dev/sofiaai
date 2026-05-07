@@ -95,6 +95,10 @@ export default function Campaigns() {
 
   const [processingCampaignId, setProcessingCampaignId] = useState<string | null>(null);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isWaiting, setIsWaiting] = useState(false);
+
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Fetch Templates
   const fetchTemplates = async () => {
@@ -212,7 +216,24 @@ export default function Campaigns() {
       let sentCount = 0;
       let errorCount = 0;
 
-      for (const contact of contacts) {
+      for (let i = 0; i < contacts.length; i++) {
+        const contact = contacts[i];
+        
+        // Anti-ban delay: Wait between messages (except the first one)
+        if (i > 0) {
+          setIsWaiting(true);
+          const randomDelay = Math.floor(Math.random() * (180 - 60 + 1) + 60);
+          
+          for (let remaining = randomDelay; remaining > 0; remaining--) {
+            setCountdown(remaining);
+            await sleep(1000);
+            // Check if processing was cancelled (optional enhancement, but keep it simple for now)
+          }
+          
+          setCountdown(null);
+          setIsWaiting(false);
+        }
+
         try {
           // Map variables based on the contact fields
           const mappedVars = Object.entries(campaign.variables || {}).map(([key, field]) => {
@@ -222,29 +243,21 @@ export default function Campaigns() {
           const phoneToSend = contact.telefone || contact.phone;
 
           if (provider === 'meta_official') {
-            // Oficial Meta API
             await sendTemplateMessage(phoneToSend, campaign.template_name, mappedVars);
           } else {
-            // Evolution API ou Uazapi (Protocolo Web)
-            if (!templateBody) {
-               throw new Error('O corpo da mensagem não foi cadastrado neste modelo.');
-            }
+            if (!templateBody) throw new Error('Corpo da mensagem vazio.');
             
-            // Replace {{1}}, {{2}}... with actual values
             let finalMessage = templateBody;
             mappedVars.forEach((val, index) => {
               finalMessage = finalMessage.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), String(val));
             });
 
-            // Need to import sendMessage from whatsappService
             const { sendMessage } = await import('../services/whatsappService');
             await sendMessage(phoneToSend, finalMessage);
           }
 
           sentCount++;
-
           
-          // Log success
           await supabase.from('campaign_logs').insert({
             campaign_id: campaign.id,
             contact_id: contact.id,
@@ -252,9 +265,8 @@ export default function Campaigns() {
           });
 
         } catch (err) {
-          console.error(`Error sending to ${contact.phone}:`, err);
+          console.error(`Error sending to ${contact.telefone}:`, err);
           errorCount++;
-          // Log error
           await supabase.from('campaign_logs').insert({
             campaign_id: campaign.id,
             contact_id: contact.id,
@@ -967,10 +979,26 @@ export default function Campaigns() {
                             }
                           }}
                           disabled={!!processingCampaignId}
-                          className="flex items-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-50"
+                          className="flex items-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-50 min-w-[180px] justify-center"
                         >
-                          {processingCampaignId === campaign.id ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
-                          Iniciar Envio
+                          {processingCampaignId === campaign.id ? (
+                            isWaiting ? (
+                              <span className="flex items-center gap-2">
+                                <Clock size={16} className="animate-pulse" />
+                                Próximo em {countdown}s
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="animate-spin" size={16} />
+                                Enviando...
+                              </span>
+                            )
+                          ) : (
+                            <>
+                              <Play size={16} />
+                              Iniciar Envio
+                            </>
+                          )}
                         </button>
                       )}
 
