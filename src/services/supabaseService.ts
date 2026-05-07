@@ -973,9 +973,9 @@ export const getDashboardStats = async (passedUserId?: string) => {
   const totalMessages = messagesCount.count || 0;
 
   // Cálculo real do tempo médio de resposta
-  let avgResponseTimeStr = '0s';
-  let avgFirstResponseIA = '0s';
-  let avgFirstResponseHuman = '0s';
+  let avgResponseTimeStr = '---';
+  let avgFirstResponseIA = '---';
+  let avgFirstResponseHuman = '---';
 
   try {
     const { data: recentMessages } = await supabase
