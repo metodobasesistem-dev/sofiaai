@@ -168,7 +168,7 @@ const SidePanel: React.FC<SidePanelProps> = ({ contact, onClose, onTabChange, on
           <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="lg" />
           <div>
             <h3 className="text-lg font-black text-gray-900 leading-tight flex items-center gap-2">
-              {contact.nome}
+              {/^\d+$/.test(contact.nome) ? formatPhone(contact.nome) : contact.nome}
               {contact.is_client && <Star size={16} className="fill-amber-500 text-amber-500" />}
             </h3>
             <p className="text-sm text-gray-500">{formatPhone(contact.telefone)}</p>
@@ -693,7 +693,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                           <div className="flex items-center gap-3">
                             <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
                             <div>
-                              <p className="text-sm font-black text-gray-900">{contact.nome}</p>
+                              <p className="text-sm font-black text-gray-900">{/^\d+$/.test(contact.nome) ? formatPhone(contact.nome) : contact.nome}</p>
                               {contact.totalMensagens !== undefined && (
                                 <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{contact.totalMensagens} msgs • {contact.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</p>
                               )}
@@ -773,7 +773,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <h4 className="text-sm font-black text-gray-900 truncate">
-                        {contact.nome}
+                        {/^\d+$/.test(contact.nome) ? formatPhone(contact.nome) : contact.nome}
                       </h4>
                       <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap">
                         {formatRelative(contact.ultimaInteracao)}

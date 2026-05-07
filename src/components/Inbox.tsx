@@ -86,6 +86,15 @@ interface Thread {
   ad_tracking?: any;
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const formatPhone = (phone: string) => {
+  const p = phone.replace(/\D/g, '');
+  if (p.length === 13) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9)}`;
+  if (p.length === 12) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,8)}-${p.slice(8)}`;
+  if (p.length === 11) return `(${p.slice(0,2)}) ${p.slice(2,7)}-${p.slice(7)}`;
+  return phone;
+};
+
 interface Message {
   id: string;
   text: string;
@@ -303,7 +312,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       <div className="flex items-center justify-between mb-1">
         <h4 className={`text-[15px] truncate flex items-center gap-2 
           ${(thread.unreadCount ?? 0) > 0 ? "font-black text-slate-900" : "font-medium text-slate-600"}`}>
-          {thread.name}
+          {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
           {thread.is_client && <Star size={12} className="fill-amber-500 text-amber-500 shrink-0" />}
           {thread.priority === 'urgent' && <span className="text-xs" title="Urgente">🔥</span>}
           {thread.priority === 'high' && <span className="text-xs" title="Alta">🔴</span>}
@@ -2229,7 +2238,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" />
                 <div className="min-w-0">
                   <h3 className="text-[15px] font-bold text-slate-900 leading-tight truncate flex items-center gap-2">
-                    {activeThread.name}
+                    {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
                     {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
                   </h3>
                   <div className="flex items-center gap-1.5">

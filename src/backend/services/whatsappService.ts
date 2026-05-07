@@ -433,7 +433,7 @@ class WhatsAppService {
       remote_jid: to,
       display_phone: cleanTo,
       agent_name: senderName,
-      contact_name: contact?.nome || 'Cliente'
+      contact_name: contact?.nome || cleanTo
     }).then(({ error }) => {
       if (error) console.warn('[WhatsAppService] Thread preview update warning:', error.message);
     });
@@ -635,7 +635,7 @@ class WhatsAppService {
         caption || `[Mídia]: ${filename}`, 
         'outbound', 
         result.key?.id || `med-${Date.now()}`, 
-        'Cliente', 
+        undefined, // contactName
         to, 
         cleanTo, 
         'Atendente',
@@ -900,7 +900,7 @@ class WhatsAppService {
           body: isManual 
             ? `[SISTEMA: O cliente parou de responder. Envie um follow-up de reengajamento agora. Instrução do humano: ${message || 'Seja amigável'}]`
             : `[SISTEMA: O cliente parou de responder. Envie um follow-up de reengajamento seguindo esta instrução: ${config.extraPrompt}]`,
-          contactName: 'Cliente',
+          contactName: undefined,
           messageId: `followup-gen-${Date.now()}`,
           displayPhone: cleanPhone,
           skipPersist: true

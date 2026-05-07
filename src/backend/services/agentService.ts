@@ -317,8 +317,8 @@ export class AgentService {
         remote_jid: remoteJid || `${cleanPhone}@c.us`,
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia',
-        // [FIX] Prioridade: CRM > Nome Editado na Thread > PushName do WhatsApp > Cliente
-        contact_name: contact?.nome || existingThread?.contact_name || contactName || 'Cliente',
+        // [FIX] Prioridade: CRM > Nome Editado na Thread > PushName do WhatsApp > Número do Telefone
+        contact_name: contact?.nome || existingThread?.contact_name || contactName || cleanPhone,
         unread_count: newUnreadCount,
         ticket_status: finalTicketStatus,
         updated_at: new Date(timestamp).toISOString()
@@ -461,7 +461,9 @@ export class AgentService {
         contactData.total_mensagens = 1;
       } else {
         // Só atualiza o nome se for inbound OU se o nome atual for genérico
-        const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp' || existing.nome === 'Você';
+        const isPhoneNumber = /^\d+$/.test(existing.nome || '') || (existing.nome?.includes('@'));
+        const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp' || existing.nome === 'Você' || isPhoneNumber;
+        
         if (contactName && (incrementCount || isGeneric)) {
            contactData.nome = contactName;
         }

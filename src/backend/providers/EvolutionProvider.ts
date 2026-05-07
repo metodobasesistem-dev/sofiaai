@@ -262,7 +262,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
       from: from,
       to: payload.instance || '',
       body: body,
-      contactName: messageData.pushName,
+      contactName: !messageData.key?.fromMe ? messageData.pushName : undefined,
       isGroup: from.includes('@g.us'),
       fromMe: !!messageData.key?.fromMe,
       timestamp: messageData.messageTimestamp || Math.floor(Date.now() / 1000),
