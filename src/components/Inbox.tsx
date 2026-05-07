@@ -78,6 +78,7 @@ interface Thread {
   is_client?: boolean;
   priority?: string;
   profilePictureUrl?: string;
+  profilePictureUpdatedAt?: string;
   pending_followup?: {
     message: string;
     scheduled_at: string;
@@ -999,14 +1000,23 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               is_client: contact?.is_client || false,
               priority: contact?.priority,
               profilePictureUrl: d.profile_picture_url,
+              profilePictureUpdatedAt: d.profile_picture_updated_at,
               labels: d.labels || [],
               pending_followup: d.pending_followup
             };
           });
           setThreads(formatted);
           
-          // ─── Busca fotos em lote ──────────────────────────────────────────────
-          const threadsToUpdate = formatted.filter(t => !t.profilePictureUrl);
+          // ─── Busca fotos em lote (novas ou expiradas > 24h) ─────────────────────────
+          const threadsToUpdate = formatted.filter(t => {
+            if (!t.profilePictureUrl) return true;
+            if (!t.profilePictureUpdatedAt) return true;
+            
+            const lastUpdate = new Date(t.profilePictureUpdatedAt);
+            const diffHours = (new Date().getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
+            return diffHours >= 24;
+          });
+
           if (threadsToUpdate.length > 0) {
             fetchProfilePicturesInBatch(threadsToUpdate);
           }
