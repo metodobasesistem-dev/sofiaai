@@ -974,12 +974,13 @@ export const getDashboardStats = async (passedUserId?: string) => {
 
   // Cálculo real do tempo médio de resposta
   let avgResponseTimeStr = '0s';
-  let avgFirstResponseTimeStr = '0s';
+  let avgFirstResponseIA = '0s';
+  let avgFirstResponseHuman = '0s';
 
   try {
     const { data: recentMessages } = await supabase
       .from('messages')
-      .select('thread_id, direction, created_at')
+      .select('thread_id, direction, created_at, is_ai, whatsapp_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1000);
@@ -995,14 +996,18 @@ export const getDashboardStats = async (passedUserId?: string) => {
 
       // Para o tempo médio de PRIMEIRA RESPOSTA (da conversa)
       const firstInboundByThread: Record<string, number> = {};
-      const firstResponseByThread: Record<string, number> = {};
-      let totalFirstDiff = 0;
-      let firstCount = 0;
+      const firstResponseByThread: Record<string, { time: number, is_ai: boolean }> = {};
+      
+      let totalFirstDiffIA = 0;
+      let countFirstIA = 0;
+      let totalFirstDiffHuman = 0;
+      let countFirstHuman = 0;
 
       msgs.forEach(msg => {
         const time = new Date(msg.created_at).getTime();
+        const isAI = msg.is_ai || msg.whatsapp_id?.startsWith('ai-');
         
-        // Lógica Geral
+        // Lógica Geral (Tempo Médio de todas as respostas)
         if (msg.direction === 'inbound') {
           if (!lastInboundByThread[msg.thread_id]) {
             lastInboundByThread[msg.thread_id] = time;
@@ -1017,37 +1022,41 @@ export const getDashboardStats = async (passedUserId?: string) => {
             count++;
             delete lastInboundByThread[msg.thread_id];
           }
-          // Primeira Resposta
+          // Primeira Resposta (Categorizada)
           if (firstInboundByThread[msg.thread_id] && !firstResponseByThread[msg.thread_id]) {
-            firstResponseByThread[msg.thread_id] = time;
-            totalFirstDiff += (time - firstInboundByThread[msg.thread_id]);
-            firstCount++;
+            const diff = time - firstInboundByThread[msg.thread_id];
+            firstResponseByThread[msg.thread_id] = { time, is_ai: isAI };
+            
+            if (isAI) {
+              totalFirstDiffIA += diff;
+              countFirstIA++;
+            } else {
+              totalFirstDiffHuman += diff;
+              countFirstHuman++;
+            }
           }
         }
       });
 
-      // Formata tempo GERAL
-      if (count > 0) {
-        const avgMs = totalDiff / count;
-        const totalSeconds = Math.floor(avgMs / 1000);
+      const formatTime = (ms: number) => {
+        const totalSeconds = Math.floor(ms / 1000);
         const mins = Math.floor(totalSeconds / 60);
         const secs = totalSeconds % 60;
-        avgResponseTimeStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
-      }
+        return mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
+      };
 
-      // Formata tempo de PRIMEIRA RESPOSTA
-      if (firstCount > 0) {
-        const avgFirstMs = totalFirstDiff / firstCount;
-        const totalSeconds = Math.floor(avgFirstMs / 1000);
-        const mins = Math.floor(totalSeconds / 60);
-        const secs = totalSeconds % 60;
-        avgFirstResponseTimeStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
-      }
+      // Formata tempo GERAL
+      if (count > 0) avgResponseTimeStr = formatTime(totalDiff / count);
+
+      // Formata tempos de PRIMEIRA RESPOSTA
+      if (countFirstIA > 0) avgFirstResponseIA = formatTime(totalFirstDiffIA / countFirstIA);
+      if (countFirstHuman > 0) avgFirstResponseHuman = formatTime(totalFirstDiffHuman / countFirstHuman);
     }
   } catch (err) {
     console.error('[DashboardStats] Error calculating response times:', err);
     avgResponseTimeStr = '---';
-    avgFirstResponseTimeStr = '---';
+    avgFirstResponseIA = '---';
+    avgFirstResponseHuman = '---';
   }
 
   return {
@@ -1058,7 +1067,8 @@ export const getDashboardStats = async (passedUserId?: string) => {
     avgScore: 0,
     messages: totalMessages,
     avgResponseTime: avgResponseTimeStr,
-    avgFirstResponseTime: avgFirstResponseTimeStr
+    avgFirstResponseIA,
+    avgFirstResponseHuman
   };
 };
 

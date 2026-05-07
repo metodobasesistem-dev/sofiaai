@@ -40,7 +40,8 @@ export default function ReportsDashboard() {
     messages: 0, 
     qualified: 0, 
     conversionRate: 0,
-    avgFirstResponseTime: '0s'
+    avgFirstResponseIA: '0s',
+    avgFirstResponseHuman: '0s'
   });
   const [history, setHistory] = useState<any[]>([]);
 
@@ -91,12 +92,13 @@ export default function ReportsDashboard() {
     },
     { 
       title: 'Tempo 1ª Resposta', 
-      value: (stats as any).avgFirstResponseTime || '0s', 
-      change: 'Imediato', 
+      value: (stats as any).avgFirstResponseIA || '0s', 
+      secondaryValue: (stats as any).avgFirstResponseHuman || '0s',
+      change: 'Sofia vs Humano', 
       icon: <Zap size={20} />, 
       color: 'text-purple-600', 
       bg: 'bg-purple-50',
-      desc: 'Agilidade da IA Sofia'
+      desc: 'Sofia (esq) | Humano (dir)'
     },
     { 
       title: 'Conversão de Leads', 
@@ -175,7 +177,14 @@ export default function ReportsDashboard() {
                   <ArrowUpRight size={10} /> {kpi.change}
                 </div>
               </div>
-              <h3 className="text-3xl font-black text-gray-900 mb-1 tracking-tighter">{kpi.value}</h3>
+              <h3 className="text-3xl font-black text-gray-900 mb-1 tracking-tighter">
+                {kpi.value}
+                {(kpi as any).secondaryValue && (
+                  <span className="text-[10px] ml-2 text-gray-400 font-bold uppercase tracking-widest bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                    H: {(kpi as any).secondaryValue}
+                  </span>
+                )}
+              </h3>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{kpi.title}</p>
               <p className="text-[10px] text-gray-300 font-medium mt-2">{kpi.desc}</p>
             </motion.div>
