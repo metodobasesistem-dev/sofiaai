@@ -21,11 +21,11 @@ import {
   RefreshCw,
   Play,
   Pause,
-  Pause,
   Loader2,
   Upload,
   FileText,
-  ClipboardList
+  ClipboardList,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -860,6 +860,26 @@ export default function Campaigns() {
             <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
             Nova Campanha
           </button>
+        </div>
+      </div>
+
+      {/* Anti-Ban Info Banner */}
+      <div className="bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary-600 shadow-sm">
+             <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Proteção Anti-Ban Ativada</h4>
+            <p className="text-xs text-slate-500 font-medium max-w-2xl">
+              Para sua segurança, o sistema simula o comportamento humano sorteando um intervalo aleatório entre <b>60 a 180 segundos</b> após cada mensagem enviada. 
+              Isso evita padrões robóticos e protege sua conta contra bloqueios.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 bg-white/50 px-4 py-2 rounded-xl border border-white">
+           <Info size={14} className="text-primary-500" />
+           <span className="text-[10px] font-black uppercase text-slate-500">Mantenha esta aba aberta durante o envio</span>
         </div>
       </div>
 
