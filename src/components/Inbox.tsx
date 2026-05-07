@@ -805,6 +805,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     contactsRef.current = contacts;
   }, [contacts]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastThreadIdRef = useRef<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [showDetails, setShowDetails] = useState(true);
@@ -891,11 +892,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   useEffect(() => {
     // Se as mensagens mudarem e não estivermos carregando, rola para o fim
     if (!loadingMessages && messages.length > 0) {
-      // Se for a primeira carga de uma conversa selecionada, pulamos direto (instant)
-      // Se for uma mensagem nova chegando, fazemos o smooth
-      scrollToBottom(messages.length <= 1 ? "auto" : "smooth");
+      // Se for a primeira carga de uma conversa selecionada (troca de thread), pulamos direto (auto/instant)
+      // Se for uma mensagem nova chegando na mesma conversa, fazemos o smooth
+      const isNewThread = lastThreadIdRef.current !== selectedThreadId;
+      scrollToBottom(isNewThread ? "auto" : "smooth");
+      
+      // Atualiza a referência da thread atual
+      lastThreadIdRef.current = selectedThreadId;
     }
-  }, [messages, loadingMessages]);
+  }, [messages, loadingMessages, selectedThreadId]);
 
   // Listen to threads
   useEffect(() => {
