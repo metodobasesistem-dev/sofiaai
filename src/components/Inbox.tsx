@@ -160,7 +160,7 @@ const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOu
   );
 };
 
-const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) => {
+const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?: (isRecording: boolean) => void }> = ({ onStop, onRecordingChange }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -201,6 +201,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
 
       recorder.start(200);
       setIsRecording(true);
+      onRecordingChange?.(true);
       setRecordingTime(0);
       timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
     } catch (err) {
@@ -213,6 +214,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
       isCancelledRef.current = false;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      onRecordingChange?.(false);
       if (timerRef.current) clearInterval(timerRef.current);
     }
   };
@@ -222,6 +224,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void }> = ({ onStop }) =
       isCancelledRef.current = true;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      onRecordingChange?.(false);
       if (timerRef.current) clearInterval(timerRef.current);
       toast.error('Gravação cancelada');
     }
@@ -820,6 +823,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   // Estados para edição rápida de nome na barra lateral
   const [isEditingName, setIsEditingName] = useState(false);
@@ -2257,7 +2261,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                 >
                   <CheckCircle2 size={14} className={activeThread.ticketStatus === 'resolved' ? "text-white" : "text-emerald-500"} />
-                  <span className="hidden sm:inline">{activeThread.ticketStatus === 'resolved' ? 'Resolvido' : 'Marcar Resolvido'}</span>
+                  <span className="hidden md:inline">{activeThread.ticketStatus === 'resolved' ? 'Resolvido' : 'Marcar Resolvido'}</span>
                 </button>
 
                 <button 
@@ -2281,9 +2285,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}
                 >
                   {activeThread.status === 'ia' ? (
-                    <><User size={14} /> <span className="hidden lg:inline">Assumir</span></>
+                    <><User size={14} /> <span className="hidden xl:inline">Assumir</span></>
                   ) : (
-                    <><Bot size={14} /> <span className="hidden lg:inline">Robô IA</span></>
+                    <><Bot size={14} /> <span className="hidden xl:inline">Robô IA</span></>
                   )}
                 </button>
 
@@ -2301,7 +2305,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <Info size={18} />
                 </button>
 
-                <div className="hidden sm:flex items-center gap-1">
+                <div className="hidden lg:flex items-center gap-1">
                   <button className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"><Phone size={18} /></button>
                   <button 
                     onClick={() => handleDeleteThread(activeThread)}
@@ -2410,7 +2414,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <button 
                   type="button" 
                   onClick={() => fileInputRef.current?.click()} 
-                  className="p-2 text-slate-500 hover:text-primary-600 transition-all"
+                  className={`p-2 text-slate-500 hover:text-primary-600 transition-all ${isRecording ? 'hidden md:block' : 'block'}`}
                   title="Anexar"
                 >
                   <Paperclip size={22} />
@@ -2419,7 +2423,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <button 
                     type="button" 
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                    className={`p-2 transition-all ${showEmojiPicker ? 'text-primary-600' : 'text-slate-500 hover:text-primary-600'}`}
+                    className={`p-2 transition-all ${isRecording ? 'hidden md:block' : 'block'} ${showEmojiPicker ? 'text-primary-600' : 'text-slate-500 hover:text-primary-600'}`}
                     title="Emojis"
                   >
                     <Smile size={22} />
@@ -2451,7 +2455,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-                  className="flex-1 min-w-0 flex items-center gap-2 bg-white rounded-2xl px-4 py-1 border border-slate-200"
+                  className={`flex-1 min-w-0 flex items-center gap-2 bg-white rounded-2xl px-4 py-1 border border-slate-200 ${isRecording ? 'hidden md:flex' : 'flex'}`}
                 >
                   <textarea 
                     rows={2} 
@@ -2498,7 +2502,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     <Send size={18} className="ml-0.5" />
                   </button>
                 ) : (
-                  <VoiceRecorder onStop={handleSendVoice} />
+                  <VoiceRecorder onStop={handleSendVoice} onRecordingChange={setIsRecording} />
                 )}
               </div>
             </div>
