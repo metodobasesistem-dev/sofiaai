@@ -873,7 +873,7 @@ export default function Campaigns() {
             <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Proteção Anti-Ban Ativada</h4>
             <p className="text-xs text-slate-500 font-medium max-w-2xl">
               Para sua segurança, o sistema simula o comportamento humano sorteando um intervalo aleatório entre <b>60 a 180 segundos</b> após cada mensagem enviada. 
-              Isso evita padrões robóticos e protege sua conta contra bloqueios.
+              Isso evita padrões robóticos e protege sua conta. <b>Importante:</b> Todo disparo em massa possui riscos; recomendamos moderação no volume e na frequência para manter a saúde do seu número.
             </p>
           </div>
         </div>
