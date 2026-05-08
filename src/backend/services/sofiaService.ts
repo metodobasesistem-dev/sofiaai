@@ -1,5 +1,5 @@
-import { supabase } from '../lib/supabaseClient.js';
-import { generateAIResponse, generateEmbedding } from './aiService.js';
+import { supabase } from '../lib/supabaseClient';
+import { generateAIResponse, generateEmbedding } from './aiService';
 
 export const sofiaService = {
   /**

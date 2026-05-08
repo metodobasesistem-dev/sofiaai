@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { sofiaService } from '../services/sofiaService.js';
-import { AuthenticatedRequest, requireAuth } from '../middleware/authMiddleware.js';
-import { supabase } from '../lib/supabaseClient.js';
+import { sofiaService } from '../services/sofiaService';
+import { AuthenticatedRequest, requireAuth } from '../middleware/authMiddleware';
+import { supabase } from '../lib/supabaseClient';
 
 const router = Router();
 
