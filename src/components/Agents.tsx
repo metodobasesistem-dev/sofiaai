@@ -400,15 +400,6 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       if (data && data.length > 0) {
         setAgents(data);
       }
-
-      // Fetch Sofia Settings (from profile)
-      const profile = await getUserProfile();
-      if (profile) {
-        setSofiaData({
-          active: profile.sofia_active ?? true,
-          prompt: profile.sofia_prompt || ''
-        });
-      }
     } catch (error: any) {
       console.error('[Agents] fetchAgents error:', error.message);
       toast.error('Instabilidade ao carregar agentes. Verifique sua conexão.');
