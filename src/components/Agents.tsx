@@ -33,7 +33,9 @@ import {
   Zap,
   FileText,
   Info,
-  History as HistoryIcon
+  History as HistoryIcon,
+  Brain,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
@@ -54,11 +56,8 @@ import {
   getAgentSecret, 
   getUserProfile,
   updateUserProfile,
-  listSofiaMessages,
-  type Agent, 
-  type KnowledgeItem, 
-  type AgentKnowledge,
   type UserProfile,
+  listSofiaMessages,
   type SofiaMessage
 } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
@@ -269,6 +268,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [view, setView] = useState<'agents' | 'history'>('agents');
   const [sofiaHistory, setSofiaHistory] = useState<SofiaMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [selectedInteraction, setSelectedInteraction] = useState<any>(null);
+  const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Agent>>({
@@ -421,12 +422,51 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     setIsLoadingHistory(true);
     try {
       const data = await listSofiaMessages();
-      setSofiaHistory(data);
+      setSofiaHistory(data || []);
     } catch (err) {
       toast.error('Erro ao carregar histórico da Sofia');
     } finally {
       setIsLoadingHistory(false);
     }
+  };
+
+  const groupInteractions = (messages: SofiaMessage[]) => {
+    const interactions: { user: SofiaMessage; assistant: SofiaMessage | null; id: string }[] = [];
+    
+    // Sort by date ascending to group correctly
+    const sorted = [...messages].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].role === 'user') {
+        const userMsg = sorted[i];
+        const nextMsg = sorted[i + 1];
+        const assistantMsg = (nextMsg && nextMsg.role === 'assistant') ? nextMsg : null;
+        
+        interactions.push({
+          user: userMsg,
+          assistant: assistantMsg,
+          id: userMsg.id!
+        });
+        
+        if (assistantMsg) i++; // Skip assistant message in next loop
+      } else {
+        // Assistant message without preceding user message
+        interactions.push({
+          user: { role: 'user', content: '(Sem pergunta registrada)', created_at: sorted[i].created_at } as any,
+          assistant: sorted[i],
+          id: sorted[i].id!
+        });
+      }
+    }
+    
+    return interactions.reverse(); // Newest first
+  };
+
+  const handleOpenInteraction = (interaction: any) => {
+    setSelectedInteraction(interaction);
+    setIsInteractionModalOpen(true);
   };
 
   useEffect(() => {
@@ -975,9 +1015,9 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
             <div className="p-8">
               {isLoadingHistory ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-24 bg-slate-50 rounded-2xl animate-pulse" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="h-48 bg-slate-50 rounded-[2rem] animate-pulse border border-slate-100" />
                   ))}
                 </div>
               ) : sofiaHistory.length === 0 ? (
@@ -988,48 +1028,136 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                   <p className="text-slate-400 font-medium">Nenhuma interação registrada ainda.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {sofiaHistory.map((msg, i) => (
-                    <motion.div 
-                      key={msg.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {groupInteractions(sofiaHistory).map((interaction, i) => (
+                    <motion.button
+                      key={interaction.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.05 }}
-                      className={`p-6 rounded-3xl border transition-all ${
-                        msg.role === 'assistant' 
-                          ? 'bg-primary-50/30 border-primary-100 ml-8' 
-                          : 'bg-white border-slate-100 mr-8'
-                      }`}
+                      onClick={() => handleOpenInteraction(interaction)}
+                      className="group text-left bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-primary-200/20 hover:-translate-y-1 transition-all flex flex-col h-full"
                     >
-                      <div className="flex items-start gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden
-                          ${msg.role === 'assistant' ? 'bg-primary-600' : 'bg-slate-100 text-slate-400'}`}>
-                          {msg.role === 'assistant' ? (
-                            <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
-                          ) : (
-                            <User size={18} />
-                          )}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
+                          <Brain size={20} />
                         </div>
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                              {msg.role === 'assistant' ? 'Sofia AI' : 'Usuário / Cliente'}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-400">
-                              {new Date(msg.created_at).toLocaleString('pt-BR')}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                            {msg.content}
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {new Date(interaction.user.created_at).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                      
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Sua Pergunta</span>
+                          <p className="text-sm text-slate-900 font-bold line-clamp-2 leading-snug">
+                            {interaction.user.content}
                           </p>
                         </div>
+                        
+                        {interaction.assistant && (
+                          <div className="pt-3 border-t border-slate-50">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary-400 block mb-1">Resposta Sofia</span>
+                            <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
+                              {interaction.assistant.content}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    </motion.div>
+                      
+                      <div className="mt-6 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-primary-600 font-bold text-[10px]">
+                          <span>Ver conversa completa</span>
+                          <ChevronRight size={12} />
+                        </div>
+                        <div className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500">
+                          <CheckCircle2 size={12} />
+                        </div>
+                      </div>
+                    </motion.button>
                   ))}
                 </div>
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhes da Interação */}
+      <AnimatePresence>
+        {isInteractionModalOpen && selectedInteraction && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center shadow-lg">
+                    <HistoryIcon size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">Detalhes da Interação</h3>
+                    <p className="text-[10px] text-slate-500 font-bold">
+                      {new Date(selectedInteraction.user.created_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsInteractionModalOpen(false)}
+                  className="w-10 h-10 rounded-xl hover:bg-slate-200/50 flex items-center justify-center text-slate-400 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+                {/* Pergunta */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <User size={14} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Sua Pergunta</span>
+                  </div>
+                  <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                    <p className="text-slate-700 leading-relaxed font-medium">
+                      {selectedInteraction.user.content}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Resposta */}
+                {selectedInteraction.assistant && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-primary-600">
+                      <div className="w-5 h-5 rounded-md bg-primary-600 overflow-hidden">
+                        <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Resposta da Sofia</span>
+                    </div>
+                    <div className="bg-primary-50/30 rounded-3xl p-6 border border-primary-100">
+                      <p className="text-slate-700 leading-relaxed font-medium">
+                        {selectedInteraction.assistant.content}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setIsInteractionModalOpen(false)}
+                  className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all"
+                >
+                  Fechar Visualização
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      </div>
         </div>
       )}
 
