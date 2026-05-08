@@ -140,6 +140,20 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
             required: ['contactPhone']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'search_contacts',
+          description: 'Busca contatos no CRM por nome ou telefone para obter detalhes.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Nome ou parte do nome do contato' }
+            },
+            required: ['query']
+          }
+        }
       }
     ];
 
@@ -162,11 +176,18 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
           const args = JSON.parse(toolCall.function.arguments);
           let result;
 
-          if (name === 'get_detailed_stats') result = await this.getSystemStats(userId, tenantId, true);
-          if (name === 'list_appointments') result = await this.fetchAppointments(userId, args.startDate, args.endDate);
-          if (name === 'analyze_agents') result = await this.fetchAgentsInfo(userId);
-          if (name === 'list_active_conversations') result = await this.fetchActiveThreads(userId);
-          if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
+          try {
+            if (name === 'get_detailed_stats') result = await this.getSystemStats(userId, tenantId, true);
+            else if (name === 'list_appointments') result = await this.fetchAppointments(userId, args.startDate, args.endDate);
+            else if (name === 'analyze_agents') result = await this.fetchAgentsInfo(userId);
+            else if (name === 'list_active_conversations') result = await this.fetchActiveThreads(userId);
+            else if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
+            else if (name === 'search_contacts') result = await this.searchContacts(userId, args.query);
+            else result = { error: 'Tool not found' };
+          } catch (toolErr: any) {
+            console.error(`[SofiaService] Tool ${name} error:`, toolErr);
+            result = { error: toolErr.message };
+          }
 
           currentMessages.push({
             role: 'tool',
@@ -252,15 +273,40 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
 
   async fetchThreadMessages(userId: string, phone: string) {
     const cleanPhone = phone.replace(/\D/g, '');
-    const threadId = `${userId}_${cleanPhone}`;
-    const { data } = await supabase.from('messages')
-      .select('direction, text, timestamp, message_type')
-      .eq('thread_id', threadId)
-      .eq('user_id', userId)
-      .order('timestamp', { ascending: false })
-      .limit(30);
     
-    return (data || []).reverse();
+    // Try multiple ID patterns
+    const patterns = [
+      `${userId}_${cleanPhone}`,
+      cleanPhone,
+      `${cleanPhone}@s.whatsapp.net`
+    ];
+
+    let messages: any[] = [];
+    
+    for (const tid of patterns) {
+      const { data } = await supabase.from('messages')
+        .select('direction, text, timestamp, message_type')
+        .eq('thread_id', tid)
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(30);
+      
+      if (data && data.length > 0) {
+        messages = data;
+        break;
+      }
+    }
+    
+    return messages.reverse();
+  },
+
+  async searchContacts(userId: string, query: string) {
+    const { data } = await supabase.from('contacts')
+      .select('id, nome, telefone, status_funil')
+      .eq('user_id', userId)
+      .or(`nome.ilike.%${query}%,telefone.ilike.%${query}%`)
+      .limit(5);
+    return data;
   },
 
   /**
