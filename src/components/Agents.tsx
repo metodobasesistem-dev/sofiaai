@@ -32,7 +32,8 @@ import {
   Lock,
   Zap,
   FileText,
-  Info
+  Info,
+  History as HistoryIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
@@ -901,7 +902,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
             className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2
               ${view === 'history' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <History size={16} />
+            <HistoryIcon size={16} />
             Histórico Sofia
           </button>
         </div>
@@ -956,7 +957,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-primary-600 text-white flex items-center justify-center shadow-lg">
-                  <History size={24} />
+                  <HistoryIcon size={24} />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Log de Interações Inteligentes</h3>
