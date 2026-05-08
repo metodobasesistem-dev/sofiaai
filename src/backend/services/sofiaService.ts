@@ -45,8 +45,13 @@ export const sofiaService = {
       content: h.content
     }));
 
-    // 4. Sofia's Persona
-    const systemPrompt = `Você é a Sofia, a inteligência central do sistema Wppai. 
+    // 4. Sofia's Persona (Default or Custom)
+    const { data: profile } = await supabase.from('profiles')
+      .select('sofia_prompt')
+      .eq('id', userId)
+      .single();
+
+    const defaultPrompt = `Você é a Sofia, a inteligência central do sistema Wppai. 
 Sua missão é ser uma parceira estratégica para o usuário, ajudando-o a configurar automações, dar conselhos sobre vendas e entender o comportamento dos leads.
 
 TONALIDADE:
@@ -54,13 +59,17 @@ TONALIDADE:
 - Proativa: se notar algo que pode ser melhorado, sugira.
 - Inteligente: use o contexto fornecido sobre o negócio do cliente para dar respostas personalizadas.
 
-CONTEXTO ATUAL:
-${context || 'Nenhuma informação específica memorizada ainda.'}
-
 DIRETRIZES:
 - Se o usuário passar uma informação nova e importante (ex: "meu preço mudou para R$50"), confirme que você memorizou isso.
 - Se o usuário pedir conselhos, use sua base de conhecimento para sugerir estratégias de WhatsApp Marketing.
 - Mantenha respostas concisas, mas completas.`;
+
+    const basePrompt = profile?.sofia_prompt || defaultPrompt;
+
+    const systemPrompt = `${basePrompt}
+
+CONTEXTO ATUAL (MEMÓRIA SEMÂNTICA):
+${context || 'Nenhuma informação específica memorizada ainda.'}`;
 
     // 5. Generate AI Response
     const response = await generateAIResponse(systemPrompt, formattedHistory, [], 'auto', userId);

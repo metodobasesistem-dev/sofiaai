@@ -20,7 +20,9 @@ import {
   Smartphone,
   LogOut,
   Settings as SettingsIcon,
-  ShieldAlert
+  ShieldAlert,
+  Bot,
+  Brain
 } from 'lucide-react';
 import PWADiagnostic from './PWADiagnostic';
 
@@ -230,7 +232,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     llm_provider: '',
     openai_api_key: '',
     gemini_api_key: '',
-    default_ai_model: ''
+    default_ai_model: '',
+    sofia_prompt: '',
+    sofia_active: true
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -261,7 +265,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
             llm_provider: profileData.llm_provider || '',
             openai_api_key: profileData.openai_api_key || '',
             gemini_api_key: profileData.gemini_api_key || '',
-            default_ai_model: profileData.default_ai_model || ''
+            default_ai_model: profileData.default_ai_model || '',
+            sofia_prompt: profileData.sofia_prompt || '',
+            sofia_active: profileData.sofia_active ?? true
           });
         }
       } catch (err) {
@@ -322,7 +328,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
         llm_provider: formData.llm_provider,
         openai_api_key: formData.openai_api_key,
         gemini_api_key: formData.gemini_api_key,
-        default_ai_model: formData.default_ai_model
+        default_ai_model: formData.default_ai_model,
+        sofia_prompt: formData.sofia_prompt,
+        sofia_active: formData.sofia_active
       });
       toast.success('Perfil atualizado com sucesso!');
     } catch (error) {
@@ -410,6 +418,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     { id: 'subscription', label: 'Assinatura', icon: <CreditCard size={18} /> },
     { id: 'channels', label: 'Canais', icon: <MessageSquare size={18} /> },
     { id: 'ai_config', label: 'Configuração IA', icon: <Zap size={18} /> },
+    { id: 'sofia', label: 'Assistente Sofia', icon: <Bot size={18} /> },
     { id: 'quick_replies', label: 'Respostas Rápidas', icon: <MessageSquare size={18} /> },
   ];
 
@@ -1025,6 +1034,99 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     >
                       {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                       Salvar Configuração IA
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSubTab === 'sofia' && (
+            <div className="space-y-8">
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/50 overflow-hidden">
+                <div className="p-8 border-b border-gray-50 bg-gradient-to-r from-violet-50 to-indigo-50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-violet-600">
+                      <Bot size={32} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Configurações da Assistente Sofia</h3>
+                      <p className="text-sm text-slate-500">Personalize a inteligência e o comportamento da sua parceira estratégica.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-8 space-y-8">
+                  <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">Status da Sofia</h4>
+                      <p className="text-xs text-slate-500 mt-1">Habilite ou desabilite o widget de chat para sua conta.</p>
+                    </div>
+                    <button 
+                      onClick={() => setFormData({...formData, sofia_active: !formData.sofia_active})}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+                        formData.sofia_active ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                          formData.sofia_active ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        System Prompt (Personalidade)
+                        <span className="bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full text-[9px] font-black uppercase">IA Power</span>
+                      </label>
+                      <button 
+                        onClick={() => setFormData({...formData, sofia_prompt: ''})}
+                        className="text-[10px] font-bold text-violet-600 hover:underline"
+                      >
+                        Restaurar padrão
+                      </button>
+                    </div>
+                    
+                    <div className="relative group">
+                      <textarea 
+                        rows={12}
+                        value={formData.sofia_prompt}
+                        onChange={e => setFormData({...formData, sofia_prompt: e.target.value})}
+                        placeholder="Ex: Você é a Sofia, uma especialista em marketing digital... Seja proativa e sugira estratégias de vendas..."
+                        className="w-full px-6 py-5 rounded-3xl border border-slate-200 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none text-sm transition-all bg-white shadow-sm resize-none custom-scrollbar leading-relaxed font-medium text-slate-700"
+                      />
+                      <div className="absolute top-4 right-4 opacity-20 group-hover:opacity-40 transition-opacity">
+                        <Brain size={24} className="text-violet-600" />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex gap-3">
+                        <div className="text-amber-600 shrink-0 mt-0.5"><ShieldAlert size={16} /></div>
+                        <p className="text-[10px] text-amber-700 leading-relaxed">
+                          <strong>Cuidado:</strong> Alterar o prompt radicalmente pode mudar o modo como a Sofia processa suas automações.
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-violet-50 border border-violet-100 flex gap-3">
+                        <div className="text-violet-600 shrink-0 mt-0.5"><Zap size={16} /></div>
+                        <p className="text-[10px] text-violet-700 leading-relaxed">
+                          <strong>Dica:</strong> Use este espaço para dizer à Sofia os nomes dos seus principais produtos e como ela deve tratar seus leads.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <button 
+                      onClick={handleSaveProfile}
+                      disabled={isSaving}
+                      className="px-10 py-4 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl font-bold text-sm flex items-center gap-3 transition-all shadow-xl shadow-violet-200 disabled:opacity-50 active:scale-95"
+                    >
+                      {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                      Salvar Configurações da Sofia
                     </button>
                   </div>
                 </div>

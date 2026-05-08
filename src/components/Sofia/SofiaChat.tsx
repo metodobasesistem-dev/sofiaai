@@ -14,6 +14,7 @@ export default function SofiaChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -42,8 +43,14 @@ export default function SofiaChat() {
         }
       });
       const data = await response.json();
-      if (Array.isArray(data)) {
-        setMessages(data);
+      
+      // Se a Sofia estiver desativada nas configurações, escondemos o widget
+      if (data.active === false) {
+        setIsVisible(false);
+      }
+
+      if (Array.isArray(data.history)) {
+        setMessages(data.history);
       }
     } catch (error) {
       console.error('Failed to fetch history:', error);
@@ -187,20 +194,22 @@ export default function SofiaChat() {
       </AnimatePresence>
 
       {/* Toggle Button */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-14 h-14 md:w-16 md:h-16 rounded-3xl flex items-center justify-center text-white shadow-2xl transition-all duration-500
-          ${isOpen ? 'bg-slate-800 rotate-90' : 'bg-gradient-to-tr from-violet-600 to-indigo-600'}`}
-      >
-        {isOpen ? <X size={28} /> : (
-          <div className="relative">
-            <MessageSquare size={28} />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full"></span>
-          </div>
-        )}
-      </motion.button>
+      {isVisible && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-14 h-14 md:w-16 md:h-16 rounded-3xl flex items-center justify-center text-white shadow-2xl transition-all duration-500
+            ${isOpen ? 'bg-slate-800 rotate-90' : 'bg-gradient-to-tr from-violet-600 to-indigo-600'}`}
+        >
+          {isOpen ? <X size={28} /> : (
+            <div className="relative">
+              <MessageSquare size={28} />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full"></span>
+            </div>
+          )}
+        </motion.button>
+      )}
     </div>
   );
 }

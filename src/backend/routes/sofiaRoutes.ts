@@ -11,8 +11,18 @@ router.get('/history', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     // No Wppai, o próprio ID do usuário atua como o tenant_id principal para armazenamento de memória
     const tenantId = req.userId!;
+    
+    // Buscar status de ativação
+    const { data: profile } = await supabase.from('profiles')
+      .select('sofia_active')
+      .eq('id', tenantId)
+      .single();
+
     const history = await sofiaService.getHistory(tenantId);
-    res.json(history);
+    res.json({ 
+      history, 
+      active: profile?.sofia_active ?? true 
+    });
   } catch (error: any) {
     res.status(500).json({ error: `Sofia API History Error: ${error.message}` });
   }

@@ -133,6 +133,8 @@ export interface UserProfile {
   whatsapp_provider?: string;
   whatsapp_provider_config?: any;
   whatsapp_phone_number_id?: string;
+  sofia_prompt?: string;
+  sofia_active?: boolean;
 }
 
 export interface AvailabilityConfig {
@@ -750,7 +752,9 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
         llm_provider: profile.llm_provider,
         openai_api_key: profile.openai_api_key,
         gemini_api_key: profile.gemini_api_key,
-        default_ai_model: profile.default_ai_model
+        default_ai_model: profile.default_ai_model,
+        sofia_prompt: profile.sofia_prompt,
+        sofia_active: profile.sofia_active ?? true
       };
     }
     return null;
