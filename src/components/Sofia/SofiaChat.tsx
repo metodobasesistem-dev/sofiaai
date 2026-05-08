@@ -12,7 +12,17 @@ interface Message {
 }
 
 export default function SofiaChat() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sofia_chat_open') === 'true';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sofia_chat_open', isOpen.toString());
+  }, [isOpen]);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -192,7 +202,7 @@ export default function SofiaChat() {
   return (
     <div className={`fixed z-[100] transition-all duration-500 ${
       isOpen 
-        ? 'inset-0 flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 md:p-6' 
+        ? 'inset-0 md:inset-auto md:bottom-8 md:right-8 flex items-end md:items-center justify-center bg-slate-900/40 md:bg-transparent backdrop-blur-sm md:backdrop-blur-none p-0' 
         : 'bottom-24 right-6 md:bottom-8 md:right-8'
     }`}>
       <AnimatePresence>
@@ -204,7 +214,7 @@ export default function SofiaChat() {
             style={{ 
               height: typeof window !== 'undefined' && window.innerWidth < 768 ? viewportHeight : '650px' 
             }}
-            className="w-full md:w-[450px] bg-white md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative border border-slate-200"
+            className="w-full md:w-[450px] bg-white md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative border border-slate-200 md:mb-0"
           >
             {/* Header */}
             <div className="p-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-between shadow-lg z-10">
