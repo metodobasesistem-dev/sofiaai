@@ -8,6 +8,7 @@ import {
   Zap, 
   CheckCircle2, 
   XCircle,
+  Clock,
   BarChart3,
   Search,
   RefreshCw,

@@ -3,6 +3,9 @@ import {
   User, 
   Building2, 
   CreditCard, 
+  Plug, 
+  Clock, 
+  Bot, 
   Check, 
   Zap, 
   ShieldCheck,
@@ -21,7 +24,6 @@ import {
   LogOut,
   Settings as SettingsIcon,
   ShieldAlert,
-  Bot,
   Brain
 } from 'lucide-react';
 import PWADiagnostic from './PWADiagnostic';
