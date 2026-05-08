@@ -26,14 +26,40 @@ export default function SofiaChat() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Keyboard Handling for Mobile
+  const [viewportHeight, setViewportHeight] = useState('100dvh');
+  
+  useEffect(() => {
+    if (!window.visualViewport) return;
+
+    const handleResize = () => {
+      const height = window.visualViewport?.height || window.innerHeight;
+      setViewportHeight(`${height}px`);
+    };
+
+    window.visualViewport.addEventListener('resize', handleResize);
+    window.visualViewport.addEventListener('scroll', handleResize);
+    handleResize();
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('scroll', handleResize);
+    };
+  }, []);
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   useEffect(() => {
     if (isOpen) {
       fetchHistory();
       scrollToBottom();
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
     }
   }, [isOpen]);
 
@@ -164,32 +190,39 @@ export default function SofiaChat() {
   };
 
   return (
-    <div className="fixed bottom-20 right-6 z-[100] md:bottom-6">
+    <div className={`fixed z-[100] transition-all duration-500 ${
+      isOpen 
+        ? 'inset-0 flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 md:p-6' 
+        : 'bottom-24 right-6 md:bottom-8 md:right-8'
+    }`}>
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 100, x: 50 }}
-            animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 100, x: 50 }}
-            className="mb-4 w-[90vw] md:w-[400px] h-[550px] bg-white/90 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            style={{ 
+              height: typeof window !== 'undefined' && window.innerWidth < 768 ? viewportHeight : '650px' 
+            }}
+            className="w-full md:w-[450px] bg-white md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative border border-slate-200"
           >
             {/* Header */}
-            <div className="p-5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg overflow-hidden border border-white/20">
+            <div className="p-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-between shadow-lg z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl overflow-hidden border-2 border-white/30 transition-transform hover:scale-105">
                   <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm">Assistente Sofia</h3>
-                  <div className="flex items-center gap-1">
-                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                    <span className="text-[10px] opacity-80">Online e aprendendo</span>
+                  <h3 className="font-black text-base tracking-tight">Sofia AI</h3>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Online e aprendendo</span>
                   </div>
                 </div>
               </div>
               <button 
                 onClick={() => setIsOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl transition-all active:scale-90"
               >
                 <X size={20} />
               </button>
@@ -240,24 +273,24 @@ export default function SofiaChat() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100">
-              <div className="relative flex items-center gap-2">
+            {/* Input Area */}
+            <div className="p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+              <div className="relative flex items-center gap-3">
                 {isRecording ? (
-                  <div className="flex-1 bg-violet-50 border border-violet-200 rounded-2xl px-4 py-3 flex items-center justify-between animate-pulse">
-                    <div className="flex items-center gap-2 text-violet-600 font-bold text-xs">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
-                      Gravando... {formatTime(recordingTime)}
+                  <div className="flex-1 bg-violet-50 border border-violet-200 rounded-2xl px-5 py-4 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex items-center gap-3 text-violet-600 font-black text-sm">
+                      <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
+                      {formatTime(recordingTime)}
                     </div>
                     <button 
                       onClick={stopRecording}
-                      className="text-violet-600 hover:text-violet-800"
+                      className="w-10 h-10 flex items-center justify-center bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors"
                     >
                       <Square size={18} fill="currentColor" />
                     </button>
                   </div>
                 ) : (
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 group">
                     <input
                       type="text"
                       value={inputValue}
@@ -265,16 +298,16 @@ export default function SofiaChat() {
                       onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                       placeholder={isTranscribing ? "Processando áudio..." : "Fale com a Sofia..."}
                       disabled={isTranscribing}
-                      className="w-full bg-white border border-slate-200 rounded-2xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all disabled:opacity-50"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-[1.5rem] pl-5 pr-14 py-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 focus:bg-white transition-all disabled:opacity-50 placeholder:text-slate-400"
                     />
                     <button 
                       onClick={isRecording ? stopRecording : startRecording}
                       disabled={isLoading || isTranscribing}
-                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all ${
-                        isRecording ? 'text-red-500 bg-red-50' : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50'
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${
+                        isRecording ? 'text-red-500 bg-red-50' : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50 active:scale-90'
                       }`}
                     >
-                      {isTranscribing ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
+                      {isTranscribing ? <Loader2 size={18} className="animate-spin" /> : <Mic size={20} />}
                     </button>
                   </div>
                 )}
@@ -282,14 +315,14 @@ export default function SofiaChat() {
                 <button
                   onClick={handleSend}
                   disabled={isLoading || !inputValue.trim() || isRecording || isTranscribing}
-                  className="w-11 h-11 bg-violet-600 text-white rounded-2xl flex items-center justify-center hover:bg-violet-700 disabled:opacity-50 disabled:hover:bg-violet-600 transition-all shadow-lg shadow-violet-200"
+                  className="w-14 h-14 bg-violet-600 text-white rounded-[1.5rem] flex items-center justify-center hover:bg-violet-700 disabled:opacity-50 disabled:grayscale transition-all shadow-xl shadow-violet-200 active:scale-95"
                 >
-                  <Send size={18} />
+                  <Send size={20} />
                 </button>
               </div>
-              <p className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-1">
-                <Sparkles size={10} />
-                Sofia usa IA para aprender com você.
+              <p className="text-[10px] font-bold uppercase tracking-widest text-center text-slate-300 mt-4 flex items-center justify-center gap-2">
+                <Sparkles size={10} className="text-violet-400" />
+                Sofia Governance System
               </p>
             </div>
           </motion.div>
@@ -297,7 +330,7 @@ export default function SofiaChat() {
       </AnimatePresence>
 
       {/* Toggle Button */}
-      {isVisible && (
+      {isVisible && !isOpen && (
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
