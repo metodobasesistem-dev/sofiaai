@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import { generateAIResponse, generateEmbedding } from './aiService';
+import { format } from 'date-fns';
 
 export const sofiaService = {
   /**
@@ -14,9 +15,12 @@ export const sofiaService = {
       content: message
     });
 
-    // 2. Search relevant memory
+    // 2. Fetch System Context (The "Unlimited Access" part)
+    const systemStats = await this.getSystemStats(userId, tenantId);
+
+    // 3. Search relevant memory
     const embedding = await generateEmbedding(message, userId);
-    let context = '';
+    let semanticContext = '';
     
     if (embedding) {
       const { data: memories } = await supabase.rpc('match_sofia_memory', {
@@ -27,69 +31,178 @@ export const sofiaService = {
       });
 
       if (memories && memories.length > 0) {
-        context = "Informações que você já sabe sobre este cliente/negócio:\n" + 
+        semanticContext = "MEMÓRIA SEMÂNTICA (Fatos memorizados anteriormente):\n" + 
           memories.map((m: any) => `- ${m.content}`).join('\n');
       }
     }
 
-    // 3. Get recent history
+    // 4. Get recent history
     const { data: history } = await supabase.from('sofia_messages')
       .select('role, content')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
-      .limit(40);
-
+      .limit(20);
 
     const formattedHistory = (history || []).reverse().map(h => ({
       role: h.role as 'user' | 'assistant',
       content: h.content
     }));
 
-    // 4. Sofia's Persona (Default or Custom)
+    // 5. Sofia's Persona
     const { data: profile } = await supabase.from('profiles')
-      .select('sofia_prompt')
+      .select('sofia_prompt, nome_empresa, nicho')
       .eq('id', userId)
       .single();
 
-    const defaultPrompt = `Você é a Sofia, a inteligência central do sistema Wppai. 
-Sua missão é ser uma parceira estratégica para o usuário, ajudando-o a configurar automações, dar conselhos sobre vendas e entender o comportamento dos leads.
+    const now = new Date();
+    const systemPrompt = `Você é a Sofia, a inteligência central e parceira estratégica do ecossistema Wppai.
+Você tem ACESSO TOTAL ao sistema para ajudar o usuário a gerir o negócio.
 
 TONALIDADE:
-- Profissional, mas acolhedora.
-- Proativa: se notar algo que pode ser melhorado, sugira.
-- Inteligente: use o contexto fornecido sobre o negócio do cliente para dar respostas personalizadas.
+- Estratégica, inteligente e proativa.
+- Você não é apenas uma atendente, você é uma CO-PILOTO do empresário.
+
+DADOS EM TEMPO REAL DO SISTEMA (DASHBOARD):
+${systemStats}
+
+${semanticContext || ''}
 
 DIRETRIZES:
-- Se o usuário passar uma informação nova e importante (ex: "meu preço mudou para R$50"), confirme que você memorizou isso.
-- Se o usuário pedir conselhos, use sua base de conhecimento para sugerir estratégias de WhatsApp Marketing.
-- Mantenha respostas concisas, mas completas.`;
+- Use as estatísticas acima para dar insights (ex: "Vi que você tem X agendamentos hoje").
+- Se o usuário perguntar algo que você não tem nos dados acima, use suas FERRAMENTAS para buscar.
+- Horário Atual: ${format(now, 'HH:mm')} de ${format(now, 'dd/MM/yyyy')}.
 
-    const basePrompt = profile?.sofia_prompt || defaultPrompt;
+PROMPT CUSTOMIZADO:
+${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
 
-    const systemPrompt = `${basePrompt}
+    // 6. Tools Definition
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'get_detailed_stats',
+          description: 'Obtém estatísticas detalhadas do CRM, contatos e conversões.',
+          parameters: { type: 'object', properties: {} }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'list_appointments',
+          description: 'Lista agendamentos para um período específico.',
+          parameters: {
+            type: 'object',
+            properties: {
+              startDate: { type: 'string', description: 'Data início YYYY-MM-DD' },
+              endDate: { type: 'string', description: 'Data fim YYYY-MM-DD' }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'analyze_agents',
+          description: 'Lista todos os agentes de IA e seu status de configuração.',
+          parameters: { type: 'object', properties: {} }
+        }
+      }
+    ];
 
-CONTEXTO ATUAL (MEMÓRIA SEMÂNTICA):
-${context || 'Nenhuma informação específica memorizada ainda.'}`;
+    // 7. AI Loop with Tools
+    let currentMessages = [
+      ...formattedHistory,
+      { role: 'user', content: message }
+    ];
 
-    // 5. Generate AI Response
-    const response = await generateAIResponse(systemPrompt, formattedHistory, [], 'auto', userId);
-    const sofiaText = response.text || "Desculpe, tive um pequeno problema ao processar sua mensagem. Poderia repetir?";
+    let aiFinalText = "";
+    
+    while (true) {
+      const response = await generateAIResponse(systemPrompt, currentMessages, tools, 'auto', userId);
+      
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        currentMessages.push({ role: 'assistant', content: response.text || '', tool_calls: response.toolCalls });
 
-    // 6. Save assistant message
+        for (const toolCall of response.toolCalls) {
+          const name = toolCall.function.name;
+          const args = JSON.parse(toolCall.function.arguments);
+          let result;
+
+          if (name === 'get_detailed_stats') result = await this.getSystemStats(userId, tenantId, true);
+          if (name === 'list_appointments') result = await this.fetchAppointments(userId, args.startDate, args.endDate);
+          if (name === 'analyze_agents') result = await this.fetchAgentsInfo(userId);
+
+          currentMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            name: name,
+            content: JSON.stringify(result || { success: false })
+          });
+        }
+      } else {
+        aiFinalText = response.text || "Estou aqui para ajudar!";
+        break;
+      }
+    }
+
+    // 8. Save assistant message
     await supabase.from('sofia_messages').insert({
       tenant_id: tenantId,
       user_id: userId,
       role: 'assistant',
-      content: sofiaText
+      content: aiFinalText
     });
 
-    // 7. Background: Memory Extraction
-    // Trigger memory extraction only if the message seems informative
-    this.extractAndSaveMemory(userId, tenantId, message, sofiaText).catch(err => {
-      console.error('[SofiaService] Memory extraction error:', err);
-    });
+    // 9. Memory Extraction (Background)
+    this.extractAndSaveMemory(userId, tenantId, message, aiFinalText).catch(() => {});
 
-    return sofiaText;
+    return aiFinalText;
+  },
+
+  async getSystemStats(userId: string, tenantId: string, detailed = false) {
+    try {
+      const [
+        { count: totalContacts },
+        { count: totalAppointments },
+        { count: activeAgents },
+        { data: recentLeads }
+      ] = await Promise.all([
+        supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('user_id', userId).neq('status', 'cancelled'),
+        supabase.from('agents').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status_ativo', true),
+        supabase.from('contacts').select('nome, status_funil').eq('user_id', userId).order('data_criacao', { ascending: false }).limit(5)
+      ]);
+
+      let stats = `ESTATÍSTICAS GERAIS:
+- Total de Contatos no CRM: ${totalContacts || 0}
+- Agendamentos Ativos: ${totalAppointments || 0}
+- Agentes de IA Online: ${activeAgents || 0}
+- Últimos leads interessados: ${(recentLeads || []).map(l => `${l.nome} (${l.status_funil})`).join(', ')}`;
+
+      if (detailed) {
+        const { data: funil } = await supabase.from('contacts').select('status_funil');
+        const counts: any = {};
+        (funil || []).forEach(c => counts[c.status_funil] = (counts[c.status_funil] || 0) + 1);
+        stats += `\nDETALHAMENTO FUNIL: ${JSON.stringify(counts)}`;
+      }
+
+      return stats;
+    } catch (err) {
+      return "Erro ao carregar estatísticas do sistema.";
+    }
+  },
+
+  async fetchAppointments(userId: string, start?: string, end?: string) {
+    const query = supabase.from('appointments').select('*').eq('user_id', userId);
+    if (start) query.gte('data', start);
+    if (end) query.lte('data', end);
+    const { data } = await query.limit(20);
+    return data;
+  },
+
+  async fetchAgentsInfo(userId: string) {
+    const { data } = await supabase.from('agents').select('nome, status_ativo, nicho').eq('user_id', userId);
+    return data;
   },
 
   /**
