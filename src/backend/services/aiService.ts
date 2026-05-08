@@ -327,3 +327,25 @@ Regras:
     return [];
   }
 }
+
+/**
+ * Generates an embedding for the given text using OpenAI.
+ */
+export async function generateEmbedding(text: string, userId?: string): Promise<number[] | null> {
+  const settings = await getAISettings(userId);
+  const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
+  if (!key) return null;
+
+  try {
+    const client = new OpenAI({ apiKey: key });
+    const response = await client.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text.replace(/\n/g, ' '),
+    });
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error('[AIService] Embedding error:', error);
+    return null;
+  }
+}
+

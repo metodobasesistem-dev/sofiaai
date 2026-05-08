@@ -62,6 +62,7 @@ import whatsappRoutes from './src/backend/routes/whatsappRoutes.js';
 import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js';
 import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
+import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
 import { requireAuth } from './src/backend/middleware/authMiddleware.js';
 
 
@@ -193,6 +194,7 @@ async function startServer() {
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/whatsapp/evolution', whatsappWebhookRoutes); // Novo Webhook
     app.use('/api/leo', leoRoutes);
+    app.use('/api/sofia', sofiaRoutes);
 
 
 

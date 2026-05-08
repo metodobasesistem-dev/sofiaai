@@ -34,6 +34,7 @@ import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { useFeature, useFeatureContext } from '../contexts/FeatureFlagContext';
 import { useRef, useEffect } from 'react';
+import SofiaChat from './Sofia/SofiaChat';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -587,6 +588,9 @@ export default function Layout({
           </button>
         )}
       </div>
+      
+      {/* Sofia Assistant Chat */}
+      <SofiaChat />
     </div>
   );
 }
