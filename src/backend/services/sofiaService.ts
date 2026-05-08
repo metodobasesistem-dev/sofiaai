@@ -80,12 +80,14 @@ ${systemStats}
 ${semanticContext || ''}
 
 DIRETRIZES:
+- Se o usuário perguntar sobre "uma conversa", "um cliente" ou "um contato" pelo nome:
+  1. Use 'search_contacts' para encontrar o telefone dele.
+  2. Use o telefone encontrado para chamar 'get_chat_history'.
 - Use as estatísticas acima para dar insights (ex: "Vi que você tem X agendamentos hoje").
-- Se o usuário perguntar algo que você não tem nos dados acima, use suas FERRAMENTAS para buscar.
 - Horário Atual: ${format(now, 'HH:mm')} de ${format(now, 'dd/MM/yyyy')}.
 
 PROMPT CUSTOMIZADO:
-${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
+${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estratégica.'}`;
 
     // 6. Tools Definition
     const tools = [
@@ -157,49 +159,69 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
       }
     ];
 
-    // 7. AI Loop with Tools
+    // 7. AI Loop with Tools (Max 5 iterations to prevent infinite loops)
     let currentMessages = [
       ...formattedHistory,
       { role: 'user', content: message }
     ];
 
     let aiFinalText = "";
+    let iterations = 0;
+    const MAX_ITERATIONS = 5;
     
-    while (true) {
-      const response = await generateAIResponse(systemPrompt, currentMessages, tools, 'auto', userId);
-      
-      if (response.toolCalls && response.toolCalls.length > 0) {
-        currentMessages.push({ role: 'assistant', content: response.text || '', tool_calls: response.toolCalls });
+    while (iterations < MAX_ITERATIONS) {
+      iterations++;
+      try {
+        const response = await generateAIResponse(systemPrompt, currentMessages, tools, 'auto', userId);
+        
+        if (response.toolCalls && response.toolCalls.length > 0) {
+          currentMessages.push({ role: 'assistant', content: response.text || '', tool_calls: response.toolCalls });
 
-        for (const toolCall of response.toolCalls) {
-          const name = toolCall.function.name;
-          const args = JSON.parse(toolCall.function.arguments);
-          let result;
+          for (const toolCall of response.toolCalls) {
+            const name = toolCall.function.name;
+            let args: any = {};
+            
+            try {
+              args = JSON.parse(toolCall.function.arguments);
+            } catch (pErr) {
+              console.error(`[SofiaService] JSON Parse Error for tool ${name}:`, toolCall.function.arguments);
+            }
 
-          try {
-            if (name === 'get_detailed_stats') result = await this.getSystemStats(userId, tenantId, true);
-            else if (name === 'list_appointments') result = await this.fetchAppointments(userId, args.startDate, args.endDate);
-            else if (name === 'analyze_agents') result = await this.fetchAgentsInfo(userId);
-            else if (name === 'list_active_conversations') result = await this.fetchActiveThreads(userId);
-            else if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
-            else if (name === 'search_contacts') result = await this.searchContacts(userId, args.query);
-            else result = { error: 'Tool not found' };
-          } catch (toolErr: any) {
-            console.error(`[SofiaService] Tool ${name} error:`, toolErr);
-            result = { error: toolErr.message };
+            let result;
+
+            try {
+              if (name === 'get_detailed_stats') result = await this.getSystemStats(userId, tenantId, true);
+              else if (name === 'list_appointments') result = await this.fetchAppointments(userId, args.startDate, args.endDate);
+              else if (name === 'analyze_agents') result = await this.fetchAgentsInfo(userId);
+              else if (name === 'list_active_conversations') result = await this.fetchActiveThreads(userId);
+              else if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
+              else if (name === 'search_contacts') result = await this.searchContacts(userId, args.query);
+              else result = { error: 'Tool not found' };
+            } catch (toolErr: any) {
+              console.error(`[SofiaService] Tool ${name} execution error:`, toolErr);
+              result = { error: toolErr.message || 'Internal tool error' };
+            }
+
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: name,
+              content: JSON.stringify(result || { success: false })
+            });
           }
-
-          currentMessages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            name: name,
-            content: JSON.stringify(result || { success: false })
-          });
+        } else {
+          aiFinalText = response.text || "Estou aqui para ajudar!";
+          break;
         }
-      } else {
-        aiFinalText = response.text || "Estou aqui para ajudar!";
+      } catch (aiErr: any) {
+        console.error('[SofiaService] AI Generation Error:', aiErr);
+        aiFinalText = "Desculpe, tive um problema ao processar sua resposta agora. Pode tentar novamente?";
         break;
       }
+    }
+
+    if (iterations >= MAX_ITERATIONS) {
+      aiFinalText = "Estou com um pouco de dificuldade para processar tantos dados agora. Pode ser mais específico na sua pergunta?";
     }
 
     // 8. Save assistant message
