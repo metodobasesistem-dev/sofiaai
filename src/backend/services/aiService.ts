@@ -113,7 +113,11 @@ export async function generateAIResponse(
           ]
         };
       }
-      return { role: m.role, content: m.content };
+      const formatted: any = { role: m.role, content: m.content };
+      if (m.tool_call_id) formatted.tool_call_id = m.tool_call_id;
+      if (m.tool_calls) formatted.tool_calls = m.tool_calls;
+      if (m.name) formatted.name = m.name;
+      return formatted;
     });
 
     try {

@@ -175,7 +175,14 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
         const response = await generateAIResponse(systemPrompt, currentMessages, tools, 'auto', userId);
         
         if (response.toolCalls && response.toolCalls.length > 0) {
-          currentMessages.push({ role: 'assistant', content: response.text || '', tool_calls: response.toolCalls });
+          console.log(`[SofiaService] 🛠️ AI requested ${response.toolCalls.length} tools:`, response.toolCalls.map(tc => tc.function.name));
+          
+          // OpenAI requirement: content must be null when tool_calls is present
+          currentMessages.push({ 
+            role: 'assistant', 
+            content: response.text || null as any, 
+            tool_calls: response.toolCalls 
+          });
 
           for (const toolCall of response.toolCalls) {
             const name = toolCall.function.name;
@@ -187,6 +194,7 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
               console.error(`[SofiaService] JSON Parse Error for tool ${name}:`, toolCall.function.arguments);
             }
 
+            console.log(`[SofiaService] 🚀 Executing tool: ${name}`, args);
             let result;
 
             try {
@@ -197,8 +205,10 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
               else if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
               else if (name === 'search_contacts') result = await this.searchContacts(userId, args.query);
               else result = { error: 'Tool not found' };
+              
+              console.log(`[SofiaService] ✅ Tool ${name} result size:`, JSON.stringify(result).length);
             } catch (toolErr: any) {
-              console.error(`[SofiaService] Tool ${name} execution error:`, toolErr);
+              console.error(`[SofiaService] ❌ Tool ${name} execution error:`, toolErr);
               result = { error: toolErr.message || 'Internal tool error' };
             }
 
