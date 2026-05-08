@@ -4,6 +4,18 @@ import { format } from 'date-fns';
 
 export const sofiaService = {
   /**
+   * Get recent history for history view
+   */
+  async getHistory(tenantId: string) {
+    const { data: history } = await supabase.from('sofia_messages')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    return history || [];
+  },
+
+  /**
    * Main chat function for Sofia
    */
   async chat(userId: string, tenantId: string, message: string) {
