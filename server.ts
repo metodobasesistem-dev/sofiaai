@@ -87,10 +87,9 @@ async function startServer() {
   // 1. Middleware
   app.use(express.json());
   
-  // Prioridade Máxima para a Sofia
+  // REGISTRO DE EMERGÊNCIA - TOPO DO SERVIDOR
   app.use('/api/v2/sofia', sofiaRoutes);
-  console.log('[Server] 🤖 PRIORIDADE: Rota /api/v2/sofia registrada no topo');
-
+  
   // 2. Health Checks
   app.get('/api/health-check', async (req, res) => {
     const redisOk = await rPing();
