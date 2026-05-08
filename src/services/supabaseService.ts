@@ -713,10 +713,10 @@ export const updateContact = async (contactId: string, data: Partial<Contact>) =
         await supabase
           .from('threads')
           .update({ contact_name: data.nome })
-          .eq('id', threadId);
       }
     } catch (err) {
       console.warn('[updateContact] Falha ao sincronizar nome na thread:', err);
+    }
   }
 };
 
