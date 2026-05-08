@@ -1001,9 +1001,13 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                       }`}
                     >
                       <div className="flex items-start gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm
-                          ${msg.role === 'assistant' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                          {msg.role === 'assistant' ? <Bot size={18} /> : <User size={18} />}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden
+                          ${msg.role === 'assistant' ? 'bg-primary-600' : 'bg-slate-100 text-slate-400'}`}>
+                          {msg.role === 'assistant' ? (
+                            <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+                          ) : (
+                            <User size={18} />
+                          )}
                         </div>
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center justify-between">
