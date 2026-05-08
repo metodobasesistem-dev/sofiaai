@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, CheckCircle2, XCircle, RefreshCw, QrCode, PhoneOff } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, RefreshCw, QrCode, PhoneOff, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
 

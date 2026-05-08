@@ -176,7 +176,6 @@ export interface Channel {
   agentId: string;
   tipo: 'whatsapp' | 'chat' | 'telegram';
   status: 'ativo' | 'inativo';
-  status: 'ativo' | 'inativo';
   created_at?: string;
 }
 

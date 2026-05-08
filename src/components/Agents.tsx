@@ -1157,9 +1157,6 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
           </div>
         )}
       </AnimatePresence>
-      </div>
-        </div>
-      )}
 
       {/* Modal Novo/Editar Agente */}
       <AnimatePresence>

@@ -91,7 +91,8 @@ export default function Layout({
   activeTab, 
   onTabChange, 
   user,
-  role 
+  role,
+  plano
 }: { 
   children: React.ReactNode, 
   activeTab: string, 
