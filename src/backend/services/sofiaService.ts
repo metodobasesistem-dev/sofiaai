@@ -106,6 +106,28 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
           description: 'Lista todos os agentes de IA e seu status de configuração.',
           parameters: { type: 'object', properties: {} }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'list_active_conversations',
+          description: 'Lista as conversas mais recentes no CRM (threads).',
+          parameters: { type: 'object', properties: {} }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_chat_history',
+          description: 'Recupera o histórico de mensagens de uma conversa específica para análise.',
+          parameters: {
+            type: 'object',
+            properties: {
+              contactPhone: { type: 'string', description: 'Telefone do contato (apenas números)' }
+            },
+            required: ['contactPhone']
+          }
+        }
       }
     ];
 
@@ -131,6 +153,8 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
           if (name === 'get_detailed_stats') result = await this.getSystemStats(userId, tenantId, true);
           if (name === 'list_appointments') result = await this.fetchAppointments(userId, args.startDate, args.endDate);
           if (name === 'analyze_agents') result = await this.fetchAgentsInfo(userId);
+          if (name === 'list_active_conversations') result = await this.fetchActiveThreads(userId);
+          if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
 
           currentMessages.push({
             role: 'tool',
@@ -203,6 +227,28 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance.'}`;
   async fetchAgentsInfo(userId: string) {
     const { data } = await supabase.from('agents').select('nome, status_ativo, nicho').eq('user_id', userId);
     return data;
+  },
+
+  async fetchActiveThreads(userId: string) {
+    const { data } = await supabase.from('threads')
+      .select('id, contact_name, display_phone, last_message, last_message_time, status')
+      .eq('user_id', userId)
+      .order('last_message_time', { ascending: false })
+      .limit(10);
+    return data;
+  },
+
+  async fetchThreadMessages(userId: string, phone: string) {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const threadId = `${userId}_${cleanPhone}`;
+    const { data } = await supabase.from('messages')
+      .select('direction, text, timestamp, message_type')
+      .eq('thread_id', threadId)
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false })
+      .limit(30);
+    
+    return (data || []).reverse();
   },
 
   /**
