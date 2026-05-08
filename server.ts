@@ -86,6 +86,10 @@ async function startServer() {
 
   // 1. Middleware
   app.use(express.json());
+  
+  // Prioridade Máxima para a Sofia
+  app.use('/api/v2/sofia', sofiaRoutes);
+  console.log('[Server] 🤖 PRIORIDADE: Rota /api/v2/sofia registrada no topo');
 
   // 2. Health Checks
   app.get('/api/health-check', async (req, res) => {
@@ -170,8 +174,6 @@ async function startServer() {
     });
 
     app.use('/api/sessions', sessionRoutes);
-    app.use('/api/v2/sofia', sofiaRoutes);
-    console.log('[Server] 🤖 Rota /api/v2/sofia registrada com sucesso');
     app.use('/api/messages', messageRoutes);
 
     app.post('/api/sessions/pairing-code', async (req, res) => {
