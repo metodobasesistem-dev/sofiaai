@@ -415,6 +415,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     }
   };
 
+  const tabs = [
     { id: 'account', label: 'Conta', icon: <User size={18} /> },
     { id: 'subscription', label: 'Assinatura', icon: <CreditCard size={18} /> },
     { id: 'channels', label: 'Canais', icon: <MessageSquare size={18} /> },
