@@ -731,26 +731,17 @@ export const listSofiaMessages = async (limit = 50): Promise<SofiaMessage[]> => 
     // Get tenant_id from profile - using a more robust approach
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('tenant_id, role')
+      .select('*') // Buscamos tudo para ser flexível se o nome da coluna mudar
       .eq('id', session.user.id)
       .maybeSingle();
 
-    if (profileError) {
-      console.error('[listSofiaMessages] Profile fetch error:', profileError);
-      throw profileError;
-    }
-
-    if (!profile?.tenant_id) {
-      console.warn('[listSofiaMessages] No tenant_id found for user:', session.user.id);
-      // Se for admin e não tiver tenant_id, talvez devêssemos listar tudo? 
-      // Por enquanto, vamos retornar vazio para evitar erro de crash
-      return [];
-    }
+    // Fallback: se tenant_id não existir na tabela profiles ainda, usamos o id do usuário
+    const tenantId = profile?.tenant_id || session.user.id;
 
     const { data, error } = await supabase
       .from('sofia_messages')
       .select('*')
-      .eq('tenant_id', profile.tenant_id)
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
       .limit(limit);
 
