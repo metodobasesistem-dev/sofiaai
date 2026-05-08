@@ -176,7 +176,18 @@ export interface Channel {
   agentId: string;
   tipo: 'whatsapp' | 'chat' | 'telegram';
   status: 'ativo' | 'inativo';
+  status: 'ativo' | 'inativo';
   created_at?: string;
+}
+
+export interface SofiaMessage {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  metadata: any;
+  created_at: string;
 }
 
 /**
@@ -706,7 +717,38 @@ export const updateContact = async (contactId: string, data: Partial<Contact>) =
       }
     } catch (err) {
       console.warn('[updateContact] Falha ao sincronizar nome na thread:', err);
-    }
+  }
+};
+
+/**
+ * Sofia Chat History
+ */
+export const listSofiaMessages = async (limit = 50): Promise<SofiaMessage[]> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('No session');
+
+    // Get tenant_id from profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', session.user.id)
+      .single();
+
+    if (!profile?.tenant_id) throw new Error('No tenant found');
+
+    const { data, error } = await supabase
+      .from('sofia_messages')
+      .select('*')
+      .eq('tenant_id', profile.tenant_id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error: any) {
+    console.error('Error listing Sofia messages:', error.message);
+    throw error;
   }
 };
 

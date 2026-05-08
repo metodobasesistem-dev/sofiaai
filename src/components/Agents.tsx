@@ -53,10 +53,12 @@ import {
   getAgentSecret, 
   getUserProfile,
   updateUserProfile,
+  listSofiaMessages,
   type Agent, 
   type KnowledgeItem, 
   type AgentKnowledge,
-  type UserProfile
+  type UserProfile,
+  type SofiaMessage
 } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 /// <reference types="vite/client" />
@@ -261,6 +263,11 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [isSaving, setIsSaving] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'preview' | 'automation' | 'advanced' | 'knowledge' | 'voice'>('profile');
+  
+  // History View States
+  const [view, setView] = useState<'agents' | 'history'>('agents');
+  const [sofiaHistory, setSofiaHistory] = useState<SofiaMessage[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Agent>>({
@@ -408,6 +415,24 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       clearTimeout(timeoutId);
     }
   };
+
+  const fetchSofiaHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const data = await listSofiaMessages();
+      setSofiaHistory(data);
+    } catch (err) {
+      toast.error('Erro ao carregar histórico da Sofia');
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'history') {
+      fetchSofiaHistory();
+    }
+  }, [view]);
 
   useEffect(() => {
     fetchAgents();
@@ -856,49 +881,150 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Meus Agentes</h1>
-          <p className="text-gray-500 text-sm">Gerencie e configure seus assistentes virtuais inteligentes.</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Inteligência Artificial</h1>
+          <p className="text-slate-500 text-sm font-medium">Gerencie seus agentes e monitore as interações da Sofia.</p>
         </div>
         
-        <button 
-          onClick={handleAddNew}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm shadow-primary-200"
-        >
-          <Plus size={18} />
-          Novo Agente
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+          <button 
+            onClick={() => setView('agents')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2
+              ${view === 'agents' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <Bot size={16} />
+            Meus Agentes
+          </button>
+          <button 
+            onClick={() => setView('history')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2
+              ${view === 'history' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <History size={16} />
+            Histórico Sofia
+          </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {agents.map(agent => (
-            <AgentCard 
-              key={agent.id}
-              agent={agent}
-              onToggle={() => handleToggle(agent.id!, agent.status_ativo)}
-              onEdit={() => handleEdit(agent)}
-              onDelete={() => handleDelete(agent.id!)}
-            />
-          ))}
 
-          {/* Empty State / Add New Placeholder */}
+        {view === 'agents' && (
           <button 
             onClick={handleAddNew}
-            className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-300 hover:text-primary-500 hover:bg-primary-50/50 transition-all group min-h-[220px]"
+            className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-2xl text-sm font-black hover:bg-primary-700 transition-all shadow-xl shadow-primary-200 active:scale-95"
           >
-            <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-              <Plus size={24} />
-            </div>
-            <span className="font-medium">Adicionar novo nicho</span>
+            <Plus size={20} />
+            Novo Agente
           </button>
+        )}
+      </div>
+
+      {view === 'agents' ? (
+        <>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {agents.map(agent => (
+                <AgentCard 
+                  key={agent.id}
+                  agent={agent}
+                  onToggle={() => handleToggle(agent.id!, agent.status_ativo)}
+                  onEdit={() => handleEdit(agent)}
+                  onDelete={() => handleDelete(agent.id!)}
+                />
+              ))}
+
+              {/* Empty State / Add New Placeholder */}
+              <button 
+                onClick={handleAddNew}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-300 hover:text-primary-500 hover:bg-primary-50/50 transition-all group min-h-[220px]"
+              >
+                <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <Plus size={24} />
+                </div>
+                <span className="font-medium">Adicionar novo nicho</span>
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary-600 text-white flex items-center justify-center shadow-lg">
+                  <History size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Log de Interações Inteligentes</h3>
+                  <p className="text-sm text-slate-500">Acompanhe cada pensamento e resposta gerada pela Sofia.</p>
+                </div>
+              </div>
+              <button 
+                onClick={fetchSofiaHistory}
+                className="p-3 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all"
+                title="Atualizar histórico"
+              >
+                <RotateCcw size={20} className={isLoadingHistory ? 'animate-spin' : ''} />
+              </button>
+            </div>
+
+            <div className="p-8">
+              {isLoadingHistory ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="h-24 bg-slate-50 rounded-2xl animate-pulse" />
+                  ))}
+                </div>
+              ) : sofiaHistory.length === 0 ? (
+                <div className="py-20 text-center space-y-4">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
+                    <MessageSquare size={40} />
+                  </div>
+                  <p className="text-slate-400 font-medium">Nenhuma interação registrada ainda.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {sofiaHistory.map((msg, i) => (
+                    <motion.div 
+                      key={msg.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`p-6 rounded-3xl border transition-all ${
+                        msg.role === 'assistant' 
+                          ? 'bg-primary-50/30 border-primary-100 ml-8' 
+                          : 'bg-white border-slate-100 mr-8'
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm
+                          ${msg.role === 'assistant' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          {msg.role === 'assistant' ? <Bot size={18} /> : <User size={18} />}
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              {msg.role === 'assistant' ? 'Sofia AI' : 'Usuário / Cliente'}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {new Date(msg.created_at).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                            {msg.content}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
