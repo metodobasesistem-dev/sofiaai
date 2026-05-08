@@ -173,6 +173,7 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
     {
       id: 'leo', 
       icon: <Zap size={20} className="text-amber-500" />, 
@@ -187,6 +188,7 @@ export default function Layout({
         label: 'Administração',
         subItems: [
           { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
+          { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
           { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios' },
           { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
           { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
@@ -211,7 +213,6 @@ export default function Layout({
       ]
     },
     { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações', flag: 'official_api' },
-    { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
   ];
 
   // Filtra itens com base nas flags (Admin sempre vê tudo)

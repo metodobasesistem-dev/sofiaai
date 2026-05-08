@@ -36,7 +36,28 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
-import { listAgents, createAgent, updateAgent, toggleAgentStatus, deleteAgent, getCachedAgents, clearAgentFromCache, listAgentKnowledge, createAgentKnowledge, updateAgentKnowledge, deleteAgentKnowledge, transcribeAudio, saveAgentSecret, getAgentSecret, type Agent, type KnowledgeItem, type AgentKnowledge } from '../services/supabaseService';
+import { 
+  listAgents, 
+  createAgent, 
+  updateAgent, 
+  toggleAgentStatus, 
+  deleteAgent, 
+  getCachedAgents, 
+  clearAgentFromCache, 
+  listAgentKnowledge, 
+  createAgentKnowledge, 
+  updateAgentKnowledge, 
+  deleteAgentKnowledge, 
+  transcribeAudio, 
+  saveAgentSecret, 
+  getAgentSecret, 
+  getUserProfile,
+  updateUserProfile,
+  type Agent, 
+  type KnowledgeItem, 
+  type AgentKnowledge,
+  type UserProfile
+} from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 /// <reference types="vite/client" />
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -160,6 +181,72 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${status === 'active' ? 'translate-x-6' : 'translate-x-1'}`}
+          />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+const SofiaCard: React.FC<{ 
+  active: boolean, 
+  onToggle: () => void, 
+  onConfigure: () => void 
+}> = ({ active, onToggle, onConfigure }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative p-6 rounded-2xl border-2 border-primary-100 bg-gradient-to-br from-white to-primary-50/30 shadow-xl shadow-primary-50 overflow-hidden group"
+    >
+      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <Bot size={80} className="text-primary-600" />
+      </div>
+
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-primary-600 text-white shadow-lg shadow-primary-200 flex items-center justify-center relative overflow-hidden">
+            <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-black text-gray-900 text-lg">Sofia AI</h3>
+              <span className="bg-primary-100 text-primary-700 text-[9px] font-black uppercase px-2 py-0.5 rounded-full tracking-widest">Agente Principal</span>
+            </div>
+            <p className="text-sm text-gray-500 font-medium">Assistente Estratégica do Sistema</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-8">
+        {active ? (
+          <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Operacional
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+            <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+            Desativada
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <button 
+          onClick={onConfigure}
+          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-white border-2 border-primary-100 rounded-xl text-sm font-bold text-primary-700 hover:bg-primary-50 transition-all shadow-sm active:scale-95"
+        >
+          <Settings2 size={18} />
+          Configurar Sofia
+        </button>
+        
+        <button 
+          onClick={onToggle}
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${active ? 'bg-primary-600' : 'bg-gray-200'}`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`}
           />
         </button>
       </div>
@@ -312,6 +399,15 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       const data = await listAgents();
       if (data && data.length > 0) {
         setAgents(data);
+      }
+
+      // Fetch Sofia Settings (from profile)
+      const profile = await getUserProfile();
+      if (profile) {
+        setSofiaData({
+          active: profile.sofia_active ?? true,
+          prompt: profile.sofia_prompt || ''
+        });
       }
     } catch (error: any) {
       console.error('[Agents] fetchAgents error:', error.message);

@@ -21,6 +21,7 @@ import LeoApp from './pages/Leo/LeoApp';
 import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
+import SofiaConfig from './components/Sofia/SofiaConfig';
 import { Toaster } from 'sonner';
 import { useFeatureContext } from './contexts/FeatureFlagContext';
 
@@ -192,6 +193,8 @@ export default function App() {
         return <AdminPanel initialView="hub" onTabChange={handleTabChange} />;
       case 'admin':
         return <AdminPanel onTabChange={handleTabChange} />;
+      case 'sofia_config':
+        return <SofiaConfig />;
       case 'reports':
         return <Reports />;
       case 'health':
