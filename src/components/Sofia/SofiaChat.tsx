@@ -36,7 +36,7 @@ export default function SofiaChat() {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) return;
 
-      const response = await fetch('/api/sofia/history', {
+      const response = await fetch('/api/v2/sofia/history', {
         headers: {
           'Authorization': `Bearer ${session.session.access_token}`
         }
@@ -60,7 +60,7 @@ export default function SofiaChat() {
 
     try {
       const { data: session } = await supabase.auth.getSession();
-      const response = await fetch('/api/sofia/chat', {
+      const response = await fetch('/api/v2/sofia/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
