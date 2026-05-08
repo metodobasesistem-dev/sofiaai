@@ -728,14 +728,24 @@ export const listSofiaMessages = async (limit = 50): Promise<SofiaMessage[]> => 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('No session');
 
-    // Get tenant_id from profile
-    const { data: profile } = await supabase
+    // Get tenant_id from profile - using a more robust approach
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('tenant_id')
+      .select('tenant_id, role')
       .eq('id', session.user.id)
-      .single();
+      .maybeSingle();
 
-    if (!profile?.tenant_id) throw new Error('No tenant found');
+    if (profileError) {
+      console.error('[listSofiaMessages] Profile fetch error:', profileError);
+      throw profileError;
+    }
+
+    if (!profile?.tenant_id) {
+      console.warn('[listSofiaMessages] No tenant_id found for user:', session.user.id);
+      // Se for admin e não tiver tenant_id, talvez devêssemos listar tudo? 
+      // Por enquanto, vamos retornar vazio para evitar erro de crash
+      return [];
+    }
 
     const { data, error } = await supabase
       .from('sofia_messages')
@@ -748,7 +758,7 @@ export const listSofiaMessages = async (limit = 50): Promise<SofiaMessage[]> => 
     return data || [];
   } catch (error: any) {
     console.error('Error listing Sofia messages:', error.message);
-    throw error;
+    return []; // Retorna vazio em vez de estourar erro na UI
   }
 };
 
