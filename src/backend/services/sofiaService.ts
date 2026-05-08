@@ -37,7 +37,8 @@ export const sofiaService = {
       .select('role, content')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(40);
+
 
     const formattedHistory = (history || []).reverse().map(h => ({
       role: h.role as 'user' | 'assistant',
