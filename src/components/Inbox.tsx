@@ -2664,55 +2664,39 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => fileInputRef.current?.click()} 
-                  className={`p-2 text-slate-500 hover:text-primary-600 transition-all ${isRecording ? 'hidden md:block' : 'block'}`}
-                  title="Anexar"
-                >
-                  <Paperclip size={22} />
-                </button>
-                <div className="relative">
-                  <button 
-                    type="button" 
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                    className={`p-2 transition-all ${isRecording ? 'hidden md:block' : 'block'} ${showEmojiPicker ? 'text-primary-600' : 'text-slate-500 hover:text-primary-600'}`}
-                    title="Emojis"
-                  >
-                    <Smile size={22} />
-                  </button>
-                  
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-full mb-3 left-0 bg-white rounded-3xl shadow-2xl border border-slate-100 p-4 w-[280px] md:w-[320px] grid grid-cols-6 gap-2 z-[100] animate-in slide-in-from-bottom-4 duration-300">
-                      {['😊', '😂', '🥰', '😍', '🤔', '😎', '👍', '🙏', '❤️', '🔥', '✨', '⭐', '👏', '🙌', '💪', '🤝', '✅', '🚀', '📞', '💬', '📍', '🎁', '💰', '🎉', '💡', '⚠️', '🏠', '🚗', '🍕', '☕'].map(emoji => (
-                        <button 
-                          key={emoji}
-                          onClick={() => {
-                            setMessageText(prev => prev + emoji);
-                            setShowEmojiPicker(false);
-                          }}
-                          className="w-10 h-10 flex items-center justify-center hover:bg-primary-50 rounded-xl transition-all text-[20px] hover:scale-125 active:scale-95"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  onChange={handleFileUpload} 
-                />
+              <div className="flex items-end gap-2 max-w-5xl mx-auto w-full relative">
+                <div className="flex-1 bg-white rounded-[26px] shadow-sm border border-slate-200 flex items-end px-1.5 py-1 min-h-[52px] relative">
+                  {/* Emoji Button */}
+                  <div className="relative">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+                      className={`p-2.5 transition-all ${isRecording ? 'hidden md:block' : 'block'} ${showEmojiPicker ? 'text-primary-600' : 'text-slate-400 hover:text-primary-500'}`}
+                    >
+                      <Smile size={24} />
+                    </button>
+                    
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-full mb-4 left-0 bg-white rounded-3xl shadow-2xl border border-slate-100 p-4 w-[280px] md:w-[320px] grid grid-cols-6 gap-2 z-[150] animate-in slide-in-from-bottom-4 duration-300">
+                        {['😊', '😂', '🥰', '😍', '🤔', '😎', '👍', '🙏', '❤️', '🔥', '✨', '⭐', '👏', '🙌', '💪', '🤝', '✅', '🚀', '📞', '💬', '📍', '🎁', '💰', '🎉', '💡', '⚠️', '🏠', '🚗', '🍕', '☕'].map(emoji => (
+                          <button 
+                            key={emoji}
+                            onClick={() => {
+                              setMessageText(prev => prev + emoji);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="w-10 h-10 flex items-center justify-center hover:bg-primary-50 rounded-xl transition-all text-[20px] hover:scale-125 active:scale-95"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                <form 
-                  onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-                  className={`flex-1 min-w-0 flex items-center gap-2 bg-white rounded-2xl px-4 py-1 border border-slate-200 ${isRecording ? 'hidden md:flex' : 'flex'}`}
-                >
+                  {/* Input Textarea */}
                   <textarea 
-                    rows={2} 
+                    rows={1} 
                     value={messageText} 
                     onPaste={handlePaste}
                     onChange={(e) => {
@@ -2726,6 +2710,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       } else {
                         setShowSlashMenu(false);
                       }
+                      
+                      // Auto-resize
+                      e.target.style.height = 'auto';
+                      e.target.style.height = e.target.scrollHeight + 'px';
                     }} 
                     onKeyDown={(e) => { 
                       if (e.key === 'Enter' && !e.shiftKey) { 
@@ -2734,30 +2722,49 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       } 
                     }} 
                     placeholder="Mensagem"
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] py-2 resize-none max-h-32 min-h-[52px]" 
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] py-3 px-2 resize-none max-h-48 min-h-[48px] placeholder:text-slate-400" 
                   />
-                  <div className="flex items-center gap-1">
+
+                  {/* Right Icons inside Capsule */}
+                  <div className="flex items-center pb-1">
+                    <button 
+                      type="button" 
+                      onClick={() => fileInputRef.current?.click()} 
+                      className="p-2.5 text-slate-400 hover:text-primary-500 transition-colors shrink-0"
+                    >
+                      <Paperclip size={22} className="rotate-45" />
+                    </button>
+
                     <button 
                       type="button" 
                       onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)} 
-                      className={`p-1.5 transition-all ${isPrivateNoteMode ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`p-2.5 transition-all shrink-0 ${isPrivateNoteMode ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <Lock size={18} />
                     </button>
                   </div>
-                </form>
+                  
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleFileUpload} 
+                  />
+                </div>
 
-                {messageText.trim() ? (
-                  <button 
-                    type="submit" 
-                    onClick={handleSendMessage}
-                    className="w-11 h-11 bg-primary-600 text-white rounded-full flex items-center justify-center shadow-md shrink-0"
-                  >
-                    <Send size={18} className="ml-0.5" />
-                  </button>
-                ) : (
-                  <VoiceRecorder onStop={handleSendVoice} onRecordingChange={setIsRecording} />
-                )}
+                {/* Floating Action Button */}
+                <div className="shrink-0 pb-0.5">
+                  {messageText.trim() ? (
+                    <button 
+                      onClick={handleSendMessage}
+                      className="w-[52px] h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95"
+                    >
+                      <Send size={22} className="ml-1" />
+                    </button>
+                  ) : (
+                    <VoiceRecorder onStop={handleSendVoice} onRecordingChange={setIsRecording} />
+                  )}
+                </div>
               </div>
             </div>
           </>
