@@ -396,7 +396,8 @@ class WhatsAppService {
   async destroySession(userId: string) { await this.logout(userId); }
 
   async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente', quotedMessageId?: string): Promise<any> {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+    const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
     const cleanTo = normalizePhone(to);
     const threadId = `${userId}_${cleanTo}`;
 
@@ -926,9 +927,10 @@ class WhatsAppService {
    */
   private async processFollowUp(data: any) {
     const { userId, from, level, config, message, isAi, isManual } = data;
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
     const cleanPhone = from.split('@')[0].replace(/\D/g, '');
     const threadId = `${userId}_${cleanPhone}`;
+
+    console.log(`[FollowUp] 🚀 Starting processFollowUp for ${from} (Manual: ${isManual}, Level: ${level || 0})`);
 
     try {
       // 1. Verificar status da thread
@@ -964,7 +966,10 @@ class WhatsAppService {
         finalMessage = aiResponseData?.text;
       }
 
-      if (!finalMessage) return;
+      if (!finalMessage) {
+        console.warn(`[FollowUp] ⚠️ No message generated/found for ${from}. Skipping.`);
+        return;
+      }
 
       // 3. Enviar
       await this.sendMessage(userId, from, finalMessage, isManual ? 'Follow-up' : 'IA (FOLLOW-UP)', 'IA');

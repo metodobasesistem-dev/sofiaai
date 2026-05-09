@@ -2623,17 +2623,30 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     Follow-up {activeThread.pending_followup.type === 'ai' ? 'IA' : 'Manual'} agendado para as {new Date(activeThread.pending_followup.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                <button 
-                  onClick={async () => {
-                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                    await supabase.from('threads').update({ pending_followup: null }).eq('id', activeThread.id);
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, pending_followup: undefined } : t));
-                    toast.success('Agendamento cancelado');
-                  }}
-                  className="text-[10px] font-black text-amber-800 hover:underline uppercase tracking-widest"
-                >
-                  Cancelar
-                </button>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={async () => {
+                      const msg = activeThread.pending_followup?.message;
+                      const isAi = activeThread.pending_followup?.type === 'ai';
+                      if (!msg) return;
+                      await handleScheduleFollowUp(msg, 0, isAi);
+                      toast.success('Follow-up enviado agora!');
+                    }}
+                    className="text-[10px] font-black text-amber-800 hover:underline uppercase tracking-widest"
+                  >
+                    Enviar Agora
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      await supabase.from('threads').update({ pending_followup: null }).eq('id', activeThread.id);
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, pending_followup: undefined } : t));
+                      toast.success('Agendamento cancelado');
+                    }}
+                    className="text-[10px] font-black text-red-600 hover:underline uppercase tracking-widest"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             )}
 
