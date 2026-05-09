@@ -817,7 +817,13 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     <h2 className="text-2xl font-bold">Você está no plano {profile?.plano || 'Starter'}</h2>
                     <p className="text-primary-100 text-sm opacity-80 mt-1">
                       {profile?.subscription_ends_at 
-                        ? `Sua próxima cobrança será em ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(profile.subscription_ends_at))}.`
+                        ? (() => {
+                            const date = new Date(profile.subscription_ends_at);
+                            const diff = date.getTime() - Date.now();
+                            const days = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+                            const formattedDate = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(date);
+                            return `Vence em ${formattedDate} (${days} ${days === 1 ? 'dia restante' : 'dias restantes'})`;
+                          })()
                         : 'Sua assinatura está ativa.'}
                     </p>
                   </div>
