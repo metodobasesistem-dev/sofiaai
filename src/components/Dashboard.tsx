@@ -453,7 +453,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         {(() => {
           const checkPlan = (minPlan: string) => {
             if (role === 'admin') return true;
-            const plans = ['Trial', 'Starter', 'Pro', 'Enterprise'];
+            const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
             const userPlanIdx = plans.indexOf(plano || 'Trial');
             const minPlanIdx = plans.indexOf(minPlan);
             return userPlanIdx >= minPlanIdx;
@@ -515,12 +515,36 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('integrations')}
                 />
               )}
+              {checkPlan('Pro') && (
+                <QuickNavCard 
+                  icon={LayoutGrid} 
+                  title="Kanban" 
+                  subtitle="Organize seus leads" 
+                  onClick={() => onTabChange?.('inbox', 'kanban')}
+                />
+              )}
               {checkPlan('Starter') && (role === 'admin' || flags['reports'] !== false) && (
                 <QuickNavCard 
                   icon={BarChart3} 
                   title="Relatórios" 
                   subtitle="Confira seus resultados" 
                   onClick={() => onTabChange?.('reports')}
+                />
+              )}
+              {checkPlan('Starter') && (
+                <QuickNavCard 
+                  icon={MessageSquare} 
+                  title="Atalhos" 
+                  subtitle="Respostas rápidas" 
+                  onClick={() => onTabChange?.('quick_replies')}
+                />
+              )}
+              {checkPlan('Elite') && (
+                <QuickNavCard 
+                  icon={Send} 
+                  title="Campanhas" 
+                  subtitle="Envio em massa" 
+                  onClick={() => onTabChange?.('campaigns')}
                 />
               )}
             </>

@@ -26,7 +26,8 @@ import {
   Activity,
   Shield,
   Zap,
-  Send
+  Send,
+  Plug
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -182,6 +183,13 @@ export default function Layout({
       flag: 'leo_ai',
       minPlan: 'Starter'
     },
+    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
+    { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', minPlan: 'Pro' },
+    { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', minPlan: 'Pro' },
+    { id: 'quick_replies', icon: <MessageSquare size={20} />, label: 'Atalhos', minPlan: 'Starter' },
+    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+    { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
+
     ...(role === 'admin' ? [
       {
         id: 'admin_group',
@@ -190,16 +198,11 @@ export default function Layout({
         subItems: [
           { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
           { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
-          { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios' },
-          { id: 'quick_replies', icon: <MessageSquare size={16} />, label: 'Respostas Rápidas' },
           { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
           { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
         ]
       }
     ] : []),
-    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
-    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
-    { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
 
     { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
@@ -214,7 +217,7 @@ export default function Layout({
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
       ]
     },
-    { id: 'integrations', icon: <Layers size={20} />, label: 'Integrações', flag: 'official_api' },
+    { id: 'integrations', icon: <Plug size={20} />, label: 'Integrações', flag: 'official_api' },
   ];
 
   // Filtra itens com base nas flags (Admin sempre vê tudo)
