@@ -385,9 +385,10 @@ export class AgentService {
         // Upsert atômico usando whatsapp_id — agora seguro pois é UNIQUE CONSTRAINT completo
         // (Fase 1 converteu o índice parcial em constraint completa).
         // Race condition entre webhook echo e persistMessage direto é resolvida aqui.
+        // Upsert atômico usando whatsapp_id — garantindo que o onConflict bata com a constraint única do banco
         const { error: mErr } = await supabase
           .from('messages')
-          .upsert(messageData, { onConflict: 'whatsapp_id,user_id' });
+          .upsert(messageData, { onConflict: 'whatsapp_id' });
 
         if (mErr) {
           console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
@@ -453,20 +454,20 @@ export class AgentService {
       };
 
       if (!existing) {
-        contactData.nome = contactName || cleanPhone;
+        contactData.nome = contactName || cleanPhone || 'Lead WhatsApp';
         contactData.status_funil = 'Lead';
         contactData.source = 'whatsapp';
         contactData.primeiro_contato = new Date().toISOString();
         contactData.data_criacao = new Date().toISOString();
         contactData.total_mensagens = 1;
       } else {
-        // Só atualiza o nome se for inbound OU se o nome atual for genérico
-        const isPhoneNumber = /^\d+$/.test(existing.nome || '') || (existing.nome?.includes('@'));
-        const isGeneric = !existing.nome || existing.nome === 'Cliente' || existing.nome === 'Atendente' || existing.nome === 'Lead WhatsApp' || existing.nome === 'Você' || isPhoneNumber;
-        
-        if (contactName && (incrementCount || isGeneric)) {
+        // Garantir que o nome nunca fique nulo no objeto de atualização se for necessário atualizar
+        if (contactName) {
            contactData.nome = contactName;
+        } else if (!existing.nome) {
+           contactData.nome = cleanPhone || 'Lead WhatsApp';
         }
+
         if (incrementCount) {
           contactData.total_mensagens = (existing.total_mensagens || 0) + 1;
         }
