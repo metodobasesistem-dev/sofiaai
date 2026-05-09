@@ -872,6 +872,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [isDeletingChat, setIsDeletingChat] = useState(false);
 
   // Estados para edição rápida de nome na barra lateral
   const [isEditingName, setIsEditingName] = useState(false);
@@ -2312,9 +2314,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
                 <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" />
                 <div className="min-w-0">
-                  <h3 className="text-[15px] font-bold text-slate-900 leading-tight truncate flex items-center gap-2">
+                  <h3 className="text-[15px] font-black text-slate-900 leading-tight truncate flex items-center gap-2">
                     {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
                     {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm
+                      ${activeThread.funilStatus === 'Resolvido' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                        activeThread.funilStatus === 'Qualificado' ? 'bg-primary-50 text-primary-600 border-primary-100' : 
+                        'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                      {activeThread.funilStatus}
+                    </span>
                   </h3>
                   <div className="flex items-center gap-1.5">
                     {(activeThread as any).isTyping ? (
@@ -2395,16 +2403,55 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <Info size={18} />
                 </button>
 
-                <div className="hidden lg:flex items-center gap-1">
-                  <button className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"><Phone size={18} /></button>
+                <div className="relative">
                   <button 
-                    onClick={() => handleDeleteThread(activeThread)}
-                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    title="Excluir conversa"
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    className={`p-2 rounded-lg transition-all ${showMoreMenu ? 'text-primary-600 bg-primary-50' : 'text-slate-400 hover:bg-slate-50'}`}
+                    title="Mais opções"
                   >
-                    <Trash size={18} />
+                    <MoreVertical size={20} />
                   </button>
-                  <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"><MoreVertical size={18} /></button>
+
+                  <AnimatePresence>
+                    {showMoreMenu && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-[100]" 
+                          onClick={() => setShowMoreMenu(false)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-[101] overflow-hidden"
+                        >
+                          <button 
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              // Add call logic if needed
+                            }}
+                          >
+                            <Phone size={16} className="text-slate-400" />
+                            Ligar (WhatsApp)
+                          </button>
+                          
+                          <div className="h-px bg-slate-50 my-1" />
+                          
+                          <button 
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              handleDeleteThread(activeThread);
+                            }}
+                          >
+                            <Trash size={16} />
+                            Excluir Conversa
+                          </button>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>
