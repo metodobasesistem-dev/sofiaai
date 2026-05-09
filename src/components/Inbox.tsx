@@ -296,7 +296,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
     <button
       type="button"
       onClick={startRecording}
-      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-emerald-500 text-white rounded-full flex items-center justify-center hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-emerald-500/20 active:scale-90 shrink-0"
+      className="w-11 h-11 md:w-[52px] md:h-[52px] bg-emerald-500 text-white rounded-full flex items-center justify-center hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-emerald-500/20 active:scale-90 shrink-0"
       title="Gravar áudio"
     >
       <Mic size={20} className="md:size-[22px]" />
@@ -2734,8 +2734,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   </div>
                 </div>
               )}
-              <div className="flex items-end gap-1.5 md:gap-2 max-w-5xl mx-auto w-full relative">
-                <div className={`flex-1 bg-white rounded-[26px] shadow-sm flex items-end px-1.5 py-1 min-h-[52px] relative ${isRecording ? 'hidden md:flex' : 'flex'}`}>
+              <div className="flex items-end gap-1 md:gap-2 max-w-5xl mx-auto w-full relative">
+                <div className={`flex-1 min-w-0 bg-white rounded-[26px] shadow-sm flex items-end px-1 md:px-1.5 py-1 min-h-[52px] relative ${isRecording ? 'hidden md:flex' : 'flex'}`}>
                   {/* Emoji Button */}
                   <div className="relative">
                     <button 
@@ -2800,15 +2800,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     <button 
                       type="button" 
                       onClick={() => fileInputRef.current?.click()} 
-                      className="p-2.5 text-slate-400 hover:text-primary-500 transition-colors shrink-0"
+                      className="p-1.5 md:p-2.5 text-slate-400 hover:text-primary-500 transition-colors shrink-0"
                     >
-                      <Paperclip size={22} className="rotate-45" />
+                      <Paperclip size={20} className="md:size-[22px] rotate-45" />
                     </button>
 
                     <button 
                       type="button" 
                       onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)} 
-                      className={`p-2.5 transition-all shrink-0 ${isPrivateNoteMode ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`p-1.5 md:p-2.5 transition-all shrink-0 ${isPrivateNoteMode ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <Lock size={18} />
                     </button>
