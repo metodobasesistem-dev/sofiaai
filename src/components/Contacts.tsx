@@ -483,8 +483,8 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
           </button>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+        <div className="grid grid-cols-1 sm:flex sm:flex-row gap-3">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full">
             <button 
               onClick={async () => {
                 try {
@@ -500,7 +500,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                   toast.error('Erro ao sincronizar: ' + err.message);
                 }
               }}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-xs font-black hover:bg-emerald-100 transition-all shadow-sm"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-[11px] font-black hover:bg-emerald-100 transition-all shadow-sm"
             >
               <RefreshCw size={14} /> Sincronizar
             </button>
@@ -510,7 +510,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                 setFormData({ nome: '', telefone: '' }); 
                 setIsModalOpen(true); 
               }}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-xs font-black hover:bg-primary-700 transition-colors shadow-lg shadow-primary-100"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-[11px] font-black hover:bg-primary-700 transition-colors shadow-lg shadow-primary-100"
             >
               <Plus size={16} /> Novo Contato
             </button>
@@ -549,9 +549,9 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                   toast.error('Erro ao exportar contatos');
                 }
               }}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+              className="col-span-2 sm:col-auto flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl text-[11px] font-bold text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              <Download size={14} className="text-gray-400" /> Exportar
+              <Download size={14} className="text-gray-400" /> Exportar Planilha
             </button>
             <button 
               onClick={fetchContacts}
@@ -567,7 +567,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
       {!isLoading && contacts.length > 0 && (
         <motion.div 
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="flex md:grid md:grid-cols-4 gap-3 overflow-x-auto pb-2 md:pb-0 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0"
+          className="grid grid-cols-2 md:grid-cols-4 gap-3"
         >
           {[
             { label: 'Total', value: stats.total, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200', status: 'Todos' },
@@ -578,7 +578,7 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
             <button
               key={i}
               onClick={() => setFilterStatus(s.status as any)}
-              className={`flex-shrink-0 w-32 md:w-auto ${s.bg} border ${s.border} rounded-2xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-primary-400' : ''}`}
+              className={`w-full ${s.bg} border ${s.border} rounded-2xl p-4 text-left transition-all hover:shadow-sm ${filterStatus === s.status ? 'ring-2 ring-offset-1 ring-primary-400' : ''}`}
             >
               <p className={`text-xl md:text-2xl font-black ${s.color}`}>{s.value}</p>
               <p className="text-[10px] md:text-xs font-bold text-gray-500 mt-0.5 uppercase tracking-wider">{s.label}</p>
