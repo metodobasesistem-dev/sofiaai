@@ -21,6 +21,8 @@ const PRICING = {
   'gpt-4': { in: 0.030, out: 0.060 },
   'gemini-1.5-pro': { in: 0.0035, out: 0.0105 },
   'gemini-1.5-flash': { in: 0.000075, out: 0.0003 },
+  'gemini-1.5-flash-8b': { in: 0.0000375, out: 0.00015 },
+  'gemini-2.0-flash-exp': { in: 0.000075, out: 0.0003 }, // Preliminary pricing
   'gemini-1.5-flash-latest': { in: 0.000075, out: 0.0003 }
 } as any;
 

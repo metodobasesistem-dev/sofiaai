@@ -569,6 +569,8 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                               <>
                                 <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                                 <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                <option value="gemini-1.5-flash-8b">Gemini 1.5 Flash-8b (Ultra Econômico)</option>
+                                <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Experimental)</option>
                               </>
                             )}
                           </select>
