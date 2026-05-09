@@ -251,7 +251,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex items-center gap-3 bg-slate-50 px-4 py-1.5 rounded-2xl border border-slate-100 shadow-sm"
+        className="flex items-center gap-1.5 md:gap-3 bg-slate-50 px-2 md:px-4 py-1.5 rounded-2xl border border-slate-100 shadow-sm"
       >
         <button 
           onClick={cancelRecording}
@@ -267,7 +267,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
             {Math.floor(recordingTime / 60)}:{Math.floor(recordingTime % 60).toString().padStart(2, '0')}
           </span>
           
-          <div className="flex gap-0.5 items-center w-16">
+          <div className="flex gap-0.5 items-center w-10 md:w-16">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <motion.div 
                 key={i}
@@ -294,10 +294,10 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
     <button
       type="button"
       onClick={startRecording}
-      className="w-[52px] h-[52px] bg-emerald-500 text-white rounded-full flex items-center justify-center hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-emerald-500/20 active:scale-90 shrink-0"
+      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-emerald-500 text-white rounded-full flex items-center justify-center hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-emerald-500/20 active:scale-90 shrink-0"
       title="Gravar áudio"
     >
-      <Mic size={22} />
+      <Mic size={20} className="md:size-[22px]" />
     </button>
   );
 };
@@ -2757,9 +2757,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   {messageText.trim() ? (
                     <button 
                       onClick={handleSendMessage}
-                      className="w-[52px] h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95"
+                      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95"
                     >
-                      <Send size={22} className="ml-1" />
+                      <Send size={20} className="md:size-[22px] ml-1" />
                     </button>
                   ) : (
                     <VoiceRecorder onStop={handleSendVoice} onRecordingChange={setIsRecording} />
