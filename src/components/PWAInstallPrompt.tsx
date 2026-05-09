@@ -79,8 +79,8 @@ export default function PWAInstallPrompt() {
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-primary-600 p-0.5 shadow-lg shadow-primary-200 overflow-hidden">
-                  <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover rounded-[14px]" />
+                <div className="w-14 h-14 rounded-2xl bg-primary-600 p-0.5 shadow-lg shadow-primary-200 overflow-hidden border border-white/20">
+                  <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover rounded-[14px]" />
                 </div>
                 <div>
                   <h3 className="font-black text-slate-900 text-lg tracking-tight">Chat Sofia</h3>

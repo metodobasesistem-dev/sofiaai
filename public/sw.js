@@ -1,10 +1,11 @@
-const CACHE_VERSION = 'v1.0.3'; 
+const CACHE_VERSION = 'v1.0.4'; 
 const CACHE_NAME = 'sofia-chat-' + CACHE_VERSION;
 const ASSETS = [
   './',
   'index.html',
   'manifest.json',
-  'sofiamini.png'
+  'sofiamini.png',
+  'sofia-face.png'
 ];
 
 
