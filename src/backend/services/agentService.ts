@@ -1036,7 +1036,8 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
       }
 
       const provider = await WhatsAppProviderFactory.getProvider(userId);
-      const instanceName = `wppai_${userId.substring(0, 8)}`;
+      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       const photoUrl = await provider.fetchProfilePictureUrl(instanceName, remoteJid);
 
       const updateData = {
