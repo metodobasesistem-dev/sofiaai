@@ -14,6 +14,7 @@ import Professionals from './components/Professionals';
 import Overview from './components/Overview';
 import AdminPanel from './components/AdminPanel';
 import Campaigns from './components/Campaigns';
+import QuickReplies from './components/QuickReplies';
 import LeoApp from './pages/Leo/LeoApp';
 
  import Login from './components/Login';
@@ -228,6 +229,8 @@ export default function App() {
         return <LeoApp user={user} role={role} onTabChange={handleTabChange} />;
       case 'campaigns':
         return <Campaigns />;
+      case 'quick_replies':
+        return <QuickReplies />;
 
       default:
         return (

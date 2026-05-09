@@ -34,16 +34,7 @@ import {
   getUserProfile, 
   updateUserProfile, 
   UserProfile, 
-  listChannels, 
-  createChannel, 
-  deleteChannel, 
-  listAgents,
-  listQuickReplies,
-  createQuickReply,
-  deleteQuickReply,
   type Agent,
-  type Channel,
-  type QuickReply
 } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -310,21 +301,6 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Channels State
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCreatingChannel, setIsCreatingChannel] = useState(false);
-  const [newChannelData, setNewChannelData] = useState({
-    nome: '',
-    agentId: '',
-    tipo: 'whatsapp' as 'whatsapp' | 'chat' | 'telegram'
-  });
-
-  // Quick Replies State
-  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
-  const [newReplyData, setNewReplyData] = useState({ title: '', content: '' });
-  const [isCreatingReply, setIsCreatingReply] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -383,31 +359,6 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
         toast.error('Erro ao carregar perfil');
       }
 
-      // Fetch Channels
-      try {
-        const channelsData = await listChannels();
-        if (channelsData) setChannels(channelsData);
-      } catch (err) {
-        console.error('Channels fetch error:', err);
-        toast.error('Erro ao carregar canais');
-      }
-
-      // Fetch Agents
-      try {
-        const agentsData = await listAgents();
-        if (agentsData) setAgents(agentsData);
-      } catch (err) {
-        console.error('Agents fetch error:', err);
-        toast.error('Erro ao carregar agentes');
-      }
-
-      // Fetch Quick Replies
-      try {
-        const repliesData = await listQuickReplies();
-        if (repliesData) setQuickReplies(repliesData);
-      } catch (err) {
-        console.error('Quick replies fetch error:', err);
-      }
 
       setIsLoading(false);
     };
@@ -449,84 +400,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     }
   };
 
-  const handleCreateChannel = async () => {
-    if (!newChannelData.nome || !newChannelData.agentId) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
-
-    try {
-      setIsCreatingChannel(true);
-      const created = await createChannel({
-        nome: newChannelData.nome,
-        agentId: newChannelData.agentId,
-        tipo: newChannelData.tipo,
-        status: 'ativo'
-      });
-
-      if (created) {
-        setChannels([...channels, created as Channel]);
-        setIsModalOpen(false);
-        setNewChannelData({ nome: '', agentId: '', tipo: 'whatsapp' });
-        toast.success('Canal criado com sucesso!');
-      }
-    } catch (error) {
-      console.error('Failed to create channel:', error);
-      toast.error('Erro ao criar canal');
-    } finally {
-      setIsCreatingChannel(false);
-    }
-  };
-
-  const handleDeleteChannel = async (id: string) => {
-    try {
-      await deleteChannel(id);
-      setChannels(channels.filter(c => c.id !== id));
-      toast.success('Canal excluído com sucesso!');
-    } catch (error) {
-      console.error('Failed to delete channel:', error);
-      toast.error('Erro ao excluir canal');
-    }
-  };
-
-  const handleCreateQuickReply = async () => {
-    if (!newReplyData.title || !newReplyData.content) {
-      toast.error('Preencha o título e o conteúdo');
-      return;
-    }
-    try {
-      setIsCreatingReply(true);
-      await createQuickReply(newReplyData);
-      const updated = await listQuickReplies();
-      setQuickReplies(updated);
-      setNewReplyData({ title: '', content: '' });
-      toast.success('Resposta rápida criada!');
-    } catch (error) {
-      console.error('Failed to create quick reply:', error);
-      toast.error('Erro ao criar resposta rápida');
-    } finally {
-      setIsCreatingReply(false);
-    }
-  };
-
-  const handleDeleteQuickReply = async (id: string) => {
-    try {
-      if (!confirm('Deseja excluir esta resposta rápida?')) return;
-      await deleteQuickReply(id);
-      setQuickReplies(quickReplies.filter(r => r.id !== id));
-      toast.success('Resposta rápida excluída!');
-    } catch (error) {
-      console.error('Failed to delete quick reply:', error);
-      toast.error('Erro ao excluir resposta rápida');
-    }
-  };
 
   const tabs = [
     { id: 'account', label: 'Conta', icon: <User size={18} /> },
     { id: 'subscription', label: 'Assinatura', icon: <CreditCard size={18} /> },
-    { id: 'channels', label: 'Canais', icon: <MessageSquare size={18} /> },
     { id: 'ai_config', label: 'Configuração IA', icon: <Zap size={18} /> },
-    { id: 'quick_replies', label: 'Respostas Rápidas', icon: <MessageSquare size={18} /> },
   ];
 
   if (isLoading) {
@@ -972,103 +850,6 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
             </div>
           )}
 
-          {activeSubTab === 'channels' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
-                      <Smartphone size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Canais Conectados</h3>
-                      <p className="text-sm text-gray-500">Gerencie os canais de comunicação da sua organização ({channels.length}/1 canais)</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-bold hover:bg-primary-700 transition-all"
-                  >
-                    <Plus size={18} />
-                    Novo Canal
-                  </button>
-                </div>
-
-                <div className="p-8">
-                  {isExpired ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
-                      <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-red-100">
-                        <Lock size={40} />
-                      </div>
-                      <h4 className="text-xl font-black text-gray-900">Período de Teste Expirado</h4>
-                      <p className="text-sm text-gray-500 max-w-sm mt-2 leading-relaxed">
-                        Seu acesso gratuito chegou ao fim. Para continuar utilizando a Sofia e seus canais de atendimento, escolha um dos nossos planos.
-                      </p>
-                      <button 
-                        onClick={() => setActiveSubTab('subscription')}
-                        className="mt-8 px-10 py-4 bg-primary-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-primary-700 transition-all shadow-xl shadow-primary-500/20"
-                      >
-                        Ativar Assinatura
-                      </button>
-                    </div>
-                  ) : channels.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                      <p className="text-sm">Nenhum canal encontrado. Adicione um novo canal para começar.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {channels.map((channel) => (
-                        <div key={channel.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 hover:border-primary-200 transition-all group relative">
-                          <button 
-                            onClick={() => handleDeleteChannel(channel.id!)}
-                            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          
-                          <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-primary-600">
-                              {channel.tipo === 'whatsapp' ? <Smartphone size={24} /> : channel.tipo === 'chat' ? <Globe size={24} /> : <Send size={24} />}
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-900">{channel.nome}</h4>
-                              <p className="text-xs text-gray-500 capitalize">{channel.tipo}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <div className="flex flex-col gap-1">
-                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full w-fit ${channel.status === 'ativo' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                                {channel.status}
-                              </span>
-                              {channel.tipo === 'whatsapp' && (
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full w-fit ${whatsappStatus?.status === 'connected' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                                  {whatsappStatus?.status === 'connected' ? 'Conectado' : whatsappStatus?.status === 'waiting' ? 'Conectando...' : 'Desconectado'}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <span className="text-xs text-gray-400">
-                                Agente: {agents.find(a => a.id === channel.agentId)?.nome || 'Nenhum'}
-                              </span>
-                              {channel.tipo === 'whatsapp' && (
-                                <button 
-                                  onClick={whatsappStatus?.status === 'connected' ? handleDisconnectWpp : handleConnectWpp}
-                                  className={`text-[10px] font-bold px-3 py-1 rounded-lg transition-all ${whatsappStatus?.status === 'connected' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
-                                >
-                                  {whatsappStatus?.status === 'connected' ? 'Desconectar' : 'Conectar'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {activeSubTab === 'ai_config' && (
             <div className="space-y-8">
@@ -1219,73 +1000,6 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
           )}
 
 
-          {activeSubTab === 'quick_replies' && (
-            <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Respostas Rápidas</h2>
-                  <p className="text-sm text-gray-500 mt-1">Gerencie modelos de mensagens para agilizar seu atendimento manual.</p>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
-                <h3 className="text-sm font-bold text-gray-900 mb-4">Criar Novo Atalho</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Título (Ex: Saudação)</label>
-                    <input 
-                      type="text"
-                      value={newReplyData.title}
-                      onChange={e => setNewReplyData({...newReplyData, title: e.target.value})}
-                      placeholder="Nome curto do botão"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none text-sm transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Conteúdo da Mensagem</label>
-                    <textarea 
-                      rows={1}
-                      value={newReplyData.content}
-                      onChange={e => setNewReplyData({...newReplyData, content: e.target.value})}
-                      placeholder="Texto completo que será enviado"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none text-sm transition-all resize-none"
-                    />
-                  </div>
-                </div>
-                <button 
-                  onClick={handleCreateQuickReply}
-                  disabled={isCreatingReply}
-                  className="mt-4 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-md shadow-primary-200"
-                >
-                  {isCreatingReply ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                  Salvar Atalho
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {quickReplies.length === 0 ? (
-                  <div className="py-20 text-center border-2 border-dashed border-gray-100 rounded-2xl">
-                    <p className="text-gray-400 text-sm">Você ainda não tem respostas rápidas criadas.</p>
-                  </div>
-                ) : (
-                  quickReplies.map(reply => (
-                    <div key={reply.id} className="bg-white border border-gray-100 rounded-xl p-6 flex items-center justify-between group hover:border-primary-100 transition-all shadow-sm">
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-gray-900">{reply.title}</h4>
-                        <p className="text-xs text-gray-500">{reply.content}</p>
-                      </div>
-                      <button 
-                        onClick={() => handleDeleteQuickReply(reply.id!)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </motion.div>
       </AnimatePresence>
 
@@ -1370,116 +1084,6 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* Add Channel Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden"
-            >
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Adicionar Novo Canal</h2>
-                  <p className="text-sm text-gray-500">Conecte um novo canal de comunicação para expandir seu alcance.</p>
-                </div>
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-all text-gray-400"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="p-8 space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Nome do Canal</label>
-                  <input 
-                    type="text"
-                    value={newChannelData.nome}
-                    onChange={e => setNewChannelData({...newChannelData, nome: e.target.value})}
-                    placeholder="Ex: WhatsApp Principal, Atendimento Site"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Agente Responsável</label>
-                  <select 
-                    value={newChannelData.agentId}
-                    onChange={e => setNewChannelData({...newChannelData, agentId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all text-sm appearance-none bg-white"
-                  >
-                    <option value="">Selecione um agente</option>
-                    {agents.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Tipo de Canal</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button 
-                      onClick={() => setNewChannelData({...newChannelData, tipo: 'whatsapp'})}
-                      className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 text-left
-                        ${newChannelData.tipo === 'whatsapp' ? 'border-primary-600 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200'}`}
-                    >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${newChannelData.tipo === 'whatsapp' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                        <Smartphone size={20} />
-                      </div>
-                      <div>
-                        <span className="block text-sm font-bold text-gray-900">WhatsApp</span>
-                      </div>
-                    </button>
-
-                    <div className="p-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 opacity-60 flex items-center gap-3 text-left cursor-not-allowed relative">
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center">
-                        <Globe size={20} />
-                      </div>
-                      <div>
-                        <span className="block text-sm font-bold text-gray-900">Chat no Site</span>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Em breve</span>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 opacity-60 flex items-center gap-3 text-left cursor-not-allowed relative">
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center">
-                        <Send size={20} />
-                      </div>
-                      <div>
-                        <span className="block text-sm font-bold text-gray-900">Telegram</span>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Em breve</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-gray-50 flex items-center justify-end gap-3">
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-all"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={handleCreateChannel}
-                  disabled={isCreatingChannel}
-                  className="px-8 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isCreatingChannel && <Loader2 size={18} className="animate-spin" />}
-                  Criar Canal
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

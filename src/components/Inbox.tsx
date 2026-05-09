@@ -59,6 +59,7 @@ import Contacts from './Contacts';
 import KanbanBoard from './KanbanBoard';
 import ReportsDashboard from './ReportsDashboard';
 import Integrations from './Integrations';
+import QuickReplies from './QuickReplies';
 
 import { ContactAvatar } from './ContactAvatar';
 
@@ -866,7 +867,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -2155,6 +2156,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Relatórios</span>}
               {activeTab === 'reports' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
+
+            <button 
+              onClick={() => setActiveTab('quick_replies')}
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
+                ${activeTab === 'quick_replies' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Respostas Rápidas"
+            >
+              <MessageSquare size={22} className={activeTab === 'quick_replies' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Atalhos</span>}
+              {activeTab === 'quick_replies' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
+            </button>
           </div>
 
           <button 
@@ -2170,6 +2182,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         <KanbanBoard user={user} threads={threads} onThreadsChange={setThreads} />
       ) : activeTab === 'reports' ? (
         <ReportsDashboard />
+      ) : activeTab === 'quick_replies' ? (
+        <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10">
+          <QuickReplies />
+        </div>
       ) : activeTab === 'integrations' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10">
           <Integrations user={user} role={user?.role || null} />

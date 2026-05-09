@@ -191,6 +191,7 @@ export default function Layout({
           { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
           { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
           { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios' },
+          { id: 'quick_replies', icon: <MessageSquare size={16} />, label: 'Respostas Rápidas' },
           { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
           { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
         ]
