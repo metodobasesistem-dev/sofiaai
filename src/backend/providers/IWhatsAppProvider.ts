@@ -19,6 +19,8 @@ export interface WhatsAppMessage {
   caption?: string;
   reaction?: string;
   reactionTargetId?: string;
+  quotedId?: string;
+  quotedText?: string;
   raw?: any;
 }
 

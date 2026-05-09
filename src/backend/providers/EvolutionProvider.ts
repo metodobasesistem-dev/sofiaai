@@ -206,6 +206,23 @@ export class EvolutionProvider implements IWhatsAppProvider {
         // O conteúdo real está junto com o messageContextInfo
     }
 
+    // Extract Context Info (Quoted Message)
+    let quotedId = undefined;
+    let quotedText = undefined;
+    const contextInfo = messageContent.extendedTextMessage?.contextInfo || 
+                        messageContent.imageMessage?.contextInfo || 
+                        messageContent.videoMessage?.contextInfo || 
+                        messageContent.audioMessage?.contextInfo || 
+                        messageContent.documentMessage?.contextInfo || 
+                        messageContent.contextInfo;
+
+    if (contextInfo?.quotedMessage) {
+      quotedId = contextInfo.stanzaId;
+      const qm = contextInfo.quotedMessage;
+      quotedText = qm.conversation || qm.extendedTextMessage?.text || 
+                   (qm.imageMessage ? '[Imagem]' : qm.videoMessage ? '[Vídeo]' : qm.audioMessage ? '[Áudio]' : qm.documentMessage ? '[Documento]' : '[Mídia]');
+    }
+
     let body = '';
     let type = 'text';
     let mediaUrl = undefined;
@@ -293,6 +310,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       caption,
       reaction: reactionMsg ? reactionMsg.text : undefined,
       reactionTargetId: reactionMsg ? reactionMsg.key?.id : undefined,
+      quotedId,
+      quotedText,
       raw: messageData
     };
   }

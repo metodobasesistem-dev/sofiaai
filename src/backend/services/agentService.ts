@@ -266,7 +266,9 @@ export class AgentService {
     mediaMimeType?: string,
     mediaFileName?: string,
     caption?: string,
-    isExternal: boolean = false
+    isExternal: boolean = false,
+    quotedId?: string,
+    quotedText?: string
   ) {
     const timestamp = Date.now();
     console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
@@ -372,6 +374,8 @@ export class AgentService {
          media_filename: mediaFileName,
          caption: caption,
          is_external: isExternal,
+         quoted_id: quotedId,
+         quoted_text: quotedText,
          whatsapp_id: messageId, // id === whatsapp_id sempre neste sistema
          created_at: new Date(timestamp).toISOString()
        };

@@ -403,72 +403,71 @@ class WhatsAppService {
 
 
     // ── FASE 2: Banco PRIMEIRO, API depois ─────────────────────────────
-    // Gera um ID temporário para persistir com status 'sending' imediatamente.
-    // Quando a API confirmar o messageId real, faremos upsert com o ID correto.
+    // ── FASE 1: Busca Mensagem Original (se houver reply) ──────────────
+    let quoted = undefined;
+    if (quotedMessageId) {
+      const { data: qMsg } = await supabase
+        .from('messages')
+        .select('direction, whatsapp_id, text')
+        .or(`whatsapp_id.eq.${quotedMessageId},id.eq.${quotedMessageId}`)
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (qMsg) {
+        quoted = {
+          id: qMsg.whatsapp_id || quotedMessageId,
+          fromMe: qMsg.direction === 'outbound' || qMsg.direction === 'sent' || qMsg.direction === 'delivered',
+          text: qMsg.text || '...'
+        };
+      } else {
+        quoted = { id: quotedMessageId, fromMe: false, text: '...' };
+      }
+    }
+
+    // ── FASE 2: Banco PRIMEIRO, API depois ─────────────────────────────
     const tempId = `sending-${Date.now()}-${cleanTo}`;
     const sendTimestamp = Date.now();
 
     try {
-    // 1. Persiste com status='sending' ANTES de chamar a API
-    await supabase.from('messages').insert({
-      id: tempId,
-      whatsapp_id: tempId,
-      user_id: userId,
-      thread_id: threadId,
-      text: message,
-      direction: 'outbound',
-      is_ai: true,
-      status: 'sending',
-      timestamp: sendTimestamp,
-      created_at: new Date(sendTimestamp).toISOString(),
-    }).then(({ error }) => {
-      if (error) console.warn('[WhatsAppService] Pre-persist (sending) warning:', error.message);
-    });
+      // 1. Persiste com status='sending' ANTES de chamar a API
+      await supabase.from('messages').insert({
+        id: tempId,
+        whatsapp_id: tempId,
+        user_id: userId,
+        thread_id: threadId,
+        text: message,
+        direction: 'outbound',
+        is_ai: true,
+        status: 'sending',
+        timestamp: sendTimestamp,
+        created_at: new Date(sendTimestamp).toISOString(),
+        quoted_id: quoted?.id,
+        quoted_text: quoted?.text
+      }).then(({ error }) => {
+        if (error) console.warn('[WhatsAppService] Pre-persist (sending) warning:', error.message);
+      });
 
-    // 2. Atualiza thread com preview da mensagem (sidebar)
-    const { data: contact } = await supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle();
-    
-    await supabase.from('threads').upsert({
-      id: threadId,
-      user_id: userId,
-      last_message: message.substring(0, 1000),
-      last_message_time: new Date(sendTimestamp).toISOString(),
-      remote_jid: to,
-      display_phone: cleanTo,
-      agent_name: senderName,
-      contact_name: contact?.nome || cleanTo
-    }).then(({ error }) => {
-      if (error) console.warn('[WhatsAppService] Thread preview update warning:', error.message);
-    });
+      // 2. Atualiza thread com preview da mensagem (sidebar)
+      const { data: contact } = await supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle();
+      
+      await supabase.from('threads').upsert({
+        id: threadId,
+        user_id: userId,
+        last_message: message.substring(0, 1000),
+        last_message_time: new Date(sendTimestamp).toISOString(),
+        remote_jid: to,
+        display_phone: cleanTo,
+        agent_name: senderName,
+        contact_name: contact?.nome || cleanTo
+      }).then(({ error }) => {
+        if (error) console.warn('[WhatsAppService] Thread preview update warning:', error.message);
+      });
 
       // 3. Chama o provider via Abstração
       const provider = await WhatsAppProviderFactory.getProvider(userId);
       
-      let quoted = undefined;
-      if (quotedMessageId) {
-        // Busca a direção da mensagem original para saber o fromMe.
-        // Tentamos buscar por whatsapp_id ou pelo ID interno (UUID) para maior robustez.
-        const { data: qMsg } = await supabase
-          .from('messages')
-          .select('direction, whatsapp_id, text')
-          .or(`whatsapp_id.eq.${quotedMessageId},id.eq.${quotedMessageId}`)
-          .eq('user_id', userId)
-          .maybeSingle();
-        
-        if (qMsg) {
-          quoted = {
-            id: qMsg.whatsapp_id || quotedMessageId,
-            fromMe: qMsg.direction === 'outbound' || qMsg.direction === 'sent' || qMsg.direction === 'delivered',
-            text: qMsg.text || '...'
-          };
-        } else {
-          // Fallback se não encontrar no banco (assume que é do cliente por segurança)
-          quoted = { id: quotedMessageId, fromMe: false, text: '...' };
-        }
-      }
-
       if (quoted) {
-        console.log(`[WhatsAppService] 💬 Quoting: ${quoted.id} | fromMe: ${quoted.fromMe} | remoteJid: ${to}`);
+        console.log(`[WhatsAppService] 📤 Replying to message ${quoted.id} | text: ${quoted.text}`);
       }
 
       const result = await provider.sendMessage(instanceName, to, message, quoted);
