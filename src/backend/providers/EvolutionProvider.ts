@@ -101,7 +101,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
   async sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean }): Promise<{ messageId: string }> {
     const cleanNumber = to.replace(/\D/g, '');
-    const remoteJid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@c.us`;
+    const remoteJid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@s.whatsapp.net`;
     
     const { data } = await this.api.post(`/message/sendText/${instanceId}`, {
       number: cleanNumber,
