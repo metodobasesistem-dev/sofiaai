@@ -62,7 +62,7 @@ import whatsappRoutes from './src/backend/routes/whatsappRoutes.js';
 import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js';
 import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
-import sofiaRoutes from './src/backend/routes/sofiaRoutes';
+import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
 import stripeRoutes from './src/backend/routes/stripeRoutes.js';
 import { requireAuth } from './src/backend/middleware/authMiddleware.js';
 
