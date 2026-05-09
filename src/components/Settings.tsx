@@ -771,31 +771,43 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto py-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
                   <PlanCard 
-                    name="Plano Pro"
-                    price="R$ 197"
+                    name="Starter"
+                    price="R$ 29,90"
+                    benefits={[
+                      "Inbox (Chat Manual)",
+                      "Dashboard de Métricas",
+                      "Gestão de Contatos CRM",
+                      "Até 1 Canal Conectado",
+                      "Relatórios de Atendimento"
+                    ]}
+                    buttonText="Assinar Starter"
+                  />
+                  <PlanCard 
+                    name="Pro"
+                    price="R$ 147"
                     popular={true}
                     benefits={[
+                      "Tudo do plano Starter",
                       "Até 3 Agentes de IA ativos",
-                      "1.000 conversas por mês",
-                      "Integração Google Calendar",
-                      "Suporte via E-mail",
-                      "Dashboard de Métricas Avançado"
+                      "Agendamentos e Calendário",
+                      "Treinamento de IA (Texto)",
+                      "Suporte via E-mail"
                     ]}
                     buttonText="Assinar Pro"
                   />
                   <PlanCard 
-                    name="Plano Enterprise"
-                    price="R$ 497"
+                    name="Elite"
+                    price="R$ 297"
                     benefits={[
+                      "IA Sofia (Co-piloto Autônomo)",
+                      "Campanhas e Broadcast",
                       "Agentes de IA Ilimitados",
-                      "Conversas Ilimitadas",
-                      "Integração Stripe e Webhooks",
-                      "Suporte VIP 24/7",
-                      "Treinamento personalizado da IA"
+                      "Acesso aos modelos o1",
+                      "Suporte VIP 24/7"
                     ]}
-                    buttonText="Assinar Enterprise"
+                    buttonText="Assinar Elite"
                   />
                 </div>
               </div>

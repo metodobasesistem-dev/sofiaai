@@ -198,16 +198,16 @@ export default function Layout({
     ] : []),
     { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
-    { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns' },
+    { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
 
-    { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA' },
+    { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
     {
       id: 'agendas', 
       icon: <Calendar size={20} />, 
       label: 'Agendas',
       flag: 'agendas',
-      minPlan: 'Starter',
+      minPlan: 'Pro',
       subItems: [
         { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
         { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
@@ -225,7 +225,7 @@ export default function Layout({
     
     // 2. Plan Restriction Check
     if (item.minPlan) {
-      const plans = ['Trial', 'Starter', 'Pro', 'Enterprise'];
+      const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
       const userPlanIdx = plans.indexOf(plano || 'Trial');
       const minPlanIdx = plans.indexOf(item.minPlan);
       
@@ -591,8 +591,8 @@ export default function Layout({
         )}
       </div>
       
-      {/* Sofia Assistant Chat */}
-      <SofiaChat />
+      {/* Sofia Assistant Chat - Somente Elite ou Admin */}
+      {(plano === 'Elite' || plano === 'Enterprise' || role === 'admin') && <SofiaChat />}
     </div>
   );
 }

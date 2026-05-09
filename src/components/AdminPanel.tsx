@@ -1101,8 +1101,8 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
               <div className="p-10 space-y-8">
                 <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Plano da Assinatura</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['Trial', 'Starter', 'Pro'].map(p => (
+                  <div className="grid grid-cols-4 gap-3">
+                    {['Trial', 'Starter', 'Pro', 'Elite'].map(p => (
                       <button 
                         key={p}
                         onClick={() => setSelectedUser({ ...selectedUser, plano: p })}
