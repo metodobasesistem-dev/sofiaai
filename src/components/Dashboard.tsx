@@ -24,7 +24,8 @@ import {
   QrCode,
   Loader2,
   RefreshCw,
-  ChevronRight
+  ChevronRight,
+  Send
 } from 'lucide-react';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { motion, AnimatePresence } from 'motion/react';
