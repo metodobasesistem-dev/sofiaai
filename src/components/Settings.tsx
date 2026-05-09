@@ -182,6 +182,43 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     };
   }, [isWhatsAppModalOpen]);
 
+  // Real-time listener for Profile updates (Stripe/Admin)
+  useEffect(() => {
+    let subscription: any;
+
+    const setupProfileListener = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      subscription = supabase
+        .channel('profile_changes')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+          (payload) => {
+            console.log('[Settings] Profile updated in realtime:', payload.new);
+            setProfile(payload.new as UserProfile);
+            // Atualiza o formulário também se necessário
+            const newData = payload.new as UserProfile;
+            setFormData(prev => ({
+              ...prev,
+              nome_completo: newData.nome_completo || prev.nome_completo,
+              nome_empresa: newData.nome_empresa || prev.nome_empresa,
+              plano: newData.plano || prev.plano
+            }));
+            toast.success(`Plano atualizado: ${newData.plano}`);
+          }
+        )
+        .subscribe();
+    };
+
+    setupProfileListener();
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
+  }, []);
+
   const handleConnectWpp = async () => {
     if (isExpired) {
       toast.error('Período de teste expirado!', {
