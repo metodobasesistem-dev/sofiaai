@@ -592,6 +592,15 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                     </div>
 
                   </div>
+
+                  <button 
+                    onClick={handleSaveSettings}
+                    disabled={isActionLoading}
+                    className="w-full mt-8 py-5 bg-primary-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-primary-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-primary-500/10"
+                  >
+                    {isActionLoading ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                    Salvar Configurações de IA
+                  </button>
                 </div>
               </div>
 
