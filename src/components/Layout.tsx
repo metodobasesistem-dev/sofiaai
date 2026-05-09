@@ -36,6 +36,7 @@ import { User } from '@supabase/supabase-js';
 import { useFeature, useFeatureContext } from '../contexts/FeatureFlagContext';
 import { useRef, useEffect } from 'react';
 import SofiaChat from './Sofia/SofiaChat';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -110,6 +111,7 @@ export default function Layout({
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const headerProfileRef = useRef<HTMLDivElement>(null);
+  const { unreadTotal } = useNotification();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -183,7 +185,20 @@ export default function Layout({
       flag: 'leo_ai',
       minPlan: 'Starter'
     },
-    { id: 'inbox', icon: <Inbox size={20} />, label: 'Caixa de Entrada' },
+    { 
+      id: 'inbox', 
+      icon: (
+        <div className="relative">
+          <Inbox size={20} />
+          {unreadTotal > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
+              {unreadTotal > 99 ? '99+' : unreadTotal}
+            </span>
+          )}
+        </div>
+      ), 
+      label: 'Caixa de Entrada' 
+    },
     { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', minPlan: 'Pro' },
     { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', minPlan: 'Pro' },
     { id: 'quick_replies', icon: <MessageSquare size={20} />, label: 'Atalhos', minPlan: 'Starter' },

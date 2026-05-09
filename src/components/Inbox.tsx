@@ -62,7 +62,7 @@ import KanbanBoard from './KanbanBoard';
 import ReportsDashboard from './ReportsDashboard';
 import Integrations from './Integrations';
 import QuickReplies from './QuickReplies';
-
+import { NotificationProvider, useNotification } from '../contexts/NotificationContext';
 import { ContactAvatar } from './ContactAvatar';
 
 interface Thread {
@@ -907,9 +907,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     selectedThreadIdRef.current = selectedThreadId;
   }, [selectedThreadId]);
 
+  const { setActiveThreadId } = useNotification();
+
   useEffect(() => {
-    notificationService.requestPermission();
-  }, []);
+    setActiveThreadId(selectedThreadId);
+  }, [selectedThreadId, setActiveThreadId]);
 
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
@@ -1245,23 +1247,6 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                                     new Date(payload.new.last_message_time).getTime() > new Date(baseThread.lastMessageTime).getTime());
 
                 if (isNewMessage) {
-                  // Notificação se for mensagem nova do lead
-                  const isIncoming = (payload.new.unread_count || 0) > (baseThread?.unreadCount || 0);
-                  const isCurrentThread = payload.new.id === selectedThreadIdRef.current;
-                  const isWindowHidden = document.visibilityState !== 'visible';
-
-                  if (isIncoming && (!isCurrentThread || isWindowHidden)) {
-                    notificationService.showNotification(
-                      resolved.name,
-                      payload.new.last_message || 'Nova mensagem',
-                      payload.new.profile_picture_url || '/sofiamini.png',
-                      () => setSelectedThreadId(payload.new.id)
-                    );
-                  } else if (isIncoming && isCurrentThread && !isWindowHidden) {
-                    // Se estiver na conversa aberta, toca apenas o som
-                    notificationService.playSound();
-                  }
-
                   const filtered = prev.filter(t => t.id !== payload.new.id);
                   return [updatedThread as any, ...filtered];
                 } else {

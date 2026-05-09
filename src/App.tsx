@@ -26,6 +26,7 @@ import { Loader2 } from 'lucide-react';
 import SofiaConfig from './components/Sofia/SofiaConfig';
 import { Toaster } from 'sonner';
 import { useFeatureContext } from './contexts/FeatureFlagContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -249,20 +250,24 @@ export default function App() {
         <Login />
       ) : maintenanceMode && role !== 'admin' ? (
         <MaintenancePage />
-      ) : window.location.search.includes('fullscreen=true') && activeTab === 'inbox' ? (
-        <div className="w-screen h-screen bg-white">
-          <Inbox user={user} role={role} isFullscreen={true} />
-        </div>
       ) : (
-        <Layout 
-      activeTab={activeTab} 
-      onTabChange={handleTabChange} 
-      user={user} 
-      role={role}
-      plano={plano}
-    >
-      {renderContent()}
-        </Layout>
+        <NotificationProvider user={user}>
+          {window.location.search.includes('fullscreen=true') && activeTab === 'inbox' ? (
+            <div className="w-screen h-screen bg-white">
+              <Inbox user={user} role={role} isFullscreen={true} />
+            </div>
+          ) : (
+            <Layout 
+              activeTab={activeTab} 
+              onTabChange={handleTabChange} 
+              user={user} 
+              role={role}
+              plano={plano}
+            >
+              {renderContent()}
+            </Layout>
+          )}
+        </NotificationProvider>
       )}
       <Toaster position="top-right" richColors />
       <PWAInstallPrompt />
