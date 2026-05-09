@@ -53,9 +53,10 @@ interface PlanCardProps {
   benefits: string[];
   buttonText: string;
   popular?: boolean;
+  billingCycle: 'monthly' | 'yearly';
 }
 
-const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps) => (
+const PlanCard = ({ name, price, benefits, buttonText, popular, billingCycle }: PlanCardProps) => (
   <div className={`relative bg-white p-8 rounded-2xl border-2 transition-all flex flex-col h-full
     ${popular ? 'border-primary-600 shadow-xl shadow-primary-100 scale-105 z-10' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
     
@@ -69,7 +70,7 @@ const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps)
       <h3 className="text-xl font-bold text-gray-900">{name}</h3>
       <div className="mt-4 flex items-baseline gap-1">
         <span className="text-3xl font-black text-gray-900">{price}</span>
-        <span className="text-gray-500 text-sm">/mês</span>
+        <span className="text-gray-500 text-sm">{billingCycle === 'monthly' ? '/mês' : '/ano'}</span>
       </div>
     </div>
 
@@ -121,6 +122,7 @@ import {
 
 export default function Settings({ initialSubTab = 'account' }: { initialSubTab?: string }) {
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab || 'account');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isExpired, setIsExpired] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
@@ -777,20 +779,42 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
 
               {/* Upgrade Section */}
               <div>
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
-                    <ShieldCheck size={24} />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
+                      <ShieldCheck size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Fazer Upgrade</h3>
+                      <p className="text-sm text-gray-500">Escolha o plano ideal para escalar seu atendimento.</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Fazer Upgrade</h3>
-                    <p className="text-sm text-gray-500">Escolha o plano ideal para escalar seu atendimento.</p>
+
+                  {/* Billing Toggle */}
+                  <div className="flex items-center gap-4 bg-gray-100 p-1.5 rounded-2xl w-fit self-center">
+                    <button 
+                      onClick={() => setBillingCycle('monthly')}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${billingCycle === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Mensal
+                    </button>
+                    <button 
+                      onClick={() => setBillingCycle('yearly')}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${billingCycle === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Anual
+                      <span className="absolute -top-3 -right-3 bg-emerald-500 text-white text-[8px] px-2 py-1 rounded-full animate-bounce shadow-lg shadow-emerald-500/20">
+                        2 MESES GRÁTIS
+                      </span>
+                    </button>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
                   <PlanCard 
                     name="Starter"
-                    price="R$ 29,90"
+                    price={billingCycle === 'monthly' ? "R$ 29,90" : "R$ 299"}
+                    billingCycle={billingCycle}
                     benefits={[
                       "Inbox (Chat Manual)",
                       "Dashboard de Métricas",
@@ -802,12 +826,13 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       "[-] IA Sofia (Co-piloto)",
                       "[-] Campanhas de Marketing"
                     ]}
-                    buttonText="Assinar Starter"
+                    buttonText={billingCycle === 'monthly' ? "Assinar Starter" : "Assinar Anual"}
                   />
                   <PlanCard 
                     name="Pro"
-                    price="R$ 147"
+                    price={billingCycle === 'monthly' ? "R$ 147" : "R$ 1.470"}
                     popular={true}
+                    billingCycle={billingCycle}
                     benefits={[
                       "Tudo do plano Starter",
                       "Até 3 Agentes de IA ativos",
@@ -818,11 +843,12 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       "[-] Campanhas e Broadcast",
                       "[-] Acesso a Modelos o1"
                     ]}
-                    buttonText="Assinar Pro"
+                    buttonText={billingCycle === 'monthly' ? "Assinar Pro" : "Assinar Anual"}
                   />
                   <PlanCard 
                     name="Elite"
-                    price="R$ 297"
+                    price={billingCycle === 'monthly' ? "R$ 297" : "R$ 2.970"}
+                    billingCycle={billingCycle}
                     benefits={[
                       "[H] IA Sofia (Co-piloto Autônomo)",
                       "Campanhas e Broadcast",
@@ -832,7 +858,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       "Agendamentos Ilimitados",
                       "Multimodal (Imagem/Voz)"
                     ]}
-                    buttonText="Assinar Elite"
+                    buttonText={billingCycle === 'monthly' ? "Assinar Elite" : "Assinar Anual"}
                   />
                 </div>
               </div>
