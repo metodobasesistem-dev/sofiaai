@@ -103,21 +103,22 @@ export class EvolutionProvider implements IWhatsAppProvider {
     const cleanNumber = to.replace(/\D/g, '');
     const remoteJid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@s.whatsapp.net`;
     
-    const { data } = await this.api.post(`/message/sendText/${instanceId}`, {
+    const payload: any = {
       number: cleanNumber,
       text: message,
       options: { 
         delay: 1200, 
-        presence: 'composing',
-        quoted: quoted ? { 
-          key: { 
-            id: quoted.id, 
-            fromMe: quoted.fromMe,
-            remoteJid: remoteJid
-          } 
-        } : undefined
+        presence: 'composing'
       }
-    });
+    };
+
+    if (quoted) {
+      payload.quoted = {
+        messageId: quoted.id
+      };
+    }
+
+    const { data } = await this.api.post(`/message/sendText/${instanceId}`, payload);
     return { messageId: data.key?.id || data.id || '' };
   }
 
