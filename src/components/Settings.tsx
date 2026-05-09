@@ -76,14 +76,25 @@ const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps)
     <ul className="space-y-4 mb-8 flex-1">
       {benefits.map((benefit, index) => {
         const isNegative = benefit.startsWith('[-]');
-        const text = isNegative ? benefit.replace('[-]', '') : benefit;
+        const isHighlighted = benefit.startsWith('[H]');
+        const text = benefit.replace('[-]', '').replace('[H]', '');
+        
         return (
-          <li key={index} className={`flex items-start gap-3 text-sm ${isNegative ? 'text-gray-400 line-through opacity-50' : 'text-gray-600 font-medium'}`}>
+          <li 
+            key={index} 
+            className={`flex items-start gap-3 text-sm transition-all
+              ${isNegative ? 'text-gray-400 line-through opacity-50' : 'text-gray-600 font-medium'}
+              ${isHighlighted ? 'bg-primary-50/50 p-3 rounded-xl border border-primary-100/50 shadow-sm' : ''}
+            `}
+          >
             <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 
-              ${isNegative ? 'bg-gray-100 text-gray-400' : (popular ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-400')}`}>
-              {isNegative ? <X size={12} /> : <Check size={12} />}
+              ${isNegative ? 'bg-gray-100 text-gray-400' : (isHighlighted ? 'bg-primary-600 text-white' : (popular ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-400'))}`}>
+              {isNegative ? <X size={12} /> : (isHighlighted ? <Sparkles size={12} /> : <Check size={12} />)}
             </div>
-            {text}
+            <div className="flex flex-col">
+              <span className={isHighlighted ? 'text-primary-900 font-bold' : ''}>{text}</span>
+              {isHighlighted && <span className="text-[9px] text-primary-500 font-black uppercase tracking-widest mt-0.5">Diferencial Único</span>}
+            </div>
           </li>
         );
       })}
@@ -813,7 +824,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     name="Elite"
                     price="R$ 297"
                     benefits={[
-                      "IA Sofia (Co-piloto Autônomo)",
+                      "[H] IA Sofia (Co-piloto Autônomo)",
                       "Campanhas e Broadcast",
                       "Agentes de IA Ilimitados",
                       "Acesso aos modelos o1",
