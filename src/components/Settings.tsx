@@ -813,7 +813,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
                   <PlanCard 
                     name="Starter"
-                    price={billingCycle === 'monthly' ? "R$ 37,90" : "R$ 297"}
+                    price={billingCycle === 'monthly' ? "R$ 37,90" : "R$ 379"}
                     billingCycle={billingCycle}
                     benefits={[
                       "Inbox (Chat Manual)",
@@ -830,7 +830,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   />
                   <PlanCard 
                     name="Pro"
-                    price={billingCycle === 'monthly' ? "R$ 167,90" : "R$ 1.470"}
+                    price={billingCycle === 'monthly' ? "R$ 167,90" : "R$ 1.679"}
                     popular={true}
                     billingCycle={billingCycle}
                     benefits={[
@@ -847,7 +847,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                   />
                   <PlanCard 
                     name="Elite"
-                    price={billingCycle === 'monthly' ? "R$ 327,90" : "R$ 2.970"}
+                    price={billingCycle === 'monthly' ? "R$ 327,90" : "R$ 3.279"}
                     billingCycle={billingCycle}
                     benefits={[
                       "[H] IA Sofia (Co-piloto Autônomo)",
