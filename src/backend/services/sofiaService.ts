@@ -269,10 +269,33 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
 - Últimos leads interessados: ${(recentLeads || []).map(l => `${l.nome} (${l.status_funil})`).join(', ')}`;
 
       if (detailed) {
-        const { data: funil } = await supabase.from('contacts').select('status_funil');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const [
+          { data: funil },
+          { count: leadsToday },
+          { count: leadsYesterday }
+        ] = await Promise.all([
+          supabase.from('contacts').select('status_funil').eq('user_id', userId),
+          supabase.from('contacts').select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .gte('data_criacao', today.toISOString()),
+          supabase.from('contacts').select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .gte('data_criacao', yesterday.toISOString())
+            .lt('data_criacao', today.toISOString())
+        ]);
+
         const counts: any = {};
         (funil || []).forEach(c => counts[c.status_funil] = (counts[c.status_funil] || 0) + 1);
-        stats += `\nDETALHAMENTO FUNIL: ${JSON.stringify(counts)}`;
+        
+        stats += `\nDETALHAMENTO FUNIL (SOMA GERAL): ${JSON.stringify(counts)}`;
+        stats += `\nNOVOS LEADS HOJE: ${leadsToday || 0}`;
+        stats += `\nNOVOS LEADS ONTEM: ${leadsYesterday || 0}`;
       }
 
       return stats;
