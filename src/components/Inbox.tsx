@@ -2707,8 +2707,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       return (
                         <React.Fragment key={msg.id}>
                           {showDateHeader && (
-                            <div className="flex justify-center my-6 sticky top-2 z-[30]">
-                              <span className="px-4 py-1.5 bg-white/80 backdrop-blur-md text-slate-500 text-[11px] font-black uppercase tracking-widest rounded-full shadow-sm border border-slate-100">
+                            <div className="flex justify-center my-8 sticky top-2 z-[30]">
+                              <span className="px-5 py-1.5 bg-white/70 backdrop-blur-md text-slate-500 text-[12.5px] font-semibold rounded-2xl shadow-sm border border-white/50">
                                 {formatDateHeader(msg.timestamp)}
                               </span>
                             </div>
