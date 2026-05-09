@@ -74,14 +74,19 @@ const PlanCard = ({ name, price, benefits, buttonText, popular }: PlanCardProps)
     </div>
 
     <ul className="space-y-4 mb-8 flex-1">
-      {benefits.map((benefit, index) => (
-        <li key={index} className="flex items-start gap-3 text-sm text-gray-600">
-          <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${popular ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-400'}`}>
-            <Check size={12} />
-          </div>
-          {benefit}
-        </li>
-      ))}
+      {benefits.map((benefit, index) => {
+        const isNegative = benefit.startsWith('[-]');
+        const text = isNegative ? benefit.replace('[-]', '') : benefit;
+        return (
+          <li key={index} className={`flex items-start gap-3 text-sm ${isNegative ? 'text-gray-400 line-through opacity-50' : 'text-gray-600 font-medium'}`}>
+            <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 
+              ${isNegative ? 'bg-gray-100 text-gray-400' : (popular ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-400')}`}>
+              {isNegative ? <X size={12} /> : <Check size={12} />}
+            </div>
+            {text}
+          </li>
+        );
+      })}
     </ul>
 
     <button className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
@@ -780,7 +785,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       "Dashboard de Métricas",
                       "Gestão de Contatos CRM",
                       "Até 1 Canal Conectado",
-                      "Relatórios de Atendimento"
+                      "Relatórios de Atendimento",
+                      "[-] Agentes de IA Autônomos",
+                      "[-] Agendamentos Inteligentes",
+                      "[-] IA Sofia (Co-piloto)",
+                      "[-] Campanhas de Marketing"
                     ]}
                     buttonText="Assinar Starter"
                   />
@@ -793,7 +802,10 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       "Até 3 Agentes de IA ativos",
                       "Agendamentos e Calendário",
                       "Treinamento de IA (Texto)",
-                      "Suporte via E-mail"
+                      "Suporte via E-mail",
+                      "[-] IA Sofia (Co-piloto)",
+                      "[-] Campanhas e Broadcast",
+                      "[-] Acesso a Modelos o1"
                     ]}
                     buttonText="Assinar Pro"
                   />
@@ -805,7 +817,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       "Campanhas e Broadcast",
                       "Agentes de IA Ilimitados",
                       "Acesso aos modelos o1",
-                      "Suporte VIP 24/7"
+                      "Suporte VIP 24/7",
+                      "Agendamentos Ilimitados",
+                      "Multimodal (Imagem/Voz)"
                     ]}
                     buttonText="Assinar Elite"
                   />
