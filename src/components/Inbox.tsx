@@ -91,6 +91,34 @@ interface Thread {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+const formatDateHeader = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  
+  // Zera as horas para comparação apenas de data
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  if (msgDate.getTime() === today.getTime()) {
+    return 'Hoje';
+  } else if (msgDate.getTime() === yesterday.getTime()) {
+    return 'Ontem';
+  }
+  
+  // Se for nos últimos 6 dias, mostra o dia da semana
+  const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 7) {
+    return date.toLocaleDateString('pt-BR', { weekday: 'long' })
+      .replace(/^\w/, (c) => c.toUpperCase()); // Capitaliza primeira letra
+  }
+  
+  // Fallback para data completa
+  return date.toLocaleDateString('pt-BR');
+};
+
 const formatPhone = (phone: string) => {
   const p = phone.replace(/\D/g, '');
   if (p.length === 13) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9)}`;
@@ -2661,19 +2689,33 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 <>
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
-                    .map(msg => (
-                      <div key={msg.id} id={`msg-${msg.id}`} className="transition-all duration-500">
-                        <ChatBubble 
-                          key={msg.id} 
-                          message={msg} 
-                          onPreview={setPreviewMedia} 
-                          onDelete={handleDeleteMessage} 
-                          onReact={handleReactToMessage}
-                          onReply={(m) => setReplyingTo(m)}
-                          onStar={handleToggleStar}
-                        />
-                      </div>
-                    ))}
+                    .map((msg, idx, filteredArr) => {
+                      const prevMsg = idx > 0 ? filteredArr[idx - 1] : null;
+                      const showDateHeader = !prevMsg || 
+                        new Date(msg.timestamp).toDateString() !== new Date(prevMsg.timestamp).toDateString();
+                      
+                      return (
+                        <React.Fragment key={msg.id}>
+                          {showDateHeader && (
+                            <div className="flex justify-center my-6 sticky top-2 z-[30]">
+                              <span className="px-4 py-1.5 bg-white/80 backdrop-blur-md text-slate-500 text-[11px] font-black uppercase tracking-widest rounded-full shadow-sm border border-slate-100">
+                                {formatDateHeader(msg.timestamp)}
+                              </span>
+                            </div>
+                          )}
+                          <div id={`msg-${msg.id}`} className="transition-all duration-500">
+                            <ChatBubble 
+                              message={msg} 
+                              onPreview={setPreviewMedia} 
+                              onDelete={handleDeleteMessage} 
+                              onReact={handleReactToMessage}
+                              onReply={(m) => setReplyingTo(m)}
+                              onStar={handleToggleStar}
+                            />
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
                   <div ref={messagesEndRef} />
                 </>
               )}
