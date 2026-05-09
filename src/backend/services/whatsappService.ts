@@ -803,46 +803,32 @@ class WhatsAppService {
         mediaMimeType
       });
 
-      // 🔍 Verificação de Novo Lead (Primeira mensagem do contato)
-      try {
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('thread_id', threadId)
-          .eq('direction', 'inbound');
-        
-        if (count === 1) {
-          // Usa o ID da mensagem para garantir que aquela mensagem específica só notifique uma vez
-          const wasFirstLead = await redisService.markAsProcessed(`push_notified_lead:${messageId}`, 3600);
-
-          if (wasFirstLead) {
-            console.log(`[WhatsAppService] 🆕 New lead detected: ${from}. Sending notification.`);
-            
-            // Send Push Notification
-            await PushNotificationService.sendPushNotification(
-              userId, 
-              `🆕 Novo Lead: ${contactName || from.split('@')[0]}`,
-              finalBody,
-              `/inbox?jid=${from}`
-            );
-          }
-        }
-      } catch (err) {
-        console.warn('[WhatsAppService] Error checking for new lead notification:', err);
-      }
-
       // 🛡️ PROTEÇÃO: Se a IA não retornou resposta (ex: modo humano ou ignorado), para por aqui sem quebrar
       if (!aiResponse || (typeof aiResponse === 'object' && (aiResponse as any).status === 'human')) {
         const isHuman = aiResponse && (aiResponse as any).status === 'human';
+        
         // 🚀 DEDUPLICAÇÃO ATÔMICA: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
-        // Usamos 'markAsProcessed' que faz um SET NX (apenas se não existir) de forma atômica no Redis.
+        // Independente se é New Lead ou mensagem comum
         const wasFirst = await redisService.markAsProcessed(`push_notified:${messageId}`, 3600);
         
         if (wasFirst) {
-          console.log(`[WhatsAppService] 🔔 Sending first notification for msg ${messageId}`);
+          // Detectar se é New Lead aqui dentro
+          const { count } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('thread_id', threadId)
+            .eq('direction', 'inbound');
+
+          const isNewLead = count === 1;
+          const title = isNewLead 
+            ? `🆕 Novo Lead: ${contactName || from.split('@')[0]}`
+            : `🔔 ${contactName || 'Cliente'} enviou mensagem`;
+
+          console.log(`[WhatsAppService] 🔔 Sending notification for msg ${messageId} | NewLead: ${isNewLead}`);
+          
           await PushNotificationService.sendPushNotification(
             userId,
-            `🔔 ${contactName || 'Cliente'} enviou mensagem`,
+            title,
             finalBody,
             `/inbox?jid=${from}`
           );
@@ -1068,6 +1054,18 @@ class WhatsAppService {
     // Rodar uma vez agora no boot
     this.cleanupOldStorageFiles();
     console.log('[WhatsAppService] initializeAllSessions called');
+  }
+
+  /**
+   * Atalho para verificar idempotência via Redis
+   */
+  async markEventAsProcessed(eventId: string, ttlSeconds: number = 3600): Promise<boolean> {
+    try {
+      return await redisService.markAsProcessed(eventId, ttlSeconds);
+    } catch (e) {
+      console.error('[WhatsAppService] Idempotency check failed:', e);
+      return true; // Fallback: processa se o Redis falhar
+    }
   }
 
   async syncInstance(userId: string) {
