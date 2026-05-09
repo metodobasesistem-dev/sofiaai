@@ -18,9 +18,13 @@ router.post('/webhook', async (req, res) => {
   if (!instanceName) return res.status(200).send('OK');
 
   // [IDEMPOTENCY] Evitar processar o mesmo evento/mensagem múltiplas vezes (webhook duplicate)
-  // Alguns providers mandam múltiplos webhooks para o mesmo evento (ex: status pending, then status received)
-  const eventId = body.data?.key?.id || body.data?.id || body.message?.key?.id || body.id;
-  if (eventId && event === 'messages.upsert') {
+  const eventId = body.data?.key?.id || 
+                  body.data?.id || 
+                  body.data?.messages?.[0]?.key?.id || 
+                  body.message?.key?.id || 
+                  body.id;
+
+  if (eventId && (event === 'messages.upsert' || event === 'MESSAGES_UPSERT')) {
     const isNew = await (whatsappService as any).markEventAsProcessed(`webhook:${eventId}`, 300); // 5 min lock
     if (!isNew) {
       console.log(`[Webhook] 🛡️ Skipping duplicate webhook event: ${eventId}`);

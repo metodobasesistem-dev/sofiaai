@@ -809,9 +809,13 @@ class WhatsAppService {
         
         // 🚀 DEDUPLICAÇÃO ATÔMICA: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
         // Independente se é New Lead ou mensagem comum
-        const wasFirst = await redisService.markAsProcessed(`push_notified:${messageId}`, 3600);
+        const wasFirstId = await redisService.markAsProcessed(`push_notified:${messageId}`, 3600);
         
-        if (wasFirst) {
+        // 🛡️ Camada Extra: Deduplicação por conteúdo (evita spam se o ID falhar ou mudar)
+        const bodyHash = Buffer.from(`${userId}:${from}:${finalBody.substring(0, 100)}`).toString('base64');
+        const wasFirstBody = await redisService.markAsProcessed(`push_notified_body:${bodyHash}`, 5); // 5s lock para spam rápido
+        
+        if (wasFirstId && wasFirstBody) {
           // Detectar se é New Lead aqui dentro
           const { count } = await supabase
             .from('messages')

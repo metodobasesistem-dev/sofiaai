@@ -193,8 +193,17 @@ export class EvolutionProvider implements IWhatsAppProvider {
   transformPayload(payload: any): WhatsAppMessage | null {
     if (payload.event !== 'messages.upsert') return null;
     
-    const messageData = payload.data;
+    let messageData = payload.data;
     if (!messageData) return null;
+
+    // Evolution as vezes manda um objeto direto, as vezes um array em data.messages
+    if (Array.isArray(messageData.messages)) {
+      messageData = messageData.messages[0];
+    } else if (Array.isArray(messageData)) {
+       messageData = messageData[0];
+    }
+
+    if (!messageData || !messageData.key) return null;
 
     const from = messageData.key?.remoteJid || '';
     
