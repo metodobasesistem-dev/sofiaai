@@ -67,7 +67,7 @@ export const sofiaService = {
       .single();
 
     const now = new Date();
-    const systemPrompt = `Você é a Sofia, a inteligência central e parceira estratégica do ecossistema Wppai.
+    const systemPrompt = `Você é a Sofia, a inteligência central e parceira estratégica deste ecossistema.
 Você tem ACESSO TOTAL ao sistema para ajudar o usuário a gerir o negócio.
 
 TONALIDADE:
@@ -84,6 +84,7 @@ DIRETRIZES:
   1. Use 'search_contacts' para encontrar o telefone dele.
   2. Use o telefone encontrado para chamar 'get_chat_history'.
 - Use as estatísticas acima para dar insights (ex: "Vi que você tem X agendamentos hoje").
+- Se o usuário pedir para criar ou ajustar um agente, use 'upsert_agent'. SEMPRE peça confirmação antes de ativar um agente se as mudanças forem drásticas.
 - Horário Atual: ${format(now, 'HH:mm')} de ${format(now, 'dd/MM/yyyy')}.
 
 PROMPT CUSTOMIZADO:
@@ -140,6 +141,23 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
               contactPhone: { type: 'string', description: 'Telefone do contato (apenas números)' }
             },
             required: ['contactPhone']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'upsert_agent',
+          description: 'Cria ou atualiza as configurações de um agente de IA do usuário.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Nome do agente' },
+              niche: { type: 'string', description: 'Nicho ou área de atuação' },
+              prompt: { type: 'string', description: 'Instruções/Prompt de sistema do agente' },
+              active: { type: 'boolean', description: 'Se o agente deve estar ativo' }
+            },
+            required: ['name', 'prompt']
           }
         }
       },
@@ -204,6 +222,7 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
               else if (name === 'list_active_conversations') result = await this.fetchActiveThreads(userId);
               else if (name === 'get_chat_history') result = await this.fetchThreadMessages(userId, args.contactPhone);
               else if (name === 'search_contacts') result = await this.searchContacts(userId, args.query);
+              else if (name === 'upsert_agent') result = await this.upsertAgent(userId, args);
               else result = { error: 'Tool not found' };
               
               console.log(`[SofiaService] ✅ Tool ${name} result size:`, JSON.stringify(result).length);
@@ -313,8 +332,49 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
   },
 
   async fetchAgentsInfo(userId: string) {
-    const { data } = await supabase.from('agents').select('nome, status_ativo, nicho').eq('user_id', userId);
+    const { data } = await supabase.from('agents').select('nome, status_ativo, nicho, prompt_base').eq('user_id', userId);
     return data;
+  },
+
+  async upsertAgent(userId: string, args: any) {
+    try {
+      const { name, niche, prompt, active } = args;
+      
+      // Busca se já existe um agente com esse nome para o usuário
+      const { data: existing } = await supabase.from('agents')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('nome', name)
+        .maybeSingle();
+
+      const payload: any = {
+        user_id: userId,
+        nome: name,
+        nicho: niche,
+        prompt_base: prompt,
+        status_ativo: active !== undefined ? active : true,
+        updated_at: new Date().toISOString()
+      };
+
+      if (existing) {
+        const { error } = await supabase.from('agents')
+          .update(payload)
+          .eq('id', existing.id);
+        if (error) throw error;
+        return { success: true, action: 'updated', name };
+      } else {
+        const { error } = await supabase.from('agents')
+          .insert({
+            ...payload,
+            created_at: new Date().toISOString()
+          });
+        if (error) throw error;
+        return { success: true, action: 'created', name };
+      }
+    } catch (err: any) {
+      console.error('[SofiaService] Error in upsertAgent:', err);
+      return { success: false, error: err.message };
+    }
   },
 
   async fetchActiveThreads(userId: string) {
