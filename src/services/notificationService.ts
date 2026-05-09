@@ -46,6 +46,8 @@ export class NotificationService {
     this.playSound();
     this.updateTitle(title);
 
+    // Na web (Desktop), se estiver aberto, o NotificationContext lida com isso.
+    // Mas no celular, queremos garantir que o SW mostre se possível.
     if (Notification.permission === 'granted' && document.visibilityState !== 'visible') {
       const notification = new Notification(title, {
         body,
@@ -61,6 +63,59 @@ export class NotificationService {
         notification.close();
       };
     }
+  }
+
+  public async subscribeToPush(): Promise<boolean> {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.warn('[NotificationService] Push not supported');
+        return false;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      
+      // Chave pública VAPID (Deve ser a mesma do backend)
+      const VAPID_PUBLIC_KEY = 'BDOHAFAPvb5cd6oJIFLaVFgQSjdWVZQRXk-XzGfQOSeUOiI-n6jv0aoouxhsrXnjJJqkMd7a4f6DN4mnVABAgjg';
+      
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+
+      console.log('[NotificationService] Push Subscribed:', subscription);
+
+      // Envia para o backend
+      const { data: { session } } = await (await import('../lib/supabase')).supabase.auth.getSession();
+      
+      const response = await fetch('/api/v2/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify(subscription)
+      });
+
+      return response.ok;
+    } catch (err) {
+      console.error('[NotificationService] Push Subscription failed:', err);
+      return false;
+    }
+  }
+
+  private urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
   }
 
   private updateTitle(newTitle: string) {

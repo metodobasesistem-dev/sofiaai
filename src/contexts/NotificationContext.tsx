@@ -24,6 +24,15 @@ export const NotificationProvider: React.FC<{ user: User | null, children: React
   useEffect(() => {
     if (!user) return;
 
+    // Push Notification Setup
+    const setupPush = async () => {
+      const permitted = await notificationService.requestPermission();
+      if (permitted) {
+        await notificationService.subscribeToPush();
+      }
+    };
+    setupPush();
+
     // 1. Initial fetch to populate unread counts
     const fetchInitialUnread = async () => {
       const { data } = await supabase

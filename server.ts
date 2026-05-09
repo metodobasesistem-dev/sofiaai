@@ -47,6 +47,7 @@ import { supabase } from './src/backend/lib/supabaseClient.js';
 import { redisService } from './src/backend/services/redisService.js';
 import sessionRoutes from './src/backend/routes/sessionRoutes.js';
 import messageRoutes from './src/backend/routes/messageRoutes.js';
+import pushRoutes from './src/backend/routes/pushRoutes.js';
 import { sessionController } from './src/backend/controllers/sessionController.js';
 import { whatsappService } from './src/backend/services/whatsappService.js';
 import { agentService } from './src/backend/services/agentService.js';
@@ -196,6 +197,7 @@ async function startServer() {
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
     app.use('/api/v2/admin', adminApiRoutes);
+    app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/whatsapp/evolution', whatsappWebhookRoutes); // Novo Webhook
     app.use('/api/leo', leoRoutes);

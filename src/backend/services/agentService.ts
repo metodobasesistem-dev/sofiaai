@@ -90,7 +90,7 @@ export class AgentService {
         if (!skipPersist) {
           await this.persistMessage(threadId, dbUserId, body, 'inbound', messageId, contactName, from, displayPhone);
         }
-        return null;
+        return { status: 'human' } as any;
       }
 
       // 2. Load Agent Config 
