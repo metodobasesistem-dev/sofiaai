@@ -45,7 +45,8 @@ import {
   Edit2,
   Globe,
   Instagram,
-  Download
+  Download,
+  MessageSquare
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
