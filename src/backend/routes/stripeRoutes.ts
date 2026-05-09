@@ -11,7 +11,7 @@ const router = express.Router();
 router.post('/create-checkout', requireAuth, async (req, res) => {
   try {
     const { priceId } = req.body;
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
     const protocol = req.protocol;
     const host = req.get('host');
     const origin = `${protocol}://${host}`;
