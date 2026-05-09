@@ -2711,11 +2711,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </button>
 
           <button 
-            onClick={() => setActiveTab('integrations')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-primary-600' : 'text-slate-400'}`}
+            onClick={() => setActiveTab('quick_replies')}
+            className={`flex flex-col items-center gap-1 ${activeTab === 'quick_replies' ? 'text-primary-600' : 'text-slate-400'}`}
           >
-            <Layers size={24} />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Integrações</span>
+            <MessageSquare size={24} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Atalhos</span>
           </button>
 
           <button 
