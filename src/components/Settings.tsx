@@ -815,7 +815,11 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                       <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{profile?.plano || 'Starter'}</span>
                     </div>
                     <h2 className="text-2xl font-bold">Você está no plano {profile?.plano || 'Starter'}</h2>
-                    <p className="text-primary-100 text-sm opacity-80 mt-1">Sua próxima cobrança será em 15 de Abril, 2024.</p>
+                    <p className="text-primary-100 text-sm opacity-80 mt-1">
+                      {profile?.subscription_ends_at 
+                        ? `Sua próxima cobrança será em ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(profile.subscription_ends_at))}.`
+                        : 'Sua assinatura está ativa.'}
+                    </p>
                   </div>
                 </div>
                 <button className="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-xl text-sm font-bold transition-all">

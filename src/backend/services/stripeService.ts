@@ -57,19 +57,28 @@ export const stripeService = {
     const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
     const priceId = subscription.items.data[0].price.id;
 
-    // Mapeia PriceID para Nome do Plano
-    const priceMap: Record<string, string> = {
-      'price_1TVBlpJ7F68id5vWe22alNFf': 'Starter', // Starter Mensal
-      'price_1TVBlpJ7F68id5vWZ9h12z8C': 'Starter', // Starter Anual
-      'price_1TVBpWJ7F68id5vW4e6Z7KtO': 'Pro',     // Pro Mensal
-      'price_1TVBpWJ7F68id5vW98PWOCmw': 'Pro',     // Pro Anual
-      'price_1TVBqEJ7F68id5vWHAbZMa8G': 'Elite',   // Elite Mensal
-      'price_1TVBqEJ7F68id5vWiRJPCU8a': 'Elite',   // Elite Anual
+    // Mapeia PriceID para Nome do Plano e Ciclo
+    const priceConfig: Record<string, { plano: string, interval: 'month' | 'year' }> = {
+      'price_1TVBlpJ7F68id5vWe22alNFf': { plano: 'Starter', interval: 'month' },
+      'price_1TVBlpJ7F68id5vWZ9h12z8C': { plano: 'Starter', interval: 'year' },
+      'price_1TVBpWJ7F68id5vW4e6Z7KtO': { plano: 'Pro',     interval: 'month' },
+      'price_1TVBpWJ7F68id5vW98PWOCmw': { plano: 'Pro',     interval: 'year' },
+      'price_1TVBqEJ7F68id5vWHAbZMa8G': { plano: 'Elite',   interval: 'month' },
+      'price_1TVBqEJ7F68id5vWiRJPCU8a': { plano: 'Elite',   interval: 'year' },
     };
 
-    const plano = priceMap[priceId] || 'Starter';
+    const config = priceConfig[priceId] || { plano: 'Starter', interval: 'month' };
+    const plano = config.plano;
     
-    console.log(`[StripeService] Payment success for user ${userId}. Plan: ${plano}`);
+    // Calcula a data de expiração
+    const endsAt = new Date();
+    if (config.interval === 'month') {
+      endsAt.setMonth(endsAt.getMonth() + 1);
+    } else {
+      endsAt.setFullYear(endsAt.getFullYear() + 1);
+    }
+    
+    console.log(`[StripeService] Payment success for user ${userId}. Plan: ${plano}, Next billing: ${endsAt.toISOString()}`);
 
     // Atualiza o perfil no Supabase
     const { data, error } = await supabase
@@ -78,6 +87,7 @@ export const stripeService = {
         plano,
         stripe_customer_id: session.customer as string,
         stripe_subscription_id: subscriptionId,
+        subscription_ends_at: endsAt.toISOString(),
         trial_ends_at: null // Remove trial se existir
       })
       .eq('id', userId)

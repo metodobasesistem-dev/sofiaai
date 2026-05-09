@@ -135,6 +135,7 @@ export interface UserProfile {
   whatsapp_phone_number_id?: string;
   sofia_prompt?: string;
   sofia_active?: boolean;
+  subscription_ends_at?: string;
 }
 
 export interface AvailabilityConfig {
