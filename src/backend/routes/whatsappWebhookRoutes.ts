@@ -139,7 +139,7 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 }
 
 async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any, direction: 'inbound' | 'outbound' = 'inbound') {
-  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, raw } = message;
+  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, quotedId, quotedText, raw } = message;
   const cleanPhone = from.split('@')[0].replace(/\D/g, '');
   const isExternal = direction === 'outbound';
 

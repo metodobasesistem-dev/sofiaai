@@ -217,7 +217,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
                         messageContent.contextInfo;
 
     if (contextInfo?.quotedMessage) {
-      quotedId = contextInfo.stanzaId;
+      quotedId = contextInfo.stanzaId || contextInfo.quotedMessage.key?.id;
       const qm = contextInfo.quotedMessage;
       quotedText = qm.conversation || qm.extendedTextMessage?.text || 
                    (qm.imageMessage ? '[Imagem]' : qm.videoMessage ? '[Vídeo]' : qm.audioMessage ? '[Áudio]' : qm.documentMessage ? '[Documento]' : '[Mídia]');
