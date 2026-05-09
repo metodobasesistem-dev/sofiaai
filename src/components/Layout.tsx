@@ -220,12 +220,12 @@ export default function Layout({
     { id: 'integrations', icon: <Plug size={20} />, label: 'Integrações', flag: 'official_api' },
   ];
 
-  // Filtra itens com base nas flags (Admin sempre vê tudo)
+  // Filtra itens com base nas flags (Admin respeita flags desativadas, mas ignora restrição de plano)
   const filteredMenuItems = menuItems.filter(item => {
-    if (role === 'admin') return true;
-    
-    // 1. Feature Flag Check
+    // 1. Feature Flag Check (Soberania do Painel de Controle)
     if (item.flag && flags[item.flag] === false) return false;
+
+    if (role === 'admin') return true;
     
     // 2. Plan Restriction Check
     if (item.minPlan) {

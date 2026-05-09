@@ -539,7 +539,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('quick_replies')}
                 />
               )}
-              {checkPlan('Elite') && (
+              {checkPlan('Elite') && (role === 'admin' || flags['campaigns'] !== false) && (
                 <QuickNavCard 
                   icon={Send} 
                   title="Campanhas" 
