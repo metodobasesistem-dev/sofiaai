@@ -15,6 +15,7 @@ import Overview from './components/Overview';
 import AdminPanel from './components/AdminPanel';
 import Campaigns from './components/Campaigns';
 import QuickReplies from './components/QuickReplies';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LeoApp from './pages/Leo/LeoApp';
 
  import Login from './components/Login';
@@ -264,6 +265,7 @@ export default function App() {
         </Layout>
       )}
       <Toaster position="top-right" richColors />
+      <PWAInstallPrompt />
     </>
   );
 }
