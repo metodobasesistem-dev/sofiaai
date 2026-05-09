@@ -115,6 +115,7 @@ interface Message {
   quoted_id?: string;
   quoted_text?: string;
   status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'sending';
+  is_starred?: boolean;
 }
 
 
@@ -374,7 +375,8 @@ const ChatBubble: React.FC<{
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onReply: (message: Message) => void;
-}> = ({ message, onPreview, onDelete, onReact, onReply }) => {
+  onStar: (messageId: string, currentStatus: boolean) => void;
+}> = ({ message, onPreview, onDelete, onReact, onReply, onStar }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -512,6 +514,12 @@ const ChatBubble: React.FC<{
             <Lock size={9} /> Nota Privada
           </div>
         )}
+
+        {message.is_starred && (
+          <div className={`absolute top-1.5 ${isLead ? '-right-1' : '-left-1'} bg-white rounded-full p-0.5 shadow-sm border border-slate-100 z-10`}>
+            <Star size={10} className="fill-amber-500 text-amber-500" />
+          </div>
+        )}
         
         {renderMediaContent()}
 
@@ -576,6 +584,14 @@ const ChatBubble: React.FC<{
               ))}
             </div>
           </div>
+          
+          <button 
+            onClick={() => onStar(message.id, !!message.is_starred)}
+            className={`p-1.5 rounded-lg transition-all ${message.is_starred ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'}`}
+            title={message.is_starred ? "Remover dos favoritos" : "Favoritar"}
+          >
+            <Star size={14} className={message.is_starred ? "fill-amber-500" : ""} />
+          </button>
           
           <button 
             onClick={() => onReply(message)}
@@ -1760,6 +1776,52 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               })}
             </div>
           </div>
+
+          {/* Mensagens Favoritas */}
+          <div className="pt-4 border-t border-slate-100">
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
+              <span className="flex items-center gap-2"><Star size={14} className="text-amber-500 fill-amber-500" /> Favoritas</span>
+              <span className="bg-amber-500 text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg shadow-amber-500/20">
+                {messages.filter(m => m.is_starred).length}
+              </span>
+            </h4>
+            <div className="space-y-3">
+              {messages.filter(m => m.is_starred).length > 0 ? (
+                messages.filter(m => m.is_starred).map((msg, idx) => (
+                  <div key={idx} className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 hover:border-amber-300 transition-all group cursor-pointer"
+                       onClick={() => {
+                         const el = document.getElementById(`msg-${msg.id}`);
+                         if (el) {
+                           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                           el.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2', 'rounded-2xl');
+                           setTimeout(() => el.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2', 'rounded-2xl'), 2000);
+                         }
+                       }}>
+                    <p className="text-[13px] text-slate-700 line-clamp-3 leading-relaxed">
+                      {msg.text || (msg.message_type === 'image' ? '📸 Imagem' : msg.message_type === 'audio' ? '🎤 Áudio' : '📎 Arquivo')}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-amber-600 font-bold uppercase">
+                      <span>{msg.time}</span>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleToggleStar(msg.id, true); 
+                        }}
+                        className="hover:underline"
+                      >
+                         Remover
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
+                  <Star size={20} className="text-slate-200 mx-auto mb-2" />
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Nenhuma favoritada</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1993,6 +2055,24 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     } catch (err) {
       console.error('Error reacting to message:', err);
       toast.error('Erro ao reagir');
+    }
+  };
+  
+  const handleToggleStar = async (messageId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ is_starred: !currentStatus })
+        .eq('id', messageId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_starred: !currentStatus } : m));
+      toast.success(!currentStatus ? 'Mensagem favoritada! ⭐' : 'Removida dos favoritos');
+    } catch (err) {
+      console.error('Error toggling star:', err);
+      toast.error('Erro ao favoritar mensagem');
     }
   };
 
@@ -2491,14 +2571,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
                     .map(msg => (
-                      <ChatBubble 
-                        key={msg.id} 
-                        message={msg} 
-                        onPreview={setPreviewMedia} 
-                        onDelete={handleDeleteMessage} 
-                        onReact={handleReactToMessage}
-                        onReply={(m) => setReplyingTo(m)}
-                      />
+                      <div key={msg.id} id={`msg-${msg.id}`} className="transition-all duration-500">
+                        <ChatBubble 
+                          key={msg.id} 
+                          message={msg} 
+                          onPreview={setPreviewMedia} 
+                          onDelete={handleDeleteMessage} 
+                          onReact={handleReactToMessage}
+                          onReply={(m) => setReplyingTo(m)}
+                          onStar={handleToggleStar}
+                        />
+                      </div>
                     ))}
                   <div ref={messagesEndRef} />
                 </>
