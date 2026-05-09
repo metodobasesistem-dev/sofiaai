@@ -974,16 +974,50 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   }, [messages, loadingMessages, selectedThreadId]);
 
   // ─── Manuseio do Botão Voltar (Mobile) ─────────────────────────────────────────
+  const lastBackPressRef = useRef<number>(0);
+
   useEffect(() => {
     const handlePopState = () => {
       if (isMobileDetailsOpen) {
         setIsMobileDetailsOpen(false);
       } else if (selectedThreadId) {
         setSelectedThreadId(null);
+      } else {
+        // Estamos na Camada 0 (Lista de Conversas)
+        const now = Date.now();
+        if (now - lastBackPressRef.current < 2000) {
+          // Segunda vez em menos de 2s, permite sair (voltando no histórico real)
+          window.history.back();
+        } else {
+          // Primeira vez ou passou o tempo
+          lastBackPressRef.current = now;
+          toast('Pressione novamente para sair', {
+            duration: 2000,
+            position: 'bottom-center',
+            style: {
+              background: '#334155',
+              color: '#fff',
+              borderRadius: '99px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              border: 'none'
+            }
+          });
+          // Re-injetamos o estado para manter o usuário aqui na próxima tentativa
+          window.history.pushState({ layer: 0 }, '');
+        }
       }
     };
 
     window.addEventListener('popstate', handlePopState);
+    
+    // Injetamos um estado inicial se estivermos no topo para poder interceptar o "voltar"
+    if (!window.history.state || window.history.state.layer === undefined) {
+      window.history.replaceState({ layer: 0 }, '');
+      // Push inicial para ter algo para "voltar" sem sair
+      window.history.pushState({ layer: 0 }, '');
+    }
+
     return () => window.removeEventListener('popstate', handlePopState);
   }, [selectedThreadId, isMobileDetailsOpen]);
 
