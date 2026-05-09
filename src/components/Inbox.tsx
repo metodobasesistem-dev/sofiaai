@@ -2480,10 +2480,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                           initial={{ opacity: 0, scale: 0.95, y: -10 }}
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                          className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-[101] overflow-hidden"
+                          className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-[101] overflow-hidden"
                         >
                           <button 
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center justify-start text-left gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
                             onClick={async () => {
                               setShowMoreMenu(false);
                               const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
@@ -2500,7 +2500,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                           </button>
 
                           <button 
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center justify-start text-left gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
                             onClick={() => {
                               setShowMoreMenu(false);
                               setShowFollowUpModal(true);
@@ -2511,7 +2511,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                           </button>
 
                           <button 
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center justify-start text-left gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
                             onClick={() => {
                               setShowMoreMenu(false);
                               toggleThreadStatus();
@@ -2527,7 +2527,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                           <div className="h-px bg-slate-50 my-1" />
                           
                           <button 
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            className="w-full flex items-center justify-start text-left gap-3 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                             onClick={() => {
                               setShowMoreMenu(false);
                               handleDeleteThread(activeThread);
