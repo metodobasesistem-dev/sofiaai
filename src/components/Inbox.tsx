@@ -253,7 +253,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex items-center gap-1 md:gap-3 bg-slate-50 px-1.5 md:px-4 py-1.5 rounded-2xl border border-slate-100 shadow-sm"
+        className="flex items-center justify-between md:justify-start w-full md:w-auto gap-1 md:gap-3 bg-white px-2 md:px-4 py-1.5 rounded-[26px] border border-slate-200 shadow-sm"
       >
         <button 
           onClick={cancelRecording}
@@ -263,7 +263,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
           <Trash2 size={20} />
         </button>
 
-        <div className="flex items-center gap-1.5 md:gap-3 px-1 md:px-2 border-x border-slate-200">
+        <div className="flex-1 md:flex-initial flex items-center justify-center gap-2 md:gap-3 px-2 md:px-4 border-x border-slate-100">
           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
           <span className="text-slate-700 text-[10px] md:text-xs font-black font-mono w-8 md:w-10">
             {Math.floor(recordingTime / 60)}:{Math.floor(recordingTime % 60).toString().padStart(2, '0')}
@@ -2735,7 +2735,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               )}
               <div className="flex items-end gap-1.5 md:gap-2 max-w-5xl mx-auto w-full relative">
-                <div className="flex-1 bg-white rounded-[26px] shadow-sm flex items-end px-1.5 py-1 min-h-[52px] relative">
+                <div className={`flex-1 bg-white rounded-[26px] shadow-sm flex items-end px-1.5 py-1 min-h-[52px] relative ${isRecording ? 'hidden md:flex' : 'flex'}`}>
                   {/* Emoji Button */}
                   <div className="relative">
                     <button 
@@ -2823,7 +2823,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
 
                 {/* Floating Action Button */}
-                <div className="shrink-0 pb-0.5">
+                <div className={`${isRecording ? 'flex-1 md:shrink-0' : 'shrink-0'} pb-0.5`}>
                   {messageText.trim() ? (
                     <button 
                       onClick={handleSendMessage}
