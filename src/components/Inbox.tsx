@@ -294,10 +294,10 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
     <button
       type="button"
       onClick={startRecording}
-      className="w-11 h-11 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:text-primary-600 hover:bg-primary-50 transition-all duration-300 shadow-sm active:scale-90 shrink-0"
+      className="w-[52px] h-[52px] bg-emerald-500 text-white rounded-full flex items-center justify-center hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-emerald-500/20 active:scale-90 shrink-0"
       title="Gravar áudio"
     >
-      <Mic size={20} />
+      <Mic size={22} />
     </button>
   );
 };
@@ -2665,7 +2665,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               )}
               <div className="flex items-end gap-2 max-w-5xl mx-auto w-full relative">
-                <div className="flex-1 bg-white rounded-[26px] shadow-sm border border-slate-200 flex items-end px-1.5 py-1 min-h-[52px] relative">
+                <div className="flex-1 bg-white rounded-[26px] shadow-sm flex items-end px-1.5 py-1 min-h-[52px] relative">
                   {/* Emoji Button */}
                   <div className="relative">
                     <button 
