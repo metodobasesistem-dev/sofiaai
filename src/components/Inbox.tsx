@@ -493,8 +493,28 @@ const ChatBubble: React.FC<{
   };
   
   return (
-    <div className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[14.5px] leading-relaxed shadow-sm relative break-words transition-all
+    <div className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'} relative overflow-hidden`}>
+      {/* Background Reply Icon (appears when dragging) */}
+      <div className={`absolute inset-y-0 left-0 flex items-center pl-6 pointer-events-none text-primary-500 opacity-0 group-active:opacity-100 transition-opacity`}>
+        <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center">
+          <ChevronLeft size={20} className="rotate-180" />
+        </div>
+      </div>
+
+      <motion.div 
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={{ left: 0, right: 0.6 }}
+        onDragEnd={(_e, info) => {
+          if (info.offset.x > 80) {
+            onReply(message);
+            if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+              window.navigator.vibrate(10);
+            }
+          }
+        }}
+        whileDrag={{ scale: 1.02 }}
+        className={`max-w-[85%] px-3 py-2 rounded-2xl text-[14.5px] leading-relaxed shadow-sm relative break-words z-10 cursor-grab active:cursor-grabbing
         ${isRevoked
           ? 'bg-slate-50 text-slate-400 border border-slate-100 italic'
           : isPrivate 
