@@ -84,7 +84,7 @@ DIRETRIZES:
   1. Use 'search_contacts' para encontrar o telefone dele.
   2. Use o telefone encontrado para chamar 'get_chat_history'.
 - Use as estatísticas acima para dar insights (ex: "Vi que você tem X agendamentos hoje").
-- Se o usuário pedir para criar ou ajustar um agente, use 'upsert_agent'. SEMPRE peça confirmação antes de ativar um agente se as mudanças forem drásticas.
+- Se o usuário pedir para criar ou ajustar um agente (incluindo follow-ups, nome, prompt ou nicho), use 'upsert_agent'. SEMPRE peça confirmação antes de ativar um agente se as mudanças forem drásticas.
 - Horário Atual: ${format(now, 'HH:mm')} de ${format(now, 'dd/MM/yyyy')}.
 
 PROMPT CUSTOMIZADO:
@@ -155,7 +155,19 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
               name: { type: 'string', description: 'Nome do agente' },
               niche: { type: 'string', description: 'Nicho ou área de atuação' },
               prompt: { type: 'string', description: 'Instruções/Prompt de sistema do agente' },
-              active: { type: 'boolean', description: 'Se o agente deve estar ativo' }
+              active: { type: 'boolean', description: 'Se o agente deve estar ativo' },
+              followUps: { 
+                type: 'array', 
+                description: 'Sequência de follow-ups automáticos',
+                items: {
+                  type: 'object',
+                  properties: {
+                    delayMinutes: { type: 'number', description: 'Minutos após o último contato' },
+                    message: { type: 'string', description: 'Mensagem (se for static)' },
+                    type: { type: 'string', enum: ['static', 'ai'], description: 'static (fixa) ou ai (gera texto contextual)' }
+                  }
+                }
+              }
             },
             required: ['name', 'prompt']
           }
@@ -338,11 +350,11 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
 
   async upsertAgent(userId: string, args: any) {
     try {
-      const { name, niche, prompt, active } = args;
+      const { name, niche, prompt, active, followUps } = args;
       
       // Busca se já existe um agente com esse nome para o usuário
       const { data: existing } = await supabase.from('agents')
-        .select('id')
+        .select('id, follow_ups')
         .eq('user_id', userId)
         .eq('nome', name)
         .maybeSingle();
@@ -355,6 +367,10 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
         status_ativo: active !== undefined ? active : true,
         updated_at: new Date().toISOString()
       };
+
+      if (followUps) {
+        payload.follow_ups = followUps;
+      }
 
       if (existing) {
         const { error } = await supabase.from('agents')
