@@ -113,20 +113,14 @@ export class EvolutionProvider implements IWhatsAppProvider {
     };
 
     if (quoted) {
-      // Formato simplificado (Evolution V2)
       payload.quoted = {
-        messageId: quoted.id
-      };
-
-      // Formato complexo (Evolution V1 / Baileys nativo)
-      payload.options.quoted = {
         key: {
           id: quoted.id,
           fromMe: quoted.fromMe,
           remoteJid: remoteJid
         },
         message: {
-          conversation: "..." // Placeholder necessário em algumas versões para habilitar o preview
+          conversation: "..."
         }
       };
     }

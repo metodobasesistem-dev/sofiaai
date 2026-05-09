@@ -467,7 +467,7 @@ class WhatsAppService {
       }
 
       if (quoted) {
-        console.log(`[WhatsAppService] 💬 Quoting message: ${quoted.id} | fromMe: ${quoted.fromMe}`);
+        console.log(`[WhatsAppService] 💬 Quoting: ${quoted.id} | fromMe: ${quoted.fromMe} | remoteJid: ${to}`);
       }
 
       const result = await provider.sendMessage(instanceName, to, message, quoted);
