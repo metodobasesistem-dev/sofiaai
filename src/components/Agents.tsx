@@ -58,6 +58,7 @@ import {
   updateUserProfile,
   type UserProfile,
   listSofiaMessages,
+  deleteSofiaInteraction,
   type SofiaMessage
 } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
@@ -467,6 +468,20 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const handleOpenInteraction = (interaction: any) => {
     setSelectedInteraction(interaction);
     setIsInteractionModalOpen(true);
+  };
+
+  const handleDeleteSofiaInteraction = async (e: React.MouseEvent, interaction: any) => {
+    e.stopPropagation(); // Prevents opening the modal
+    
+    if (!confirm('Deseja realmente excluir esta interação do histórico?')) return;
+
+    try {
+      await deleteSofiaInteraction(interaction.user.id, interaction.assistant?.id);
+      setSofiaHistory(prev => prev.filter(m => m.id !== interaction.user.id && m.id !== interaction.assistant?.id));
+      toast.success('Interação removida do histórico.');
+    } catch (err) {
+      toast.error('Erro ao excluir interação.');
+    }
   };
 
   useEffect(() => {
@@ -1039,8 +1054,17 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                       className="group text-left bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-primary-200/20 hover:-translate-y-1 transition-all flex flex-col h-full"
                     >
                       <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
-                          <Brain size={20} />
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
+                            <Brain size={20} />
+                          </div>
+                          <button 
+                            onClick={(e) => handleDeleteSofiaInteraction(e, interaction)}
+                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            title="Excluir interação"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                         <span className="text-[10px] font-bold text-slate-400">
                           {new Date(interaction.user.created_at).toLocaleDateString('pt-BR')}
@@ -1145,7 +1169,17 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                 )}
               </div>
 
-              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                <button
+                  onClick={(e) => {
+                    handleDeleteSofiaInteraction(e, selectedInteraction);
+                    setIsInteractionModalOpen(false);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-50 rounded-xl text-xs font-bold transition-all"
+                >
+                  <Trash2 size={16} />
+                  Excluir Interação
+                </button>
                 <button
                   onClick={() => setIsInteractionModalOpen(false)}
                   className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all"

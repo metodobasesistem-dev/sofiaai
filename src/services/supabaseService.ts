@@ -752,6 +752,24 @@ export const listSofiaMessages = async (limit = 50): Promise<SofiaMessage[]> => 
   }
 };
 
+export const deleteSofiaInteraction = async (messageId: string, assistantMessageId?: string) => {
+  try {
+    const idsToDelete = [messageId];
+    if (assistantMessageId) idsToDelete.push(assistantMessageId);
+
+    const { error } = await supabase
+      .from('sofia_messages')
+      .delete()
+      .in('id', idsToDelete);
+
+    if (error) throw error;
+    return true;
+  } catch (error: any) {
+    console.error('Error deleting Sofia interaction:', error.message);
+    throw error;
+  }
+};
+
 export const deleteContact = async (contactId: string) => {
   // Note: threads would need to be deleted too if we want parity
   const { error } = await supabase
