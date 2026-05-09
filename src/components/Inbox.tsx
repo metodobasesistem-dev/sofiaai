@@ -582,7 +582,7 @@ const ChatBubble: React.FC<{
             {message.reaction}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {!isRevoked && (
         <div className={`flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
