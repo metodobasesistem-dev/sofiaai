@@ -2446,57 +2446,6 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
 
               <div className="flex items-center gap-1 md:gap-3 shrink-0">
-                <button
-                  onClick={async () => {
-                    const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
-                    const newFunil = newStatus === 'resolved' ? 'Resolvido' : 'Lead';
-                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                    
-                    // Update thread
-                    await supabase.from('threads').update({ ticket_status: newStatus }).eq('id', activeThread.id);
-                    
-                    // Update contact funil status
-                    await supabase.from('contacts').update({ status_funil: newFunil }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, ticketStatus: newStatus, funilStatus: newFunil } : t));
-                    if (newStatus === 'resolved') toast.success('Conversa marcada como resolvida!');
-                  }}
-                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-1.5
-                    ${activeThread.ticketStatus === 'resolved' 
-                      ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700' 
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-                >
-                  <CheckCircle2 size={14} className={activeThread.ticketStatus === 'resolved' ? "text-white" : "text-emerald-500"} />
-                  <span className="hidden md:inline">{activeThread.ticketStatus === 'resolved' ? 'Resolvido' : 'Marcar Resolvido'}</span>
-                </button>
-
-                <button 
-                  onClick={() => setShowFollowUpModal(true)}
-                  className={`p-1.5 rounded-lg transition-all border shadow-sm flex items-center gap-1.5
-                    ${activeThread.pending_followup 
-                      ? 'bg-amber-50 text-amber-600 border-amber-200' 
-                      : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}
-                  title="Agendar Follow-up"
-                >
-                  <Clock size={16} className={activeThread.pending_followup ? 'text-amber-500 animate-pulse' : ''} />
-                </button>
-
-                <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block"></div>
-
-                <button 
-                  onClick={toggleThreadStatus}
-                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm flex items-center gap-2
-                    ${activeThread.status === 'ia' 
-                      ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'}`}
-                >
-                  {activeThread.status === 'ia' ? (
-                    <><User size={14} /> <span className="hidden xl:inline">Assumir</span></>
-                  ) : (
-                    <><Bot size={14} /> <span className="hidden xl:inline">Robô IA</span></>
-                  )}
-                </button>
-
                 <button 
                   onClick={() => {
                     if (window.innerWidth < 1024) {
@@ -2535,13 +2484,44 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                         >
                           <button 
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-                            onClick={() => {
+                            onClick={async () => {
                               setShowMoreMenu(false);
-                              // Add call logic if needed
+                              const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
+                              const newFunil = newStatus === 'resolved' ? 'Resolvido' : 'Lead';
+                              const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                              await supabase.from('threads').update({ ticket_status: newStatus }).eq('id', activeThread.id);
+                              await supabase.from('contacts').update({ status_funil: newFunil }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                              setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, ticketStatus: newStatus, funilStatus: newFunil } : t));
+                              if (newStatus === 'resolved') toast.success('Conversa marcada como resolvida!');
                             }}
                           >
-                            <Phone size={16} className="text-slate-400" />
-                            Ligar (WhatsApp)
+                            <CheckCircle2 size={16} className={activeThread.ticketStatus === 'resolved' ? "text-emerald-600" : "text-slate-400"} />
+                            {activeThread.ticketStatus === 'resolved' ? 'Reabrir Conversa' : 'Marcar como Resolvido'}
+                          </button>
+
+                          <button 
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              setShowFollowUpModal(true);
+                            }}
+                          >
+                            <Clock size={16} className={activeThread.pending_followup ? "text-amber-500" : "text-slate-400"} />
+                            {activeThread.pending_followup ? 'Ver Follow-up' : 'Agendar Follow-up'}
+                          </button>
+
+                          <button 
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              toggleThreadStatus();
+                            }}
+                          >
+                            {activeThread.status === 'ia' ? (
+                              <><User size={16} className="text-slate-400" /> Assumir Atendimento</>
+                            ) : (
+                              <><Bot size={16} className="text-emerald-500" /> Ativar Robô IA</>
+                            )}
                           </button>
                           
                           <div className="h-px bg-slate-50 my-1" />
