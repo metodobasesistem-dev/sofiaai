@@ -95,7 +95,7 @@ class WhatsAppService {
    * Se já existir um agendado, ele será substituído (debounce).
    */
   async scheduleFollowUp(userId: string, from: string, level: number = 0) {
-    const jobId = `followup:${userId}:${from}`;
+    const jobId = `followup-${userId}-${from}`;
     let dbUserId = userId;
     
     try {
@@ -141,7 +141,7 @@ class WhatsAppService {
   async scheduleManualFollowUp(userId: string, from: string, message: string, delayMinutes: number, isAi: boolean = false) {
     const cleanPhone = normalizePhone(from);
     const threadId = `${userId}_${cleanPhone}`;
-    const jobId = `followup:manual:${userId}:${cleanPhone}`;
+    const jobId = `followup-manual-${userId}-${cleanPhone}`;
     const delayMs = delayMinutes * 60 * 1000;
     const scheduledAt = new Date(Date.now() + delayMs).toISOString();
 
@@ -185,8 +185,8 @@ class WhatsAppService {
   async cancelFollowUp(userId: string, from: string) {
     const cleanPhone = normalizePhone(from);
     const threadId = `${userId}_${cleanPhone}`;
-    const autoJobId = `followup:${userId}:${from}`;
-    const manualJobId = `followup:manual:${userId}:${cleanPhone}`;
+    const autoJobId = `followup-${userId}-${from}`;
+    const manualJobId = `followup-manual-${userId}-${cleanPhone}`;
 
     try {
       // Cancela Job Automático
