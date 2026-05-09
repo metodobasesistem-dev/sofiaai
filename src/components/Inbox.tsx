@@ -117,6 +117,7 @@ interface Message {
   quoted_text?: string;
   status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'sending';
   is_starred?: boolean;
+  whatsapp_id?: string;
 }
 
 

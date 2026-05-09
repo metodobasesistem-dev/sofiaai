@@ -440,7 +440,24 @@ class WhatsAppService {
 
       // 3. Chama o provider via Abstração
       const provider = await WhatsAppProviderFactory.getProvider(userId);
-      const result = await provider.sendMessage(instanceName, to, message, quotedMessageId);
+      
+      let quoted = undefined;
+      if (quotedMessageId) {
+        // Busca a direção da mensagem original para saber o fromMe
+        const { data: qMsg } = await supabase
+          .from('messages')
+          .select('direction')
+          .eq('whatsapp_id', quotedMessageId)
+          .eq('user_id', userId)
+          .maybeSingle();
+        
+        quoted = {
+          id: quotedMessageId,
+          fromMe: qMsg?.direction === 'outbound'
+        };
+      }
+
+      const result = await provider.sendMessage(instanceName, to, message, quoted);
       const msgId = (result as any).messageId || (result as any).key?.id || tempId;
 
       // 4. Substitui o registro temporário pelo definitivo com o ID real do WhatsApp

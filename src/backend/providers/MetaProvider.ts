@@ -36,7 +36,7 @@ export class MetaProvider implements IWhatsAppProvider {
     return { status: 'connected' };
   }
 
-  async sendMessage(instanceId: string, to: string, message: string, quotedMessageId?: string): Promise<{ messageId: string }> {
+  async sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean }): Promise<{ messageId: string }> {
     const api = await this.getClient(instanceId);
     const phoneId = process.env.META_PHONE_ID || 'TODO_FETCH_FROM_DB';
     
@@ -49,7 +49,7 @@ export class MetaProvider implements IWhatsAppProvider {
         preview_url: false,
         body: message
       },
-      ...(quotedMessageId ? { context: { message_id: quotedMessageId } } : {})
+      ...(quoted ? { context: { message_id: quoted.id } } : {})
     });
     
     return { messageId: data.messages?.[0]?.id || '' };

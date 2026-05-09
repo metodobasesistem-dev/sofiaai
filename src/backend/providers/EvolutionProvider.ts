@@ -99,15 +99,23 @@ export class EvolutionProvider implements IWhatsAppProvider {
     }
   }
 
-  async sendMessage(instanceId: string, to: string, message: string, quotedMessageId?: string): Promise<{ messageId: string }> {
+  async sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean }): Promise<{ messageId: string }> {
     const cleanNumber = to.replace(/\D/g, '');
+    const remoteJid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@c.us`;
+    
     const { data } = await this.api.post(`/message/sendText/${instanceId}`, {
       number: cleanNumber,
       text: message,
       options: { 
         delay: 1200, 
         presence: 'composing',
-        quoted: quotedMessageId ? { key: { id: quotedMessageId } } : undefined
+        quoted: quoted ? { 
+          key: { 
+            id: quoted.id, 
+            fromMe: quoted.fromMe,
+            remoteJid: remoteJid
+          } 
+        } : undefined
       }
     });
     return { messageId: data.key?.id || data.id || '' };
