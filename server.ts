@@ -63,6 +63,7 @@ import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js
 import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes';
+import stripeRoutes from './src/backend/routes/stripeRoutes.js';
 import { requireAuth } from './src/backend/middleware/authMiddleware.js';
 
 
@@ -89,6 +90,7 @@ async function startServer() {
   
   // REGISTRO DE EMERGÊNCIA - TOPO DO SERVIDOR
   app.use('/api/v2/sofia', sofiaRoutes);
+  app.use('/api/v2/stripe', stripeRoutes);
   
   // 2. Health Checks
   app.get('/api/health-check', async (req, res) => {

@@ -51,13 +51,15 @@ import { toast } from 'sonner';
 interface PlanCardProps {
   name: string;
   price: string;
-  benefits: string[];
   buttonText: string;
   popular?: boolean;
   billingCycle: 'monthly' | 'yearly';
+  priceId: string;
+  onSubscribe: (priceId: string) => void;
+  isLoading?: boolean;
 }
 
-const PlanCard = ({ name, price, benefits, buttonText, popular, billingCycle }: PlanCardProps) => (
+const PlanCard = ({ name, price, benefits, buttonText, popular, billingCycle, priceId, onSubscribe, isLoading }: PlanCardProps) => (
   <div className={`relative bg-white p-8 rounded-2xl border-2 transition-all flex flex-col h-full
     ${popular ? 'border-primary-600 shadow-xl shadow-primary-100 scale-105 z-10' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
     
@@ -102,12 +104,21 @@ const PlanCard = ({ name, price, benefits, buttonText, popular, billingCycle }: 
       })}
     </ul>
 
-    <button className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
+    <button 
+      onClick={() => onSubscribe(priceId)}
+      disabled={isLoading}
+      className={`w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
       ${popular 
         ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-md shadow-primary-200' 
-        : 'bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-      {buttonText}
-      <ArrowRight size={16} />
+        : 'bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50'}
+      disabled:opacity-50
+    `}>
+      {isLoading ? <Loader2 size={18} className="animate-spin" /> : (
+        <>
+          {buttonText}
+          <ArrowRight size={16} />
+        </>
+      )}
     </button>
   </div>
 );
@@ -125,6 +136,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab || 'account');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isSubscribing, setIsSubscribing] = useState<string | null>(null);
   const [isExpired, setIsExpired] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
 
@@ -218,6 +230,39 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
     } finally {
       window.location.replace('/');
     }
+  };
+
+  const handleSubscribe = async (priceId: string) => {
+    try {
+      setIsSubscribing(priceId);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/v2/stripe/create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ priceId })
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Erro ao criar sessão de checkout');
+      }
+    } catch (error: any) {
+      console.error('[Subscribe] Error:', error);
+      toast.error(error.message);
+    } finally {
+      setIsSubscribing(null);
+    }
+  };
+  
+  const getInitials = (name: string | null | undefined) => {
+    return name ? name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) : 'US';
   };
 
   const [isLoading, setIsLoading] = useState(true);
@@ -816,6 +861,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     name="Starter"
                     price={billingCycle === 'monthly' ? "R$ 37,90" : "R$ 379"}
                     billingCycle={billingCycle}
+                    priceId={billingCycle === 'monthly' ? 'price_1TVBlpJ7F68id5vWe22alNFf' : 'price_1TVBlpJ7F68id5vWZ9h12z8C'}
+                    onSubscribe={handleSubscribe}
+                    isLoading={isSubscribing === (billingCycle === 'monthly' ? 'price_1TVBlpJ7F68id5vWe22alNFf' : 'price_1TVBlpJ7F68id5vWZ9h12z8C')}
                     benefits={[
                       "Inbox (Chat Manual)",
                       "Dashboard de Métricas",
@@ -834,6 +882,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     price={billingCycle === 'monthly' ? "R$ 167,90" : "R$ 1.679"}
                     popular={true}
                     billingCycle={billingCycle}
+                    priceId={billingCycle === 'monthly' ? 'price_1TVBpWJ7F68id5vW4e6Z7KtO' : 'price_1TVBpWJ7F68id5vW98PWOCmw'}
+                    onSubscribe={handleSubscribe}
+                    isLoading={isSubscribing === (billingCycle === 'monthly' ? 'price_1TVBpWJ7F68id5vW4e6Z7KtO' : 'price_1TVBpWJ7F68id5vW98PWOCmw')}
                     benefits={[
                       "Tudo do plano Starter",
                       "Até 3 Agentes de IA ativos",
@@ -850,6 +901,9 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                     name="Elite"
                     price={billingCycle === 'monthly' ? "R$ 327,90" : "R$ 3.279"}
                     billingCycle={billingCycle}
+                    priceId={billingCycle === 'monthly' ? 'price_1TVBqEJ7F68id5vWHAbZMa8G' : 'price_1TVBqEJ7F68id5vWiRJPCU8a'}
+                    onSubscribe={handleSubscribe}
+                    isLoading={isSubscribing === (billingCycle === 'monthly' ? 'price_1TVBqEJ7F68id5vWHAbZMa8G' : 'price_1TVBqEJ7F68id5vWiRJPCU8a')}
                     benefits={[
                       "[H] IA Sofia (Co-piloto Autônomo)",
                       "Campanhas e Broadcast",
