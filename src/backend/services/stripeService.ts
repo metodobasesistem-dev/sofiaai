@@ -72,7 +72,7 @@ export const stripeService = {
     console.log(`[StripeService] Payment success for user ${userId}. Plan: ${plano}`);
 
     // Atualiza o perfil no Supabase
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .update({ 
         plano,
@@ -80,11 +80,18 @@ export const stripeService = {
         stripe_subscription_id: subscriptionId,
         trial_ends_at: null // Remove trial se existir
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
 
     if (error) {
-      console.error('[StripeService] Error updating profile:', error);
+      console.error('[StripeService] ❌ Error updating profile in database:', error);
       throw error;
+    }
+
+    if (data && data.length > 0) {
+      console.log(`[StripeService] ✅ Profile updated successfully for user ${userId}. New plan: ${data[0].plano}`);
+    } else {
+      console.warn(`[StripeService] ⚠️ Profile update returned no data for user ${userId}. Check if the ID exists.`);
     }
   }
 };
