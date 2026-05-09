@@ -197,16 +197,21 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
           { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
           (payload) => {
             console.log('[Settings] Profile updated in realtime:', payload.new);
-            setProfile(payload.new as UserProfile);
-            // Atualiza o formulário também se necessário
             const newData = payload.new as UserProfile;
+            
+            // Só mostra o brinde se o plano REALMENTE mudou
+            setProfile(prev => {
+              if (prev && prev.plano !== newData.plano) {
+                toast.success(`Plano atualizado: ${newData.plano}`);
+              }
+              return newData;
+            });
+
             setFormData(prev => ({
               ...prev,
               nome_completo: newData.nome_completo || prev.nome_completo,
               nome_empresa: newData.nome_empresa || prev.nome_empresa,
-              plano: newData.plano || prev.plano
             }));
-            toast.success(`Plano atualizado: ${newData.plano}`);
           }
         )
         .subscribe();
