@@ -812,11 +812,10 @@ class WhatsAppService {
           .eq('direction', 'inbound');
         
         if (count === 1) {
-          const leadNotifiedKey = `notified_lead:${from}`;
-          const alreadyLeadNotified = await redisService.get(leadNotifiedKey);
+          // Usa o ID da mensagem para garantir que aquela mensagem específica só notifique uma vez
+          const wasFirstLead = await redisService.markAsProcessed(`push_notified_lead:${messageId}`, 3600);
 
-          if (!alreadyLeadNotified) {
-            await redisService.set(leadNotifiedKey, '1', 3600);
+          if (wasFirstLead) {
             console.log(`[WhatsAppService] 🆕 New lead detected: ${from}. Sending notification.`);
             
             // Send Push Notification
@@ -835,20 +834,20 @@ class WhatsAppService {
       // 🛡️ PROTEÇÃO: Se a IA não retornou resposta (ex: modo humano ou ignorado), para por aqui sem quebrar
       if (!aiResponse || (typeof aiResponse === 'object' && (aiResponse as any).status === 'human')) {
         const isHuman = aiResponse && (aiResponse as any).status === 'human';
-        // 🚀 DEDUPLICAÇÃO DE NOTIFICAÇÃO: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
-        const notifiedKey = `notified:${messageId}`;
-        const alreadyNotified = await redisService.get(notifiedKey);
+        // 🚀 DEDUPLICAÇÃO ATÔMICA: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
+        // Usamos 'markAsProcessed' que faz um SET NX (apenas se não existir) de forma atômica no Redis.
+        const wasFirst = await redisService.markAsProcessed(`push_notified:${messageId}`, 3600);
         
-        if (!alreadyNotified) {
-          await redisService.set(notifiedKey, '1', 3600); // Expira em 1 hora
-
-          // Send Push Notification
+        if (wasFirst) {
+          console.log(`[WhatsAppService] 🔔 Sending first notification for msg ${messageId}`);
           await PushNotificationService.sendPushNotification(
             userId,
             `🔔 ${contactName || 'Cliente'} enviou mensagem`,
             finalBody,
             `/inbox?jid=${from}`
           );
+        } else {
+          console.log(`[WhatsAppService] 🛡️ Skipping duplicate notification for msg ${messageId}`);
         }
 
         return;
