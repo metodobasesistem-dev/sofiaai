@@ -437,7 +437,7 @@ class WhatsAppService {
         thread_id: threadId,
         text: message,
         direction: 'outbound',
-        is_ai: true,
+        is_ai: senderType === 'IA', // BUG FIX: respect senderType correctly
         status: 'sending',
         timestamp: sendTimestamp,
         created_at: new Date(sendTimestamp).toISOString(),
@@ -483,10 +483,12 @@ class WhatsAppService {
           thread_id: threadId,
           text: message,
           direction: 'outbound',
-      is_ai: true,
+          is_ai: senderType === 'IA', // BUG FIX: respect senderType correctly
           status: 'sent',
           timestamp: sendTimestamp,
           created_at: new Date(sendTimestamp).toISOString(),
+          quoted_id: quoted?.id,   // BUG FIX: propagate quoted context to definitive record
+          quoted_text: quoted?.text
         });
 
         if (error) {
@@ -805,8 +807,7 @@ class WhatsAppService {
 
       // 🛡️ PROTEÇÃO: Se a IA não retornou resposta (ex: modo humano ou ignorado), para por aqui sem quebrar
       if (!aiResponse || (typeof aiResponse === 'object' && (aiResponse as any).status === 'human')) {
-        const isHuman = aiResponse && (aiResponse as any).status === 'human';
-        
+        // Modo Humano: notificar operador pois é ele quem precisa responder
         // 🚀 DEDUPLICAÇÃO ATÔMICA: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
         // Independente se é New Lead ou mensagem comum
         const wasFirstId = await redisService.markAsProcessed(`push_notified:${messageId}`, 3600);

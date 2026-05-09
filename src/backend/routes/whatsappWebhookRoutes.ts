@@ -164,7 +164,8 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     const base64 = await provider.getMediaBase64(instanceName, raw?.key, raw?.message);
     if (!base64) {
       console.warn(`[Webhook] Could not get base64 for media message: ${messageId}`);
-      await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal);
+      // BUG FIX: Pass quotedId/quotedText even in fallback path
+      await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText);
       return;
     }
 
@@ -197,7 +198,10 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
       if (type === 'audio' && transcription) {
         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
       } else if (type === 'image' || type === 'video') {
-         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption || (type === 'image' ? '[Imagem]' : '[Vídeo]'), contactName, cleanPhone, messageId, false, mediaUrl, mimeType);
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption || (type === 'image' ? '[Imagem]' : '[Vídeo]'), contactName, cleanPhone, messageId, false, mediaUrl, mimeType);
+      } else if (type === 'document') {
+        // BUG FIX: Documents were silently dropped. Now AI is informed.
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, `[Documento recebido: ${fileName || 'arquivo'}]`, contactName, cleanPhone, messageId, false);
       }
     }
   } catch (err) {
