@@ -1380,7 +1380,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             caption: d.caption,
             is_external: d.is_external,
             reaction: d.reaction,
-            whatsapp_id: d.whatsapp_id
+            whatsapp_id: d.whatsapp_id,
+            status: d.status
           }));
           setMessages(formatted as any);
         }
