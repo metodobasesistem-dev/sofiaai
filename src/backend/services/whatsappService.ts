@@ -393,7 +393,7 @@ class WhatsAppService {
 
   async destroySession(userId: string) { await this.logout(userId); }
 
-  async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente'): Promise<any> {
+  async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente', quotedMessageId?: string): Promise<any> {
     const instanceName = `wppai_${userId.substring(0, 8)}`;
     const cleanTo = normalizePhone(to);
     const threadId = `${userId}_${cleanTo}`;
@@ -440,7 +440,7 @@ class WhatsAppService {
 
       // 3. Chama o provider via Abstração
       const provider = await WhatsAppProviderFactory.getProvider(userId);
-      const result = await provider.sendMessage(instanceName, to, message);
+      const result = await provider.sendMessage(instanceName, to, message, quotedMessageId);
       const msgId = (result as any).messageId || (result as any).key?.id || tempId;
 
       // 4. Substitui o registro temporário pelo definitivo com o ID real do WhatsApp

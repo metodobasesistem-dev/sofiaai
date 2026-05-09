@@ -57,14 +57,14 @@ class SessionController {
   }
 
   async sendMessage(req: Request, res: Response) {
-    let { userId, to, message } = req.body;
-    console.log(`[SessionController] 📩 sendMessage request: User=${userId}, To=${to}, Msg=${message.substring(0, 20)}...`);
+    let { userId, to, message, quotedMessageId } = req.body;
+    console.log(`[SessionController] 📩 sendMessage request: User=${userId}, To=${to}, Msg=${message.substring(0, 20)}..., Quoted=${quotedMessageId || 'None'}`);
     if (!userId || !to || !message) {
       return res.status(400).json({ error: 'Missing userId, to, or message' });
     }
 
     try {
-      const result = await whatsappService.sendMessage(userId, to, message);
+      const result = await whatsappService.sendMessage(userId, to, message, 'Atendente', 'Atendente', quotedMessageId);
       res.json(result);
     } catch (error: any) {
       console.error('Error sending message:', error);

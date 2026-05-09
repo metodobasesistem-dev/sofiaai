@@ -96,7 +96,7 @@ export const getWhatsAppStatus = async (): Promise<WhatsAppStatusResponse> => {
 /**
  * Send a WhatsApp message via the backend API.
  */
-export const sendMessage = async (to: string, message: string) => {
+export const sendMessage = async (to: string, message: string, quotedMessageId?: string) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
@@ -109,6 +109,7 @@ export const sendMessage = async (to: string, message: string) => {
       userId: user.id,
       to,
       message,
+      quotedMessageId,
     }),
   });
 

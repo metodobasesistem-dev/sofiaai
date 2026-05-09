@@ -110,6 +110,9 @@ interface Message {
   caption?: string;
   is_external?: boolean;
   reaction?: string;
+  quoted_id?: string;
+  quoted_text?: string;
+  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'sending';
 }
 
 
@@ -349,7 +352,11 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
           : "text-[13px] truncate leading-tight flex-1 mr-2 font-normal text-slate-500"}>
           {thread.lastMessage || 'Inicie uma conversa'}
         </p>
-        {(thread.unreadCount ?? 0) > 0 && (
+        {(thread as any).isTyping ? (
+          <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
+            Digitando...
+          </span>
+        ) : (thread.unreadCount ?? 0) > 0 && (
           <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm">
             {thread.unreadCount}
           </span>
@@ -364,7 +371,8 @@ const ChatBubble: React.FC<{
   onPreview: (media: any) => void;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
-}> = ({ message, onPreview, onDelete, onReact }) => {
+  onReply: (message: Message) => void;
+}> = ({ message, onPreview, onDelete, onReact, onReply }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -490,6 +498,13 @@ const ChatBubble: React.FC<{
               ? 'bg-[#dcf8c6] text-slate-800 rounded-tr-none' 
               : 'bg-white text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
         
+        {message.quoted_text && (
+          <div className={`mb-2 p-2 rounded-lg border-l-4 text-xs truncate max-w-full
+            ${!isLead ? 'bg-black/5 border-primary-500 text-slate-600' : 'bg-slate-50 border-primary-500 text-slate-500'}`}>
+            {message.quoted_text}
+          </div>
+        )}
+
         {isPrivate && (
           <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase" title="Esta é uma nota interna visível apenas para você">
             <Lock size={9} /> Nota Privada
@@ -516,7 +531,19 @@ const ChatBubble: React.FC<{
         <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-50 justify-end ${!isLead && !isRevoked ? 'text-[#075e54]' : 'text-slate-400'}`}>
           {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
           {message.time}
-          {!isLead && !isPrivate && !isRevoked && <CheckCheck size={14} className="ml-1 text-[#34b7f1]" />}
+          {!isLead && !isPrivate && !isRevoked && (
+            <>
+              {(message as any).status === 'read' ? (
+                <CheckCheck size={14} className="ml-1 text-[#34b7f1]" />
+              ) : (message as any).status === 'delivered' ? (
+                <CheckCheck size={14} className="ml-1 text-slate-400" />
+              ) : (message as any).status === 'sent' ? (
+                <Check size={14} className="ml-1 text-slate-400" />
+              ) : (
+                <Clock size={10} className="ml-1 text-slate-400" />
+              )}
+            </>
+          )}
         </div>
 
         {message.reaction && (
@@ -535,18 +562,26 @@ const ChatBubble: React.FC<{
             >
               <Smile size={14} />
             </button>
-            <div className="absolute bottom-full mb-2 left-0 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 hidden group-focus-within/emoji:flex gap-1.5 z-[100] animate-in slide-in-from-bottom-2 duration-200">
-              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+            <div className="absolute bottom-full mb-2 left-0 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 hidden group-focus-within/emoji:grid grid-cols-6 gap-1.5 z-[100] animate-in slide-in-from-bottom-2 duration-200 min-w-[220px]">
+              {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '💡', '✅', '❌', '🚀', '👀', '🤔', '💯', '⭐', '🤝'].map(emoji => (
                 <button 
                   key={emoji}
                   onClick={() => onReact(message.id, emoji)}
-                  className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[16px] hover:scale-125"
+                  className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[18px] hover:scale-125"
                 >
                   {emoji}
                 </button>
               ))}
             </div>
           </div>
+          
+          <button 
+            onClick={() => onReply(message)}
+            className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
+            title="Responder"
+          >
+            <ChevronLeft size={14} className="rotate-180" />
+          </button>
           
           <button 
             onClick={() => onDelete(message.id)}
@@ -813,6 +848,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
 
   useEffect(() => {
     contactsRef.current = contacts;
@@ -1844,9 +1880,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
 
     try {
+      const currentQuotedId = replyingTo?.id;
+      setReplyingTo(null);
+
       // Fase 4: apenas envia — o banco é atualizado pelo backend (Fase 2)
       // e o Realtime listener reflete a mensagem assim que for inserida.
-      await sendMessage(activeThread.remoteJid, finalMessageText);
+      await sendMessage(activeThread.remoteJid, finalMessageText, currentQuotedId);
 
       // Atualiza status da thread para 'human'
       await supabase
@@ -2253,8 +2292,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
                   </h3>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span className="text-[11px] text-slate-500 font-medium truncate">Online via WhatsApp</span>
+                    {(activeThread as any).isTyping ? (
+                      <span className="text-[11px] text-emerald-500 font-bold animate-pulse">Digitando...</span>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span className="text-[11px] text-slate-500 font-medium truncate">Online via WhatsApp</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2374,7 +2419,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
                     .map(msg => (
-                      <ChatBubble key={msg.id} message={msg} onPreview={setPreviewMedia} onDelete={handleDeleteMessage} onReact={handleReactToMessage} />
+                      <ChatBubble 
+                        key={msg.id} 
+                        message={msg} 
+                        onPreview={setPreviewMedia} 
+                        onDelete={handleDeleteMessage} 
+                        onReact={handleReactToMessage}
+                        onReply={(m) => setReplyingTo(m)}
+                      />
                     ))}
                   <div ref={messagesEndRef} />
                 </>
@@ -2399,6 +2451,25 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
             {/* Input Area */}
             <div className="p-2 border-t border-slate-200 bg-[#f0f2f5] shrink-0 relative">
+              {replyingTo && (
+                <div className="mx-2 mb-2 bg-white rounded-xl border-l-4 border-primary-500 p-3 shadow-sm flex items-start justify-between animate-in slide-in-from-bottom-2 duration-200">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-primary-600 uppercase tracking-widest mb-1">
+                      Respondendo a {replyingTo.sender === 'lead' ? activeThread.name : 'Você'}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate leading-relaxed">
+                      {replyingTo.text || (replyingTo.message_type === 'image' ? '📸 Imagem' : replyingTo.message_type === 'audio' ? '🎤 Áudio' : '📎 Arquivo')}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 text-slate-400 hover:text-red-500 transition-all"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               {showSlashMenu && (
                 <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[60]">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
