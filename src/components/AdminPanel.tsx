@@ -871,6 +871,15 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 uppercase">Dias</span>
                        </div>
                     </div>
+
+                    <button 
+                       onClick={handleSaveSettings}
+                       disabled={isActionLoading}
+                       className="w-full mt-8 py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl"
+                     >
+                       {isActionLoading ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                       Aplicar Segurança
+                     </button>
                  </div>
               </div>
 
