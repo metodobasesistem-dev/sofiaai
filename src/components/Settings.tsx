@@ -1084,6 +1084,7 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
     </div>
   );
 }

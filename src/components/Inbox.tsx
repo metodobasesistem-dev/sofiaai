@@ -1400,13 +1400,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar bg-white relative">
         {/* Perfil Header */}
-        <div className="p-8 border-b border-slate-100 text-center bg-slate-50/30 relative overflow-hidden">
+        <div className="p-5 border-b border-slate-100 text-center bg-slate-50/30 relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[140%] opacity-[0.03] pointer-events-none" 
                style={{ backgroundImage: `url(${activeThread.profilePictureUrl || ''})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(40px)' }}></div>
           
           <div className="relative z-10">
-            <div className="w-28 h-28 rounded-[2.5rem] bg-white text-slate-400 flex items-center justify-center mx-auto mb-6 border border-slate-200/50 shadow-xl overflow-hidden group">
+            <div className="w-20 h-20 rounded-[1.5rem] bg-white text-slate-400 flex items-center justify-center mx-auto mb-4 border border-slate-200/50 shadow-xl overflow-hidden group">
               {activeThread.profilePictureUrl ? (
                 <img src={activeThread.profilePictureUrl} alt={activeThread.name} className="w-full h-full object-cover" />
               ) : (
@@ -1474,7 +1474,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                  {activeThread.remoteJid.split('@')[0]}
                </span>
             </div>
-            <div className="mt-6 px-8">
+            <div className="mt-4 px-4">
                <button 
                 onClick={() => setShowTrackingModal(true)}
                 className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[11px] transition-all
@@ -1490,7 +1490,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
         </div>
 
-        <div className="p-8 space-y-10">
+        <div className="p-5 space-y-8">
           {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
@@ -1660,8 +1660,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               </div>
               
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary-50 flex items-center justify-center text-primary-600 shrink-0 border border-primary-100 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600 shrink-0 border border-primary-100 shadow-sm">
                   <Clock size={18} />
                 </div>
                 <div>
@@ -2208,7 +2208,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         </div>
       ) : (
         <>
-          <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[35%] lg:w-[30%] border-r border-gray-100 flex-col bg-gray-50/30`}>
+          <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[32%] lg:w-[26%] border-r border-gray-100 flex-col bg-gray-50/30`}>
         <div className="p-4 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
@@ -2644,7 +2644,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       {selectedThreadId && activeThread && showDetails && (
         <motion.div 
           initial={{ opacity: 0, width: 0 }}
-          animate={{ opacity: 1, width: '28%' }}
+          animate={{ opacity: 1, width: '22%' }}
           className="hidden lg:flex border-l border-gray-100 flex-col bg-white overflow-hidden"
         >
           {renderContactDetails()}
