@@ -450,7 +450,7 @@ class WhatsAppService {
         // Tentamos buscar por whatsapp_id ou pelo ID interno (UUID) para maior robustez.
         const { data: qMsg } = await supabase
           .from('messages')
-          .select('direction, whatsapp_id')
+          .select('direction, whatsapp_id, text')
           .or(`whatsapp_id.eq.${quotedMessageId},id.eq.${quotedMessageId}`)
           .eq('user_id', userId)
           .maybeSingle();
@@ -458,11 +458,12 @@ class WhatsAppService {
         if (qMsg) {
           quoted = {
             id: qMsg.whatsapp_id || quotedMessageId,
-            fromMe: qMsg.direction === 'outbound' || qMsg.direction === 'sent' || qMsg.direction === 'delivered'
+            fromMe: qMsg.direction === 'outbound' || qMsg.direction === 'sent' || qMsg.direction === 'delivered',
+            text: qMsg.text || '...'
           };
         } else {
           // Fallback se não encontrar no banco (assume que é do cliente por segurança)
-          quoted = { id: quotedMessageId, fromMe: false };
+          quoted = { id: quotedMessageId, fromMe: false, text: '...' };
         }
       }
 

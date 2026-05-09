@@ -53,7 +53,7 @@ export interface IWhatsAppProvider {
   /**
    * Sends a simple text message
    */
-  sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean }): Promise<{ messageId: string }>;
+  sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean, text?: string }): Promise<{ messageId: string }>;
 
   /**
    * Sends media (image, video, document)

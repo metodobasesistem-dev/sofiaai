@@ -99,7 +99,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     }
   }
 
-  async sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean }): Promise<{ messageId: string }> {
+  async sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean, text?: string }): Promise<{ messageId: string }> {
     const cleanNumber = to.replace(/\D/g, '');
     const remoteJid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@s.whatsapp.net`;
     
@@ -120,7 +120,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
           remoteJid: remoteJid
         },
         message: {
-          conversation: "..."
+          conversation: quoted.text || "..."
         }
       };
     }
