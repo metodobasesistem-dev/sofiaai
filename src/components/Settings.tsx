@@ -24,7 +24,8 @@ import {
   LogOut,
   Settings as SettingsIcon,
   ShieldAlert,
-  Brain
+  Brain,
+  Sparkles
 } from 'lucide-react';
 import PWADiagnostic from './PWADiagnostic';
 
