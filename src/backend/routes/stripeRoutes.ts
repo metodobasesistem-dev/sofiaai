@@ -38,13 +38,12 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
  * Webhook do Stripe (Não requer Auth, o Stripe autentica via assinatura)
  * POST /api/v2/stripe/webhook
  */
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-
+router.post('/webhook', async (req, res) => {
   try {
-    // Nota: Em produção, devemos validar a assinatura aqui usando process.env.STRIPE_WEBHOOK_SECRET
-    // Por enquanto, processamos direto para facilitar o setup inicial
-    const event = JSON.parse(req.body);
+    // Como o express.json() já está ativo no server.ts, o req.body já é um objeto
+    const event = req.body;
+
+    console.log(`[StripeWebhook] Received event type: ${event.type}`);
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
