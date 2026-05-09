@@ -2109,8 +2109,16 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }>
       {isFullscreen && (
         <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 hidden md:flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>
-          <div className="w-10 h-10 rounded-xl overflow-hidden mb-8 shadow-lg shadow-primary-500/20 border border-slate-700 bg-slate-800">
-            <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover" />
+          <div className="flex items-center gap-3 mb-8 px-2">
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-primary-500/20 border border-slate-700 bg-slate-800 shrink-0">
+              <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover" />
+            </div>
+            {isSidebarExpanded && (
+              <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-300">
+                <span className="text-white font-black text-sm tracking-tight">Chat Sofia</span>
+                <span className="text-primary-500 text-[9px] font-bold uppercase tracking-widest">Inteligência</span>
+              </div>
+            )}
           </div>
           
           <div className="flex flex-col gap-4 w-full px-2">

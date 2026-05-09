@@ -7,6 +7,11 @@ export default function PWAInstallPrompt() {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    setIsFullscreen(window.location.search.includes('fullscreen=true'));
+  }, []);
 
   useEffect(() => {
     // Detect platform
@@ -79,12 +84,12 @@ export default function PWAInstallPrompt() {
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-primary-600 p-0.5 shadow-lg shadow-primary-200 overflow-hidden border border-white/20">
-                  <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover rounded-[14px]" />
+                <div className="w-14 h-14 rounded-2xl bg-slate-900 p-0.5 shadow-lg shadow-primary-200 overflow-hidden border border-white/20">
+                  <img src={isFullscreen ? "/sofia-face.png" : "/sofiamini.png"} alt="App Icon" className="w-full h-full object-cover rounded-[14px]" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 text-lg tracking-tight">Chat Sofia</h3>
-                  <p className="text-xs text-slate-500 font-medium">Instale para acesso rápido</p>
+                  <h3 className="font-black text-slate-900 text-lg tracking-tight">{isFullscreen ? "Chat Sofia" : "Zyreo Sofia"}</h3>
+                  <p className="text-xs text-slate-500 font-medium">Instale o aplicativo {isFullscreen ? "de atendimento" : "completo"}</p>
                 </div>
               </div>
               <button 
@@ -124,7 +129,7 @@ export default function PWAInstallPrompt() {
             ) : (
               <div className="space-y-4">
                 <p className="text-[13px] text-slate-600 leading-relaxed">
-                  Adicione o **Chat Sofia** à sua tela inicial para uma experiência de aplicativo completa e mais rápida.
+                  Adicione o **{isFullscreen ? "Chat Sofia" : "Zyreo Sofia"}** à sua tela inicial para uma experiência de aplicativo completa e mais rápida.
                 </p>
                 <div className="flex gap-3">
                   <button 

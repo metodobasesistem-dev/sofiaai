@@ -6,12 +6,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chat Sofia</title>
     <link rel="icon" type="image/png" href="sofiamini.png" />
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#7C3AED" />
-    <link rel="apple-touch-icon" href="sofia-face.png" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Chat Sofia">
+
+    <!-- Dynamic PWA Manifest and Icons -->
+    <script>
+      (function() {
+        const isFullscreen = window.location.search.includes('fullscreen=true');
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = isFullscreen ? 'manifest-sofia.json' : 'manifest-zyreo.json';
+        document.head.appendChild(manifestLink);
+
+        const appleIcon = document.createElement('link');
+        appleIcon.rel = 'apple-touch-icon';
+        appleIcon.href = isFullscreen ? 'sofia-face.png' : 'sofiamini.png';
+        document.head.appendChild(appleIcon);
+
+        const favicon = document.createElement('link');
+        favicon.rel = 'icon';
+        favicon.type = 'image/png';
+        favicon.href = isFullscreen ? 'sofia-face.png' : 'sofiamini.png';
+        document.head.appendChild(favicon);
+
+        if (isFullscreen) {
+          document.title = "Chat Sofia";
+        }
+      })();
+    </script>
 
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />

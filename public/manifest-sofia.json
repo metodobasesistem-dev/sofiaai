@@ -2,7 +2,7 @@
   "name": "Chat Sofia",
   "short_name": "Chat Sofia",
   "description": "Sua assistente inteligente de atendimento",
-  "start_url": "/",
+  "start_url": "/?fullscreen=true",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#7C3AED",
@@ -11,12 +11,14 @@
     {
       "src": "sofia-face.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "sofia-face.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
