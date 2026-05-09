@@ -2481,7 +2481,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
-            <div className="h-16 px-2 md:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
+            <div className="h-16 px-2 md:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-sm z-[40]">
               <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                 <button 
                   onClick={() => window.history.back()}
@@ -2543,14 +2543,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     {showMoreMenu && (
                       <>
                         <div 
-                          className="fixed inset-0 z-[100]" 
+                          className="fixed inset-0 z-[998]" 
                           onClick={() => setShowMoreMenu(false)}
                         />
                         <motion.div
                           initial={{ opacity: 0, scale: 0.95, y: -10 }}
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                          className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-[101] overflow-hidden"
+                          className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-[999] overflow-hidden"
                         >
                           <button 
                             className="w-full flex items-center justify-start text-left gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"

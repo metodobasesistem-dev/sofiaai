@@ -513,44 +513,6 @@ class WhatsAppService {
     }
   }
 
-  /**
-   * Envia uma notificação via WhatsApp para o telefone do dono da conta (atendente).
-   * Utiliza a coluna 'notification_phone' da tabela profiles.
-   */
-  async sendAgentNotification(userId: string, customerPhone: string, customerName: string, messageText: string, reason: 'human_mode' | 'no_agent' | 'new_lead' = 'human_mode') {
-    try {
-      // 1. Buscar o perfil para obter o notification_phone
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('notification_phone, whatsapp_instance_id')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!profile?.notification_phone) {
-        console.log(`[WhatsAppService] 🔕 Notification skipped for user ${userId}: No notification_phone configured.`);
-        return;
-      }
-
-      const cleanPhone = profile.notification_phone.replace(/\D/g, '');
-      const instanceName = profile.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
-      
-      let header = '🔔 *Nova Mensagem*';
-      if (reason === 'human_mode') header = '👤 *Atendimento Humano Requerido*';
-      if (reason === 'new_lead') header = '🆕 *Novo Lead Recebido*';
-
-      const alertMsg = `${header}\n\n` +
-                       `*Cliente:* ${customerName || 'Lead'} (${customerPhone})\n` +
-                       `*Mensagem:* ${messageText.substring(0, 500)}${messageText.length > 500 ? '...' : ''}\n\n` +
-                       `_Acesse o painel para responder._`;
-
-      console.log(`[WhatsAppService] 📤 Sending agent notification to ${cleanPhone} via ${instanceName}`);
-      
-      // Enviamos diretamente via EvolutionApiService para ser mais rápido e evitar queues
-      await EvolutionApiService.sendMessage(instanceName, cleanPhone, alertMsg);
-    } catch (err) {
-      console.error('[WhatsAppService] Failed to send agent notification:', err);
-    }
-  }
 
   async deleteMessage(userId: string, messageId: string) {
     try {
@@ -840,7 +802,6 @@ class WhatsAppService {
         
         if (count === 1) {
           console.log(`[WhatsAppService] 🆕 New lead detected: ${from}. Sending notification.`);
-          await this.sendAgentNotification(userId, displayPhone || from.split('@')[0], contactName || 'Novo Lead', finalBody, 'new_lead');
           
           // Send Push Notification
           await PushNotificationService.sendPushNotification(
@@ -859,14 +820,6 @@ class WhatsAppService {
         const isHuman = aiResponse && (aiResponse as any).status === 'human';
         console.log(`[WhatsAppService] ℹ️ AI skipped response for ${from} (${isHuman ? 'Human Mode' : 'No Active Agent'})`);
         
-        // Dispara notificação para o atendente
-        await this.sendAgentNotification(
-          userId, 
-          displayPhone || from.split('@')[0], 
-          contactName || 'Cliente', 
-          finalBody, 
-          isHuman ? 'human_mode' : 'no_agent'
-        );
 
         // Send Push Notification
         await PushNotificationService.sendPushNotification(
