@@ -1395,7 +1395,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             is_external: d.is_external,
             reaction: d.reaction,
             whatsapp_id: d.whatsapp_id,
-            status: d.status
+            status: d.status,
+            is_starred: d.is_starred || false,
+            quoted_id: d.quoted_id,
+            quoted_text: d.quoted_text
           }));
           setMessages(formatted as any);
         }
@@ -1422,7 +1425,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         caption: d.caption,
         is_external: d.is_external,
         reaction: d.reaction,
-        whatsapp_id: d.whatsapp_id
+        whatsapp_id: d.whatsapp_id,
+        is_starred: d.is_starred || false,
+        quoted_id: d.quoted_id,
+        quoted_text: d.quoted_text
       });
 
       channel = supabase
