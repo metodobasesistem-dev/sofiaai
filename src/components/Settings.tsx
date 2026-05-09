@@ -1000,6 +1000,10 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
                           <>
                             <option value="gpt-4o">GPT-4o (Mais inteligente)</option>
                             <option value="gpt-4o-mini">GPT-4o Mini (Mais rápido/econômico)</option>
+                            <option value="o1-preview">o1-preview (Raciocínio Avançado)</option>
+                            <option value="o1-mini">o1-mini (Raciocínio Rápido)</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-4">GPT-4</option>
                           </>
                         ) : (
                           <>
