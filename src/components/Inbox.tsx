@@ -2679,7 +2679,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative" 
+                 style={{ 
+                   backgroundColor: '#e5ddd5', // Cor base similar ao WhatsApp
+                   backgroundImage: 'url(/chat-bg.png)', 
+                   backgroundSize: '400px', 
+                   backgroundRepeat: 'repeat' 
+                 }}>
+              {/* Overlay suave para integrar melhor com o tema claro */}
+              <div className="absolute inset-0 bg-white/40 pointer-events-none" />
+              
+              <div className="relative z-10 space-y-4">
               {loadingMessages ? (
                 <div className="space-y-6">
                   <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
@@ -2719,6 +2729,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <div ref={messagesEndRef} />
                 </>
               )}
+              </div>
             </div>
 
             {/* Quick Replies chips */}
