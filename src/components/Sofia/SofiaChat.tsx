@@ -223,7 +223,7 @@ export default function SofiaChat() {
                   <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base tracking-tight">Sofia AI</h3>
+                  <h3 className="font-black text-base tracking-tight">Zyreo <span className="opacity-80">Sofia</span></h3>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
                     <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Online e aprendendo</span>
@@ -332,7 +332,7 @@ export default function SofiaChat() {
               </div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-center text-slate-300 mt-4 flex items-center justify-center gap-2">
                 <Sparkles size={10} className="text-violet-400" />
-                Sofia Governance System
+                Zyreo Sofia Governance
               </p>
             </div>
           </motion.div>

@@ -209,20 +209,20 @@ export default function Login() {
       >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-sofia-purple via-sofia-purple to-sofia-glow rounded-3xl flex items-center justify-center text-white mb-6 shadow-2xl shadow-sofia-purple/40 ring-1 ring-white/20 overflow-hidden">
+          <div className="w-24 h-24 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white mb-6 shadow-2xl shadow-primary/20 ring-1 ring-white/10 overflow-hidden group">
             {!logoError ? (
               <img 
                 src="/sofiamini.png" 
-                alt="Sofia Logo" 
-                className="w-full h-full object-cover"
+                alt="Zyreo Sofia Logo" 
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 onError={() => setLogoError(true)}
               />
             ) : (
-              <Bot size={42} />
+              <Bot size={48} className="text-primary-400" />
             )}
           </div>
-          <h1 className="text-5xl font-black text-white tracking-tighter mb-2">Sofia</h1>
-          <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px]">IA de Atendimento Inteligente</p>
+          <h1 className="text-5xl font-black text-white tracking-tighter mb-2">Zyreo <span className="text-primary-500">Sofia</span></h1>
+          <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[10px]">Ecossistema de Atendimento Inteligente</p>
         </div>
 
         {/* Main Card */}

@@ -266,10 +266,10 @@ export default function Layout({
         <div className="p-6 flex items-center justify-between">
           {!collapsed && (
             <div className="flex items-center gap-2 font-bold text-xl text-primary cursor-pointer" onClick={() => handleTabClick('dashboard')}>
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30 overflow-hidden">
-                <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30 overflow-hidden border border-white/10">
+                <img src="/sofiamini.png" alt="Zyreo Sofia" className="w-full h-full object-cover" />
               </div>
-              <span className="tracking-tighter font-black">Sofia</span>
+              <span className="tracking-tighter font-black">Zyreo <span className="text-primary">Sofia</span></span>
             </div>
           )}
           {collapsed && (
@@ -277,7 +277,7 @@ export default function Layout({
               className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer shadow-lg shadow-primary/30 overflow-hidden"
               onClick={() => handleTabClick('dashboard')}
             >
-              <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+              <img src="/sofiamini.png" alt="Zyreo Sofia" className="w-full h-full object-cover" />
             </div>
           )}
         </div>

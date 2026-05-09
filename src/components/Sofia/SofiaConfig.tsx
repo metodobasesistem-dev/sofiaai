@@ -66,7 +66,7 @@ export default function SofiaConfig() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
         <Loader2 className="animate-spin text-primary-600" size={40} />
-        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Carregando Cérebro da Sofia...</p>
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Acessando Cérebro Zyreo Sofia...</p>
       </div>
     );
   }
@@ -85,11 +85,11 @@ export default function SofiaConfig() {
           </div>
           <div className="text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-              <h1 className="text-4xl font-black tracking-tight">Configurações da Sofia</h1>
+              <h1 className="text-4xl font-black tracking-tight">Cérebro Zyreo <span className="text-primary-200">Sofia</span></h1>
               <span className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/20">Master Admin</span>
             </div>
             <p className="text-primary-100 text-lg font-medium max-w-2xl">
-              Gerencie a inteligência central do sistema. As alterações feitas aqui definem a personalidade, o tom de voz e o comportamento da Sofia.
+              Gerencie a inteligência central do ecossistema. As alterações feitas aqui definem a personalidade, o tom de voz e o comportamento da Sofia.
             </p>
           </div>
         </div>
