@@ -1359,7 +1359,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             media_filename: d.media_filename,
             caption: d.caption,
             is_external: d.is_external,
-            reaction: d.reaction
+            reaction: d.reaction,
+            whatsapp_id: d.whatsapp_id
           }));
           setMessages(formatted as any);
         }
@@ -1385,7 +1386,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         media_filename: d.media_filename,
         caption: d.caption,
         is_external: d.is_external,
-        reaction: d.reaction
+        reaction: d.reaction,
+        whatsapp_id: d.whatsapp_id
       });
 
       channel = supabase
@@ -2035,7 +2037,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
 
     try {
-      const currentQuotedId = replyingTo?.id;
+      const currentQuotedId = replyingTo?.whatsapp_id || replyingTo?.id;
       setReplyingTo(null);
 
       // Fase 4: apenas envia — o banco é atualizado pelo backend (Fase 2)
