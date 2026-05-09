@@ -562,7 +562,7 @@ const ChatBubble: React.FC<{
             >
               <Smile size={14} />
             </button>
-            <div className="absolute bottom-full mb-2 left-0 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 hidden group-focus-within/emoji:grid grid-cols-6 gap-1.5 z-[100] animate-in slide-in-from-bottom-2 duration-200 min-w-[220px]">
+            <div className={`absolute bottom-full mb-2 ${isLead ? 'left-0' : 'right-0'} bg-white border border-slate-200 rounded-2xl shadow-xl p-2 hidden group-focus-within/emoji:grid grid-cols-6 gap-1.5 z-[100] animate-in slide-in-from-bottom-2 duration-200 min-w-[220px]`}>
               {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '💡', '✅', '❌', '🚀', '👀', '🤔', '💯', '⭐', '🤝'].map(emoji => (
                 <button 
                   key={emoji}
