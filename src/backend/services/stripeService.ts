@@ -1,16 +1,27 @@
 import Stripe from 'stripe';
 import { supabase } from '../lib/supabaseClient.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-01-27.acacia' as any,
-});
+let _stripe: Stripe | null = null;
+
+const getStripe = () => {
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.warn('[StripeService] STRIPE_SECRET_KEY is not defined. Payments will fail.');
+      throw new Error('Stripe API Key is missing');
+    }
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-01-27.acacia' as any,
+    });
+  }
+  return _stripe;
+};
 
 export const stripeService = {
   /**
    * Cria uma sessão de checkout para o usuário
    */
   async createCheckoutSession(userId: string, priceId: string, successUrl: string, cancelUrl: string) {
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -43,7 +54,7 @@ export const stripeService = {
     }
 
     // Busca detalhes da assinatura para saber o plano
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
     const priceId = subscription.items.data[0].price.id;
 
     // Mapeia PriceID para Nome do Plano
