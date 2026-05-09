@@ -802,15 +802,21 @@ class WhatsAppService {
           .eq('direction', 'inbound');
         
         if (count === 1) {
-          console.log(`[WhatsAppService] 🆕 New lead detected: ${from}. Sending notification.`);
-          
-          // Send Push Notification
-          await PushNotificationService.sendPushNotification(
-            userId, 
-            `🆕 Novo Lead: ${contactName || from.split('@')[0]}`,
-            finalBody,
-            `/inbox?jid=${from}`
-          );
+          const leadNotifiedKey = `notified_lead:${from}`;
+          const alreadyLeadNotified = await redisService.get(leadNotifiedKey);
+
+          if (!alreadyLeadNotified) {
+            await redisService.set(leadNotifiedKey, '1', 3600);
+            console.log(`[WhatsAppService] 🆕 New lead detected: ${from}. Sending notification.`);
+            
+            // Send Push Notification
+            await PushNotificationService.sendPushNotification(
+              userId, 
+              `🆕 Novo Lead: ${contactName || from.split('@')[0]}`,
+              finalBody,
+              `/inbox?jid=${from}`
+            );
+          }
         }
       } catch (err) {
         console.warn('[WhatsAppService] Error checking for new lead notification:', err);
@@ -819,16 +825,21 @@ class WhatsAppService {
       // 🛡️ PROTEÇÃO: Se a IA não retornou resposta (ex: modo humano ou ignorado), para por aqui sem quebrar
       if (!aiResponse || (typeof aiResponse === 'object' && (aiResponse as any).status === 'human')) {
         const isHuman = aiResponse && (aiResponse as any).status === 'human';
-        console.log(`[WhatsAppService] ℹ️ AI skipped response for ${from} (${isHuman ? 'Human Mode' : 'No Active Agent'})`);
+        // 🚀 DEDUPLICAÇÃO DE NOTIFICAÇÃO: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
+        const notifiedKey = `notified:${messageId}`;
+        const alreadyNotified = await redisService.get(notifiedKey);
         
+        if (!alreadyNotified) {
+          await redisService.set(notifiedKey, '1', 3600); // Expira em 1 hora
 
-        // Send Push Notification
-        await PushNotificationService.sendPushNotification(
-          userId,
-          `🔔 ${contactName || 'Cliente'} enviou mensagem`,
-          finalBody,
-          `/inbox?jid=${from}`
-        );
+          // Send Push Notification
+          await PushNotificationService.sendPushNotification(
+            userId,
+            `🔔 ${contactName || 'Cliente'} enviou mensagem`,
+            finalBody,
+            `/inbox?jid=${from}`
+          );
+        }
 
         return;
       }
