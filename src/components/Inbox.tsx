@@ -890,6 +890,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [isRecording, setIsRecording] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
+  const navigationLayerRef = useRef(0);
 
   // Estados para edição rápida de nome na barra lateral
   const [isEditingName, setIsEditingName] = useState(false);
@@ -971,6 +972,33 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       lastThreadIdRef.current = selectedThreadId;
     }
   }, [messages, loadingMessages, selectedThreadId]);
+
+  // ─── Manuseio do Botão Voltar (Mobile) ─────────────────────────────────────────
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isMobileDetailsOpen) {
+        setIsMobileDetailsOpen(false);
+      } else if (selectedThreadId) {
+        setSelectedThreadId(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedThreadId, isMobileDetailsOpen]);
+
+  useEffect(() => {
+    let currentLayer = 0;
+    if (selectedThreadId) currentLayer = 1;
+    if (isMobileDetailsOpen) currentLayer = 2;
+
+    // Apenas adicionamos ao histórico se estivermos indo "mais fundo"
+    if (currentLayer > navigationLayerRef.current) {
+      window.history.pushState({ layer: currentLayer }, '');
+    }
+    
+    navigationLayerRef.current = currentLayer;
+  }, [selectedThreadId, isMobileDetailsOpen]);
 
   // Listen to threads
   useEffect(() => {
@@ -2386,7 +2414,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <div className="h-16 px-2 md:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
               <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                 <button 
-                  onClick={() => setSelectedThreadId(null)}
+                  onClick={() => window.history.back()}
                   className="md:hidden p-2 -ml-2 text-slate-500 hover:text-primary-600 transition-colors"
                 >
                   <ArrowLeft size={20} />
@@ -2801,7 +2829,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {/* Header Mobile Info */}
           <div className="px-4 h-16 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
              <button 
-               onClick={() => setIsMobileDetailsOpen(false)}
+               onClick={() => window.history.back()}
                className="p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all flex items-center gap-2"
              >
                <ArrowLeft size={24} />
