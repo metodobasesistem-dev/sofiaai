@@ -507,53 +507,174 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setSelectedContact(null)}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30"
-            />
-            <motion.div
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl z-40 flex flex-col border-l border-slate-100"
-            >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
-                <div className="flex items-center gap-4">
-                  <ContactAvatar url={selectedContact.profile_picture_url} name={selectedContact.nome} size="lg" />
-                  <div>
-                    <h3 className="text-base font-black text-slate-900">{selectedContact.nome}</h3>
-                    <p className="text-xs text-slate-500">{formatPhone(selectedContact.telefone)}</p>
-                    <div className="mt-1.5"><StatusBadge status={selectedContact.status_funil} /></div>
-                  </div>
-                </div>
-                <button onClick={() => setSelectedContact(null)} className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-                  <X size={20} />
-                </button>
+// ── Side Panel ──
+const SidePanel = ({ 
+  contact, 
+  onClose, 
+  onTabChange, 
+  onStatusChange, 
+  onEdit 
+}: { 
+  contact: any; 
+  onClose: () => void; 
+  onTabChange: (tab: string) => void;
+  onStatusChange: (id: string, status: string) => void;
+  onEdit: (contact: any) => void;
+}) => {
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loadingAppts, setLoadingAppts] = useState(true);
+
+  useEffect(() => {
+    if (!contact.telefone) {
+      setLoadingAppts(false);
+      return;
+    }
+    setLoadingAppts(true);
+    listContactAppointments(contact.telefone)
+      .then(setAppointments)
+      .catch(console.error)
+      .finally(() => setLoadingAppts(false));
+  }, [contact.telefone]);
+
+  const openInbox = () => {
+    if (!contact.telefone) return;
+    const jid = `${contact.telefone.replace(/\D/g, '')}@c.us`;
+    const url = new URL(window.location.href);
+    url.searchParams.set('jid', jid);
+    window.history.pushState({}, '', url);
+    onTabChange('inbox');
+  };
+
+  return (
+    <motion.div
+      initial={{ x: '100%', opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: '100%', opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-40 flex flex-col border-l border-slate-100"
+    >
+      {/* Header */}
+      <div className="p-8 border-b border-slate-100 flex items-start justify-between bg-slate-50/30">
+        <div className="flex items-center gap-5">
+          <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="xl" />
+          <div className="space-y-1">
+            <h3 className="text-xl font-black text-slate-900 tracking-tight">{contact.nome}</h3>
+            <p className="text-sm font-medium text-slate-500">{formatPhone(contact.telefone)}</p>
+            <div className="pt-1">
+              <StatusBadge status={contact.status_funil} />
+            </div>
+          </div>
+        </div>
+        <button 
+          onClick={onClose} 
+          className="w-12 h-12 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-all"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-3 divide-x divide-slate-50 border-b border-slate-100 bg-white">
+        {[
+          { label: 'Mensagens', value: contact.totalMensagens || 0, icon: <MessageSquare size={16} /> },
+          { label: 'Agendas', value: appointments.length, icon: <Calendar size={16} /> },
+          { label: 'Desde', value: formatRelative(contact.data_criacao), icon: <Clock size={16} /> },
+        ].map((stat, i) => (
+          <div key={i} className="flex flex-col items-center justify-center py-6 px-2 space-y-1">
+            <div className="text-slate-300">{stat.icon}</div>
+            <span className="text-lg font-black text-slate-900 leading-none">{stat.value}</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-8 space-y-8">
+        {/* Detalhes do Contato */}
+        <section className="space-y-4">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Info size={12} /> Detalhes do Perfil
+          </h4>
+          <div className="bg-slate-50/50 rounded-[24px] p-6 space-y-4 border border-slate-100/50">
+            {[
+              { label: 'Telefone', value: formatPhone(contact.telefone), icon: <Phone size={14} /> },
+              { label: 'Origem', value: contact.source || 'WhatsApp', icon: <Globe size={14} /> },
+              { label: 'Última Mensagem', value: contact.ultimaMensagem || '—', icon: <MessageSquare size={14} /> },
+              { label: 'Visto por último', value: formatRelative(contact.ultimaInteracao), icon: <Clock size={14} /> },
+            ].map((item, i) => (
+              <div key={i} className="flex items-start justify-between gap-4">
+                <span className="text-xs font-black text-slate-400 whitespace-nowrap flex items-center gap-2">
+                   {item.icon} {item.label}
+                </span>
+                <span className="text-xs font-bold text-slate-900 text-right">{item.value}</span>
               </div>
-              <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-                <div className="space-y-3">
-                  {[
-                    { label: 'Telefone', value: formatPhone(selectedContact.telefone) },
-                    { label: 'Status', value: selectedContact.status_funil },
-                    { label: 'Mensagens', value: `${selectedContact.totalMensagens || 0} msgs` },
-                    { label: 'Última interação', value: formatRelative(selectedContact.ultimaInteracao) },
-                    { label: 'Cliente desde', value: formatRelative(selectedContact.data_criacao) },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-50">
-                      <span className="text-xs text-slate-400 font-medium">{item.label}</span>
-                      <span className="text-xs font-bold text-slate-900">{item.value}</span>
+            ))}
+          </div>
+        </section>
+
+        {/* Próximos Agendamentos */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <Calendar size={12} /> Agendamentos
+            </h4>
+            {appointments.length > 0 && (
+              <span className="px-2 py-0.5 bg-primary-50 text-primary-600 rounded-full text-[9px] font-black">
+                {appointments.length} TOTAL
+              </span>
+            )}
+          </div>
+          
+          {loadingAppts ? (
+            <div className="py-8 flex flex-col items-center justify-center text-slate-300">
+              <Loader2 size={24} className="animate-spin mb-2" />
+              <p className="text-[10px] font-bold uppercase tracking-widest">Carregando agendamentos...</p>
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="bg-slate-50/30 border-2 border-dashed border-slate-100 rounded-[24px] p-8 text-center">
+              <p className="text-xs font-bold text-slate-400 italic">Nenhum agendamento encontrado.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {appointments.map((appt, i) => (
+                <div key={i} className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+                       <Calendar size={18} />
                     </div>
-                  ))}
+                    <div>
+                      <p className="text-xs font-black text-slate-900">{appt.service_name || 'Consulta'}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                        {new Date(appt.date).toLocaleDateString('pt-BR')} às {appt.time}
+                      </p>
+                    </div>
+                  </div>
+                  <CheckCircle2 size={16} className="text-emerald-500 opacity-20 group-hover:opacity-100 transition-all" />
                 </div>
-              </div>
-              <div className="p-4 border-t border-slate-100 space-y-2">
-                <button
-                  onClick={() => { setEditingContactId(selectedContact.id || null); setFormData({ nome: selectedContact.nome, telefone: selectedContact.telefone }); setIsModalOpen(true); setSelectedContact(null); }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm"
-                >
-                  <Edit2 size={16} /> Editar Contato
-                </button>
-              </div>
-            </motion.div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="p-6 border-t border-slate-100 bg-slate-50/30 grid grid-cols-2 gap-4">
+        <button
+          onClick={() => onEdit(contact)}
+          className="flex items-center justify-center gap-2 px-4 py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+        >
+          <Edit2 size={16} /> Editar
+        </button>
+        <button
+          onClick={openInbox}
+          className="flex items-center justify-center gap-2 px-4 py-4 bg-primary-600 text-white rounded-[20px] text-xs font-black uppercase tracking-widest hover:bg-primary-700 transition-all shadow-xl shadow-primary-500/30 active:scale-95"
+        >
+          <MessageSquare size={16} /> Abrir Chat
+        </button>
+      </div>
+    </motion.div>
+  );
+};
           </>
         )}
       </AnimatePresence>
