@@ -1015,34 +1015,58 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     const params = new URLSearchParams(window.location.search);
     const jid = params.get('jid');
     if (jid && threads.length > 0) {
-      const thread = threads.find(t => t.remoteJid === jid);
+      const cleanJid = jid.split('@')[0];
+      const thread = threads.find(t => (t.remoteJid || '').split('@')[0] === cleanJid);
+      
       if (thread) {
         setSelectedThreadId(thread.id);
       } else {
-        // Cria uma thread temporária para que o usuário possa iniciar a conversa
-        const tempId = `temp-${Date.now()}`;
-        const tempThread: Thread = {
-          id: tempId,
-          remoteJid: jid,
-          name: jid.split('@')[0],
-          lastMessage: 'Iniciar conversa...',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: 'human',
-          updatedAt: new Date().toISOString(),
-          ticketStatus: 'open',
-          funilStatus: 'Lead'
-        };
-        
-        // Tenta buscar o nome real no CRM
-        const resolved = getResolvedContact(jid, tempThread.name);
-        tempThread.name = resolved.name;
-        tempThread.funilStatus = resolved.funilStatus;
+        // Verifica se já não criamos uma temp thread para esse número
+        const hasTemp = threads.some(t => t.id.startsWith('temp-') && (t.remoteJid || '').split('@')[0] === cleanJid);
+        if (!hasTemp) {
+          // Cria uma thread temporária para que o usuário possa iniciar a conversa
+          const tempId = `temp-${Date.now()}`;
+          const tempThread: Thread = {
+            id: tempId,
+            remoteJid: `${cleanJid}@s.whatsapp.net`, // Standardize to backend format
+            name: cleanJid,
+            lastMessage: 'Iniciar conversa...',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'human',
+            updatedAt: new Date().toISOString(),
+            ticketStatus: 'open',
+            funilStatus: 'Lead'
+          };
+          
+          // Tenta buscar o nome real no CRM
+          const resolved = getResolvedContact(cleanJid, tempThread.name);
+          tempThread.name = resolved.name;
+          tempThread.funilStatus = resolved.funilStatus;
 
-        setThreads(prev => [tempThread, ...prev]);
-        setSelectedThreadId(tempId);
+          setThreads(prev => [tempThread, ...prev]);
+          setSelectedThreadId(tempId);
+        }
       }
     }
-  }, [threads.length]); // Depend only on length so we don't loop endlessly when we add the temp thread
+  }, [threads.length]);
+
+  // Merge temporary threads with real ones when they arrive from backend
+  useEffect(() => {
+    if (selectedThreadId?.startsWith('temp-')) {
+      const tempThread = threads.find(t => t.id === selectedThreadId);
+      if (tempThread) {
+        // Procura uma thread real com o mesmo número
+        const cleanTempJid = (tempThread.remoteJid || '').split('@')[0];
+        const realThread = threads.find(t => !t.id.startsWith('temp-') && (t.remoteJid || '').split('@')[0] === cleanTempJid);
+        
+        if (realThread) {
+          // Muda a seleção para a thread real e remove a temporária do estado
+          setSelectedThreadId(realThread.id);
+          setThreads(prev => prev.filter(t => t.id !== tempThread.id));
+        }
+      }
+    }
+  }, [threads, selectedThreadId]);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     // Usamos um pequeno timeout para garantir que o DOM atualizou

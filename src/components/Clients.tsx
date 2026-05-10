@@ -145,7 +145,7 @@ const SidePanel = ({ contact, onClose, onTabChange, onStatusChange, isAdminMode 
 
   const openInbox = () => {
     if (!contact.telefone) return;
-    const jid = `${contact.telefone.replace(/\D/g, '')}@c.us`;
+    const jid = `${contact.telefone.replace(/\D/g, '')}@s.whatsapp.net`;
     const url = new URL(window.location.href);
     url.searchParams.set('jid', jid);
     window.history.pushState({}, '', url);
