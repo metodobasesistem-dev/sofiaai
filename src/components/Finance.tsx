@@ -50,6 +50,10 @@ export default function Finance() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Filter States
+  const [filterType, setFilterType] = useState<'all' | 'entrada' | 'saida'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
   // Form States
   const [formData, setFormData] = useState({
     descricao: '',
@@ -66,10 +70,17 @@ export default function Finance() {
     tipo: 'receita' as 'receita' | 'despesa'
   });
 
-  // Resumo
+  // Resumo (Sempre baseado em todos os dados para manter o saldo real)
   const totalReceita = transactions.filter(t => t.tipo === 'entrada' && t.status === 'pago').reduce((acc, t) => acc + Number(t.valor), 0);
   const totalDespesa = transactions.filter(t => t.tipo === 'saida' && t.status === 'pago').reduce((acc, t) => acc + Number(t.valor), 0);
   const saldo = totalReceita - totalDespesa;
+
+  // Lista Filtrada
+  const filteredTransactions = transactions.filter(t => {
+    const matchesSearch = t.descricao.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || t.tipo === filterType;
+    return matchesSearch && matchesType;
+  });
 
   useEffect(() => {
     fetchInitialData();
@@ -488,6 +499,8 @@ export default function Finance() {
               <input 
                 type="text" 
                 placeholder="Pesquisar por descrição..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
               />
             </div>
@@ -497,9 +510,24 @@ export default function Finance() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Tudo</button>
-            <button className="px-4 py-2 bg-white text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50">Entradas</button>
-            <button className="px-4 py-2 bg-white text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50">Saídas</button>
+            <button 
+              onClick={() => setFilterType('all')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterType === 'all' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+            >
+              Tudo
+            </button>
+            <button 
+              onClick={() => setFilterType('entrada')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterType === 'entrada' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+            >
+              Entradas
+            </button>
+            <button 
+              onClick={() => setFilterType('saida')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterType === 'saida' ? 'bg-red-600 text-white shadow-lg shadow-red-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+            >
+              Saídas
+            </button>
           </div>
         </div>
 
@@ -526,21 +554,21 @@ export default function Finance() {
                     </div>
                   </td>
                 </tr>
-              ) : transactions.length === 0 ? (
+              ) : filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-8 py-20 text-center">
                     <div className="max-w-xs mx-auto">
                       <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Wallet size={32} className="text-slate-300" />
                       </div>
-                      <h4 className="text-lg font-bold text-slate-800">Nenhum lançamento</h4>
-                      <p className="text-sm text-slate-500 mt-2">Comece registrando suas vendas ou despesas para ver a mágica acontecer.</p>
-                      <button onClick={() => setShowAddModal(true)} className="mt-6 text-primary-600 font-bold hover:underline">Adicionar meu primeiro registro</button>
+                      <h4 className="text-lg font-bold text-slate-800">Nenhum resultado</h4>
+                      <p className="text-sm text-slate-500 mt-2">Não encontramos nada para "{searchTerm || filterType}".</p>
+                      {searchTerm && <button onClick={() => setSearchTerm('')} className="mt-4 text-primary-600 font-bold hover:underline">Limpar busca</button>}
                     </div>
                   </td>
                 </tr>
               ) : (
-                transactions.map((transaction, idx) => (
+                filteredTransactions.map((transaction, idx) => (
                   <motion.tr 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
