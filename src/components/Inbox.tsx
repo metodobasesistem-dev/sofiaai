@@ -1018,9 +1018,31 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       const thread = threads.find(t => t.remoteJid === jid);
       if (thread) {
         setSelectedThreadId(thread.id);
+      } else {
+        // Cria uma thread temporária para que o usuário possa iniciar a conversa
+        const tempId = `temp-${Date.now()}`;
+        const tempThread: Thread = {
+          id: tempId,
+          remoteJid: jid,
+          name: jid.split('@')[0],
+          lastMessage: 'Iniciar conversa...',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'human',
+          updatedAt: new Date().toISOString(),
+          ticketStatus: 'open',
+          funilStatus: 'Lead'
+        };
+        
+        // Tenta buscar o nome real no CRM
+        const resolved = getResolvedContact(jid, tempThread.name);
+        tempThread.name = resolved.name;
+        tempThread.funilStatus = resolved.funilStatus;
+
+        setThreads(prev => [tempThread, ...prev]);
+        setSelectedThreadId(tempId);
       }
     }
-  }, [threads]);
+  }, [threads.length]); // Depend only on length so we don't loop endlessly when we add the temp thread
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     // Usamos um pequeno timeout para garantir que o DOM atualizou
