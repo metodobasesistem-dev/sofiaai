@@ -47,12 +47,17 @@ import {
   Instagram,
   Download,
   MessageSquare,
-  ChevronDown
+  ChevronDown,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
+import Finance from './Finance';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage } from '../services/whatsappService';
@@ -948,7 +953,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance'>('conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -2403,6 +2408,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Atalhos</span>}
               {activeTab === 'quick_replies' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
+
+            <button 
+              onClick={() => setActiveTab('finance')}
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
+                ${activeTab === 'finance' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Financeiro"
+            >
+              <Wallet size={22} className={activeTab === 'finance' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Financeiro</span>}
+              {activeTab === 'finance' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
+            </button>
           </div>
 
           <button 
@@ -2442,6 +2458,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             }
           }} />
         </div>
+      ) : activeTab === 'finance' ? (
+        <Finance />
       ) : (
         <>
           <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[32%] lg:w-[26%] border-r border-gray-100 flex-col bg-gray-50/30`}>
