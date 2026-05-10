@@ -14,7 +14,9 @@ import {
   Tag,
   Clock,
   ChevronRight,
-  Download
+  Download,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
@@ -43,8 +45,9 @@ export default function Finance() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   // Form States
@@ -114,6 +117,35 @@ export default function Finance() {
     }
   };
 
+  const handleEditClick = (t: Transaction) => {
+    setEditingTransaction(t);
+    setFormData({
+      descricao: t.descricao,
+      valor: String(t.valor),
+      tipo: t.tipo,
+      status: t.status as any,
+      data_pagamento: t.data_pagamento,
+      categoria_id: (t as any).categoria_id || '',
+      observacoes: (t as any).observacoes || ''
+    });
+    setShowAddModal(true);
+    setOpenMenuId(null);
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este lançamento?')) return;
+
+    try {
+      const { error } = await supabase.from('financial_transactions').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Lançamento excluído!');
+      fetchTransactions();
+      setOpenMenuId(null);
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + err.message);
+    }
+  };
+
   const fetchTransactions = async () => {
     try {
       const { data, error } = await supabase
@@ -146,7 +178,7 @@ export default function Finance() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase.from('financial_transactions').insert({
+      const payload = {
         user_id: user.id,
         descricao: formData.descricao,
         valor: parseFloat(formData.valor),
@@ -155,12 +187,22 @@ export default function Finance() {
         data_pagamento: formData.data_pagamento,
         categoria_id: formData.categoria_id || null,
         observacoes: formData.observacoes
-      });
+      };
+
+      let error;
+      if (editingTransaction) {
+        const { error: err } = await supabase.from('financial_transactions').update(payload).eq('id', editingTransaction.id);
+        error = err;
+      } else {
+        const { error: err } = await supabase.from('financial_transactions').insert(payload);
+        error = err;
+      }
 
       if (error) throw error;
 
-      toast.success('Lançamento realizado com sucesso!');
+      toast.success(editingTransaction ? 'Lançamento atualizado!' : 'Lançamento realizado com sucesso!');
       setShowAddModal(false);
+      setEditingTransaction(null);
       setFormData({
         descricao: '',
         valor: '',
@@ -231,8 +273,10 @@ export default function Finance() {
               className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden border border-slate-100"
             >
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">Novo Lançamento</h3>
-                <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400 hover:text-red-500 transition-all">
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                  {editingTransaction ? 'Editar Lançamento' : 'Novo Lançamento'}
+                </h3>
+                <button onClick={() => { setShowAddModal(false); setEditingTransaction(null); }} className="p-2 text-slate-400 hover:text-red-500 transition-all">
                   <Plus size={24} className="rotate-45" />
                 </button>
               </div>
@@ -331,8 +375,8 @@ export default function Finance() {
                     disabled={isSaving}
                     className="w-full py-4 bg-primary-600 text-white rounded-2xl text-sm font-black shadow-xl shadow-primary-500/30 hover:bg-primary-700 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
-                    {isSaving ? <Plus className="animate-spin" /> : <Plus size={18} />}
-                    {isSaving ? 'Salvando...' : 'Confirmar Lançamento'}
+                    {isSaving ? <Plus className="animate-spin" /> : editingTransaction ? <Edit size={18} /> : <Plus size={18} />}
+                    {isSaving ? 'Salvando...' : editingTransaction ? 'Salvar Alterações' : 'Confirmar Lançamento'}
                   </button>
                 </div>
               </form>
@@ -540,10 +584,40 @@ export default function Finance() {
                         {transaction.status}
                       </span>
                     </td>
-                    <td className="px-8 py-6 text-right">
-                      <button className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                    <td className="px-8 py-6 text-right relative">
+                      <button 
+                        onClick={() => setOpenMenuId(openMenuId === transaction.id ? null : transaction.id)}
+                        className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      >
                         <MoreVertical size={16} />
                       </button>
+
+                      <AnimatePresence>
+                        {openMenuId === transaction.id && (
+                          <>
+                            <div className="fixed inset-0 z-[150]" onClick={() => setOpenMenuId(null)} />
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                              className="absolute right-8 top-16 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-[160] overflow-hidden"
+                            >
+                              <button 
+                                onClick={() => handleEditClick(transaction)}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                              >
+                                <Edit size={14} /> Editar
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 size={14} /> Excluir
+                              </button>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
                     </td>
                   </motion.tr>
                 ))
