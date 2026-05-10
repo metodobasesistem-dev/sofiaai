@@ -129,15 +129,12 @@ router.get('/instagram/webhook', (req, res) => {
 
 router.post('/instagram/webhook', async (req, res) => {
   const signature = req.headers['x-hub-signature-256'] as string;
-  const isValid = leoInstagramService.validateWebhookSignature(JSON.stringify(req.body), signature);
-
-  console.log('[Leo Webhook] POST recebido.');
-  console.log('[Leo Webhook] Assinatura válida:', isValid);
+  const rawBody = JSON.stringify(req.body);
+  const isValid = leoInstagramService.validateWebhookSignature(rawBody, signature);
 
   if (!signature || !isValid) {
-    console.warn('[Leo Webhook] ⚠️ Assinatura inválida detectada, mas processando para DEBUG...');
-    // Em produção real, deveríamos retornar 403 aqui. 
-    // Mas para teste, vamos deixar passar e ver se o processamento interno funciona.
+    console.warn('[Leo Webhook] ❌ Assinatura inválida. Rejeitando requisição.');
+    return res.status(403).json({ error: 'Invalid signature' });
   }
 
   // Processar em background

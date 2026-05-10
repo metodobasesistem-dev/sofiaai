@@ -80,11 +80,19 @@ export class EvolutionApiService {
 
   static async setWebhook(userId: string) {
     const api = getApi();
-    const WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || '';
+    let WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || '';
+    const SECRET = process.env.EVOLUTION_WEBHOOK_SECRET;
 
     if (!WEBHOOK_URL || WEBHOOK_URL.includes('your-backend-url')) {
       console.warn('[EvolutionAPI] BACKEND_WEBHOOK_URL not properly configured. Skipping webhook setup.');
       return;
+    }
+
+    // SEC-02: Anexa automaticamente o token de segurança na URL do Webhook
+    if (SECRET && !WEBHOOK_URL.includes('token=')) {
+      const separator = WEBHOOK_URL.includes('?') ? '&' : '?';
+      WEBHOOK_URL = `${WEBHOOK_URL}${separator}token=${SECRET}`;
+      console.log(`[EvolutionAPI] 🛡️ Proteção ativada: Token anexado à URL do Webhook.`);
     }
     
     try {

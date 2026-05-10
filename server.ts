@@ -132,8 +132,8 @@ async function startServer() {
     }
   });
 
-  // Diagnostic route to troubleshoot production issues
-  app.get('/api/diag/system', async (req, res) => {
+  // Diagnostic route to troubleshoot production issues (ADMIN ONLY)
+  app.get('/api/diag/system', requireAuth as any, requireAdmin as any, async (req, res) => {
     const mask = (str?: string) => str ? `${str.substring(0, 5)}...${str.substring(str.length - 4)}` : 'MISSING';
     
     const diag = {
@@ -200,7 +200,6 @@ async function startServer() {
     app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/whatsapp/evolution', whatsappWebhookRoutes); // Novo Webhook
-    app.use('/api/leo', leoRoutes);
     app.use('/api/leo', leoRoutes);
 
 

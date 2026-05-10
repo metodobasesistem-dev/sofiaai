@@ -80,12 +80,27 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // ─── PATCH /api/v2/admin/users/:id ────────────────────────────────────────
+// SEC-06: Whitelist de campos para evitar injeção de campos sensíveis (role, id, email)
+const ADMIN_USER_PATCH_ALLOWED_FIELDS = [
+  'name', 'plan', 'trial_ends_at', 'is_active',
+  'feature_flags', 'sofia_active', 'whatsapp_status'
+];
+
 router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   const targetUserId = req.params.id;
   try {
+    // Filtrar apenas campos permitidos
+    const payload = Object.fromEntries(
+      Object.entries(req.body).filter(([k]) => ADMIN_USER_PATCH_ALLOWED_FIELDS.includes(k))
+    );
+
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid fields to update.' });
+    }
+
     const { error } = await supabase
       .from('profiles')
-      .update(req.body)
+      .update(payload)
       .eq('id', targetUserId);
 
     if (error) throw error;

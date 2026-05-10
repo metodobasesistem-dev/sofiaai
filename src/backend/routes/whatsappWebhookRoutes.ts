@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { agentService } from '../services/agentService.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
@@ -9,6 +10,33 @@ import { normalizePhone } from '../lib/phoneHelper.js';
 
 const router = Router();
 
+/**
+ * SEC-02: Valida token de segurança do webhook da Evolution API.
+ * A Evolution API não suporta assinatura HMAC nativamente.
+ * A proteção é feita via token secreto na URL do webhook:
+ *   https://sua-url.com/api/whatsapp/evolution/webhook?token=SEU_TOKEN_SECRETO
+ *
+ * Configure EVOLUTION_WEBHOOK_SECRET = SEU_TOKEN_SECRETO no .env.
+ * Se não configurado, aceita sem validação (modo compatibilidade).
+ */
+function validateEvolutionToken(tokenFromQuery: string | undefined): boolean {
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  if (!secret) {
+    // Modo compatibilidade: sem secret configurado, aceita tudo
+    return true;
+  }
+  if (!tokenFromQuery) {
+    console.warn('[Webhook] ⚠️ Token ausente na URL. Configure EVOLUTION_WEBHOOK_SECRET e atualize a URL do webhook na Evolution.');
+    return false;
+  }
+  // Comparação timing-safe para evitar timing attacks
+  try {
+    return crypto.timingSafeEqual(Buffer.from(tokenFromQuery), Buffer.from(secret));
+  } catch {
+    return false;
+  }
+}
+
 router.post('/webhook', async (req, res) => {
   const body = req.body;
   // Identificador comum de instância (necessário para achar o dono)
@@ -16,6 +44,13 @@ router.post('/webhook', async (req, res) => {
   const event = body.event;
 
   if (!instanceName) return res.status(200).send('OK');
+
+  // [SEC-02] Validar token secreto da URL do webhook
+  const token = req.query.token as string | undefined;
+  if (!validateEvolutionToken(token)) {
+    console.warn(`[Webhook] ❌ Token inválido ou ausente. Instance: ${instanceName}. Rejeitando.`);
+    return res.status(403).send('Forbidden');
+  }
 
   // [IDEMPOTENCY] Evitar processar o mesmo evento/mensagem múltiplas vezes (webhook duplicate)
   const eventId = body.data?.key?.id || 
