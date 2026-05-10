@@ -220,7 +220,7 @@ export default function SofiaChat() {
             <div className="p-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-between shadow-lg z-10">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl overflow-hidden border-2 border-white/30 transition-transform hover:scale-105">
-                  <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+                  <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <h3 className="font-black text-base tracking-tight">Zyreo <span className="opacity-80">Sofia</span></h3>
@@ -350,7 +350,7 @@ export default function SofiaChat() {
         >
           {isOpen ? <X size={28} className="text-white" /> : (
             <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-inner">
-              <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+              <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover" />
               <span className="absolute bottom-1 right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full"></span>
             </div>
           )}
