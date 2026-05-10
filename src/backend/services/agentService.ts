@@ -328,12 +328,13 @@ export class AgentService {
 
       const { error: tErr } = await supabase.from('threads').upsert(threadData);
       
-      // Sincronizar foto de perfil (respeita cache de 24h internamente)
-      if (threadData.remote_jid) {
-        this.syncProfilePicture(userId, threadId, threadData.remote_jid).catch(() => {});
-      }
-      
       if (tErr) {
+        console.error('[AgentService] ❌ THREAD PERSIST ERROR:', {
+          code: tErr.code,
+          message: tErr.message,
+          details: tErr.details,
+          threadId
+        });
         console.warn('[AgentService] Initial thread upsert failed, retrying minimal set...', tErr.message);
         // Minimal fallback to ensure persistence
         const { error: fErr } = await supabase.from('threads').upsert({

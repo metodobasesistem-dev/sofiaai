@@ -458,9 +458,20 @@ class WhatsAppService {
         remote_jid: to,
         display_phone: cleanTo,
         agent_name: senderName,
-        contact_name: contact?.nome || cleanTo
+        contact_name: contact?.nome || cleanTo,
+        updated_at: new Date(sendTimestamp).toISOString()
       }).then(({ error }) => {
-        if (error) console.warn('[WhatsAppService] Thread preview update warning:', error.message);
+        if (error) {
+          console.error('[WhatsAppService] ❌ CRITICAL THREAD UPSERT ERROR:', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            threadId
+          });
+        } else {
+          console.log(`[WhatsAppService] 🧵 Thread updated for ${threadId}`);
+        }
       });
 
       // 3. Chama o provider via Abstração
@@ -1068,6 +1079,10 @@ class WhatsAppService {
   async startMaintenanceWorker() {
     console.log('[WhatsAppService] 🛠️ Maintenance Worker scheduled (30 min cycle)');
     setInterval(() => this.runMaintenanceSync(), 1800000);
+  }
+
+  async destroyAll() {
+    console.log('[WhatsAppService] destroyAll called (No-op for Evolution)');
   }
 
   /**
