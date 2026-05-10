@@ -142,6 +142,17 @@ export class EvolutionApiService {
     }
   }
 
+  static async fetchInstances() {
+    const api = getApi();
+    try {
+      const { data } = await api.get('/instance/fetchInstances');
+      return data;
+    } catch (error: any) {
+      console.error(`[EvolutionAPI] Error fetching instances:`, error.response?.data || error.message);
+      return [];
+    }
+  }
+
   static async getPairingCode(instanceName: string, phoneNumber: string) {
     const api = getApi();
     try {

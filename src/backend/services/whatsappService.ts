@@ -1058,7 +1058,7 @@ class WhatsAppService {
       }
 
       // --- PARTE B: Limpeza de Órfãos ---
-      const allEvolutionInstances = await EvolutionApiService.listInstances();
+      const allEvolutionInstances = await EvolutionApiService.fetchInstances();
       if (allEvolutionInstances && Array.isArray(allEvolutionInstances)) {
         for (const instance of allEvolutionInstances) {
           const name = instance.instanceName;
