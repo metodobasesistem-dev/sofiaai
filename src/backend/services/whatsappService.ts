@@ -998,67 +998,76 @@ class WhatsAppService {
     }
   }
 
-  async startMaintenanceWorker() {
-    console.log('[WhatsAppService] 🛠️ Maintenance Worker started (30 min cycle)');
-    
-    // Roda a cada 30 minutos para não sobrecarregar o sistema
-    setInterval(async () => {
-      try {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, whatsapp_instance_id, whatsapp_status')
-          .not('whatsapp_instance_id', 'is', null);
-
-        if (!profiles) return;
-
-        // --- PARTE A: Sincronização de Status (Instâncias Ativas) ---
-        for (const profile of profiles) {
-          const instanceName = profile.whatsapp_instance_id!;
-          try {
-            const realStatus = await EvolutionApiService.getInstanceStatus(instanceName);
-            const mappedStatus = realStatus.state === 'open' ? 'connected' : (realStatus.state === 'connecting' ? 'connecting' : 'disconnected');
-            if (mappedStatus !== profile.whatsapp_status) {
-              await this.updateProfileStatus(profile.id, { status: mappedStatus });
-            }
-            if (mappedStatus === 'connected') {
-              await EvolutionApiService.setWebhook(instanceName).catch(() => {});
-            }
-          } catch (err) {}
-        }
-
-        // --- PARTE B: Limpeza de Órfãos (Zeladoria) ---
-        // Busca todas as instâncias que existem na Evolution
-        const allEvolutionInstances = await EvolutionApiService.listInstances();
-        if (allEvolutionInstances && Array.isArray(allEvolutionInstances)) {
-          for (const instance of allEvolutionInstances) {
-            const name = instance.instanceName;
-            if (name && name.startsWith('wppai_')) {
-              // Verifica se essa instância pertence a algum usuário no nosso banco
-              const isLinked = profiles.some(p => p.whatsapp_instance_id === name);
-              if (!isLinked) {
-                console.log(`[Maintenance] 🧹 Deleting orphaned instance: ${name}`);
-                await EvolutionApiService.deleteInstance(name).catch(() => {});
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[WhatsAppService] Global Maintenance Error:', err);
-      }
-    }, 1800000); // 30 minutos
-  }
-
-  async destroyAll() {
-    console.log('[WhatsAppService] destroyAll called (No-op for Evolution)');
-  }
-
   async initializeAllSessions() {
+    console.log('[WhatsAppService] 🚀 initializeAllSessions: Forcing immediate sync...');
+    
+    // Roda a manutenção/sincronização uma vez agora (sem esperar o interval)
+    this.runMaintenanceSync().catch(err => {
+       console.error('[WhatsAppService] Initial sync failed:', err);
+    });
+
     this.startMaintenanceWorker();
+    
     // Rodar limpeza de storage uma vez ao dia (ou a cada 24h)
     setInterval(() => this.cleanupOldStorageFiles(), 86400000);
     // Rodar uma vez agora no boot
     this.cleanupOldStorageFiles();
-    console.log('[WhatsAppService] initializeAllSessions called');
+  }
+
+  /**
+   * Lógica central de manutenção: Sincroniza status, webhooks e limpa órfãos.
+   */
+  async runMaintenanceSync() {
+    try {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, whatsapp_instance_id, whatsapp_status')
+        .not('whatsapp_instance_id', 'is', null);
+
+      if (!profiles) return;
+
+      console.log(`[Maintenance] 🔄 Syncing ${profiles.length} active profiles...`);
+
+      // --- PARTE A: Sincronização de Status e Webhooks ---
+      for (const profile of profiles) {
+        const instanceName = profile.whatsapp_instance_id!;
+        try {
+          const realStatus = await EvolutionApiService.getInstanceStatus(instanceName);
+          const mappedStatus = realStatus.state === 'open' ? 'connected' : (realStatus.state === 'connecting' ? 'connecting' : 'disconnected');
+          
+          if (mappedStatus !== profile.whatsapp_status) {
+            await this.updateProfileStatus(profile.id, { status: mappedStatus });
+          }
+
+          // SEMPRE tenta setar o webhook para garantir que o token da URL esteja atualizado com o Coolify
+          if (mappedStatus === 'connected') {
+            await EvolutionApiService.setWebhook(instanceName).catch(() => {});
+          }
+        } catch (err) {}
+      }
+
+      // --- PARTE B: Limpeza de Órfãos ---
+      const allEvolutionInstances = await EvolutionApiService.listInstances();
+      if (allEvolutionInstances && Array.isArray(allEvolutionInstances)) {
+        for (const instance of allEvolutionInstances) {
+          const name = instance.instanceName;
+          if (name && name.startsWith('wppai_')) {
+            const isLinked = profiles.some(p => p.whatsapp_instance_id === name);
+            if (!isLinked) {
+              console.log(`[Maintenance] 🧹 Deleting orphaned instance: ${name}`);
+              await EvolutionApiService.deleteInstance(name).catch(() => {});
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Maintenance] Sync Error:', err);
+    }
+  }
+
+  async startMaintenanceWorker() {
+    console.log('[WhatsAppService] 🛠️ Maintenance Worker scheduled (30 min cycle)');
+    setInterval(() => this.runMaintenanceSync(), 1800000);
   }
 
   /**
