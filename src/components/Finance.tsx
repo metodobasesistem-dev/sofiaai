@@ -44,9 +44,10 @@ export default function Finance() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Form State
+  // Form States
   const [formData, setFormData] = useState({
     descricao: '',
     valor: '',
@@ -55,6 +56,11 @@ export default function Finance() {
     data_pagamento: format(new Date(), 'yyyy-MM-dd'),
     categoria_id: '',
     observacoes: ''
+  });
+
+  const [newCatData, setNewCatData] = useState({
+    nome: '',
+    tipo: 'receita' as 'receita' | 'despesa'
   });
 
   // Resumo
@@ -78,6 +84,34 @@ export default function Finance() {
   const fetchCategories = async () => {
     const { data } = await supabase.from('financial_categories').select('*').order('nome');
     if (data) setCategories(data);
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatData.nome) return;
+
+    try {
+      setIsSaving(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase.from('financial_categories').insert({
+        user_id: user.id,
+        nome: newCatData.nome,
+        tipo: newCatData.tipo
+      });
+
+      if (error) throw error;
+
+      toast.success('Categoria criada!');
+      setNewCatData({ nome: '', tipo: 'receita' });
+      fetchCategories();
+      setShowCategoryModal(false);
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const fetchTransactions = async () => {
@@ -151,6 +185,34 @@ export default function Finance() {
   return (
     <div className="flex-1 h-full bg-slate-50/50 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
       
+      {/* Modal de Nova Categoria */}
+      <AnimatePresence>
+        {showCategoryModal && (
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCategoryModal(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 border border-slate-100">
+              <h3 className="text-lg font-black text-slate-900 mb-4">Nova Categoria</h3>
+              <form onSubmit={handleAddCategory} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Nome da Categoria</label>
+                  <input type="text" autoFocus required value={newCatData.nome} onChange={e => setNewCatData({...newCatData, nome: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary-500" placeholder="Ex: Tráfego Pago" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Tipo</label>
+                  <select value={newCatData.tipo} onChange={e => setNewCatData({...newCatData, tipo: e.target.value as any})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none">
+                    <option value="receita">Receita (Entrada)</option>
+                    <option value="despesa">Despesa (Saída)</option>
+                  </select>
+                </div>
+                <button disabled={isSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all">
+                  {isSaving ? 'Salvando...' : 'Criar Categoria'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Modal de Cadastro */}
       <AnimatePresence>
         {showAddModal && (
@@ -235,7 +297,10 @@ export default function Finance() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Categoria</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Categoria</label>
+                        <button type="button" onClick={() => { setShowCategoryModal(true); setNewCatData({...newCatData, tipo: formData.tipo === 'entrada' ? 'receita' : 'despesa'}); }} className="text-[10px] font-black text-primary-600 hover:underline uppercase tracking-widest">+ Nova</button>
+                      </div>
                       <select 
                         value={formData.categoria_id}
                         onChange={e => setFormData({...formData, categoria_id: e.target.value})}
@@ -289,6 +354,9 @@ export default function Finance() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+            <Tag size={16} /> Categorias
+          </button>
           <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
             <Download size={16} /> Exportar
           </button>
