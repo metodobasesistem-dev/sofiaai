@@ -58,7 +58,7 @@ const formatRelative = (date: any): string => {
 };
 import { syncContacts } from '../services/whatsappService';
 import { listContacts, deleteContact, updateContactFunilStatus } from '../services/supabaseService';
-import ContactAvatar from './ContactAvatar';
+import { ContactAvatar } from './ContactAvatar';
 
 // Componente de Badge para Status
 const StatusBadge = ({ status }: { status: string }) => {
