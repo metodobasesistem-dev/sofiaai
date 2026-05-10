@@ -478,6 +478,11 @@ export class AgentService {
         }
       }
 
+      // [CRITICAL FIX] Garantia final contra erro de NOT NULL na coluna 'nome'
+      if (!contactData.nome) {
+        contactData.nome = contactName || cleanPhone || 'Lead WhatsApp';
+      }
+
       const { error: upsertErr } = await supabase.from('contacts').upsert(contactData, { onConflict: 'id' });
       if (upsertErr) {
         console.error('[AgentService] ❌ Contact upsert failed:', upsertErr);
