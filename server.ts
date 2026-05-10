@@ -88,6 +88,7 @@ async function startServer() {
   });
 
   // 1. Middleware
+  app.set('trust proxy', true);
   app.use(express.json());
   app.use('/api/', globalLimiter); // Proteção global básica
   

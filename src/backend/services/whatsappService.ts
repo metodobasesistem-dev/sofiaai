@@ -486,7 +486,7 @@ class WhatsAppService {
 
       // 4. Substitui o registro temporário pelo definitivo com o ID real do WhatsApp
       if (msgId !== tempId) {
-        // Insere o definitivo (pode conflitar com webhook echo — tratado por onConflict)
+        console.log(`[WhatsAppService] 💾 Attempting definitive persist for msg ${msgId}`);
         const { error } = await supabase.from('messages').insert({
           id: msgId,
           whatsapp_id: msgId,
@@ -494,30 +494,37 @@ class WhatsAppService {
           thread_id: threadId,
           text: message,
           direction: 'outbound',
-          is_ai: senderType === 'IA', // BUG FIX: respect senderType correctly
+          is_ai: senderType === 'IA',
           status: 'sent',
           timestamp: sendTimestamp,
           created_at: new Date(sendTimestamp).toISOString(),
-          quoted_id: quoted?.id,   // BUG FIX: propagate quoted context to definitive record
+          quoted_id: quoted?.id,
           quoted_text: quoted?.text
         });
-
+ 
         if (error) {
           if (error.code === '23505') {
-            // Webhook chegou primeiro — só atualiza o status do registro que já existe para este usuário
-            await supabase.from('messages').update({ status: 'sent', thread_id: threadId }).eq('whatsapp_id', msgId).eq('user_id', userId);
-            // Neste caso de conflito positivo, podemos deletar a temporária
-            await supabase.from('messages').delete().eq('id', tempId);
+            console.log(`[WhatsAppService] 🔄 Conflict: Webhook already persisted ${msgId}. Updating status.`);
+            const { error: upErr } = await supabase.from('messages')
+              .update({ status: 'sent', thread_id: threadId })
+              .eq('whatsapp_id', msgId)
+              .eq('user_id', userId);
+            
+            if (!upErr) {
+              await supabase.from('messages').delete().eq('id', tempId);
+            } else {
+              console.error('[WhatsAppService] ❌ Failed to update existing message during conflict:', upErr);
+            }
           } else {
-            console.error('[WhatsAppService] Definitive persist failed, keeping temp as fallback:', error.message);
-            // NÃO DELETA A TEMPORÁRIA SE FALHAR — mantém como rastro
+            console.error('[WhatsAppService] ❌ Definitive persist failed:', error);
+            // NÃO DELETA A TEMPORÁRIA SE FALHAR — mantém como rastro para não "sumir" no front
           }
         } else {
-          // Sucesso no insert definitivo: remove o registro temporário com segurança
+          console.log(`[WhatsAppService] ✅ Definitive persist success for ${msgId}. Cleaning up temp ${tempId}.`);
           await supabase.from('messages').delete().eq('id', tempId);
         }
       } else {
-        // API não retornou ID diferente — só atualiza o status do temp
+        console.log(`[WhatsAppService] ℹ️ API returned same ID as temp. Just updating status for ${tempId}.`);
         await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
       }
 
