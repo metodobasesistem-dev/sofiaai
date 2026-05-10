@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Download,
   Edit,
-  Trash2
+  Trash2,
+  User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
@@ -32,7 +33,15 @@ interface Transaction {
   status: 'pago' | 'pendente' | 'cancelado';
   data_pagamento: string;
   categoria_nome?: string;
+  contact_id?: string;
+  contact_name?: string;
   metodo_pagamento?: string;
+}
+
+interface Contact {
+  id: string;
+  name: string;
+  pushname?: string;
 }
 
 interface Category {
@@ -44,7 +53,9 @@ interface Category {
 export default function Finance() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -62,6 +73,7 @@ export default function Finance() {
     status: 'pago' as 'pago' | 'pendente',
     data_pagamento: format(new Date(), 'yyyy-MM-dd'),
     categoria_id: '',
+    contact_id: '',
     observacoes: ''
   });
 
@@ -77,7 +89,8 @@ export default function Finance() {
 
   // Lista Filtrada
   const filteredTransactions = transactions.filter(t => {
-    const matchesSearch = t.descricao.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = t.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         t.contact_name?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || t.tipo === filterType;
     return matchesSearch && matchesType;
   });
@@ -90,7 +103,8 @@ export default function Finance() {
     setLoading(true);
     await Promise.all([
       fetchTransactions(),
-      fetchCategories()
+      fetchCategories(),
+      fetchContacts()
     ]);
     setLoading(false);
   };
@@ -98,6 +112,11 @@ export default function Finance() {
   const fetchCategories = async () => {
     const { data } = await supabase.from('financial_categories').select('*').order('nome');
     if (data) setCategories(data);
+  };
+
+  const fetchContacts = async () => {
+    const { data } = await supabase.from('contacts').select('id, name, pushname').order('name').limit(500);
+    if (data) setContacts(data);
   };
 
   const handleAddCategory = async (e: React.FormEvent) => {
@@ -137,6 +156,7 @@ export default function Finance() {
       status: t.status as any,
       data_pagamento: t.data_pagamento,
       categoria_id: (t as any).categoria_id || '',
+      contact_id: t.contact_id || '',
       observacoes: (t as any).observacoes || ''
     });
     setShowAddModal(true);
@@ -163,7 +183,8 @@ export default function Finance() {
         .from('financial_transactions')
         .select(`
           *,
-          financial_categories(nome)
+          financial_categories(nome),
+          contacts(name, pushname)
         `)
         .order('data_pagamento', { ascending: false });
 
@@ -171,7 +192,8 @@ export default function Finance() {
       
       const formatted = (data || []).map(t => ({
         ...t,
-        categoria_nome: t.financial_categories?.nome
+        categoria_nome: t.financial_categories?.nome,
+        contact_name: t.contacts?.name || t.contacts?.pushname
       }));
       
       setTransactions(formatted);
@@ -197,6 +219,7 @@ export default function Finance() {
         status: formData.status,
         data_pagamento: formData.data_pagamento,
         categoria_id: formData.categoria_id || null,
+        contact_id: formData.contact_id || null,
         observacoes: formData.observacoes
       };
 
@@ -221,6 +244,7 @@ export default function Finance() {
         status: 'pago',
         data_pagamento: format(new Date(), 'yyyy-MM-dd'),
         categoria_id: '',
+        contact_id: '',
         observacoes: ''
       });
       fetchTransactions();
@@ -368,6 +392,22 @@ export default function Finance() {
                       </select>
                     </div>
                     <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Lead / Contato (Opcional)</label>
+                      <select 
+                        value={formData.contact_id}
+                        onChange={e => setFormData({...formData, contact_id: e.target.value})}
+                        className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50 outline-none transition-all"
+                      >
+                        <option value="">Nenhum</option>
+                        {contacts.map(contact => (
+                          <option key={contact.id} value={contact.id}>{contact.name || contact.pushname}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Status</label>
                       <select 
                         value={formData.status}
@@ -584,7 +624,18 @@ export default function Finance() {
                         </div>
                         <div>
                           <p className="text-sm font-bold text-slate-800 leading-tight">{transaction.descricao}</p>
-                          <p className="text-[10px] text-slate-400 font-medium mt-1">ID: #{transaction.id.substring(0, 8)}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-[10px] text-slate-400 font-medium">ID: #{transaction.id.substring(0, 8)}</p>
+                            {transaction.contact_name && (
+                              <>
+                                <span className="text-[10px] text-slate-300">•</span>
+                                <div className="flex items-center gap-1 text-[10px] text-primary-600 font-bold">
+                                  <UserIcon size={10} />
+                                  {transaction.contact_name}
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
