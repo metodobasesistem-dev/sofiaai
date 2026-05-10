@@ -66,6 +66,7 @@ import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
 import stripeRoutes from './src/backend/routes/stripeRoutes.js';
 import { requireAuth, requireAdmin } from './src/backend/middleware/authMiddleware.js';
+import { globalLimiter, apiLimiter, authLimiter, webhookLimiter } from './src/backend/middleware/rateLimiter.js';
 
 
 
@@ -88,9 +89,10 @@ async function startServer() {
 
   // 1. Middleware
   app.use(express.json());
+  app.use('/api/', globalLimiter); // Proteção global básica
   
   // REGISTRO DE EMERGÊNCIA - TOPO DO SERVIDOR
-  app.use('/api/v2/sofia', sofiaRoutes);
+  app.use('/api/v2/sofia', apiLimiter, sofiaRoutes);
   app.use('/api/v2/stripe', stripeRoutes);
   
   // 2. Health Checks
@@ -133,7 +135,7 @@ async function startServer() {
   });
 
   // Diagnostic route to troubleshoot production issues (ADMIN ONLY)
-  app.get('/api/diag/system', requireAuth as any, requireAdmin as any, async (req, res) => {
+  app.get('/api/diag/system', authLimiter, requireAuth as any, requireAdmin as any, async (req, res) => {
     const mask = (str?: string) => str ? `${str.substring(0, 5)}...${str.substring(str.length - 4)}` : 'MISSING';
     
     const diag = {
@@ -196,11 +198,11 @@ async function startServer() {
     app.use('/api/v2/contacts', contactApiRoutes);
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
-    app.use('/api/v2/admin', adminApiRoutes);
+    app.use('/api/v2/admin', authLimiter, adminApiRoutes);
     app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
-    app.use('/api/whatsapp/evolution', whatsappWebhookRoutes); // Novo Webhook
-    app.use('/api/leo', leoRoutes);
+    app.use('/api/whatsapp/evolution', webhookLimiter, whatsappWebhookRoutes); // Novo Webhook
+    app.use('/api/leo', webhookLimiter, leoRoutes);
 
 
 
