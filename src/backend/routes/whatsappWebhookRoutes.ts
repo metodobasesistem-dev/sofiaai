@@ -20,18 +20,26 @@ const router = Router();
  * Se não configurado, aceita sem validação (modo compatibilidade).
  */
 function validateEvolutionToken(tokenFromQuery: string | undefined): boolean {
-  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  const secret = (process.env.EVOLUTION_WEBHOOK_SECRET || '').trim();
   if (!secret) {
     // Modo compatibilidade: sem secret configurado, aceita tudo
     return true;
   }
-  if (!tokenFromQuery) {
-    console.warn('[Webhook] ⚠️ Token ausente na URL. Configure EVOLUTION_WEBHOOK_SECRET e atualize a URL do webhook na Evolution.');
+  const tokenTrimmed = (tokenFromQuery || '').trim();
+  if (!tokenTrimmed) {
+    console.warn('[Webhook] ⚠️ Token ausente na URL. Webhook rejeitado.');
     return false;
   }
   // Comparação timing-safe para evitar timing attacks
   try {
-    return crypto.timingSafeEqual(Buffer.from(tokenFromQuery), Buffer.from(secret));
+    const bufA = Buffer.from(tokenTrimmed);
+    const bufB = Buffer.from(secret);
+    // timingSafeEqual exige buffers do mesmo tamanho
+    if (bufA.length !== bufB.length) {
+      console.warn(`[Webhook] ⚠️ Token diverge: URL=${bufA.length} chars | ENV=${bufB.length} chars. Verifique EVOLUTION_WEBHOOK_SECRET no Coolify.`);
+      return false;
+    }
+    return crypto.timingSafeEqual(bufA, bufB);
   } catch {
     return false;
   }
