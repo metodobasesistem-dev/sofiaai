@@ -27,7 +27,8 @@ import {
   Shield,
   Zap,
   Send,
-  Plug
+  Plug,
+  Wallet
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -198,6 +199,11 @@ export default function Layout({
         </div>
       ), 
       label: 'Caixa de Entrada' 
+    },
+    { 
+      id: 'finance', 
+      icon: <Wallet size={20} />, 
+      label: 'Financeiro' 
     },
     { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', minPlan: 'Pro' },
     { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', minPlan: 'Pro' },

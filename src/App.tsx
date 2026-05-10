@@ -17,6 +17,7 @@ import Campaigns from './components/Campaigns';
 import QuickReplies from './components/QuickReplies';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LeoApp from './pages/Leo/LeoApp';
+import Finance from './components/Finance';
 
  import Login from './components/Login';
  import MaintenancePage from './components/MaintenancePage';
@@ -233,6 +234,8 @@ export default function App() {
         return <Campaigns />;
       case 'quick_replies':
         return <QuickReplies />;
+      case 'finance':
+        return <Finance />;
 
       default:
         return (
