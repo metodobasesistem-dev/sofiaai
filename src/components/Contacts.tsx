@@ -507,7 +507,34 @@ export default function Contacts({ onTabChange, user, role }: { onTabChange?: (t
                 toast.error('Nenhum contato para exportar');
                 return;
               }
-              // ... logic remains same
+
+              try {
+                const headers = ['Nome', 'Telefone', 'Status', 'Cliente', 'Total Mensagens', 'Origem', 'Data Criacao', 'Ultima Interacao'];
+                const csvRows = filteredContacts.map(c => [
+                  `"${(c.nome || '').replace(/"/g, '""')}"`,
+                  `"${c.telefone}"`,
+                  `"${c.status_funil}"`,
+                  `"${c.is_client ? 'Sim' : 'Não'}"`,
+                  `"${c.totalMensagens || 0}"`,
+                  `"${c.source || 'manual'}"`,
+                  `"${new Date(c.data_criacao || Date.now()).toLocaleString('pt-BR')}"`,
+                  `"${c.ultimaInteracao ? new Date(c.ultimaInteracao).toLocaleString('pt-BR') : '—'}"`
+                ].join(','));
+
+                const csvContent = [headers.join(','), ...csvRows].join('\n');
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `contatos_crm_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success(`${filteredContacts.length} contatos exportados!`);
+              } catch (err) {
+                console.error('[Export] Error:', err);
+                toast.error('Erro ao exportar contatos');
+              }
             }}
             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
           >
