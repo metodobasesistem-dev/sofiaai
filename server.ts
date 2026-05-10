@@ -65,7 +65,7 @@ import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
 import stripeRoutes from './src/backend/routes/stripeRoutes.js';
-import { requireAuth } from './src/backend/middleware/authMiddleware.js';
+import { requireAuth, requireAdmin } from './src/backend/middleware/authMiddleware.js';
 
 
 
