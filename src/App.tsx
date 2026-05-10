@@ -219,8 +219,7 @@ export default function App() {
         if (role !== 'admin' && !chatEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Inbox user={user} role={role} />;
       case 'contacts':
-        if (role !== 'admin' && !crmEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
-        return <Contacts onTabChange={handleTabChange} user={user} role={role} />;
+        return <Contacts onTabChange={handleTabChange} />;
       case 'clients':
         return <Clients onTabChange={handleTabChange} user={user} role={role} />;
       case 'integrations':
