@@ -56,9 +56,9 @@ const formatRelative = (date: any): string => {
   if (days < 7) return `${days}d atrás`;
   return formatDate(date);
 };
-import { syncContacts, listContacts, deleteContact, updateContactStatus } from '../services/supabaseService';
+import { syncContacts } from '../services/whatsappService';
+import { listContacts, deleteContact, updateContactFunilStatus } from '../services/supabaseService';
 import ContactAvatar from './ContactAvatar';
-import SidePanel from './contacts/SidePanel';
 
 // Componente de Badge para Status
 const StatusBadge = ({ status }: { status: string }) => {
@@ -164,12 +164,10 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
 
   const handleStatusChange = async (contactId: string, newStatus: string) => {
     try {
-      const res = await updateContactStatus(contactId, newStatus);
-      if (res.success) {
-        setContacts(prev => prev.map(c => c.id === contactId ? { ...c, status_funil: newStatus } : c));
-        if (selectedContact?.id === contactId) {
-          setSelectedContact({ ...selectedContact, status_funil: newStatus });
-        }
+      await updateContactFunilStatus(contactId, newStatus as any);
+      setContacts(prev => prev.map(c => c.id === contactId ? { ...c, status_funil: newStatus } : c));
+      if (selectedContact?.id === contactId) {
+        setSelectedContact((prev: any) => prev ? { ...prev, status_funil: newStatus } : prev);
       }
     } catch (err) {
       toast.error('Erro ao atualizar status');
@@ -511,17 +509,51 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
               onClick={() => setSelectedContact(null)}
               className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30"
             />
-            <SidePanel 
-              contact={selectedContact} 
-              onClose={() => setSelectedContact(null)} 
-              onTabChange={onTabChange}
-              onStatusChange={handleStatusChange}
-              onEdit={(c) => {
-                setEditingContactId(c.id || null);
-                setFormData({ nome: c.nome, telefone: c.telefone });
-                setIsModalOpen(true);
-              }}
-            />
+            <motion.div
+              initial={{ x: '100%', opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="fixed right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl z-40 flex flex-col border-l border-slate-100"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+                <div className="flex items-center gap-4">
+                  <ContactAvatar url={selectedContact.profile_picture_url} name={selectedContact.nome} size="lg" />
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">{selectedContact.nome}</h3>
+                    <p className="text-xs text-slate-500">{formatPhone(selectedContact.telefone)}</p>
+                    <div className="mt-1.5"><StatusBadge status={selectedContact.status_funil} /></div>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedContact(null)} className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4 flex-1 overflow-y-auto">
+                <div className="space-y-3">
+                  {[
+                    { label: 'Telefone', value: formatPhone(selectedContact.telefone) },
+                    { label: 'Status', value: selectedContact.status_funil },
+                    { label: 'Mensagens', value: `${selectedContact.totalMensagens || 0} msgs` },
+                    { label: 'Última interação', value: formatRelative(selectedContact.ultimaInteracao) },
+                    { label: 'Cliente desde', value: formatRelative(selectedContact.data_criacao) },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-50">
+                      <span className="text-xs text-slate-400 font-medium">{item.label}</span>
+                      <span className="text-xs font-bold text-slate-900">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-100 space-y-2">
+                <button
+                  onClick={() => { setEditingContactId(selectedContact.id || null); setFormData({ nome: selectedContact.nome, telefone: selectedContact.telefone }); setIsModalOpen(true); setSelectedContact(null); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm"
+                >
+                  <Edit2 size={16} /> Editar Contato
+                </button>
+              </div>
+            </motion.div>
           </>
         )}
       </AnimatePresence>
