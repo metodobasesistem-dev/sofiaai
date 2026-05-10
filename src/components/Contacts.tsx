@@ -23,7 +23,39 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { formatPhone, formatRelative } from '../utils/formatters';
+// ── Helpers ──
+const formatPhone = (phone: string) => {
+  if (!phone) return '—';
+  const p = phone.replace(/\D/g, '');
+  if (p.length === 13) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9)}`;
+  if (p.length === 12) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,8)}-${p.slice(8)}`;
+  if (p.length === 11) return `(${p.slice(0,2)}) ${p.slice(2,7)}-${p.slice(7)}`;
+  return phone;
+};
+
+const formatDate = (date: any): string => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatRelative = (date: any): string => {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Agora mesmo';
+  if (mins < 60) return `${mins}min atrás`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h atrás`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'Ontem';
+  if (days < 7) return `${days}d atrás`;
+  return formatDate(date);
+};
 import { syncContacts, listContacts, deleteContact, updateContactStatus } from '../services/supabaseService';
 import ContactAvatar from './ContactAvatar';
 import SidePanel from './contacts/SidePanel';
