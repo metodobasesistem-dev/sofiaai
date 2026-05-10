@@ -1014,28 +1014,29 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const jid = params.get('jid');
-    if (jid && threads.length > 0) {
+    if (jid && threads.length > 0 && user?.id) {
       const cleanJid = jid.split('@')[0];
-      const thread = threads.find(t => (t.remoteJid || '').split('@')[0] === cleanJid);
+      const threadId = `${user.id}_${cleanJid}`;
+      const existingThread = threads.find(t => t.id === threadId || (t.remoteJid || '').split('@')[0] === cleanJid);
       
-      if (thread) {
-        setSelectedThreadId(thread.id);
+      if (existingThread) {
+        setSelectedThreadId(existingThread.id);
       } else {
         // Verifica se já não criamos uma temp thread para esse número
-        const hasTemp = threads.some(t => t.id.startsWith('temp-') && (t.remoteJid || '').split('@')[0] === cleanJid);
+        const hasTemp = threads.some(t => (t as any).isTemp && (t.remoteJid || '').split('@')[0] === cleanJid);
         if (!hasTemp) {
-          // Cria uma thread temporária para que o usuário possa iniciar a conversa
-          const tempId = `temp-${Date.now()}`;
-          const tempThread: Thread = {
-            id: tempId,
-            remoteJid: `${cleanJid}@s.whatsapp.net`, // Standardize to backend format
+          // Cria uma thread temporária com o ID REAL que o backend vai usar
+          const tempThread: Thread & { isTemp?: boolean } = {
+            id: threadId,
+            remoteJid: `${cleanJid}@s.whatsapp.net`,
             name: cleanJid,
             lastMessage: 'Iniciar conversa...',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             status: 'human',
             updatedAt: new Date().toISOString(),
             ticketStatus: 'open',
-            funilStatus: 'Lead'
+            funilStatus: 'Lead',
+            isTemp: true
           };
           
           // Tenta buscar o nome real no CRM
@@ -1044,29 +1045,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           tempThread.funilStatus = resolved.funilStatus;
 
           setThreads(prev => [tempThread, ...prev]);
-          setSelectedThreadId(tempId);
+          setSelectedThreadId(threadId);
         }
       }
     }
-  }, [threads.length]);
-
-  // Merge temporary threads with real ones when they arrive from backend
-  useEffect(() => {
-    if (selectedThreadId?.startsWith('temp-')) {
-      const tempThread = threads.find(t => t.id === selectedThreadId);
-      if (tempThread) {
-        // Procura uma thread real com o mesmo número
-        const cleanTempJid = (tempThread.remoteJid || '').split('@')[0];
-        const realThread = threads.find(t => !t.id.startsWith('temp-') && (t.remoteJid || '').split('@')[0] === cleanTempJid);
-        
-        if (realThread) {
-          // Muda a seleção para a thread real e remove a temporária do estado
-          setSelectedThreadId(realThread.id);
-          setThreads(prev => prev.filter(t => t.id !== tempThread.id));
-        }
-      }
-    }
-  }, [threads, selectedThreadId]);
+  }, [threads.length, user?.id]);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     // Usamos um pequeno timeout para garantir que o DOM atualizou
@@ -1292,7 +1275,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           async (payload) => {
             if (payload.eventType === 'INSERT') {
               setThreads(prev => {
-                if (prev.some(t => t.id === payload.new.id)) return prev;
+                // Se já existe e NÃO é temporária, ignora. Se for temporária, substitui pela real.
+                if (prev.some(t => t.id === payload.new.id && !(t as any).isTemp)) return prev;
+                
                 const resolved = getResolvedContact(payload.new.remote_jid || '', payload.new.contact_name || 'Lead WhatsApp');
                 const newThread = {
                   id: payload.new.id,
@@ -1309,7 +1294,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   profilePictureUrl: payload.new.profile_picture_url,
                   pending_followup: payload.new.pending_followup
                 };
-                return [newThread as any, ...prev];
+
+                const filtered = prev.filter(t => t.id !== payload.new.id);
+                return [newThread as any, ...filtered];
               });
             } else if (payload.eventType === 'UPDATE') {
               setThreads(prev => {
