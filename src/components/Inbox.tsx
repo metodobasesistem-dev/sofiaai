@@ -46,7 +46,8 @@ import {
   Globe,
   Instagram,
   Download,
-  MessageSquare
+  MessageSquare,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -917,6 +918,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     contactsRef.current = contacts;
@@ -1031,8 +1034,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       
       // Atualiza a referência da thread atual
       lastThreadIdRef.current = selectedThreadId;
+      setShowScrollButton(false); // Reset button on thread change
     }
   }, [messages, loadingMessages, selectedThreadId]);
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    
+    // Se estiver a mais de 300px do fundo, mostra o botão
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 300;
+    setShowScrollButton(!isAtBottom);
+  };
 
   // ─── Manuseio do Botão Voltar (Mobile) ─────────────────────────────────────────
   const lastBackPressRef = useRef<number>(0);
@@ -2685,13 +2698,16 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative" 
-                 style={{ 
-                   backgroundColor: '#e5ddd5', // Cor base similar ao WhatsApp
-                   backgroundImage: 'url(/chat-bg.png)', 
-                   backgroundSize: '400px', 
-                   backgroundRepeat: 'repeat' 
-                 }}>
+            <div 
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative no-scrollbar" 
+              style={{ 
+                backgroundColor: '#e5ddd5', // Cor base similar ao WhatsApp
+                backgroundImage: 'url(/chat-bg.png)', 
+                backgroundSize: '400px', 
+                backgroundRepeat: 'repeat' 
+              }}>
               {/* Overlay suave para integrar melhor com o tema claro */}
               <div className="absolute inset-0 bg-white/40 pointer-events-none" />
               
@@ -2736,6 +2752,27 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </>
               )}
               </div>
+
+              {/* Scroll to Bottom Floating Button */}
+              <AnimatePresence>
+                {showScrollButton && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                    onClick={() => scrollToBottom("smooth")}
+                    className="absolute bottom-6 right-6 w-10 h-10 bg-white text-slate-600 rounded-full shadow-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all z-[100] active:scale-90 group"
+                    title="Ir para o final"
+                  >
+                    <ChevronDown size={20} className="group-hover:translate-y-0.5 transition-transform" />
+                    {activeThread.unreadCount && activeThread.unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                        {activeThread.unreadCount}
+                      </span>
+                    )}
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Quick Replies chips */}
