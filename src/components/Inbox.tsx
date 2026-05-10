@@ -2366,6 +2366,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             </button>
             
             <button 
+              onClick={() => setActiveTab('finance')}
+              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
+                ${activeTab === 'finance' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+              title="Financeiro"
+            >
+              <Wallet size={22} className={activeTab === 'finance' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
+              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Financeiro</span>}
+              {activeTab === 'finance' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
+            </button>
+
+            <button 
               onClick={() => setActiveTab('contacts')}
               className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
                 ${activeTab === 'contacts' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
@@ -2407,17 +2418,6 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               <MessageSquare size={22} className={activeTab === 'quick_replies' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
               {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Atalhos</span>}
               {activeTab === 'quick_replies' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
-            </button>
-
-            <button 
-              onClick={() => setActiveTab('finance')}
-              className={`w-full ${isSidebarExpanded ? 'py-3 px-4 justify-start' : 'aspect-square justify-center'} rounded-xl flex items-center gap-3 transition-all group relative
-                ${activeTab === 'finance' ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-              title="Financeiro"
-            >
-              <Wallet size={22} className={activeTab === 'finance' ? 'fill-primary-400/20 shrink-0' : 'shrink-0'} />
-              {isSidebarExpanded && <span className="font-semibold text-sm whitespace-nowrap overflow-hidden opacity-100">Financeiro</span>}
-              {activeTab === 'finance' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r-full" />}
             </button>
           </div>
 
