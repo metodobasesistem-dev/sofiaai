@@ -201,8 +201,6 @@ export class EvolutionApiService {
         number: cleanNumber,
         text: text,
         options: {
-          delay: 1200,
-          presence: 'composing',
           linkPreview: false
         }
       });
@@ -220,8 +218,6 @@ export class EvolutionApiService {
       const { data } = await api.post(`/message/sendWhatsAppAudio/${userId}`, {
         number: to,
         options: {
-          delay: 1200,
-          presence: 'recording',
           encoding: true
         },
         audio: base64Audio
@@ -238,7 +234,7 @@ export class EvolutionApiService {
     try {
       const { data } = await api.post(`/message/sendMedia/${userId}`, {
         number: to,
-        options: { delay: 1200, presence: 'composing' },
+        options: {},
         media: base64Media,
         mediatype: mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document',
         mimetype: mimetype,
