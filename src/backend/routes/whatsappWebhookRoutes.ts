@@ -189,6 +189,40 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
     if (!fromMe) {
       await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
     }
+
+    // 3. [FOTO] Busca e cacheia a foto de perfil do contato em background (sem bloquear o webhook)
+    // Só dispara se for mensagem inbound (do cliente) para manter a foto sempre atualizada
+    if (!fromMe) {
+      setImmediate(async () => {
+        try {
+          const { data: thread } = await supabase
+            .from('threads')
+            .select('profile_picture_url, profile_picture_updated_at')
+            .eq('id', threadId)
+            .maybeSingle();
+
+          // Só atualiza se não tiver foto ou se tiver mais de 24h
+          const needsUpdate = !thread?.profile_picture_url || (() => {
+            if (!thread.profile_picture_updated_at) return true;
+            const ageHours = (Date.now() - new Date(thread.profile_picture_updated_at).getTime()) / 3600000;
+            return ageHours >= 24;
+          })();
+
+          if (needsUpdate) {
+            const photoUrl = await provider.fetchProfilePictureUrl(instanceName, cleanPhone);
+            if (photoUrl) {
+              await supabase.from('threads').update({
+                profile_picture_url: photoUrl,
+                profile_picture_updated_at: new Date().toISOString()
+              }).eq('id', threadId);
+              console.log(`[Webhook] 📸 Profile picture cached for ${cleanPhone}`);
+            }
+          }
+        } catch (photoErr) {
+          // Falha silenciosa — foto é opcional
+        }
+      });
+    }
   } catch (err: any) {
     // Log detalhado conforme solicitado no Bug 1
     console.error(`[Webhook] ❌ PERSISTENCE FAILED for message ${messageId} | User: ${userId} | Jid: ${from} | Type: ${type} | Error:`, err.message || err);

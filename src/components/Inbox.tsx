@@ -966,23 +966,45 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [newName, setNewName] = useState('');
 
   // ─── Lógica de Busca de Fotos em Lote ──────────────────────────────────────────
+  // Só busca fotos que ainda não estão cacheadas no banco (sem foto ou expiradas)
   const fetchProfilePicturesInBatch = async (threadsToSync: Thread[]) => {
-    // Máximo de 10 simultâneas para não sobrecarregar
-    const batchSize = 10;
-    for (let i = 0; i < threadsToSync.length; i += batchSize) {
-      const chunk = threadsToSync.slice(i, i + batchSize);
+    // Filtra apenas threads sem foto ou com foto expirada (>24h)
+    const stale = threadsToSync.filter(t => {
+      if (!t.profilePictureUrl) return true;
+      if (!t.profilePictureUpdatedAt) return true;
+      const ageHours = (Date.now() - new Date(t.profilePictureUpdatedAt).getTime()) / 3600000;
+      return ageHours >= 24;
+    });
+
+    if (stale.length === 0) return;
+
+    // Máximo de 5 simultâneas para não sobrecarregar a Evolution API
+    const batchSize = 5;
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return;
+
+    for (let i = 0; i < stale.length; i += batchSize) {
+      const chunk = stale.slice(i, i + batchSize);
       await Promise.allSettled(chunk.map(async (t) => {
         try {
           const phone = t.remoteJid.split('@')[0].replace(/\D/g, '');
           const res = await fetch(`/api/v2/contacts/profile-picture/${phone}`, {
-            headers: { 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` }
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
           });
+          if (!res.ok) return;
           const result = await res.json();
           if (result.success && result.url) {
-            setThreads(prev => prev.map(pt => pt.id === t.id ? { ...pt, profilePictureUrl: result.url } : pt));
+            // Atualiza localmente
+            setThreads(prev => prev.map(pt => pt.id === t.id ? { 
+              ...pt, 
+              profilePictureUrl: result.url,
+              profilePictureUpdatedAt: new Date().toISOString()
+            } : pt));
           }
         } catch (e) {}
       }));
+      // Pequeno delay entre batches para não estrangular a API
+      if (i + batchSize < stale.length) await new Promise(r => setTimeout(r, 500));
     }
   };
 
@@ -1482,12 +1504,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         quoted_text: d.quoted_text
       });
 
+      // Variável para guardar o timestamp da última mensagem conhecida (reconciliação de lacunas)
+      let lastKnownMsgTimestamp: string | null = null;
+
       channel = supabase
         .channel(`messages-${selectedThreadId}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
           (payload) => {
+            // Atualiza o timestamp da última mensagem conhecida
+            if (payload.new.created_at) lastKnownMsgTimestamp = payload.new.created_at;
+
             setMessages(prev => {
               const newMsg = formatMsg(payload.new);
               
@@ -1542,6 +1570,29 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             setMessages(prev => prev.filter(m => m.id !== payload.old.id));
           }
         )
+        .on('system', {}, (status: any) => {
+          // ── RECONCILIAÇÃO DE LACUNAS (Gap Detection) ──────────────────
+          // Quando o Realtime reconecta após queda de rede, busca mensagens perdidas
+          if (status === 'SUBSCRIBED' && lastKnownMsgTimestamp) {
+            console.log('[Inbox] 🔄 Realtime reconnected. Fetching messages since', lastKnownMsgTimestamp);
+            supabase
+              .from('messages')
+              .select('*')
+              .eq('thread_id', selectedThreadIdRef.current!)
+              .gt('created_at', lastKnownMsgTimestamp)
+              .order('created_at', { ascending: true })
+              .then(({ data }) => {
+                if (data && data.length > 0) {
+                  console.log(`[Inbox] 🔄 Gap fill: ${data.length} message(s) recovered.`);
+                  setMessages(prev => {
+                    const existingIds = new Set(prev.map(m => m.id));
+                    const newMsgs = data.filter(d => !existingIds.has(d.id)).map(formatMsg);
+                    return newMsgs.length > 0 ? [...prev, ...newMsgs as any] : prev;
+                  });
+                }
+              });
+          }
+        })
         .subscribe();
 
       // Zerar não-lidas (Optimistic + Backend)

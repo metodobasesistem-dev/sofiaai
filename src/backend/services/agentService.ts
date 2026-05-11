@@ -8,6 +8,29 @@ import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 
+/**
+ * Retry com backoff exponencial para operações de banco de dados.
+ * Protege contra falhas transitórias de rede e sobrecarga do Supabase.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 300): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      // Não retenta em erros de constraint (23505=duplicado, 23503=FK)
+      if (err?.code === '23505' || err?.code === '23503') throw err;
+      if (attempt < maxAttempts) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1); // 300ms, 600ms, 1200ms
+        console.warn(`[withRetry] Attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms...`, err?.message || err);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 
 
 export async function logToDB(userId: string, level: string, module: string, message: string, metadata: any = {}) {
@@ -273,11 +296,11 @@ export class AgentService {
     const timestamp = Date.now();
     console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
     
-      // 1. Thread UPSERT FIRST
+      // 1. Thread UPSERT FIRST — com retry automático
     try {
       const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId));
       let [{ data: existingThread }, { data: contact }] = await Promise.all([
-        supabase.from('threads').select('contact_name, photo_url, unread_count, ticket_status').eq('id', threadId).maybeSingle(),
+        supabase.from('threads').select('contact_name, profile_picture_url, profile_picture_updated_at, unread_count, ticket_status').eq('id', threadId).maybeSingle(),
         supabase.from('contacts').select('nome, status_funil').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
       ]);
       
@@ -305,8 +328,6 @@ export class AgentService {
         console.log(`[AgentService] 🔄 Reopening resolved thread for ${cleanPhone}. Moving back to Lead.`);
         finalTicketStatus = 'open';
         finalFunilStatus = 'Lead';
-        
-        // Atualiza o contato no banco também
         await supabase.from('contacts').update({ status_funil: 'Lead' }).eq('id', `${userId}_${cleanPhone}`);
       }
 
@@ -315,42 +336,43 @@ export class AgentService {
         user_id: userId,
         last_message: text.substring(0, 1000),
         last_message_time: new Date(timestamp).toISOString(),
-        status: 'ia', 
-        remote_jid: remoteJid || `${cleanPhone}@c.us`,
+        status: 'ia',
+        remote_jid: remoteJid || `${cleanPhone}@s.whatsapp.net`,
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia',
-        // [FIX] Prioridade: CRM > Nome Editado na Thread > PushName do WhatsApp > Número do Telefone
+        // [FIX] Prioridade: CRM > Nome já salvo na Thread > PushName do WhatsApp > Número
         contact_name: contact?.nome || existingThread?.contact_name || contactName || cleanPhone,
         unread_count: newUnreadCount,
         ticket_status: finalTicketStatus,
         updated_at: new Date(timestamp).toISOString()
       };
 
-      const { error: tErr } = await supabase.from('threads').upsert(threadData);
-      
-      if (tErr) {
-        console.error('[AgentService] ❌ THREAD PERSIST ERROR:', {
-          code: tErr.code,
-          message: tErr.message,
-          details: tErr.details,
-          threadId
-        });
-        console.warn('[AgentService] Initial thread upsert failed, retrying minimal set...', tErr.message);
-        // Minimal fallback to ensure persistence
-        const { error: fErr } = await supabase.from('threads').upsert({
+      // [FOTO] Preserva a foto existente — nunca sobrescreve com null
+      if (existingThread?.profile_picture_url) {
+        threadData.profile_picture_url = existingThread.profile_picture_url;
+        threadData.profile_picture_updated_at = existingThread.profile_picture_updated_at;
+      }
+
+      await withRetry(async () => {
+        const { error: tErr } = await supabase.from('threads').upsert(threadData);
+        if (tErr) throw tErr;
+      });
+
+    } catch (err: any) {
+      console.error('[AgentService] Thread sync error (all retries exhausted):', err?.message || err);
+      // Fallback mínimo para garantir que a thread existe
+      try {
+        const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId));
+        await supabase.from('threads').upsert({
           id: threadId,
           user_id: userId,
           last_message: text.substring(0, 1000),
           last_message_time: new Date(timestamp).toISOString(),
-          remote_jid: threadData.remote_jid
+          remote_jid: remoteJid || `${cleanPhone}@s.whatsapp.net`
         });
-        if (fErr) {
-          console.error('[DEBUG-THREADS-FATAL] FAILED EVEN MINIMAL UPSERT:', fErr);
-          throw fErr; // Throw to block caller
-        }
+      } catch (fbErr) {
+        console.error('[AgentService] FATAL: Even fallback thread upsert failed:', fbErr);
       }
-    } catch (err) {
-      console.error('[AgentService] Thread sync error:', err);
     }
 
     // 2. Message Second
@@ -387,19 +409,13 @@ export class AgentService {
          messageData.cost_brl = usage.cost_brl || 0;
        }
  
-        // Upsert atômico usando whatsapp_id — agora seguro pois é UNIQUE CONSTRAINT completo
-        // (Fase 1 converteu o índice parcial em constraint completa).
-        // Race condition entre webhook echo e persistMessage direto é resolvida aqui.
-        // Upsert atômico usando whatsapp_id — garantindo que o onConflict bata com a constraint única do banco
-        const { error: mErr } = await supabase
-          .from('messages')
-          .upsert(messageData, { onConflict: 'whatsapp_id' });
-
-        if (mErr) {
-          console.error(`[AgentService] ❌ Error in message upsert:`, mErr);
-          await logToDB(userId, 'error', 'persistence', `Message upsert failed: ${messageId}`, mErr);
-          throw mErr; // Throw to block caller (Bug 1)
-        }
+        // Upsert atômico usando whatsapp_id com retry automático
+        await withRetry(async () => {
+          const { error: mErr } = await supabase
+            .from('messages')
+            .upsert(messageData, { onConflict: 'whatsapp_id' });
+          if (mErr) throw mErr;
+        });
 
     } catch (mErr) {
        console.error('[AgentService] Message insert exception:', mErr);
