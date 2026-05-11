@@ -120,7 +120,7 @@ router.post('/webhook', async (req, res) => {
 });
 
 async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any) {
-  const { from, body, contactName, id: messageId, fromMe, type, caption, fileName, mimeType, quotedId, quotedText, raw } = message;
+  const { from, body, contactName, id: messageId, fromMe, type, caption, fileName, mimeType, quotedId, quotedText, contactJid, raw } = message;
   
   // Filtro de Tipos Não Suportados/Técnicos
   const tiposParaIgnorar = ['pollUpdateMessage', 'protocolMessage'];
@@ -189,7 +189,7 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
     }
 
     // 1. PRIMEIRO PERSISTE (Bug 1: Garante ordem e sucesso)
-    await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe, quotedId, quotedText);
+    await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe, quotedId, quotedText, contactJid);
     
     // 2. SÓ DISPARA SE PERSISTIU (ou se for outbound do telefone, não dispara IA)
     if (!fromMe) {
@@ -237,7 +237,7 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 }
 
 async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any, direction: 'inbound' | 'outbound' = 'inbound') {
-  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, quotedId, quotedText, raw } = message;
+  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, quotedId, quotedText, contactJid, raw } = message;
   const cleanPhone = from.split('@')[0].replace(/\D/g, '');
   const isExternal = direction === 'outbound';
 
@@ -248,7 +248,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     if (!base64) {
       console.warn(`[Webhook] Could not get base64 for media message: ${messageId}`);
       // BUG FIX: Pass quotedId/quotedText even in fallback path
-      await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText);
+      await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid);
       return;
     }
 
@@ -273,7 +273,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     // Persist enriched message
     await agentService.persistMessage(
       threadId, userId, processedText, direction, messageId, contactName, from, cleanPhone, 
-      isExternal ? 'Atendente' : undefined, undefined, mediaUrl, type, mediaUrl, mimeType, fileName, caption, isExternal, quotedId, quotedText
+      isExternal ? 'Atendente' : undefined, undefined, mediaUrl, type, mediaUrl, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid
     );
 
     // Trigger AI only if inbound
@@ -290,7 +290,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
   } catch (err) {
     console.error(`[Webhook] Failed to process media message ${messageId}:`, err);
     // Fallback persist without media URL if failed
-    await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText);
+    await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid);
   }
 }
 

@@ -22,6 +22,7 @@ export interface WhatsAppMessage {
   quotedId?: string;
   quotedText?: string;
   raw?: any;
+  contactJid?: string;
 }
 
 export interface WhatsAppStatus {

@@ -152,6 +152,7 @@ interface Message {
   status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'sending';
   is_starred?: boolean;
   whatsapp_id?: string;
+  contact_jid?: string;
 }
 
 
@@ -459,8 +460,9 @@ const ChatBubble: React.FC<{
   onReact: (messageId: string, emoji: string) => void;
   onReply: (message: Message) => void;
   onStar: (messageId: string, currentStatus: boolean) => void;
+  onOpenContact: (jid: string) => void;
   onImageLoad?: () => void;
-}> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onImageLoad }) => {
+}> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onOpenContact, onImageLoad }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -553,11 +555,24 @@ const ChatBubble: React.FC<{
 
       case 'contact':
         return (
-          <div className="flex items-center gap-3 p-2">
-            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
-              <User size={20} />
+          <div className="flex flex-col gap-2 p-1 min-w-[200px]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 border border-primary-100">
+                <User size={20} />
+              </div>
+              <p className="font-bold text-sm text-slate-800">{message.text}</p>
             </div>
-            <p className="font-bold text-sm">{message.text}</p>
+            {message.contact_jid && (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenContact(message.contact_jid!);
+                }}
+                className="w-full mt-2 py-2 px-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20"
+              >
+                <MessageSquare size={14} /> Conversar
+              </button>
+            )}
           </div>
         );
 
@@ -1577,7 +1592,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             status: d.status,
             is_starred: d.is_starred || false,
             quoted_id: d.quoted_id,
-            quoted_text: d.quoted_text
+            quoted_text: d.quoted_text,
+            contact_jid: d.contact_jid
           }));
           setMessages(formatted as any);
         }
@@ -1607,7 +1623,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         whatsapp_id: d.whatsapp_id,
         is_starred: d.is_starred || false,
         quoted_id: d.quoted_id,
-        quoted_text: d.quoted_text
+        quoted_text: d.quoted_text,
+        contact_jid: d.contact_jid
       });
 
       // Variável para guardar o timestamp da última mensagem conhecida (reconciliação de lacunas)
@@ -2247,6 +2264,52 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       console.error('Error sending file:', err);
       toast.error('Erro ao enviar arquivo');
     }
+  };
+
+  const handleOpenContactChat = (jid: string) => {
+    if (!jid || !user?.id) return;
+
+    const cleanJid = jid.split('@')[0];
+    const threadId = `${user.id}_${cleanJid}`;
+    
+    // Se já estivermos com essa thread selecionada, não faz nada
+    if (selectedThreadId === threadId) return;
+
+    // Busca nas threads existentes
+    const existingThread = threads.find(t => t.id === threadId || (t.remoteJid || '').split('@')[0] === cleanJid);
+    
+    if (existingThread) {
+      setSelectedThreadId(existingThread.id);
+      console.log(`[Inbox] 🔗 Contact JID selected: ${existingThread.id}`);
+    } else {
+      // Cria uma temporária se não existir
+      const tempThread: Thread & { isTemp?: boolean } = {
+        id: threadId,
+        remoteJid: `${cleanJid}@s.whatsapp.net`,
+        name: cleanJid,
+        lastMessage: 'Conversar com contato compartilhado...',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'human',
+        updatedAt: new Date().toISOString(),
+        ticketStatus: 'open',
+        funilStatus: 'Lead',
+        isTemp: true
+      };
+      
+      const resolved = getResolvedContact(cleanJid, tempThread.name);
+      tempThread.name = resolved.name;
+      tempThread.funilStatus = resolved.funilStatus;
+
+      setThreads(prev => {
+        const hasTemp = prev.some(t => t.id === threadId);
+        if (hasTemp) return prev;
+        return [tempThread, ...prev];
+      });
+      setSelectedThreadId(threadId);
+      console.log(`[Inbox] 🔗 Temp contact thread created: ${threadId}`);
+    }
+    
+    toast.success('Abrindo conversa...');
   };
 
   const handleSendMessage = async () => {
@@ -2951,6 +3014,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                               onReact={handleReactToMessage}
                               onReply={(m) => setReplyingTo(m)}
                               onStar={handleToggleStar}
+                              onOpenContact={handleOpenContactChat}
                               onImageLoad={() => {
                                 // Só rola se o usuário já estiver próximo ao fundo
                                 if (!showScrollButton) scrollToBottom("smooth");

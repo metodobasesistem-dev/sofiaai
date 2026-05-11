@@ -238,6 +238,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     let mimeType = undefined;
     let fileName = undefined;
     let caption = undefined;
+    let contactJid = undefined;
 
     // Extract content based on message type
     const reactionMsg = messageContent.reactionMessage || messageData.reactionMessage || (messageData.message && messageData.message.reactionMessage);
@@ -277,6 +278,19 @@ export class EvolutionProvider implements IWhatsAppProvider {
     } else if (messageContent.contactMessage) {
       body = `[Contato]: ${messageContent.contactMessage.displayName || ''}`;
       type = 'contact';
+      
+      // Extrair JID do vCard
+      const vcard = messageContent.contactMessage.vcard || '';
+      const waidMatch = vcard.match(/waid=([^:;]+)/);
+      if (waidMatch && waidMatch[1]) {
+        contactJid = `${waidMatch[1]}@s.whatsapp.net`;
+      } else {
+        const telMatch = vcard.match(/TEL.*:([^\n\r]+)/);
+        if (telMatch && telMatch[1]) {
+          const num = telMatch[1].replace(/\D/g, '');
+          if (num) contactJid = `${num}@s.whatsapp.net`;
+        }
+      }
     } else if (messageContent.locationMessage) {
       body = `[Localização]: ${messageContent.locationMessage.degreesLatitude}, ${messageContent.locationMessage.degreesLongitude}`;
       type = 'location';
@@ -321,7 +335,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       reactionTargetId: reactionMsg ? reactionMsg.key?.id : undefined,
       quotedId,
       quotedText,
-      raw: messageData
+      raw: messageData,
+      contactJid
     };
   }
 

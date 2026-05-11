@@ -291,7 +291,8 @@ export class AgentService {
     caption?: string,
     isExternal: boolean = false,
     quotedId?: string,
-    quotedText?: string
+    quotedText?: string,
+    contactJid?: string
   ) {
     const timestamp = Date.now();
     console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
@@ -408,6 +409,7 @@ export class AgentService {
          quoted_id: quotedId,
          quoted_text: quotedText,
          whatsapp_id: messageId, // id === whatsapp_id sempre neste sistema
+         contact_jid: contactJid,
          created_at: new Date(timestamp).toISOString()
        };
  
