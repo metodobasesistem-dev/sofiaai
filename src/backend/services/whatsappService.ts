@@ -2,7 +2,7 @@ import qrcode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
 import { supabase } from '../lib/supabaseClient.js';
-import { agentService } from './agentService.js';
+import { agentService, logToDB } from './agentService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { Queue, Worker, Job } from 'bullmq';
@@ -429,28 +429,11 @@ class WhatsAppService {
     const sendTimestamp = Date.now();
 
     try {
-      // 1. Persiste com status='sending' ANTES de chamar a API
-      await supabase.from('messages').insert({
-        id: tempId,
-        whatsapp_id: tempId,
-        user_id: userId,
-        thread_id: threadId,
-        text: message,
-        direction: 'outbound',
-        is_ai: senderType === 'IA', // BUG FIX: respect senderType correctly
-        status: 'sending',
-        timestamp: sendTimestamp,
-        created_at: new Date(sendTimestamp).toISOString(),
-        quoted_id: quoted?.id,
-        quoted_text: quoted?.text
-      }).then(({ error }) => {
-        if (error) console.warn('[WhatsAppService] Pre-persist (sending) warning:', error.message);
-      });
-
-      // 2. Atualiza thread com preview da mensagem (sidebar)
+      // 1. Atualiza thread com preview da mensagem (sidebar) PRIMEIRO
+      // Isso evita erro de Foreign Key na inserção da mensagem
       const { data: contact } = await supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle();
       
-      await supabase.from('threads').upsert({
+      const { error: tErr } = await supabase.from('threads').upsert({
         id: threadId,
         user_id: userId,
         last_message: message.substring(0, 1000),
@@ -460,19 +443,37 @@ class WhatsAppService {
         agent_name: senderName,
         contact_name: contact?.nome || cleanTo,
         updated_at: new Date(sendTimestamp).toISOString()
-      }).then(({ error }) => {
-        if (error) {
-          console.error('[WhatsAppService] ❌ CRITICAL THREAD UPSERT ERROR:', {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            threadId
-          });
-        } else {
-          console.log(`[WhatsAppService] 🧵 Thread updated for ${threadId}`);
-        }
       });
+
+      if (tErr) {
+        console.error('[WhatsAppService] ❌ CRITICAL THREAD UPSERT ERROR:', tErr);
+        // Prosseguimos mesmo se a thread falhar? Se a thread falhar, a mensagem vai falhar no FK.
+        // Mas vamos tentar logar e continuar se possível.
+      } else {
+        console.log(`[WhatsAppService] 🧵 Thread updated for ${threadId}`);
+      }
+
+      // 2. Persiste com status='sending' ANTES de chamar a API (E AGUARDA)
+      const { error: mErr } = await supabase.from('messages').insert({
+        id: tempId,
+        whatsapp_id: tempId,
+        user_id: userId,
+        thread_id: threadId,
+        text: message,
+        direction: 'outbound',
+        is_ai: senderType === 'IA',
+        message_type: 'text',
+        status: 'sending',
+        timestamp: sendTimestamp,
+        created_at: new Date(sendTimestamp).toISOString(),
+        quoted_id: quoted?.id,
+        quoted_text: quoted?.text
+      });
+
+      if (mErr) {
+        console.warn('[WhatsAppService] ⚠️ Pre-persist (sending) failed:', mErr.message);
+        await logToDB(userId, 'warning', 'persistence', `Pre-persist failed for ${tempId}`, mErr);
+      }
 
       // 3. Chama o provider via Abstração
       const provider = await WhatsAppProviderFactory.getProvider(userId);
@@ -495,12 +496,14 @@ class WhatsAppService {
           text: message,
           direction: 'outbound',
           is_ai: senderType === 'IA',
+          message_type: 'text',
           status: 'sent',
           timestamp: sendTimestamp,
           created_at: new Date(sendTimestamp).toISOString(),
           quoted_id: quoted?.id,
           quoted_text: quoted?.text
         });
+
  
         if (error) {
           if (error.code === '23505') {
@@ -517,7 +520,9 @@ class WhatsAppService {
             }
           } else {
             console.error('[WhatsAppService] ❌ Definitive persist failed:', error);
-            // NÃO DELETA A TEMPORÁRIA SE FALHAR — mantém como rastro para não "sumir" no front
+            // Se falhou o definitivo mas temos o tempId, tentamos apenas atualizar o status do tempId
+            // para o usuário não "perder" a mensagem visualmente.
+            await supabase.from('messages').update({ status: 'sent', whatsapp_id: msgId }).eq('id', tempId);
           }
         } else {
           console.log(`[WhatsAppService] ✅ Definitive persist success for ${msgId}. Cleaning up temp ${tempId}.`);
@@ -538,10 +543,11 @@ class WhatsAppService {
       return { success: true, messageId: msgId };
     } catch (err: any) {
       // API falhou — marca a mensagem temporária como 'failed'
+      console.error(`[WhatsAppService] ❌ Error in sendMessage to ${to}:`, err.message);
       await supabase.from('messages').update({ status: 'failed' }).eq('id', tempId);
-      console.error(`[WhatsAppService] Error in sendMessage to ${to}:`, err.message);
       return { success: false, error: err.message };
     }
+
   }
 
 
@@ -650,8 +656,11 @@ class WhatsAppService {
     const audioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
     try {
       const cleanTo = normalizePhone(to);
+      const threadId = `${userId}_${cleanTo}`;
+      
+      // Garante que a thread existe antes da mensagem
       await agentService.persistMessage(
-        `${userId}_${cleanTo}`, 
+        threadId, 
         userId, 
         '[Áudio]', 
         'outbound', 
@@ -665,7 +674,10 @@ class WhatsAppService {
         'audio', // messageType
         audioUrl || undefined // mediaUrl
       );
-    } catch (err) {}
+    } catch (err: any) {
+      console.error('[WhatsAppService] ❌ Error persisting sent voice message:', err);
+      await logToDB(userId, 'error', 'persistence', `Voice message persistence failed: ${result.key?.id}`, err);
+    }
     return { success: true, messageId: result.key?.id };
   }
 
@@ -680,8 +692,10 @@ class WhatsAppService {
 
     try {
       const cleanTo = normalizePhone(to);
+      const threadId = `${userId}_${cleanTo}`;
+      
       await agentService.persistMessage(
-        `${userId}_${cleanTo}`, 
+        threadId, 
         userId, 
         caption || `[Mídia]: ${filename}`, 
         'outbound', 
@@ -698,8 +712,9 @@ class WhatsAppService {
         filename,
         caption
       );
-    } catch (err) {
-      console.error('[WhatsAppService] Error persisting sent media:', err);
+    } catch (err: any) {
+      console.error('[WhatsAppService] ❌ Error persisting sent media:', err);
+      await logToDB(userId, 'error', 'persistence', `Media persistence failed: ${result.key?.id}`, err);
     }
     return { success: true, messageId: result.key?.id };
   }

@@ -10,7 +10,7 @@ import { normalizePhone } from '../lib/phoneHelper.js';
 
 
 
-async function logToDB(userId: string, level: string, module: string, message: string, metadata: any = {}) {
+export async function logToDB(userId: string, level: string, module: string, message: string, metadata: any = {}) {
   try {
     await supabase.from('sys_logs').insert({
       user_id: userId,
@@ -407,7 +407,7 @@ export class AgentService {
 
     // 3. Update Contact
     try {
-      const cleanPhone = (displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId) || '').replace(/\D/g, '');
+      const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId) || '');
       if (cleanPhone) {
         await this.upsertContact(userId, cleanPhone, contactName, text, direction === 'inbound');
       }
