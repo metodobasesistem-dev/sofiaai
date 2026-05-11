@@ -412,7 +412,8 @@ const ChatBubble: React.FC<{
   onReact: (messageId: string, emoji: string) => void;
   onReply: (message: Message) => void;
   onStar: (messageId: string, currentStatus: boolean) => void;
-}> = ({ message, onPreview, onDelete, onReact, onReply, onStar }) => {
+  onImageLoad?: () => void;
+}> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onImageLoad }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -446,11 +447,19 @@ const ChatBubble: React.FC<{
           <div className="space-y-2">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity"
                  onClick={() => onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
-              <img src={message.media_url} alt="WhatsApp" className="max-w-full max-h-[300px] object-contain" />
+              <img 
+                src={message.media_url} 
+                alt="WhatsApp" 
+                className="max-w-full max-h-[300px] object-contain" 
+                onLoad={() => {
+                  if (onImageLoad) onImageLoad();
+                }}
+              />
             </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
           </div>
         );
+
 
       case 'video':
         return (
@@ -1074,23 +1083,34 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   }, [threads.length, user?.id]);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
-    // Usamos um pequeno timeout para garantir que o DOM atualizou
-    setTimeout(() => {
+    // Usamos múltiplos timeouts para garantir que o scroll aconteça mesmo se o DOM demorar (ex: imagens)
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const performScroll = () => {
       messagesEndRef.current?.scrollIntoView({ behavior });
-    }, 100);
+    };
+
+    // Primeira tentativa imediata
+    performScroll();
+    
+    // Segunda tentativa após 100ms
+    setTimeout(performScroll, 100);
+    
+    // Terceira tentativa após 500ms (para imagens pesadas)
+    setTimeout(performScroll, 500);
   };
 
   useEffect(() => {
     // Se as mensagens mudarem e não estivermos carregando, rola para o fim
     if (!loadingMessages && messages.length > 0) {
-      // Se for a primeira carga de uma conversa selecionada (troca de thread), pulamos direto (auto/instant)
-      // Se for uma mensagem nova chegando na mesma conversa, fazemos o smooth
       const isNewThread = lastThreadIdRef.current !== selectedThreadId;
+      
+      // No mobile ou troca de thread, o scroll instantâneo é melhor
       scrollToBottom(isNewThread ? "auto" : "smooth");
       
-      // Atualiza a referência da thread atual
       lastThreadIdRef.current = selectedThreadId;
-      setShowScrollButton(false); // Reset button on thread change
+      setShowScrollButton(false);
     }
   }, [messages, loadingMessages, selectedThreadId]);
 
@@ -1098,10 +1118,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     
-    // Se estiver a mais de 300px do fundo, mostra o botão
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 300;
+    // Se estiver a mais de 400px do fundo, mostra o botão (ajustado de 300 para 400 para ser mais sensível)
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+    const isAtBottom = distanceToBottom < 150; // Tolerância menor para considerar "no fundo"
     setShowScrollButton(!isAtBottom);
   };
+
 
   // ─── Manuseio do Botão Voltar (Mobile) ─────────────────────────────────────────
   const lastBackPressRef = useRef<number>(0);
@@ -2866,6 +2888,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                               onReact={handleReactToMessage}
                               onReply={(m) => setReplyingTo(m)}
                               onStar={handleToggleStar}
+                              onImageLoad={() => {
+                                // Só rola se o usuário já estiver próximo ao fundo
+                                if (!showScrollButton) scrollToBottom("smooth");
+                              }}
                             />
                           </div>
                         </React.Fragment>
@@ -2883,11 +2909,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     initial={{ opacity: 0, scale: 0.5, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                    onClick={() => scrollToBottom("smooth")}
-                    className="absolute bottom-6 right-6 w-10 h-10 bg-white text-slate-600 rounded-full shadow-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-all z-[100] active:scale-90 group"
+                    onClick={() => {
+                      scrollToBottom("smooth");
+                      setShowScrollButton(false);
+                    }}
+                    className="absolute bottom-6 right-8 w-12 h-12 bg-white text-primary-600 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-slate-100 flex items-center justify-center hover:bg-slate-50 transition-all z-[100] active:scale-90 group"
                     title="Ir para o final"
                   >
-                    <ChevronDown size={20} className="group-hover:translate-y-0.5 transition-transform" />
+                    <ChevronDown size={24} className="group-hover:translate-y-0.5 transition-transform" />
+
                     {activeThread.unreadCount && activeThread.unreadCount > 0 && (
                       <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                         {activeThread.unreadCount}
