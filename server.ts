@@ -107,6 +107,86 @@ async function startServer() {
     });
   });
 
+  // 🛡️ CHAT SYSTEM HEALTH CHECK — Valida todos os subsistemas críticos do chat
+  // Monitore este endpoint externamente (Uptime Kuma, Betterstack, etc.)
+  // para detectar regressões antes que os usuários reportem.
+  app.get('/api/health/chat', async (req, res) => {
+    const checks: Record<string, { ok: boolean; detail?: string; latencyMs?: number }> = {};
+    const start = Date.now();
+
+    // 1. Database — tabela messages acessível
+    try {
+      const t0 = Date.now();
+      const { error } = await supabase.from('messages').select('id').limit(1);
+      checks.db_messages = { ok: !error, latencyMs: Date.now() - t0, detail: error?.message };
+    } catch (e: any) {
+      checks.db_messages = { ok: false, detail: e.message };
+    }
+
+    // 2. Database — tabela threads acessível
+    try {
+      const t0 = Date.now();
+      const { error } = await supabase.from('threads').select('id').limit(1);
+      checks.db_threads = { ok: !error, latencyMs: Date.now() - t0, detail: error?.message };
+    } catch (e: any) {
+      checks.db_threads = { ok: false, detail: e.message };
+    }
+
+    // 3. Database — tabela contacts acessível
+    try {
+      const t0 = Date.now();
+      const { error } = await supabase.from('contacts').select('id').limit(1);
+      checks.db_contacts = { ok: !error, latencyMs: Date.now() - t0, detail: error?.message };
+    } catch (e: any) {
+      checks.db_contacts = { ok: false, detail: e.message };
+    }
+
+    // 4. Redis — cache e idempotência
+    checks.redis = { ok: await rPing() };
+
+    // 5. Mensagens travadas em "sending" (indica falha de persistência)
+    try {
+      const threshold = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // > 5 min
+      const { data: stuck, error } = await supabase
+        .from('messages')
+        .select('id, created_at, user_id')
+        .eq('status', 'sending')
+        .lt('created_at', threshold)
+        .limit(10);
+      checks.stuck_messages = { 
+        ok: !error && (stuck?.length ?? 0) === 0,
+        detail: stuck?.length ? `${stuck.length} message(s) stuck in 'sending' status for >5min` : undefined
+      };
+    } catch (e: any) {
+      checks.stuck_messages = { ok: false, detail: e.message };
+    }
+
+    // 6. Threads sem mensagens (órfãs — indica falha no ciclo de persistência)
+    try {
+      const { data: orphans, error } = await supabase
+        .from('threads')
+        .select('id')
+        .is('last_message', null)
+        .limit(5);
+      checks.orphan_threads = {
+        ok: !error && (orphans?.length ?? 0) === 0,
+        detail: orphans?.length ? `${orphans.length} thread(s) with no last_message` : undefined
+      };
+    } catch (e: any) {
+      checks.orphan_threads = { ok: false, detail: e.message };
+    }
+
+    const allOk = Object.values(checks).every(c => c.ok);
+    const totalMs = Date.now() - start;
+
+    res.status(allOk ? 200 : 503).json({
+      status: allOk ? 'healthy' : 'degraded',
+      timestamp: new Date().toISOString(),
+      totalLatencyMs: totalMs,
+      checks
+    });
+  });
+
   // Public settings for maintenance/signups
   app.get('/api/v2/public-settings', async (req, res) => {
     try {
