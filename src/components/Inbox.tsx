@@ -246,10 +246,11 @@ const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOu
       {/* Speed Selector (WhatsApp Style) */}
       <button 
         onClick={toggleSpeed}
-        className={`ml-1 px-2 py-1 rounded-lg text-[10px] font-black transition-all shrink-0 border
+        className={`ml-1 px-2 py-1 rounded-lg text-[10px] font-black transition-all shrink-0 border shadow-sm
           ${isOutbound 
-            ? 'bg-white/20 border-white/20 text-white hover:bg-white/30' 
-            : 'bg-white border-primary-100 text-primary-600 hover:bg-primary-50 shadow-sm'}`}
+            ? 'bg-white border-primary-100 text-primary-700 hover:bg-primary-50' 
+            : 'bg-white border-primary-100 text-primary-700 hover:bg-primary-50'}`}
+
       >
         {playbackRate}x
       </button>
