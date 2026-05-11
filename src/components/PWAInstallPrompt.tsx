@@ -88,7 +88,7 @@ export default function PWAInstallPrompt() {
                   <img src={isFullscreen ? "/sofia-face.png" : "/sofiamini.png"} alt="App Icon" className="w-full h-full object-cover rounded-[14px]" />
                 </div>
                 <div>
-                  <h3 className=\"font-black text-slate-900 text-lg tracking-tight\">Zyreo Sofia</h3>
+                  <h3 className="font-black text-slate-900 text-lg tracking-tight">Zyreo Sofia</h3>
                   <p className="text-xs text-slate-500 font-medium">Instale o aplicativo {isFullscreen ? "de atendimento" : "completo"}</p>
                 </div>
               </div>
