@@ -2600,7 +2600,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             </div>
             {isSidebarExpanded && (
               <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-300">
-                <span className="text-white font-black text-sm tracking-tight">Zyreo Sofia</span>
+                <span className="text-white font-black text-sm tracking-tight">Chat Sofia</span>
                 <span className="text-primary-500 text-[9px] font-bold uppercase tracking-widest">Inteligência</span>
               </div>
             )}
