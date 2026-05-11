@@ -1041,22 +1041,29 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     };
   };
 
-  // Handle JID from URL
+  // Handle JID from URL - Robust version
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const jid = params.get('jid');
-    if (jid && threads.length > 0 && user?.id) {
+    const handleUrlJid = () => {
+      const params = new URLSearchParams(window.location.search);
+      const jid = params.get('jid');
+      if (!jid || !user?.id) return;
+
       const cleanJid = jid.split('@')[0];
       const threadId = `${user.id}_${cleanJid}`;
+      
+      // Se já estivermos com essa thread selecionada, não faz nada
+      if (selectedThreadIdRef.current === threadId) return;
+
+      // Busca nas threads existentes
       const existingThread = threads.find(t => t.id === threadId || (t.remoteJid || '').split('@')[0] === cleanJid);
       
       if (existingThread) {
         setSelectedThreadId(existingThread.id);
-      } else {
-        // Verifica se já não criamos uma temp thread para esse número
+        console.log(`[Inbox] 🔗 JID from URL selected: ${existingThread.id}`);
+      } else if (threads.length > 0) {
+        // Se já carregamos as threads e não achamos, criamos uma temporária
         const hasTemp = threads.some(t => (t as any).isTemp && (t.remoteJid || '').split('@')[0] === cleanJid);
         if (!hasTemp) {
-          // Cria uma thread temporária com o ID REAL que o backend vai usar
           const tempThread: Thread & { isTemp?: boolean } = {
             id: threadId,
             remoteJid: `${cleanJid}@s.whatsapp.net`,
@@ -1070,17 +1077,25 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             isTemp: true
           };
           
-          // Tenta buscar o nome real no CRM
           const resolved = getResolvedContact(cleanJid, tempThread.name);
           tempThread.name = resolved.name;
           tempThread.funilStatus = resolved.funilStatus;
 
           setThreads(prev => [tempThread, ...prev]);
           setSelectedThreadId(threadId);
+          console.log(`[Inbox] 🔗 Temp JID thread created: ${threadId}`);
         }
       }
-    }
-  }, [threads.length, user?.id]);
+    };
+
+    // Executa imediatamente
+    handleUrlJid();
+
+    // E escuta mudanças na URL (popstate)
+    window.addEventListener('popstate', handleUrlJid);
+    return () => window.removeEventListener('popstate', handleUrlJid);
+  }, [threads.length, user?.id, window.location.search]);
+
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     // Usamos múltiplos timeouts para garantir que o scroll aconteça mesmo se o DOM demorar (ex: imagens)

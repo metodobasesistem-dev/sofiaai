@@ -122,7 +122,10 @@ const SidePanel = ({
     const url = new URL(window.location.href);
     url.searchParams.set('jid', jid);
     window.history.pushState({}, '', url);
+    // Dispara evento manual para o Inbox perceber a mudança sem reload
+    window.dispatchEvent(new PopStateEvent('popstate'));
     onTabChange('inbox');
+
   };
 
   return (
