@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1.0.6'; 
+const CACHE_VERSION = 'v1.0.7'; 
 const CACHE_NAME = 'sofia-chat-' + CACHE_VERSION;
 const ASSETS = [
   './',
@@ -80,8 +80,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: './sofia-face.png',
-    badge: './sofiamini.png',
+    icon: data.icon || '/sofia-face.png',
+    badge: data.badge || '/sofiamini.png',
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/'
