@@ -1324,12 +1324,34 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               setThreads(prev => {
                 const existingIndex = prev.findIndex(t => t.id === payload.new.id);
                 const baseThread = existingIndex !== -1 ? prev[existingIndex] : null;
-                const resolved = getResolvedContact(payload.new.remote_jid || baseThread?.remoteJid || '', payload.new.contact_name || baseThread?.name || 'Lead WhatsApp');
+
+                // [FIX] Prioridade de nome correta:
+                // 1. Nome do CRM (fonte mais confiável — vem do contato salvo)
+                // 2. Nome já existente na thread em memória (evita regressão)
+                // 3. contact_name do payload do banco (pode ser número se o backend salvou errado)
+                // 4. Fallback final
+                const resolvedFromCRM = getResolvedContact(
+                  payload.new.remote_jid || baseThread?.remoteJid || '',
+                  '' // Não passamos fallback aqui — queremos saber se o CRM tem mesmo
+                );
+                const crmName = resolvedFromCRM.name && !/^\d+$/.test(resolvedFromCRM.name) 
+                  ? resolvedFromCRM.name 
+                  : null;
+                
+                const existingName = baseThread?.name && !/^\d+$/.test(baseThread.name)
+                  ? baseThread.name
+                  : null;
+
+                const dbContactName = payload.new.contact_name && !/^\d+$/.test(payload.new.contact_name)
+                  ? payload.new.contact_name
+                  : null;
+
+                const finalName = crmName || existingName || dbContactName || payload.new.contact_name || baseThread?.name || 'Lead WhatsApp';
 
                 const updatedThread = {
                   ...(baseThread || {}),
                   id: payload.new.id,
-                  name: resolved.name,
+                  name: finalName,
                   lastMessage: payload.new.last_message || baseThread?.lastMessage || '',
                   status: payload.new.status || baseThread?.status || 'ia',
                   unreadCount: payload.new.unread_count ?? baseThread?.unreadCount ?? 0,
@@ -1337,12 +1359,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : (baseThread?.lastMessageTime || 0),
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
-                  funilStatus: resolved.funilStatus,
+                  funilStatus: resolvedFromCRM.funilStatus !== 'Lead' ? resolvedFromCRM.funilStatus : (baseThread?.funilStatus || 'Lead'),
                   profilePictureUrl: payload.new.profile_picture_url || baseThread?.profilePictureUrl,
                   pending_followup: payload.new.pending_followup ?? baseThread?.pending_followup
                 };
 
-                // BUG 1 FIX: Só move para o topo se a última mensagem mudou
+                // Só move para o topo se a última mensagem mudou
                 const isNewMessage = payload.new.last_message_time && 
                                    (!baseThread?.lastMessageTime || 
                                     new Date(payload.new.last_message_time).getTime() > new Date(baseThread.lastMessageTime).getTime());
@@ -1351,7 +1373,6 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   const filtered = prev.filter(t => t.id !== payload.new.id);
                   return [updatedThread as any, ...filtered];
                 } else {
-                  // Apenas atualiza dados (ex: unreadCount = 0) sem mudar a ordem
                   return prev.map(t => (t.id === payload.new.id ? (updatedThread as any) : t));
                 }
               });

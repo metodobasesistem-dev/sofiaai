@@ -431,30 +431,56 @@ class WhatsAppService {
     try {
       // 1. Atualiza thread com preview da mensagem (sidebar) PRIMEIRO
       // Isso evita erro de Foreign Key na inserção da mensagem
-      const [{ data: existingThread }, { data: contact }] = await Promise.all([
-        supabase.from('threads').select('contact_name').eq('id', threadId).maybeSingle(),
+      const [{ data: existingThread }, { data: contactExact }] = await Promise.all([
+        supabase.from('threads').select('contact_name, profile_picture_url, profile_picture_updated_at').eq('id', threadId).maybeSingle(),
         supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle()
       ]);
-      
-      const { error: tErr } = await supabase.from('threads').upsert({
+
+      // [FIX] Busca fuzzy por últimos 8 dígitos se a busca exata não encontrou
+      let contact = contactExact;
+      if (!contact?.nome && cleanTo.length >= 8) {
+        const { data: fuzzy } = await supabase
+          .from('contacts')
+          .select('nome')
+          .eq('user_id', userId)
+          .ilike('telefone', `%${cleanTo.slice(-8)}`)
+          .maybeSingle();
+        if (fuzzy?.nome) contact = fuzzy;
+      }
+
+      // [FIX] Nunca salva número como contact_name
+      const resolvedContactName = contact?.nome
+        || (existingThread?.contact_name && !/^\d+$/.test(existingThread.contact_name) ? existingThread.contact_name : null)
+        || null;
+
+      const threadUpsertData: Record<string, any> = {
         id: threadId,
         user_id: userId,
         last_message: message.substring(0, 1000),
         last_message_time: new Date(sendTimestamp).toISOString(),
-        remote_jid: to,
+        remote_jid: to.includes('@') ? to : `${cleanTo}@s.whatsapp.net`,
         display_phone: cleanTo,
         agent_name: senderName,
-        contact_name: contact?.nome || existingThread?.contact_name || cleanTo,
         updated_at: new Date(sendTimestamp).toISOString()
-      });
+      };
+
+      // Só inclui contact_name se encontramos um nome real (não número)
+      if (resolvedContactName) threadUpsertData.contact_name = resolvedContactName;
+
+      // Preserva a foto de perfil existente
+      if (existingThread?.profile_picture_url) {
+        threadUpsertData.profile_picture_url = existingThread.profile_picture_url;
+        threadUpsertData.profile_picture_updated_at = existingThread.profile_picture_updated_at;
+      }
+
+      const { error: tErr } = await supabase.from('threads').upsert(threadUpsertData);
 
       if (tErr) {
         console.error('[WhatsAppService] ❌ CRITICAL THREAD UPSERT ERROR:', tErr);
-        // Prosseguimos mesmo se a thread falhar? Se a thread falhar, a mensagem vai falhar no FK.
-        // Mas vamos tentar logar e continuar se possível.
       } else {
-        console.log(`[WhatsAppService] 🧵 Thread updated for ${threadId}`);
+        console.log(`[WhatsAppService] 🧵 Thread updated for ${threadId} | name: ${resolvedContactName || '(preserved)'}`);
       }
+
 
       // 2. Persiste com status='sending' ANTES de chamar a API (E AGUARDA)
       const { error: mErr } = await supabase.from('messages').insert({
