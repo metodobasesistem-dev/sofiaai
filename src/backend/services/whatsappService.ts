@@ -449,9 +449,12 @@ class WhatsAppService {
       }
 
       // [FIX] Nunca salva número como contact_name
-      const resolvedContactName = contact?.nome
-        || (existingThread?.contact_name && !/^\d+$/.test(existingThread.contact_name) ? existingThread.contact_name : null)
-        || null;
+      const isPhone = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
+
+      const resolvedContactName = (contact?.nome && !isPhone(contact.nome)) ? contact.nome 
+        : (existingThread?.contact_name && !isPhone(existingThread.contact_name)) ? existingThread.contact_name
+        : null;
+
 
       const threadUpsertData: Record<string, any> = {
         id: threadId,

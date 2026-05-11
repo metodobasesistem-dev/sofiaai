@@ -1347,28 +1347,29 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 const existingIndex = prev.findIndex(t => t.id === payload.new.id);
                 const baseThread = existingIndex !== -1 ? prev[existingIndex] : null;
 
-                // [FIX] Prioridade de nome correta:
-                // 1. Nome do CRM (fonte mais confiável — vem do contato salvo)
-                // 2. Nome já existente na thread em memória (evita regressão)
-                // 3. contact_name do payload do banco (pode ser número se o backend salvou errado)
-                // 4. Fallback final
+                // [FIX] Nunca deixa o número sobrescrever o nome real (ex: +55 (32) ...)
+                const isPhone = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
+
                 const resolvedFromCRM = getResolvedContact(
                   payload.new.remote_jid || baseThread?.remoteJid || '',
                   '' // Não passamos fallback aqui — queremos saber se o CRM tem mesmo
                 );
-                const crmName = resolvedFromCRM.name && !/^\d+$/.test(resolvedFromCRM.name) 
+
+                const crmName = resolvedFromCRM.name && !isPhone(resolvedFromCRM.name) 
                   ? resolvedFromCRM.name 
                   : null;
+
                 
-                const existingName = baseThread?.name && !/^\d+$/.test(baseThread.name)
+                const existingName = baseThread?.name && !isPhone(baseThread.name)
                   ? baseThread.name
                   : null;
 
-                const dbContactName = payload.new.contact_name && !/^\d+$/.test(payload.new.contact_name)
+                const dbContactName = payload.new.contact_name && !isPhone(payload.new.contact_name)
                   ? payload.new.contact_name
                   : null;
 
                 const finalName = crmName || existingName || dbContactName || payload.new.contact_name || baseThread?.name || 'Lead WhatsApp';
+
 
                 const updatedThread = {
                   ...(baseThread || {}),

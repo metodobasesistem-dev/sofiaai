@@ -341,7 +341,15 @@ export class AgentService {
         display_phone: cleanPhone,
         agent_name: agentName || 'Sofia',
         // [FIX] Prioridade: CRM > Nome já salvo na Thread > PushName do WhatsApp > Número
-        contact_name: contact?.nome || existingThread?.contact_name || contactName || cleanPhone,
+        // Nunca deixa o número sobrescrever um nome real
+        contact_name: (() => {
+          const isPhone = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
+          
+          if (contact?.nome && !isPhone(contact.nome)) return contact.nome;
+          if (existingThread?.contact_name && !isPhone(existingThread.contact_name)) return existingThread.contact_name;
+          if (contactName && !isPhone(contactName)) return contactName;
+          return contact?.nome || existingThread?.contact_name || contactName || cleanPhone;
+        })(),
         unread_count: newUnreadCount,
         ticket_status: finalTicketStatus,
         updated_at: new Date(timestamp).toISOString()
@@ -482,11 +490,18 @@ export class AgentService {
         contactData.data_criacao = new Date().toISOString();
         contactData.total_mensagens = 1;
       } else {
-        // Garantir que o nome nunca fique nulo no objeto de atualização se for necessário atualizar
-        if (contactName) {
+        // Garantir que o nome nunca seja sobrescrevido por um número
+        const isPhone = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
+        
+        if (contactName && !isPhone(contactName)) {
            contactData.nome = contactName;
-        } else if (!existing.nome) {
-           contactData.nome = cleanPhone || 'Lead WhatsApp';
+        } else if (!existing.nome || isPhone(existing.nome)) {
+           // Se não tem nome ou o nome atual é um telefone, tenta usar o que veio ou fallback
+           if (contactName && !isPhone(contactName)) {
+             contactData.nome = contactName;
+           } else if (!existing.nome) {
+             contactData.nome = cleanPhone || 'Lead WhatsApp';
+           }
         }
 
         if (incrementCount) {
