@@ -191,7 +191,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
   }
 
   transformPayload(payload: any): WhatsAppMessage | null {
-    if (payload.event !== 'messages.upsert') return null;
+    const event = (payload.event || '').toLowerCase().replace(/_/g, '.');
+    if (event !== 'messages.upsert' && event !== 'send.message') return null;
     
     let messageData = payload.data;
     if (!messageData) return null;

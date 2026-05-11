@@ -51,7 +51,10 @@ router.post('/webhook', async (req, res) => {
   const instanceName = body.instance || body.instanceName || (body.data?.instance) || (body.data?.instanceName);
   const event = body.event;
 
-  if (!instanceName) return res.status(200).send('OK');
+  if (!instanceName) {
+    console.warn(`[Webhook] ⚠️ Received webhook without instanceName. Event: ${event}`);
+    return res.status(200).send('OK');
+  }
 
   // [SEC-02] Validar token secreto da URL do webhook
   const token = req.query.token as string | undefined;
@@ -83,7 +86,10 @@ router.post('/webhook', async (req, res) => {
       .eq('whatsapp_instance_id', instanceName)
       .single();
 
-    if (!profile) return res.status(200).send('OK');
+    if (!profile) {
+      console.warn(`[Webhook] ⚠️ No profile found for instanceName: "${instanceName}". Webhook ignored.`);
+      return res.status(200).send('OK');
+    }
     const userId = profile.id;
 
     // 2. Obtém o Provider Abstraído
