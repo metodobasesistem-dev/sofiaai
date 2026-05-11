@@ -566,47 +566,48 @@ class WhatsAppService {
 
       if (!msg) return { success: false, error: 'Mensagem não encontrada' };
 
-      // 2. Se for outbound, tenta apagar no WhatsApp via Provider
+      // 2. Se for outbound, tenta apagar no WhatsApp via Provider (para todos)
       if (msg.direction === 'outbound') {
          const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
          const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
          const provider = await WhatsAppProviderFactory.getProvider(userId);
          
          // No WhatsApp, apagamos para todos (fromMe: true)
-         const remoteJid = msg.thread_id.includes('_') ? msg.thread_id.split('_')[1] + '@c.us' : msg.thread_id;
-         await provider.deleteMessage(instanceName, remoteJid, msg.whatsapp_id || messageId, true);
+         const remoteJid = msg.thread_id.includes('_') 
+           ? msg.thread_id.split('_')[1] + '@s.whatsapp.net' 
+           : msg.thread_id;
+         await provider.deleteMessage(instanceName, remoteJid, msg.whatsapp_id || messageId, true).catch(err => {
+           console.warn('[WhatsAppService] Could not delete message from WhatsApp (already deleted or API error):', err?.message);
+         });
       }
 
       // 3. Se houver mídia (URL do Storage), apaga o arquivo físico para economizar espaço
-      const storageUrl = msg.media_url || msg.audio_url;
-      if (storageUrl && storageUrl.includes('chat-audios/')) {
-        try {
-          // Extrai o path relativo após o nome do bucket 'chat-audios/'
-          const filePath = storageUrl.split('chat-audios/').pop();
-          if (filePath) {
-            console.log(`[WhatsAppService] Deleting physical file from storage: ${filePath}`);
-            await supabase.storage.from('chat-audios').remove([filePath]);
+      for (const urlField of [msg.media_url, msg.audio_url]) {
+        if (!urlField) continue;
+        for (const bucket of ['chat-audios', 'whatsapp-sessions']) {
+          if (urlField.includes(`${bucket}/`)) {
+            try {
+              const filePath = urlField.split(`${bucket}/`).pop();
+              if (filePath) {
+                await supabase.storage.from(bucket).remove([filePath]);
+                console.log(`[WhatsAppService] 🗑️ Deleted physical file: ${bucket}/${filePath}`);
+              }
+            } catch (storageErr) {
+              console.warn('[WhatsAppService] Failed to delete file from storage (ignoring):', storageErr);
+            }
           }
-        } catch (storageErr) {
-          // Falha no storage não deve impedir a deleção lógica da mensagem
-          console.warn('[WhatsAppService] Failed to delete file from storage (ignoring):', storageErr);
         }
       }
 
-      // 4. Marcamos como apagada no banco (estilo WhatsApp)
+      // 4. DELEÇÃO REAL DO REGISTRO NO BANCO (não apenas mascarar)
       const { error } = await supabase
         .from('messages')
-        .update({ 
-          text: '🚫 Esta mensagem foi apagada',
-          message_type: 'revoked',
-          media_url: null,
-          audio_url: null,
-          caption: null
-        })
+        .delete()
         .eq('id', messageId)
         .eq('user_id', userId);
 
       if (error) throw error;
+      console.log(`[WhatsAppService] 🗑️ Message ${messageId} permanently deleted from DB.`);
       return { success: true };
     } catch (err: any) {
       console.error('[WhatsAppService] Error deleting message:', err);
