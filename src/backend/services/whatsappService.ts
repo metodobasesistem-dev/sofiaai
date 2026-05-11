@@ -1176,7 +1176,7 @@ class WhatsAppService {
         rejectCall: false,
         msgCall: "",
         groupsIgnore: true,
-        alwaysOnline: true,
+        alwaysOnline: false,
         readMessages: false,
         readStatus: false,
         syncFullHistory: false
