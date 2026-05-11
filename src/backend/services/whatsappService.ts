@@ -431,7 +431,10 @@ class WhatsAppService {
     try {
       // 1. Atualiza thread com preview da mensagem (sidebar) PRIMEIRO
       // Isso evita erro de Foreign Key na inserção da mensagem
-      const { data: contact } = await supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle();
+      const [{ data: existingThread }, { data: contact }] = await Promise.all([
+        supabase.from('threads').select('contact_name').eq('id', threadId).maybeSingle(),
+        supabase.from('contacts').select('nome').eq('id', `${userId}_${cleanTo}`).maybeSingle()
+      ]);
       
       const { error: tErr } = await supabase.from('threads').upsert({
         id: threadId,
@@ -441,7 +444,7 @@ class WhatsAppService {
         remote_jid: to,
         display_phone: cleanTo,
         agent_name: senderName,
-        contact_name: contact?.nome || cleanTo,
+        contact_name: contact?.nome || existingThread?.contact_name || cleanTo,
         updated_at: new Date(sendTimestamp).toISOString()
       });
 
