@@ -80,8 +80,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/sofia-face.png',
-    badge: '/sofiamini.png',
+    icon: './sofia-face.png',
+    badge: './sofiamini.png',
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/'
@@ -90,6 +90,7 @@ self.addEventListener('push', (event) => {
       { action: 'open', title: 'Ver Mensagem' }
     ]
   };
+
 
   event.waitUntil(
     self.registration.showNotification(data.title, options)

@@ -40,8 +40,11 @@ export class PushNotificationService {
       const payload = JSON.stringify({
         title,
         body,
-        url
+        url,
+        icon: '/sofia-face.png',
+        badge: '/sofiamini.png'
       });
+
 
       // 2. Enviar para cada dispositivo ÚNICO
       const promises = Array.from(uniqueEndpoints.values()).map(subscription => 

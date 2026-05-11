@@ -51,11 +51,12 @@ export class NotificationService {
     if (Notification.permission === 'granted' && document.visibilityState !== 'visible') {
       const notification = new Notification(title, {
         body,
-        icon: icon || '/sofiamini.png',
-        badge: '/sofiamini.png',
+        icon: icon || './sofia-face.png',
+        badge: './sofiamini.png',
         tag: 'sofia-chat-msg',
         renotify: true
       });
+
 
       notification.onclick = () => {
         window.focus();
