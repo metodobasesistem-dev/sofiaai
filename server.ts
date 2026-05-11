@@ -88,7 +88,8 @@ async function startServer() {
   });
 
   // 1. Middleware
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1); // Confia no primeiro proxy (Coolify/Nginx/Cloudflare)
+
   app.use(express.json());
   app.use('/api/', globalLimiter); // Proteção global básica
   
