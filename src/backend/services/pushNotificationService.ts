@@ -27,7 +27,15 @@ export class PushNotificationService {
         return;
       }
 
-      console.log(`[PushService] Sending notifications to ${subscriptions.length} devices for user ${userId}`);
+      // Deduplicação em memória por endpoint para evitar spam se houver lixo no banco
+      const uniqueEndpoints = new Map();
+      subscriptions.forEach(sub => {
+        if (sub.subscription && sub.subscription.endpoint) {
+          uniqueEndpoints.set(sub.subscription.endpoint, sub.subscription);
+        }
+      });
+
+      console.log(`[PushService] Sending notifications to ${uniqueEndpoints.size} unique devices for user ${userId} (from ${subscriptions.length} total subs)`);
 
       const payload = JSON.stringify({
         title,
@@ -35,18 +43,19 @@ export class PushNotificationService {
         url
       });
 
-      // 2. Enviar para cada dispositivo
-      const promises = subscriptions.map(sub => 
-        webpush.sendNotification(sub.subscription, payload).catch(err => {
+      // 2. Enviar para cada dispositivo ÚNICO
+      const promises = Array.from(uniqueEndpoints.values()).map(subscription => 
+        webpush.sendNotification(subscription, payload).catch(err => {
           console.error(`[PushService] Error sending to subscription:`, err.statusCode);
           // Se o código for 410 (Gone) ou 404 (Not Found), a assinatura não é mais válida
           if (err.statusCode === 410 || err.statusCode === 404) {
-            this.removeInvalidSubscription(sub.subscription);
+            this.removeInvalidSubscription(subscription);
           }
         })
       );
 
       await Promise.all(promises);
+
     } catch (err) {
       console.error('[PushService] Global error:', err);
     }
@@ -66,15 +75,32 @@ export class PushNotificationService {
 
   static async saveSubscription(userId: string, subscription: any) {
     try {
-      // Verifica se já existe
+      if (!subscription || !subscription.endpoint) {
+        throw new Error('Invalid subscription object: missing endpoint');
+      }
+
+      // 1. Buscar se já existe essa assinatura (pelo endpoint, que é único)
+      // Usamos ilike ou eq dependendo do banco, mas como é um campo JSON/TEXT no Supabase, 
+      // o ideal é extrair o endpoint se estiver em colunas separadas ou usar operador JSON.
+      // Assumindo que 'subscription' no banco é uma coluna JSONB:
       const { data: existing } = await supabase
         .from('push_subscriptions')
         .select('id')
         .eq('user_id', userId)
-        .eq('subscription', subscription)
+        .contains('subscription', { endpoint: subscription.endpoint })
         .maybeSingle();
 
-      if (existing) return { success: true };
+      if (existing) {
+        console.log(`[PushService] Subscription already exists for user ${userId} and endpoint`);
+        return { success: true };
+      }
+
+      // 2. Opcional: Limpar assinaturas antigas com o mesmo endpoint mas outro userId (se for o caso de troca de conta no mesmo browser)
+      await supabase
+        .from('push_subscriptions')
+        .delete()
+        .contains('subscription', { endpoint: subscription.endpoint })
+        .neq('user_id', userId);
 
       const { error } = await supabase
         .from('push_subscriptions')
@@ -91,3 +117,4 @@ export class PushNotificationService {
     }
   }
 }
+
