@@ -89,17 +89,23 @@ router.post('/webhook', async (req, res) => {
     // 2. Obtém o Provider Abstraído
     const provider = await WhatsAppProviderFactory.getProvider(userId);
 
-    // 3. Traduz o payload proprietário para o formato universal
+    const normalizedEvent = (event || '').toUpperCase().replace(/\./g, '_');
+
+    // 3. [STATUS] Atualiza status de entrega/leitura das mensagens (✓ → ✓✓ → ✓✓ azul)
+    if (normalizedEvent === 'MESSAGES_UPDATE') {
+      await handleMessageStatusUpdate(userId, body.data);
+      return res.status(200).send('OK');
+    }
+
+    // 4. Traduz o payload proprietário para o formato universal
     const message = provider.transformPayload(body);
 
-    // 4. Processa se for uma mensagem válida
+    // 5. Processa se for uma mensagem válida
     if (message) {
       await handleStandardizedMessage(userId, instanceName, message, provider);
     }
 
-    // 5. Tratamento de Eventos de Conexão (Agnóstico via Evento do Provider se possível, 
-    // ou fallback para o switch atual se o evento for detectado)
-    const normalizedEvent = (event || '').toUpperCase().replace(/\./g, '_');
+    // 6. Tratamento de Eventos de Conexão
     if (normalizedEvent === 'CONNECTION_UPDATE') {
       await handleConnectionUpdate(userId, body.data);
     } else if (normalizedEvent === 'QRCODE_UPDATED') {
@@ -285,6 +291,57 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     console.error(`[Webhook] Failed to process media message ${messageId}:`, err);
     // Fallback persist without media URL if failed
     await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText);
+  }
+}
+
+/**
+ * Processa eventos MESSAGES_UPDATE da Evolution API.
+ * Esses eventos chegam quando o WhatsApp confirma entrega/leitura de uma mensagem.
+ * 
+ * Status mapping da Evolution API:
+ *   PENDING   → pending   (na fila do WhatsApp)
+ *   SERVER_ACK → sent     (servidor do WhatsApp recebeu)
+ *   DELIVERY_ACK → delivered (celular do destinatário recebeu)
+ *   READ      → read      (destinatário visualizou — tique azul)
+ *   PLAYED    → read      (áudio ouvido)
+ */
+async function handleMessageStatusUpdate(userId: string, data: any) {
+  try {
+    // A Evolution pode mandar um array ou objeto único
+    const updates = Array.isArray(data) ? data : [data];
+
+    for (const update of updates) {
+      const msgId = update?.key?.id || update?.id;
+      const rawStatus = (update?.update?.status || update?.status || '').toUpperCase();
+      
+      if (!msgId || !rawStatus) continue;
+
+      // Só processa mensagens enviadas por nós (fromMe)
+      const fromMe = update?.key?.fromMe === true;
+      if (!fromMe) continue;
+
+      // Mapeamento de status da Evolution para o nosso banco
+      const statusMap: Record<string, string> = {
+        'PENDING':       'pending',
+        'SERVER_ACK':    'sent',
+        'DELIVERY_ACK':  'delivered',
+        'READ':          'read',
+        'PLAYED':        'read'  // áudio ouvido = lido
+      };
+
+      const mappedStatus = statusMap[rawStatus];
+      if (!mappedStatus) continue;
+
+      console.log(`[Webhook] 📬 Status update: ${msgId} → ${mappedStatus}`);
+
+      await supabase
+        .from('messages')
+        .update({ status: mappedStatus })
+        .eq('whatsapp_id', msgId)
+        .eq('user_id', userId);
+    }
+  } catch (err) {
+    console.error('[Webhook] Error processing message status update:', err);
   }
 }
 
