@@ -3416,58 +3416,107 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         </div>
       )}
 
-      {previewMedia && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-10 animate-in fade-in duration-200">
-          <button 
-            onClick={() => setPreviewMedia(null)}
-            className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all z-10"
-            title="Fechar"
-          >
-            <X size={28} />
-          </button>
+      {previewMedia && (() => {
+        const isGalleryValid = previewMedia.type === 'image' || previewMedia.type === 'video';
+        const galleryMedia = isGalleryValid 
+          ? messages
+              .filter(m => m.message_type === 'image' || m.message_type === 'video')
+              .filter(m => m.media_url)
+              .map(m => ({
+                url: m.media_url!,
+                type: m.message_type as string,
+                name: m.media_filename || m.caption || ''
+              }))
+          : [];
+        const currentIndex = galleryMedia.findIndex(m => m.url === previewMedia.url);
 
-          <div className="max-w-7xl max-h-screen w-full h-full flex flex-col items-center justify-center relative">
-            {previewMedia.type === 'image' && (
-              <img src={previewMedia.url} alt={previewMedia.name || 'Preview'} className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in duration-300" />
-            )}
-            
-            {previewMedia.type === 'video' && (
-              <video controls autoPlay className="max-w-full max-h-full rounded-xl shadow-2xl animate-in zoom-in duration-300">
-                <source src={previewMedia.url} />
-                Seu navegador não suporta vídeos.
-              </video>
+        const goNext = (e: React.MouseEvent) => {
+          e.stopPropagation();
+          if (currentIndex < galleryMedia.length - 1) {
+            setPreviewMedia(galleryMedia[currentIndex + 1]);
+          }
+        };
+
+        const goPrev = (e: React.MouseEvent) => {
+          e.stopPropagation();
+          if (currentIndex > 0) {
+            setPreviewMedia(galleryMedia[currentIndex - 1]);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-10 animate-in fade-in duration-200">
+            <button 
+              onClick={() => setPreviewMedia(null)}
+              className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all z-10"
+              title="Fechar"
+            >
+              <X size={28} />
+            </button>
+
+            {isGalleryValid && currentIndex > 0 && (
+              <button 
+                onClick={goPrev}
+                className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/80 rounded-full text-white transition-all z-20 backdrop-blur-md"
+                title="Anterior"
+              >
+                <ChevronLeft size={32} />
+              </button>
             )}
 
-            {previewMedia.type === 'document' && (
-               <div className="bg-white rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in duration-300 max-w-sm w-full">
-                  <div className="w-24 h-24 rounded-2xl bg-primary-500 flex items-center justify-center text-white">
-                    <FileText size={48} />
-                  </div>
-                  <div className="text-center">
-                    <h3 className="text-xl font-bold text-slate-800 break-all">{previewMedia.name || 'Documento'}</h3>
-                    <p className="text-slate-500 mt-2 text-sm">Este arquivo está pronto para download.</p>
-                  </div>
-                  <a 
-                    href={previewMedia.url} 
-                    target="_blank" 
-                    download={previewMedia.name}
-                    className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold transition-all shadow-lg"
-                  >
-                    <Download size={18} /> Download Arquivo
-                  </a>
-               </div>
+            {isGalleryValid && currentIndex !== -1 && currentIndex < galleryMedia.length - 1 && (
+              <button 
+                onClick={goNext}
+                className="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/80 rounded-full text-white transition-all z-20 backdrop-blur-md"
+                title="Próxima"
+              >
+                <ChevronRight size={32} />
+              </button>
             )}
 
-            {previewMedia.name && previewMedia.type !== 'document' && (
-              <div className="absolute bottom-0 left-0 right-0 text-center pb-6">
-                <span className="px-4 py-2 bg-black/40 text-white text-[11px] font-bold rounded-full backdrop-blur-md border border-white/10">
-                  {previewMedia.name}
-                </span>
-              </div>
-            )}
+            <div className="max-w-7xl max-h-screen w-full h-full flex flex-col items-center justify-center relative">
+              {previewMedia.type === 'image' && (
+                <img key={previewMedia.url} src={previewMedia.url} alt={previewMedia.name || 'Preview'} className="max-w-full max-h-[85vh] object-contain shadow-2xl animate-in zoom-in duration-300" />
+              )}
+              
+              {previewMedia.type === 'video' && (
+                <video key={previewMedia.url} controls autoPlay className="max-w-full max-h-[85vh] rounded-xl shadow-2xl animate-in zoom-in duration-300">
+                  <source src={previewMedia.url} />
+                  Seu navegador não suporta vídeos.
+                </video>
+              )}
+
+              {previewMedia.type === 'document' && (
+                 <div className="bg-white rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in duration-300 max-w-sm w-full">
+                    <div className="w-24 h-24 rounded-2xl bg-primary-500 flex items-center justify-center text-white">
+                      <FileText size={48} />
+                    </div>
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-slate-800 break-all">{previewMedia.name || 'Documento'}</h3>
+                      <p className="text-slate-500 mt-2 text-sm">Este arquivo está pronto para download.</p>
+                    </div>
+                    <a 
+                      href={previewMedia.url} 
+                      target="_blank" 
+                      download={previewMedia.name}
+                      className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold transition-all shadow-lg"
+                    >
+                      <Download size={18} /> Download Arquivo
+                    </a>
+                 </div>
+              )}
+
+              {previewMedia.name && previewMedia.type !== 'document' && (
+                <div className="absolute bottom-0 left-0 right-0 text-center pb-6">
+                  <span className="px-4 py-2 bg-black/40 text-white text-[11px] font-bold rounded-full backdrop-blur-md border border-white/10">
+                    {previewMedia.name}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <FollowUpModal 
         isOpen={showFollowUpModal}
