@@ -1,6 +1,6 @@
 {
-  "name": "Chat Sofia",
-  "short_name": "Chat Sofia",
+  "name": "Zyreo Sofia",
+  "short_name": "Zyreo Sofia",
   "description": "Sua assistente inteligente de atendimento",
   "start_url": "/?fullscreen=true",
   "display": "standalone",
