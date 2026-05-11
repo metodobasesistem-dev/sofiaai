@@ -160,11 +160,13 @@ const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOu
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const audio = new Audio(url);
     audioRef.current = audio;
+    audio.playbackRate = playbackRate; // Mantém a velocidade se mudar o áudio
     audio.onloadedmetadata = () => setDuration(audio.duration);
     audio.ontimeupdate = () => setProgress((audio.currentTime / audio.duration) * 100);
     audio.onended = () => setPlaying(false);
@@ -184,33 +186,77 @@ const AudioPlayer: React.FC<{ url: string, isOutbound: boolean }> = ({ url, isOu
     setPlaying(!playing);
   };
 
+  const toggleSpeed = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextRate = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
+    setPlaybackRate(nextRate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextRate;
+    }
+  };
+
   return (
-    <div className={`flex items-center gap-3 py-1 px-2 rounded-2xl min-w-[200px] mb-1
+    <div className={`flex items-center gap-3 py-1.5 px-3 rounded-2xl min-w-[240px] mb-1 relative group/audio
       ${isOutbound ? 'bg-white/10' : 'bg-primary-50/50'}`}>
+      
       <button 
         onClick={togglePlay}
-        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm
-          ${isOutbound ? 'bg-white text-primary-600' : 'bg-primary-600 text-white'}`}
+        className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-sm shrink-0
+          ${isOutbound ? 'bg-white text-primary-600' : 'bg-primary-600 text-white hover:bg-primary-700'}`}
       >
-        {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+        {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
       </button>
-      <div className="flex-1 space-y-1">
-        <div className="h-1 bg-black/10 rounded-full overflow-hidden">
+
+      <div className="flex-1 space-y-1.5">
+        <div className="h-1 bg-black/10 rounded-full overflow-hidden cursor-pointer" 
+             onClick={(e) => {
+               e.stopPropagation();
+               if (!audioRef.current || !duration) return;
+               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+               const x = e.clientX - rect.left;
+               const pct = x / rect.width;
+               audioRef.current.currentTime = pct * duration;
+             }}>
           <motion.div 
             className={`h-full ${isOutbound ? 'bg-white' : 'bg-primary-600'}`}
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
+            transition={{ type: "tween", ease: "linear", duration: 0.1 }}
           />
         </div>
-        <div className={`flex justify-between text-[8px] font-bold uppercase tracking-tighter
+        <div className={`flex justify-between text-[9px] font-black uppercase tracking-tighter
           ${isOutbound ? 'text-primary-100' : 'text-slate-400'}`}>
-          <span>{playing ? 'Reproduzindo' : 'Mensagem de voz'}</span>
+          <div className="flex items-center gap-2">
+             <span>{playing ? 'Reproduzindo' : 'Mensagem de voz'}</span>
+             {playing && <span className="flex gap-0.5 items-center h-2">
+                {[0,1,2].map(i => (
+                  <motion.span 
+                    key={i}
+                    animate={{ height: [2, 6, 2] }}
+                    transition={{ repeat: Infinity, duration: 0.5, delay: i * 0.1 }}
+                    className={`w-0.5 rounded-full ${isOutbound ? 'bg-white' : 'bg-primary-600'}`} 
+                  />
+                ))}
+             </span>}
+          </div>
           <span>{duration ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, '0')}` : '--:--'}</span>
         </div>
       </div>
+
+      {/* Speed Selector (WhatsApp Style) */}
+      <button 
+        onClick={toggleSpeed}
+        className={`ml-1 px-2 py-1 rounded-lg text-[10px] font-black transition-all shrink-0 border
+          ${isOutbound 
+            ? 'bg-white/20 border-white/20 text-white hover:bg-white/30' 
+            : 'bg-white border-primary-100 text-primary-600 hover:bg-primary-50 shadow-sm'}`}
+      >
+        {playbackRate}x
+      </button>
     </div>
   );
 };
+
 
 const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?: (isRecording: boolean) => void }> = ({ onStop, onRecordingChange }) => {
   const [isRecording, setIsRecording] = useState(false);
