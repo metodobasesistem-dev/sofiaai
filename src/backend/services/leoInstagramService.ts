@@ -362,7 +362,15 @@ export const leoInstagramService = {
       .eq('ativo', true);
 
     const commentText = value.text.toLowerCase().trim();
-    const matchedTrigger = triggers?.find(t => commentText.includes(t.palavra_chave.toLowerCase().trim()));
+    const mediaId = value.media?.id;
+
+    // 1. Tentar match com gatilho específico do post
+    let matchedTrigger = triggers?.find(t => t.post_id === mediaId && commentText.includes(t.palavra_chave.toLowerCase().trim()));
+
+    // 2. Se não achou, tentar match com gatilho global (post_id nulo)
+    if (!matchedTrigger) {
+      matchedTrigger = triggers?.find(t => !t.post_id && commentText.includes(t.palavra_chave.toLowerCase().trim()));
+    }
 
     if (matchedTrigger) {
       console.log(`[LeoWebhook] Gatilho encontrado para "${matchedTrigger.palavra_chave}"`);
@@ -624,6 +632,33 @@ export const leoInstagramService = {
         today_reach: dailyStats[days[days.length - 1]]?.alcance || 0
       }
     };
+  },
+
+  async getMedia(companyId: string) {
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('instagram_access_token, instagram_account_id')
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (!config?.instagram_access_token || !config?.instagram_account_id) {
+      throw new Error('Conta do Instagram não conectada');
+    }
+
+    const accessToken = decrypt(config.instagram_access_token);
+    const igId = config.instagram_account_id;
+
+    try {
+      const res = await fetch(`https://graph.facebook.com/v19.0/${igId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=24&access_token=${accessToken}`);
+      const data = await res.json();
+      
+      if (data.error) throw new Error(data.error.message);
+      
+      return data.data || [];
+    } catch (err) {
+      console.error('[LeoInstagramService] Error fetching media:', err);
+      throw err;
+    }
   },
 
   async addTrigger(companyId: string, trigger: any) {

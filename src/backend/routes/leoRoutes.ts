@@ -109,6 +109,15 @@ router.delete('/instagram/triggers/:id', requireAuth, requireAdmin, async (req: 
   }
 });
 
+router.get('/instagram/media', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const media = await leoInstagramService.getMedia(req.userId!);
+    res.json(media);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- WEBHOOKS (Público) ---
 
 router.get('/instagram/webhook', (req, res) => {
