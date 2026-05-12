@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { Loader2, CheckCircle2, XCircle, RefreshCw, QrCode, PhoneOff, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+import { standardFetch } from '../services/supabaseService';
+
 
 const WhatsAppIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
@@ -68,9 +70,10 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     stopPolling();
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/sessions/restore/${uid}`);
+        const res = await standardFetch(`/api/sessions/restore/${uid}`);
         if (!res.ok) return;
         const data = await res.json();
+
 
         if (data.status === 'connected') {
           updateStatus('connected', null);
@@ -148,9 +151,10 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
 
     const fetchCurrentStatus = async () => {
       try {
-        const res = await fetch(`/api/sessions/restore/${uid}`);
+        const res = await standardFetch(`/api/sessions/restore/${uid}`);
         if (!res.ok) return;
         const data = await res.json();
+
 
         if (data.status === 'connected') {
           updateStatus('connected', null);
@@ -195,11 +199,11 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     setQr(null);
 
     try {
-      const res = await fetch('/api/sessions/pairing-code', {
+      const res = await standardFetch('/api/sessions/pairing-code', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, phoneNumber }),
       });
+
 
       if (!res.ok) {
         const err = await res.json();
@@ -225,11 +229,11 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     if (status === 'connected') {
       try {
         setLoading(true);
-        const res = await fetch('/api/sessions/disconnect', {
+        const res = await standardFetch('/api/sessions/disconnect', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId }),
         });
+
         if (!res.ok) throw new Error('Falha ao desconectar');
 
         updateStatus('disconnected', null);
@@ -251,11 +255,11 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     setPairingCode(null);
 
     try {
-      const response = await fetch('/api/sessions/create', {
+      const response = await standardFetch('/api/sessions/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       });
+
 
       if (!response.ok) {
         const text = await response.text();
@@ -292,11 +296,11 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     const toastId = toast.loading('Removendo instância definitivamente...');
 
     try {
-      const res = await fetch('/api/sessions/delete', {
+      const res = await standardFetch('/api/sessions/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       });
+
 
       if (!res.ok) throw new Error('Falha ao remover instância');
 
@@ -319,11 +323,11 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     const toastId = toast.loading('Sincronizando com a Evolution API...');
     
     try {
-      const response = await fetch('/api/whatsapp/sync', {
+      const response = await standardFetch('/api/whatsapp/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       });
+
 
       if (!response.ok) {
         const err = await response.json();

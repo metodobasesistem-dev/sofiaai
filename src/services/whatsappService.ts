@@ -12,15 +12,8 @@ export interface WhatsAppStatusResponse {
  * Initiate a WhatsApp connection (get QR code).
  */
 export const connectWhatsApp = async (): Promise<{ success: boolean; qr?: string }> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-
-  const response = await fetch(`${API_BASE_URL}/create`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ userId: user.id })
+  const response = await standardFetch(`${API_BASE_URL}/create`, {
+    method: 'POST'
   });
 
   if (!response.ok) {
@@ -30,6 +23,7 @@ export const connectWhatsApp = async (): Promise<{ success: boolean; qr?: string
 
   return response.json();
 };
+
 
 /**
  * Listen to WhatsApp session status in real-time.
@@ -84,7 +78,7 @@ export const getWhatsAppStatus = async (): Promise<WhatsAppStatusResponse> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
-  const response = await fetch(`${API_BASE_URL}/status/${user.id}`);
+  const response = await standardFetch(`${API_BASE_URL}/status/${user.id}`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch WhatsApp status');
@@ -93,20 +87,14 @@ export const getWhatsAppStatus = async (): Promise<WhatsAppStatusResponse> => {
   return response.json();
 };
 
+
 /**
  * Send a WhatsApp message via the backend API.
  */
 export const sendMessage = async (to: string, message: string, quotedMessageId?: string) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-
-  const response = await fetch('/api/messages/send', {
+  const response = await standardFetch('/api/messages/send', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({
-      userId: user.id,
       to,
       message,
       quotedMessageId,
@@ -121,20 +109,14 @@ export const sendMessage = async (to: string, message: string, quotedMessageId?:
   return response.json();
 };
 
+
 /**
  * Send a WhatsApp Template message via the backend API.
  */
 export const sendTemplateMessage = async (to: string, templateName: string, variables: any[]) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-
-  const response = await fetch('/api/messages/send-template', {
+  const response = await standardFetch('/api/messages/send-template', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({
-      userId: user.id,
       to,
       templateName,
       variables,
@@ -149,19 +131,13 @@ export const sendTemplateMessage = async (to: string, templateName: string, vari
   return response.json();
 };
 
+
 /**
  * Disconnect/Logout WhatsApp session.
  */
 export const disconnectWhatsApp = async (): Promise<{ success: boolean }> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-
-  const response = await fetch(`${API_BASE_URL}/disconnect`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ userId: user.id })
+  const response = await standardFetch(`${API_BASE_URL}/disconnect`, {
+    method: 'POST'
   });
 
   if (!response.ok) {
@@ -171,6 +147,7 @@ export const disconnectWhatsApp = async (): Promise<{ success: boolean }> => {
 
   return response.json();
 };
+
 
 /**
  * Trigger contact synchronization from existing threads.
