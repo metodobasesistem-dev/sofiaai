@@ -4,7 +4,7 @@ import { InstagramAccount, InstagramStatus } from '../../types/leo.js';
 
 const META_APP_ID = process.env.META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET || 'wppai_leo_secret_default_2024'; // Fallback fix
-const REDIRECT_URI = 'https://baseai.natandesouza.com.br/api/leo/instagram/callback';
+const REDIRECT_URI = 'https://sofia.zyreo.com.br/api/leo/instagram/callback';
 
 // Helper de criptografia
 function encrypt(text: string): string {
