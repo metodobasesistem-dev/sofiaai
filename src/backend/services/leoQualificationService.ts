@@ -93,15 +93,21 @@ export const leoQualificationService = {
   async sendInitialDM(leadId: string, instagramUid: string, companyId: string): Promise<void> {
     const { data: config } = await supabase.from('leo_config').select('mensagem_inicial, instagram_account_id, instagram_access_token').eq('company_id', companyId).single();
     
-    if (!config?.instagram_access_token) return;
+    if (!config?.instagram_access_token || !config?.mensagem_inicial) return;
 
-    // TODO: Implementar chamada real ao Instagram Graph API via POST /{instagram-account-id}/messages
-    // Como é um mock/planejamento, vamos apenas registrar a interação
-    
-    await supabase.from('leo_instagram_interacoes').insert({
-      lead_id: leadId,
-      tipo: 'dm_enviada',
-      conteudo: config.mensagem_inicial
-    });
+    try {
+      // 1. Enviar DM real via Meta API
+      const { leoInstagramService } = await import('./leoInstagramService.js');
+      await leoInstagramService.sendMessage(instagramUid, config.mensagem_inicial, companyId);
+      
+      // 2. Registrar Interação
+      await supabase.from('leo_instagram_interacoes').insert({
+        lead_id: leadId,
+        tipo: 'dm_enviada',
+        conteudo: config.mensagem_inicial
+      });
+    } catch (err) {
+      console.error('[LeoQualificationService] Error sending initial DM:', err);
+    }
   }
 };

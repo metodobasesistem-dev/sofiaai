@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { leoInstagramService } from '../services/leoInstagramService.js';
 import { leoMetaService } from '../services/leoMetaService.js';
 import { AuthenticatedRequest, requireAdmin, requireAuth } from '../middleware/authMiddleware.js';
+import { supabase } from '../lib/supabaseClient.js';
 
 const router = Router();
 
@@ -143,6 +144,39 @@ router.post('/instagram/webhook', async (req, res) => {
   });
 
   res.sendStatus(200);
+});
+
+// --- CONFIGURAÇÕES GERAIS LEO ---
+
+router.get('/config', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { data: config } = await supabase
+      .from('leo_config')
+      .select('mensagem_inicial, perguntas_qualificacao, score_minimo')
+      .eq('company_id', req.userId!)
+      .maybeSingle();
+    
+    res.json(config || { 
+      mensagem_inicial: '', 
+      perguntas_qualificacao: ['Qual o volume médio de leads atual?', 'Já utiliza algum CRM?', 'Qual o seu orçamento mensal para Ads?'], 
+      score_minimo: 70 
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/config', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { mensagem_inicial, perguntas_qualificacao, score_minimo } = req.body;
+    await supabase
+      .from('leo_config')
+      .update({ mensagem_inicial, perguntas_qualificacao, score_minimo })
+      .eq('company_id', req.userId!);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // --- OUTRAS ROTAS ---
