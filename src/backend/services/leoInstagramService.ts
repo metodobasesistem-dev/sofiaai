@@ -2,9 +2,9 @@ import { supabase } from '../lib/supabaseClient.js';
 import crypto from 'node:crypto';
 import { InstagramAccount, InstagramStatus } from '../../types/leo.js';
 
-const META_APP_ID = process.env.META_APP_ID;
-const META_APP_SECRET = process.env.META_APP_SECRET || 'wppai_leo_secret_default_2024'; // Fallback fix
-const REDIRECT_URI = 'https://sofia.zyreo.com.br/api/leo/instagram/callback';
+const META_APP_ID     = process.env.META_APP_ID;
+const META_APP_SECRET = process.env.META_APP_SECRET || 'wppai_leo_secret_default_2024';
+const REDIRECT_URI    = process.env.LEO_REDIRECT_URI || 'https://sofia.zyreo.com.br/api/leo/instagram/callback';
 
 // Helper de criptografia
 function encrypt(text: string): string {
@@ -115,27 +115,7 @@ export const leoInstagramService = {
     const pageId = pageWithIg.id;
     const encryptedToken = encrypt(userAccessToken);
 
-    // 3. Inscrever a Página no Webhook do App
-    try {
-      console.log(`[LeoInstagramService] Inscrevendo a página ${pageId} no webhook...`);
-      const subRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscribed_fields: ['messages', 'messaging_postbacks'],
-          access_token: pageAccessToken
-        })
-      });
-      const subData = await subRes.json();
-      console.log(`[LeoInstagramService] Resposta da inscrição da página:`, subData);
-      if (subData.error) {
-        console.warn(`[LeoInstagramService] Falha ao inscrever página no webhook:`, subData.error);
-      }
-    } catch (err) {
-      console.error(`[LeoInstagramService] Erro na requisição de inscrição da página:`, err);
-    }
-
-    // 4. Salvar no banco
+    // 3. Salvar no banco primeiro (subscribeWebhooks precisa dos dados salvos)
     await supabase
       .from('leo_config')
       .update({
@@ -144,10 +124,13 @@ export const leoInstagramService = {
         instagram_username: igAccount.username,
         instagram_name: igAccount.name,
         instagram_picture_url: igAccount.profile_picture_url,
-        instagram_token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 dias aprox
+        instagram_token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
         instagram_state_token: null
       })
       .eq('company_id', companyId);
+
+    // 4. Inscrever Página e Conta IG nos webhooks (com os campos corretos)
+    await leoInstagramService.subscribeWebhooks(companyId, pageId, pageAccessToken, igAccount.id);
 
     return {
       id: igAccount.id,
@@ -253,6 +236,81 @@ export const leoInstagramService = {
       .eq('company_id', companyId);
   },
 
+  /**
+   * Inscreve a Página e a Conta Instagram Business nos webhooks corretos.
+   * Chamado na conexão OAuth e no endpoint de re-subscrição.
+   *
+   * Se `pageId`/`pageAccessToken`/`igAccountId` não forem passados, busca no banco.
+   */
+  async subscribeWebhooks(
+    companyId: string,
+    pageId?: string,
+    pageAccessToken?: string,
+    igAccountId?: string
+  ): Promise<void> {
+    // Se os dados não foram passados, busca via User Access Token armazenado
+    if (!pageId || !pageAccessToken || !igAccountId) {
+      const { data: config } = await supabase
+        .from('leo_config')
+        .select('instagram_access_token, instagram_account_id')
+        .eq('company_id', companyId)
+        .single();
+
+      if (!config?.instagram_access_token) throw new Error('Conta não conectada');
+      const userToken = decrypt(config.instagram_access_token);
+      igAccountId = config.instagram_account_id;
+
+      const pagesRes = await fetch(
+        `https://graph.facebook.com/v19.0/me/accounts?fields=id,access_token,instagram_business_account{id}&access_token=${userToken}`
+      );
+      const pagesData = await pagesRes.json();
+      const page = pagesData.data?.find((p: any) => p.instagram_business_account?.id === igAccountId);
+      if (!page) throw new Error('Página vinculada à conta IG não encontrada');
+      pageId = page.id;
+      pageAccessToken = page.access_token;
+    }
+
+    // 1. Subscrição da PÁGINA — eventos Messenger + roteamento Instagram
+    try {
+      const pageRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscribed_fields: ['messages', 'messaging_postbacks', 'instagram'],
+          access_token: pageAccessToken
+        })
+      });
+      const pageData = await pageRes.json();
+      if (pageData.error) {
+        console.warn(`[LeoWebhook] ⚠️ Falha na subscrição da página ${pageId}:`, pageData.error.message);
+      } else {
+        console.log(`[LeoWebhook] ✅ Página ${pageId} inscrita (messages, messaging_postbacks, instagram)`);
+      }
+    } catch (err: any) {
+      console.error(`[LeoWebhook] ❌ Erro ao inscrever página:`, err.message);
+    }
+
+    // 2. Subscrição da CONTA IG — comentários, DMs e menções
+    try {
+      const igRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/subscribed_apps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscribed_fields: ['comments', 'messages', 'mentions'],
+          access_token: pageAccessToken
+        })
+      });
+      const igData = await igRes.json();
+      if (igData.error) {
+        console.warn(`[LeoWebhook] ⚠️ Falha na subscrição da conta IG ${igAccountId}:`, igData.error.message);
+      } else {
+        console.log(`[LeoWebhook] ✅ Conta IG ${igAccountId} inscrita (comments, messages, mentions)`);
+      }
+    } catch (err: any) {
+      console.error(`[LeoWebhook] ❌ Erro ao inscrever conta IG:`, err.message);
+    }
+  },
+
   validateWebhookSignature(payload: string, signature: string): boolean {
     const expectedSignature = 'sha256=' + crypto
       .createHmac('sha256', META_APP_SECRET)
@@ -311,11 +369,26 @@ export const leoInstagramService = {
   },
 
   async handleComment(value: any, companyId: string) {
-    console.log(`[LeoWebhook] Processando comentário de @${value.from?.username}: "${value.text}"`);
     if (!value.from || !value.text) return;
-    const instagramUid = value.from.id;
+    const commentId   = value.id as string;
+    const instagramUid = value.from.id as string;
+    const username    = value.from.username as string;
 
-    // 1. Obter ou Criar Lead (Manual para evitar falha de constraint)
+    console.log(`[LeoWebhook] 💬 Comentário de @${username}: "${value.text}" (id: ${commentId})`);
+
+    // 1. Idempotência — se este comentário já foi processado, ignora
+    const { data: existing } = await supabase
+      .from('leo_instagram_interacoes')
+      .select('id')
+      .eq('instagram_message_id', commentId)
+      .maybeSingle();
+
+    if (existing) {
+      console.log(`[LeoWebhook] ⏭️ Comentário ${commentId} já processado — ignorando`);
+      return;
+    }
+
+    // 2. Obter ou Criar Lead
     let { data: lead, error: leadError } = await supabase
       .from('leo_leads')
       .select('*')
@@ -323,51 +396,36 @@ export const leoInstagramService = {
       .eq('instagram_uid', instagramUid)
       .maybeSingle();
 
-    if (leadError) {
-      console.error('[LeoWebhook] Erro ao buscar lead:', leadError);
-    }
+    if (leadError) console.error('[LeoWebhook] ❌ Erro ao buscar lead:', leadError);
 
     if (!lead) {
-      console.log('[LeoWebhook] Criando novo lead para Instagram UID:', instagramUid);
+      console.log(`[LeoWebhook] 🆕 Criando lead para @${username} (uid: ${instagramUid})`);
       const { data: newLead, error: createError } = await supabase
         .from('leo_leads')
-        .insert({
-          company_id: companyId,
-          instagram_uid: instagramUid,
-          nome: value.from.username,
-          plataforma: 'instagram'
-        })
+        .insert({ company_id: companyId, instagram_uid: instagramUid, nome: username, plataforma: 'instagram' })
         .select()
         .single();
-      
+
       if (createError) {
-        console.error('[LeoWebhook] Erro ao criar lead:', createError);
+        console.error('[LeoWebhook] ❌ Erro ao criar lead:', createError);
         return;
       }
       lead = newLead;
-    } else {
-      // Atualizar nome se mudou
-      if (lead.nome !== value.from.username) {
-        await supabase.from('leo_leads').update({ nome: value.from.username }).eq('id', lead.id);
-      }
+    } else if (lead.nome !== username) {
+      await supabase.from('leo_leads').update({ nome: username }).eq('id', lead.id);
     }
 
-    if (!lead) {
-      console.error('[LeoWebhook] Falha crítica: Lead não disponível após upsert manual.');
-      return;
-    }
+    if (!lead) { console.error('[LeoWebhook] ❌ Lead não disponível após criação'); return; }
 
-    // 2. Registrar Interação
+    // 3. Registrar comentário (com instagram_message_id para idempotência futura)
     await supabase.from('leo_instagram_interacoes').insert({
       lead_id: lead.id,
       tipo: 'comentario',
       conteudo: value.text,
-      instagram_message_id: value.id
+      instagram_message_id: commentId
     });
 
-    console.log(`[LeoWebhook] Comentário processado para lead: ${value.from.username}`);
-
-    // 3. Automação por Palavra-Chave (Gatilhos)
+    // 4. Buscar gatilhos e tentar match
     const { data: triggers } = await supabase
       .from('leo_insta_gatilhos')
       .select('*')
@@ -375,46 +433,49 @@ export const leoInstagramService = {
       .eq('ativo', true);
 
     const commentText = value.text.toLowerCase().trim();
-    const mediaId = value.media?.id;
+    const mediaId     = value.media?.id;
 
-    // 1. Tentar match com gatilho específico do post
-    let matchedTrigger = triggers?.find(t => t.post_id === mediaId && commentText.includes(t.palavra_chave.toLowerCase().trim()));
-
-    // 2. Se não achou, tentar match com gatilho global (post_id nulo)
+    let matchedTrigger = triggers?.find(t =>
+      t.post_id === mediaId && commentText.includes(t.palavra_chave.toLowerCase().trim())
+    );
     if (!matchedTrigger) {
-      matchedTrigger = triggers?.find(t => !t.post_id && commentText.includes(t.palavra_chave.toLowerCase().trim()));
+      matchedTrigger = triggers?.find(t =>
+        !t.post_id && commentText.includes(t.palavra_chave.toLowerCase().trim())
+      );
     }
 
     if (matchedTrigger) {
-      console.log(`[LeoWebhook] Gatilho encontrado para "${matchedTrigger.palavra_chave}"`);
-      
-      // Ação 1: Enviar DM
+      console.log(`[LeoWebhook] 🎯 Gatilho "${matchedTrigger.palavra_chave}" acionado para @${username}`);
+
       if (matchedTrigger.mensagem_dm) {
         try {
           await this.sendMessage(instagramUid, matchedTrigger.mensagem_dm, companyId);
+          // instagram_message_id = commentId marca que este comentário já disparou DM
           await supabase.from('leo_instagram_interacoes').insert({
             lead_id: lead.id,
             tipo: 'dm_enviada',
-            conteudo: matchedTrigger.mensagem_dm
+            conteudo: matchedTrigger.mensagem_dm,
+            instagram_message_id: `dm_trigger_${commentId}`
           });
-        } catch (err) {
-          console.error('[LeoWebhook] Erro ao enviar DM do gatilho:', err);
+          console.log(`[LeoWebhook] ✅ DM enviada para @${username}`);
+        } catch (err: any) {
+          console.error(`[LeoWebhook] ❌ Falha ao enviar DM para @${username}:`, err.message, '| Meta error code:', err.code);
+          throw err; // Propaga para o caller (BullMQ retry)
         }
       }
 
-      // Ação 2: Responder Comentário Publicamente
       if (matchedTrigger.resposta_comentario) {
         try {
-          await this.replyToComment(value.id, matchedTrigger.resposta_comentario, companyId);
-        } catch (err) {
-          console.error('[LeoWebhook] Erro ao responder comentário do gatilho:', err);
+          await this.replyToComment(commentId, matchedTrigger.resposta_comentario, companyId);
+          console.log(`[LeoWebhook] ✅ Resposta pública ao comentário ${commentId}`);
+        } catch (err: any) {
+          console.warn(`[LeoWebhook] ⚠️ Falha ao responder comentário ${commentId}:`, err.message);
         }
       }
-
-      return; // Se houve match de gatilho, encerra aqui (não executa a resposta padrão)
+      return;
     }
 
-    // 4. Automação de Resposta Padrão (Fallback)
+    // 5. Fallback: auto-resposta genérica
     const { data: config } = await supabase
       .from('leo_config')
       .select('insta_auto_comment_enabled, insta_auto_comment_msg')
@@ -424,47 +485,63 @@ export const leoInstagramService = {
     if (config?.insta_auto_comment_enabled && config.insta_auto_comment_msg) {
       try {
         await this.sendMessage(instagramUid, config.insta_auto_comment_msg, companyId);
-        
-        // Registrar DM enviada pela automação
         await supabase.from('leo_instagram_interacoes').insert({
           lead_id: lead.id,
           tipo: 'dm_enviada',
-          conteudo: config.insta_auto_comment_msg
+          conteudo: config.insta_auto_comment_msg,
+          instagram_message_id: `dm_auto_${commentId}`
         });
-      } catch (err) {
-        console.error('[LeoWebhook] Erro ao enviar auto-resposta de comentário:', err);
+        console.log(`[LeoWebhook] ✅ Auto-DM enviada para @${username}`);
+      } catch (err: any) {
+        console.error(`[LeoWebhook] ❌ Falha ao enviar auto-DM para @${username}:`, err.message);
+        throw err;
       }
     }
   },
 
   async handleDM(messaging: any, companyId: string) {
-    const instagramUid = messaging.sender.id;
-    const text = messaging.message?.text;
-    if (!text) return;
+    const instagramUid = messaging.sender.id as string;
+    const messageId    = messaging.message?.mid as string;
+    const text         = messaging.message?.text as string;
+    if (!text || !messageId) return;
 
-    // 1. Upsert Lead
-    const { data: lead } = await supabase.from('leo_leads').upsert({
-      company_id: companyId,
-      instagram_uid: instagramUid,
-      plataforma: 'instagram'
-    }, { onConflict: 'company_id,instagram_uid' }).select().single();
+    console.log(`[LeoWebhook] 📩 DM recebida de uid ${instagramUid}: "${text.slice(0, 60)}…" (mid: ${messageId})`);
 
-    if (!lead) return;
+    // 1. Idempotência — se esta mensagem já foi registrada, ignora
+    const { data: existing } = await supabase
+      .from('leo_instagram_interacoes')
+      .select('id')
+      .eq('instagram_message_id', messageId)
+      .maybeSingle();
 
-    // 2. Registrar Interação
+    if (existing) {
+      console.log(`[LeoWebhook] ⏭️ DM ${messageId} já registrada — ignorando`);
+      return;
+    }
+
+    // 2. Upsert Lead
+    const { data: lead } = await supabase
+      .from('leo_leads')
+      .upsert({ company_id: companyId, instagram_uid: instagramUid, plataforma: 'instagram' }, { onConflict: 'company_id,instagram_uid' })
+      .select()
+      .single();
+
+    if (!lead) { console.error('[LeoWebhook] ❌ Falha ao criar/atualizar lead para DM recebida'); return; }
+
+    // 3. Registrar interação
     await supabase.from('leo_instagram_interacoes').insert({
       lead_id: lead.id,
       tipo: 'dm_recebida',
       conteudo: text,
-      instagram_message_id: messaging.message.mid
+      instagram_message_id: messageId
     });
 
-    // 3. Chamar Qualificação (IA)
+    // 4. Qualificação via IA
     try {
       const { leoQualificationService } = await import('./leoQualificationService.js');
       await leoQualificationService.qualifyLead(lead.id);
-    } catch (err) {
-      console.error('[LeoWebhook] Erro no fluxo de DM:', err);
+    } catch (err: any) {
+      console.error('[LeoWebhook] ❌ Erro na qualificação do lead:', err.message);
     }
   },
 
@@ -475,11 +552,17 @@ export const leoInstagramService = {
       .eq('company_id', companyId)
       .single();
 
-    if (!config?.instagram_access_token) return;
+    if (!config?.instagram_access_token) {
+      console.warn(`[LeoWebhook] ⚠️ sendMessage abortado — conta IG não conectada para company ${companyId}`);
+      return;
+    }
 
     const accessToken = decrypt(config.instagram_access_token);
-    
-    const res = await fetch(`https://graph.facebook.com/v19.0/${config.instagram_account_id}/messages`, {
+    const endpoint = `https://graph.facebook.com/v19.0/${config.instagram_account_id}/messages`;
+
+    console.log(`[LeoWebhook] 📤 Enviando DM para uid ${recipientIgUid} via conta ${config.instagram_account_id}`);
+
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -490,7 +573,16 @@ export const leoInstagramService = {
     });
 
     const result = await res.json();
-    if (result.error) throw new Error(result.error.message);
+    if (result.error) {
+      const { code, type, message: msg } = result.error;
+      console.error(`[LeoWebhook] ❌ Meta API error ao enviar DM — code: ${code}, type: ${type}, message: ${msg}`);
+      const err = new Error(msg) as any;
+      err.code = code;
+      err.type = type;
+      throw err;
+    }
+
+    console.log(`[LeoWebhook] ✅ DM enviada com sucesso — message_id: ${result.message_id}`);
   },
 
   async replyToComment(commentId: string, text: string, companyId: string): Promise<void> {

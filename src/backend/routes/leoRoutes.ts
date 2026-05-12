@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { leoInstagramService } from '../services/leoInstagramService.js';
+import { leoService } from '../services/leoService.js';
 import { leoMetaService } from '../services/leoMetaService.js';
 import { AuthenticatedRequest, requireAdmin, requireAuth } from '../middleware/authMiddleware.js';
 import { supabase } from '../lib/supabaseClient.js';
@@ -51,6 +52,21 @@ router.post('/instagram/refresh-token', requireAuth, requireAdmin, async (req: A
     await leoInstagramService.refreshToken(req.userId!);
     res.json({ success: true });
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/leo/instagram/resubscribe
+ * Re-inscreve a Página e a Conta IG nos webhooks com os campos corretos.
+ * Necessário após a correção do bug de subscribed_fields para contas já conectadas.
+ */
+router.post('/instagram/resubscribe', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    await leoInstagramService.subscribeWebhooks(req.userId!);
+    res.json({ success: true, message: 'Webhook re-inscrito com sucesso (comments, messages, mentions, instagram)' });
+  } catch (error: any) {
+    console.error('[LeoRoutes] Erro ao re-inscrever webhook:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -147,10 +163,8 @@ router.post('/instagram/webhook', async (req, res) => {
     return res.status(403).json({ error: 'Invalid signature' });
   }
 
-  // Processar em background
-  leoInstagramService.processWebhookEvent(req.body).catch(err => {
-    console.error('[LeoWebhook] Erro ao processar evento:', err);
-  });
+  // Enfileira no BullMQ para processamento com retry automático
+  await leoService.enqueueWebhookEvent(req.body);
 
   res.sendStatus(200);
 });
@@ -184,6 +198,20 @@ router.post('/config', requireAuth, requireAdmin, async (req: AuthenticatedReque
       .eq('company_id', req.userId!);
     res.json({ success: true });
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/leo/instagram/resubscribe-all  (admin)
+ * Re-inscreve TODAS as contas IG conectadas nos webhooks corretos.
+ */
+router.post('/instagram/resubscribe-all', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  try {
+    const result = await leoService.resubscribeAllAccounts();
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error('[LeoRoutes] Erro ao re-inscrever todas as contas:', error);
     res.status(500).json({ error: error.message });
   }
 });
