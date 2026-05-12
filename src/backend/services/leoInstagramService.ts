@@ -51,6 +51,8 @@ export const leoInstagramService = {
       'instagram_manage_messages',
       'pages_show_list',
       'pages_read_engagement',
+      'pages_manage_metadata',
+      'pages_messaging',
       'business_management'
     ].join(',');
 
@@ -114,14 +116,13 @@ export const leoInstagramService = {
     const pageId = pageWithIg.id;
     const encryptedToken = encrypt(userAccessToken); // Salvamos o token do usuário que tem permissão geral
 
-    // 3. Inscrever a Página no Webhook do App
+    // 3. Inscrever a Página no Webhook do App (Para o Instagram, não precisa enviar subscribed_fields)
     try {
       console.log(`[LeoInstagramService] Inscrevendo a página ${pageId} no webhook...`);
       const subRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subscribed_fields: ['messages', 'messaging_postbacks'],
           access_token: pageAccessToken
         })
       });
