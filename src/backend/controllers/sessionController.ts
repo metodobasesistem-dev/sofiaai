@@ -1,28 +1,19 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { whatsappService } from '../services/whatsappService.js';
+import { AuthenticatedRequest } from '../middleware/authMiddleware.js';
 
 class SessionController {
-  async createSession(req: Request, res: Response) {
+  async createSession(req: AuthenticatedRequest, res: Response) {
     console.log('--- [SessionController] createSession start (non-blocking) ---');
-    console.log('Request body:', JSON.stringify(req.body));
-    
-    let { userId } = req.body;
-    if (!userId) {
-      console.warn('[SessionController] Missing userId in request body');
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing userId' 
-      });
-    }
 
+    const userId = req.userId!;
     console.log(`[SessionController] Triggering session initialization for userId: ${userId}`);
 
     try {
-      // Trigger/Get session (WhatsAppService now handles existing session validation)
       const result = await whatsappService.createSession(userId);
-      
+
       console.log(`[SessionController] Session generated for ${userId}`);
-      
+
       if (result === 'connected') {
         res.json({ success: true, status: 'connected' });
       } else {
@@ -36,17 +27,17 @@ class SessionController {
       }
 
       console.error(`[SessionController] Error triggering session for ${userId}:`, error);
-      res.status(500).json({ 
-        success: false, 
-        error: error.message || 'Failed to trigger session' 
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to trigger session'
       });
     } finally {
       console.log('--- [SessionController] createSession end ---');
     }
   }
 
-  async getStatus(req: Request, res: Response) {
-    let { userId } = req.params;
+  async getStatus(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
     try {
       const data = await whatsappService.getSessionStatus(userId);
       res.json({ ...data, debug_version: 'v2-logging-active' });
@@ -56,11 +47,12 @@ class SessionController {
     }
   }
 
-  async sendMessage(req: Request, res: Response) {
-    let { userId, to, message, quotedMessageId } = req.body;
+  async sendMessage(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
+    const { to, message, quotedMessageId } = req.body;
     console.log(`[SessionController] 📩 sendMessage request: User=${userId}, To=${to}, Msg=${message.substring(0, 20)}..., Quoted=${quotedMessageId || 'None'}`);
-    if (!userId || !to || !message) {
-      return res.status(400).json({ error: 'Missing userId, to, or message' });
+    if (!to || !message) {
+      return res.status(400).json({ error: 'Missing to or message' });
     }
 
     try {
@@ -72,13 +64,9 @@ class SessionController {
     }
   }
 
-  async restoreSession(req: Request, res: Response) {
-    const { userId } = req.params;
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
+  async restoreSession(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
     try {
-      // Only reads status — never creates or destroys anything
       const data = await whatsappService.getSessionStatus(userId);
       console.log(`[SessionController] Restore check for ${userId}: ${data.status}`);
       res.json(data);
@@ -88,12 +76,8 @@ class SessionController {
     }
   }
 
-  async disconnectSession(req: Request, res: Response) {
-    let { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
-
+  async disconnectSession(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
     try {
       console.log(`[SessionController] Disconnecting session (logout) for ${userId}`);
       await whatsappService.logout(userId);
@@ -104,12 +88,8 @@ class SessionController {
     }
   }
 
-  async deleteSession(req: Request, res: Response) {
-    let { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
-
+  async deleteSession(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
     try {
       console.log(`[SessionController] PERMANENTLY DELETING session and instance for ${userId}`);
       await whatsappService.deleteInstance(userId);
@@ -120,10 +100,11 @@ class SessionController {
     }
   }
 
-  async deleteMessage(req: Request, res: Response) {
-    let { userId, messageId } = req.body;
-    if (!userId || !messageId) {
-      return res.status(400).json({ error: 'Missing userId or messageId' });
+  async deleteMessage(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
+    const { messageId } = req.body;
+    if (!messageId) {
+      return res.status(400).json({ error: 'Missing messageId' });
     }
 
     try {
@@ -135,10 +116,11 @@ class SessionController {
     }
   }
 
-  async reactToMessage(req: Request, res: Response) {
-    let { userId, messageId, reaction, remoteJid } = req.body;
-    if (!userId || !messageId || !reaction || !remoteJid) {
-      return res.status(400).json({ error: 'Missing userId, messageId, reaction or remoteJid' });
+  async reactToMessage(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
+    const { messageId, reaction, remoteJid } = req.body;
+    if (!messageId || !reaction || !remoteJid) {
+      return res.status(400).json({ error: 'Missing messageId, reaction or remoteJid' });
     }
 
     try {
