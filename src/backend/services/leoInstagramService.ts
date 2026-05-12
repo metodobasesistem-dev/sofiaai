@@ -110,7 +110,29 @@ export const leoInstagramService = {
     }
 
     const igAccount = pageWithIg.instagram_business_account;
+    const pageAccessToken = pageWithIg.access_token;
+    const pageId = pageWithIg.id;
     const encryptedToken = encrypt(userAccessToken); // Salvamos o token do usuário que tem permissão geral
+
+    // 3. Inscrever a Página no Webhook do App
+    try {
+      console.log(`[LeoInstagramService] Inscrevendo a página ${pageId} no webhook...`);
+      const subRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscribed_fields: ['messages', 'comments', 'messaging_postbacks'],
+          access_token: pageAccessToken
+        })
+      });
+      const subData = await subRes.json();
+      console.log(`[LeoInstagramService] Resposta da inscrição da página:`, subData);
+      if (subData.error) {
+        console.warn(`[LeoInstagramService] Falha ao inscrever página no webhook:`, subData.error);
+      }
+    } catch (err) {
+      console.error(`[LeoInstagramService] Erro na requisição de inscrição da página:`, err);
+    }
 
     // 4. Salvar no banco
     await supabase
