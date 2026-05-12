@@ -429,7 +429,12 @@ class WhatsAppService {
   async destroySession(userId: string) { await this.logout(userId); }
 
   async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente', quotedMessageId?: string): Promise<any> {
+    if (!userId) {
+      console.error('[WhatsAppService] ❌ ERROR: userId is undefined in sendMessage');
+      return { success: false, error: 'User ID is required' };
+    }
     const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+
     const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
     const cleanTo = normalizePhone(to);
     const threadId = `${userId}_${cleanTo}`;

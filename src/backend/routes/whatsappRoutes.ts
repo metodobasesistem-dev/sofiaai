@@ -7,16 +7,20 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware/authMiddle
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Secure all routes in this router
+router.use(requireAuth);
+
 router.post('/send-voice', upload.single('audio'), async (req, res) => {
-  const { userId, remoteJid } = req.body;
+  const userId = (req as AuthenticatedRequest).userId!;
+  const { remoteJid } = req.body;
   const audioFile = req.file;
 
-  if (!userId || !remoteJid || !audioFile) {
-    return res.status(400).json({ error: 'Faltam parâmetros: userId, remoteJid e audio são necessários.' });
+  if (!remoteJid || !audioFile) {
+    return res.status(400).json({ error: 'Faltam parâmetros: remoteJid e audio são necessários.' });
   }
 
   try {
-    console.log(`[WhatsappRoutes] 🎙️ Recebido pedido de envio de voz para ${remoteJid}`);
+    console.log(`[WhatsappRoutes] 🎙️ Recebido pedido de envio de voz para ${remoteJid} (User: ${userId})`);
     await whatsappService.sendVoice(userId, remoteJid, audioFile.buffer);
     res.json({ success: true, message: 'Áudio enviado com sucesso!' });
   } catch (err: any) {
@@ -26,15 +30,16 @@ router.post('/send-voice', upload.single('audio'), async (req, res) => {
 });
 
 router.post('/send-media', upload.single('media'), async (req, res) => {
-  const { userId, remoteJid, caption } = req.body;
+  const userId = (req as AuthenticatedRequest).userId!;
+  const { remoteJid, caption } = req.body;
   const mediaFile = req.file;
 
-  if (!userId || !remoteJid || !mediaFile) {
-    return res.status(400).json({ error: 'Faltam parâmetros: userId, remoteJid e media são necessários.' });
+  if (!remoteJid || !mediaFile) {
+    return res.status(400).json({ error: 'Faltam parâmetros: remoteJid e media são necessários.' });
   }
 
   try {
-    console.log(`[WhatsappRoutes] 📎 Recebido pedido de envio de mídia para ${remoteJid}`);
+    console.log(`[WhatsappRoutes] 📎 Recebido pedido de envio de mídia para ${remoteJid} (User: ${userId})`);
     await whatsappService.sendMedia(userId, remoteJid, mediaFile.buffer, mediaFile.mimetype, mediaFile.originalname, caption);
     res.json({ success: true, message: 'Mídia enviada com sucesso!' });
   } catch (err: any) {
@@ -44,9 +49,7 @@ router.post('/send-media', upload.single('media'), async (req, res) => {
 });
 
 router.post('/sync', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'Faltando userId' });
-
+  const userId = (req as AuthenticatedRequest).userId!;
   try {
     const result = await whatsappService.syncInstance(userId);
     res.json(result);
@@ -56,10 +59,11 @@ router.post('/sync', async (req, res) => {
 });
 
 router.post('/followup/manual', async (req, res) => {
-  const { userId, remoteJid, message, delayMinutes, isAi } = req.body;
+  const userId = (req as AuthenticatedRequest).userId!;
+  const { remoteJid, message, delayMinutes, isAi } = req.body;
   
-  if (!userId || !remoteJid || delayMinutes === undefined) {
-    return res.status(400).json({ error: 'Parâmetros userId, remoteJid e delayMinutes são obrigatórios.' });
+  if (!remoteJid || delayMinutes === undefined) {
+    return res.status(400).json({ error: 'Parâmetros remoteJid e delayMinutes são obrigatórios.' });
   }
 
   try {
@@ -79,9 +83,9 @@ router.post('/followup/manual', async (req, res) => {
  * A atualização do banco dispara o Supabase Realtime, que notifica o frontend
  * com a nova URL (ou null, mostrando as iniciais enquanto o fetch não conclui).
  */
-router.post('/threads/refresh-photo', requireAuth as any, async (req, res) => {
+router.post('/threads/refresh-photo', async (req, res) => {
   const { threadId } = req.body;
-  const userId = (req as AuthenticatedRequest).userId;
+  const userId = (req as AuthenticatedRequest).userId!;
 
   if (!threadId) {
     return res.status(400).json({ error: 'threadId é obrigatório' });

@@ -249,17 +249,9 @@ async function startServer() {
   try {
     console.log('[Server] Registering API Routes...');
     
-    // Session creation (Direct Controller call)
-    app.post('/api/sessions/create', async (req, res) => {
-      try {
-        await sessionController.createSession(req, res);
-      } catch (err: any) {
-        console.error('[Server] Error in direct session create:', err);
-        res.status(500).json({ error: err.message || 'Internal Server Error' });
-      }
-    });
-
+    // API Routes are handled by separate router files
     app.use('/api/sessions', sessionRoutes);
+
     app.use('/api/messages', messageRoutes);
 
     app.post('/api/sessions/pairing-code', async (req, res) => {
