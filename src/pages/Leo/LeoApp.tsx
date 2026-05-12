@@ -4,6 +4,7 @@ import LeoLeads from './LeoLeads';
 import LeoCampanhas from './LeoCampanhas';
 import LeoInstagram from './LeoInstagram';
 import LeoConfig from './LeoConfig';
+import LeoPostagens from './LeoPostagens';
 
 export default function LeoApp({ user, role, onTabChange }: any) {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -14,6 +15,7 @@ export default function LeoApp({ user, role, onTabChange }: any) {
       case 'leads': return <LeoLeads />;
       case 'campanhas': return <LeoCampanhas />;
       case 'instagram': return <LeoInstagram role={role} />;
+      case 'postagens': return <LeoPostagens role={role} />;
       case 'configuracoes': return <LeoConfig role={role} />;
       default: return <LeoDashboard />;
     }
@@ -22,7 +24,7 @@ export default function LeoApp({ user, role, onTabChange }: any) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-6 mb-8 border-b border-gray-100 pb-4 overflow-x-auto">
-        {['dashboard', 'leads', 'campanhas', 'instagram', 'configuracoes'].map((view) => (
+        {['dashboard', 'leads', 'campanhas', 'instagram', 'postagens', 'configuracoes'].map((view) => (
           <button
             key={view}
             onClick={() => setCurrentView(view)}
