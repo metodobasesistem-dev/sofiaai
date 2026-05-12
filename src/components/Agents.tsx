@@ -35,7 +35,9 @@ import {
   Info,
   History as HistoryIcon,
   Brain,
-  ChevronRight
+  ChevronRight,
+  ShoppingBag,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skeleton, CardSkeleton } from './common/SkeletonLoader';
@@ -291,7 +293,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     appointmentDuration: 30,
     response_delay: 15,
     training_mode: 'text',
-    whatsapp_provider: 'evolution'
+    whatsapp_provider: 'evolution',
+    ecommerce_api_url: '',
+    ecommerce_api_type: 'custom',
+    ecommerce_api_use_nlp: false
   });
 
   const [previewMessages, setPreviewMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
@@ -327,6 +332,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   const [kbEditTitle, setKbEditTitle] = useState('');
   const [kbEditContent, setKbEditContent] = useState('');
   const [metaAccessToken, setMetaAccessToken] = useState('');
+  const [ecommerceApiToken, setEcommerceApiToken] = useState('');
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
 
   // Feature Flags
@@ -763,7 +769,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       voice_id: agent.voice_id || 'alloy',
       training_mode: agent.training_mode || 'text',
       whatsapp_provider: agent.whatsapp_provider || 'evolution',
-      whatsapp_provider_config: agent.whatsapp_provider_config || {}
+      whatsapp_provider_config: agent.whatsapp_provider_config || {},
+      ecommerce_api_url: agent.ecommerce_api_url || '',
+      ecommerce_api_type: agent.ecommerce_api_type || 'custom',
+      ecommerce_api_use_nlp: agent.ecommerce_api_use_nlp || false
     });
 
     // Buscar segredo se for Meta
@@ -771,6 +780,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       getAgentSecret(agent.id, 'meta_access_token').then(token => {
         setMetaAccessToken(token);
       }).catch(() => setMetaAccessToken(''));
+
+      getAgentSecret(agent.id, 'ecommerce_api_token').then(token => {
+        setEcommerceApiToken(token);
+      }).catch(() => setEcommerceApiToken(''));
     }
 
     setActiveTab('profile');
@@ -822,11 +835,14 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
         await updateAgent(editingAgent.id, formData);
         
         // Salva segredos se houver
-        if (formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
-          const { data: { session: currentSession } } = await supabase.auth.getSession();
-          const currentUser = currentSession?.user;
-          if (currentUser) {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const currentUser = currentSession?.user;
+        if (currentUser) {
+          if (formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
             await saveAgentSecret(editingAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
+          }
+          if (ecommerceApiToken) {
+            await saveAgentSecret(editingAgent.id, currentUser.id, 'ecommerce_api_token', ecommerceApiToken);
           }
         }
         
@@ -856,11 +872,16 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
         });
 
         // Salva segredos para novo agente
-        if (newAgent?.id && formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
+        if (newAgent?.id) {
           const { data: { session: currentSession } } = await supabase.auth.getSession();
           const currentUser = currentSession?.user;
           if (currentUser) {
-            await saveAgentSecret(newAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
+            if (formData.whatsapp_provider === 'meta_official' && metaAccessToken) {
+              await saveAgentSecret(newAgent.id, currentUser.id, 'meta_access_token', metaAccessToken);
+            }
+            if (ecommerceApiToken) {
+              await saveAgentSecret(newAgent.id, currentUser.id, 'ecommerce_api_token', ecommerceApiToken);
+            }
           }
         }
 
@@ -2817,6 +2838,93 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                         <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">
                           As configurações de provedor WhatsApp agora são gerenciadas centralmente no Painel Administrativo pelo nível de Inquilino.
                         </p>
+                      </div>
+                    </div>
+
+                    {/* Integração E-commerce */}
+                    <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-8">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center text-primary-600 shadow-sm">
+                          <ShoppingBag size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black text-slate-900 tracking-tight">Integração E-commerce</h3>
+                          <p className="text-sm text-slate-500">Conecte o agente ao seu site para consulta de produtos em tempo real.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Base URL da API</label>
+                          <div className="relative">
+                            <input 
+                              type="text"
+                              value={formData.ecommerce_api_url}
+                              onChange={e => setFormData({...formData, ecommerce_api_url: e.target.value})}
+                              placeholder="https://sualoja.com.br/v1"
+                              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                            />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300">
+                              <ExternalLink size={16} />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-slate-400 italic">Ex: https://lmdecor.zyreo.com.br/v1</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Bearer Token / Chave API</label>
+                          <div className="relative">
+                            <input 
+                              type="password"
+                              value={ecommerceApiToken}
+                              onChange={e => setEcommerceApiToken(e.target.value)}
+                              placeholder="••••••••••••••••"
+                              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                            />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300">
+                              <Lock size={16} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Plataforma</label>
+                          <select 
+                            value={formData.ecommerce_api_type}
+                            onChange={e => setFormData({...formData, ecommerce_api_type: e.target.value})}
+                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all appearance-none"
+                          >
+                            <option value="custom">API Customizada (Padrão Zyreo)</option>
+                            <option value="woocommerce">WooCommerce</option>
+                            <option value="shopify">Shopify</option>
+                            <option value="n8n">Webhook N8N</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col justify-center gap-3">
+                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Busca Inteligente (NLP)</label>
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => setFormData({...formData, ecommerce_api_use_nlp: !formData.ecommerce_api_use_nlp})}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${formData.ecommerce_api_use_nlp ? 'bg-primary-600' : 'bg-slate-200'}`}
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.ecommerce_api_use_nlp ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                            <span className="text-xs text-slate-600 font-bold">Habilitar endpoint /busca-ia</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-primary-50 border border-primary-100 rounded-2xl p-4 flex items-start gap-3">
+                        <div className="p-2 bg-white rounded-lg text-primary-600 shadow-sm shrink-0">
+                          <Sparkles size={18} />
+                        </div>
+                        <div className="text-xs text-primary-800 leading-relaxed">
+                          <p className="font-bold">Como funciona a integração:</p>
+                          <p className="mt-0.5">O agente usará o endpoint de busca inteligente para encontrar produtos baseados na conversa do cliente. Caso não encontre, ele tentará listar os itens do catálogo padrão.</p>
+                        </div>
                       </div>
                     </div>
                   </div>

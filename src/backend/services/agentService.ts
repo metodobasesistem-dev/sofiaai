@@ -221,6 +221,8 @@ export class AgentService {
               }
             } else if (functionName === 'servicoTool') {
               toolResult = await this.handleSearchCatalog(dbUserId, args.pergunta || args.query);
+            } else if (functionName === 'consultarEcommerce') {
+              toolResult = await this.handleEcommerceSearch(dbUserId, agentData, args.query || args.pergunta);
             }
 
             console.log(`[AgentService] ✅ TOOL RESULT: ${functionName}`, toolResult);
@@ -886,6 +888,8 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
               }
             } else if (functionName === 'servicoTool') {
               toolResult = await this.handleSearchCatalog(userId, args.pergunta || args.query);
+            } else if (functionName === 'consultarEcommerce') {
+              toolResult = await this.handleEcommerceSearch(userId, agentData, args.query || args.pergunta);
             }
 
             currentMessages.push({
@@ -1026,6 +1030,57 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
     }
   }
 
+  private async getAgentSecret(agentId: string, secretKey: string) {
+    const { data } = await supabase
+      .from('agent_secrets')
+      .select('secret_value')
+      .eq('agent_id', agentId)
+      .eq('secret_key', secretKey)
+      .maybeSingle();
+    return data?.secret_value || null;
+  }
+
+  private async handleEcommerceSearch(userId: string, agentData: any, query: string) {
+    try {
+      const apiUrl = agentData.ecommerce_api_url;
+      if (!apiUrl) return { error: 'E-commerce não configurado para este agente.' };
+
+      const apiToken = await this.getAgentSecret(agentData.id, 'ecommerce_api_token');
+      const useNlp = agentData.ecommerce_api_use_nlp;
+
+      console.log(`[AgentService] 🛒 E-commerce Search: "${query}" (NLP: ${useNlp})`);
+
+      const headers: any = {
+        'Content-Type': 'application/json'
+      };
+      if (apiToken) headers['Authorization'] = `Bearer ${apiToken}`;
+
+      let url = apiUrl;
+      let options: any = { headers };
+
+      if (useNlp) {
+        url = `${apiUrl.endsWith('/') ? apiUrl : apiUrl + '/' }busca-ia`;
+        options.method = 'POST';
+        options.body = JSON.stringify({ query, modo: 'enxuto' });
+      } else {
+        url = `${apiUrl.endsWith('/') ? apiUrl : apiUrl + '/' }kits-e-itens?q=${encodeURIComponent(query)}&limit=5`;
+        options.method = 'GET';
+      }
+
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const errText = await response.text();
+        return { error: `Falha na API do E-commerce: ${response.status}`, details: errText };
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (err: any) {
+      console.error('[AgentService] Ecommerce search error:', err);
+      return { error: 'Falha na comunicação com o e-commerce.', details: err.message };
+    }
+  }
+
   private getAgentTools() {
     return [
       {
@@ -1057,6 +1112,20 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
               professional_name: { type: 'string', description: 'Nome do profissional (opcional)' }
             },
             required: ['acao', 'date']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'consultarEcommerce',
+          description: 'Busca produtos, kits, preços e disponibilidade no catálogo em tempo real do site do cliente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'A frase ou termo de busca do cliente (ex: kits safari até 400 reais)' }
+            },
+            required: ['query']
           }
         }
       }

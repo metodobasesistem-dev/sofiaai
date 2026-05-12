@@ -61,6 +61,9 @@ export interface Agent {
     instance_name?: string;
     [key: string]: any;
   };
+  ecommerce_api_url?: string;
+  ecommerce_api_type?: string;
+  ecommerce_api_use_nlp?: boolean;
 }
 
 export interface AgentSecret {
@@ -310,7 +313,10 @@ const mapAgents = (data: any[]): Agent[] =>
     followUps: a.follow_ups,
     reminders: a.reminders,
     appointmentDuration: a.appointment_duration,
-    response_delay: a.response_delay
+    response_delay: a.response_delay,
+    ecommerce_api_url: a.ecommerce_api_url,
+    ecommerce_api_type: a.ecommerce_api_type,
+    ecommerce_api_use_nlp: a.ecommerce_api_use_nlp
   }));
 
 export const listAgents = async (): Promise<Agent[]> => {
@@ -367,7 +373,10 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
       follow_ups: agentData.followUps,
       reminders: agentData.reminders,
       whatsapp_provider: agentData.whatsapp_provider,
-      whatsapp_provider_config: agentData.whatsapp_provider_config
+      whatsapp_provider_config: agentData.whatsapp_provider_config,
+      ecommerce_api_url: agentData.ecommerce_api_url,
+      ecommerce_api_type: agentData.ecommerce_api_type,
+      ecommerce_api_use_nlp: agentData.ecommerce_api_use_nlp
     };
 
     const res = await standardFetch('/api/v2/agents', {
@@ -418,7 +427,10 @@ export const updateAgent = async (agentId: string, agentData: Partial<Agent>) =>
       follow_ups: agentData.followUps,
       reminders: agentData.reminders,
       whatsapp_provider: agentData.whatsapp_provider,
-      whatsapp_provider_config: agentData.whatsapp_provider_config
+      whatsapp_provider_config: agentData.whatsapp_provider_config,
+      ecommerce_api_url: agentData.ecommerce_api_url,
+      ecommerce_api_type: agentData.ecommerce_api_type,
+      ecommerce_api_use_nlp: agentData.ecommerce_api_use_nlp
     })
   });
 
