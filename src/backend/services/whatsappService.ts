@@ -726,25 +726,25 @@ class WhatsAppService {
       
       // Garante que a thread existe antes da mensagem
       await agentService.persistMessage(
-        threadId, 
-        userId, 
-        '[Áudio]', 
-        'outbound', 
-        result.key?.id || `ai-${Date.now()}`, 
+        threadId,
+        userId,
+        '[Áudio]',
+        'outbound',
+        result.messageId || `ai-${Date.now()}`,
         undefined, // contactName
-        to, 
-        cleanTo, 
+        to,
+        cleanTo,
         'Atendente', // agentName
-        undefined, 
+        undefined,
         audioUrl || undefined,
         'audio', // messageType
         audioUrl || undefined // mediaUrl
       );
     } catch (err: any) {
       console.error('[WhatsAppService] ❌ Error persisting sent voice message:', err);
-      await logToDB(userId, 'error', 'persistence', `Voice message persistence failed: ${result.key?.id}`, err);
+      await logToDB(userId, 'error', 'persistence', `Voice message persistence failed: ${result.messageId}`, err);
     }
-    return { success: true, messageId: result.key?.id };
+    return { success: true, messageId: result.messageId };
   }
 
   async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string, caption?: string) {
@@ -752,23 +752,22 @@ class WhatsAppService {
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     const type = mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document';
     const result = await provider.sendMedia(instanceName, to, buffer.toString('base64'), caption || filename, type);
-    
-    // Upload para nosso storage para visualização no chat
+
     const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
 
     try {
       const cleanTo = normalizePhone(to);
       const threadId = `${userId}_${cleanTo}`;
-      
+
       await agentService.persistMessage(
-        threadId, 
-        userId, 
-        caption || `[Mídia]: ${filename}`, 
-        'outbound', 
-        result.key?.id || `med-${Date.now()}`, 
+        threadId,
+        userId,
+        caption || `[Mídia]: ${filename}`,
+        'outbound',
+        result.messageId || `med-${Date.now()}`,
         undefined, // contactName
-        to, 
-        cleanTo, 
+        to,
+        cleanTo,
         'Atendente',
         undefined, // usage
         undefined, // audioUrl
@@ -780,9 +779,9 @@ class WhatsAppService {
       );
     } catch (err: any) {
       console.error('[WhatsAppService] ❌ Error persisting sent media:', err);
-      await logToDB(userId, 'error', 'persistence', `Media persistence failed: ${result.key?.id}`, err);
+      await logToDB(userId, 'error', 'persistence', `Media persistence failed: ${result.messageId}`, err);
     }
-    return { success: true, messageId: result.key?.id };
+    return { success: true, messageId: result.messageId };
   }
 
 
