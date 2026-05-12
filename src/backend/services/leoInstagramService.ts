@@ -263,39 +263,50 @@ export const leoInstagramService = {
 
   async processWebhookEvent(body: any): Promise<void> {
     console.log('[LeoWebhook] Evento bruto recebido:', JSON.stringify(body, null, 2));
-    const entry = body.entry?.[0];
-    if (!entry) {
-      console.warn('[LeoWebhook] Payload sem "entry".');
-      return;
-    }
-
-    const instagramAccountId = entry.id;
-    console.log('[LeoWebhook] ID da conta no evento:', instagramAccountId);
     
-    // Buscar qual empresa é dona desta conta do Instagram
-    const { data: config, error: configError } = await supabase
-      .from('leo_config')
-      .select('company_id')
-      .eq('instagram_account_id', instagramAccountId)
-      .maybeSingle();
-
-    if (configError) {
-      console.error('[LeoWebhook] Erro ao buscar config:', configError);
-    }
-
-    if (!config) {
-      console.warn('[LeoWebhook] Nenhuma empresa encontrada para o ID:', instagramAccountId);
+    if (!body.entry || !Array.isArray(body.entry)) {
+      console.warn('[LeoWebhook] Payload sem "entry" ou formato inválido.');
       return;
     }
 
-    const companyId = config.company_id;
-    const changes = entry.changes?.[0];
-    const messaging = entry.messaging?.[0];
+    for (const entry of body.entry) {
+      const instagramAccountId = entry.id;
+      console.log('[LeoWebhook] Processando entry ID:', instagramAccountId);
+      
+      // Buscar qual empresa é dona desta conta do Instagram
+      const { data: config, error: configError } = await supabase
+        .from('leo_config')
+        .select('company_id')
+        .eq('instagram_account_id', instagramAccountId)
+        .maybeSingle();
 
-    if (changes) {
-      await this.handleComment(changes.value, companyId);
-    } else if (messaging) {
-      await this.handleDM(messaging, companyId);
+      if (configError) {
+        console.error('[LeoWebhook] Erro ao buscar config:', configError);
+        continue;
+      }
+
+      if (!config) {
+        console.warn(`[LeoWebhook] ❌ Nenhuma empresa encontrada para o ID: ${instagramAccountId}. Verifique se este é o ID da Conta IG ou da Página FB.`);
+        continue;
+      }
+
+      const companyId = config.company_id;
+
+      // Processar Mudanças (Comentários)
+      if (entry.changes && Array.isArray(entry.changes)) {
+        for (const change of entry.changes) {
+          if (change.field === 'comments') {
+            await this.handleComment(change.value, companyId);
+          }
+        }
+      }
+
+      // Processar Mensagens (DMs)
+      if (entry.messaging && Array.isArray(entry.messaging)) {
+        for (const msg of entry.messaging) {
+          await this.handleDM(msg, companyId);
+        }
+      }
     }
   },
 
