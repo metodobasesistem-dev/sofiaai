@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, MessageCircle, Send, Plus, Trash2, X, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../../lib/supabase';
 
 export default function LeoPostagens({ role }: { role: string }) {
   const [posts, setPosts] = useState<any[]>([]);
@@ -17,13 +18,23 @@ export default function LeoPostagens({ role }: { role: string }) {
   });
   const [saving, setSaving] = useState(false);
 
+  const authFetch = async (url: string, options: RequestInit = {}) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${session?.access_token || ''}`,
+      'Content-Type': 'application/json'
+    };
+    return fetch(url, { ...options, headers });
+  };
+
   useEffect(() => {
     fetchMedia();
   }, []);
 
   const fetchMedia = async () => {
     try {
-      const res = await fetch('/api/leo/instagram/media');
+      const res = await authFetch('/api/leo/instagram/media');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao carregar postagens');
       setPosts(data);
@@ -36,7 +47,7 @@ export default function LeoPostagens({ role }: { role: string }) {
 
   const fetchTriggers = async (postId: string) => {
     try {
-      const res = await fetch('/api/leo/instagram/triggers');
+      const res = await authFetch('/api/leo/instagram/triggers');
       const data = await res.json();
       if (res.ok) {
         setTriggers(data.filter((t: any) => t.post_id === postId));
@@ -61,7 +72,7 @@ export default function LeoPostagens({ role }: { role: string }) {
     
     setSaving(true);
     try {
-      const res = await fetch('/api/leo/instagram/triggers', {
+      const res = await authFetch('/api/leo/instagram/triggers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,7 +98,7 @@ export default function LeoPostagens({ role }: { role: string }) {
   const handleDeleteTrigger = async (id: string) => {
     if (role !== 'admin') return;
     try {
-      const res = await fetch(`/api/leo/instagram/triggers/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/leo/instagram/triggers/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Erro ao deletar');
       setTriggers(triggers.filter(t => t.id !== id));
       toast.success('Gatilho removido.');
