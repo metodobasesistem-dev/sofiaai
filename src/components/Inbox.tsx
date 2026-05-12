@@ -2212,11 +2212,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     try {
       const formData = new FormData();
       formData.append('audio', blob);
-      formData.append('userId', userId);
       formData.append('remoteJid', activeThread.remoteJid);
 
+      const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/whatsapp/send-voice', {
         method: 'POST',
+        headers: session ? { 'Authorization': `Bearer ${session.access_token}` } : {},
         body: formData
       });
 
@@ -2245,11 +2246,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     try {
       const formData = new FormData();
       formData.append('media', file);
-      formData.append('userId', userId);
       formData.append('remoteJid', activeThread.remoteJid);
 
+      const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/whatsapp/send-media', {
         method: 'POST',
+        headers: session ? { 'Authorization': `Bearer ${session.access_token}` } : {},
         body: formData
       });
 
@@ -2487,11 +2489,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     if (!selectedThreadId || !activeThread) return;
     
     try {
+      const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/whatsapp/followup/manual', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify({
-          userId: user?.id,
           remoteJid: activeThread.remoteJid,
           message: msg,
           delayMinutes: delay,
@@ -2543,12 +2548,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     try {
       const formData = new FormData();
       formData.append('media', pastedFile);
-      formData.append('userId', userId);
       formData.append('remoteJid', activeThread.remoteJid);
       if (pasteCaption.trim()) formData.append('caption', pasteCaption.trim());
 
+      const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/whatsapp/send-media', {
         method: 'POST',
+        headers: session ? { 'Authorization': `Bearer ${session.access_token}` } : {},
         body: formData
       });
 
