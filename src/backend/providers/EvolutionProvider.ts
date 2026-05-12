@@ -23,7 +23,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
   }
 
   async connect(instanceId: string, config: WhatsAppConfig): Promise<void> {
-    const INSTANCE_TOKEN = process.env.EVOLUTION_AUTH_BASE64 || 'WppAI@2024#Secure123';
+    const INSTANCE_TOKEN = process.env.EVOLUTION_AUTH_BASE64;
+    if (!INSTANCE_TOKEN) throw new Error('EVOLUTION_AUTH_BASE64 env var is not set');
     
     try {
       await this.api.post('/instance/create', {

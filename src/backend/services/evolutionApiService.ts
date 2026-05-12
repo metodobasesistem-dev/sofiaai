@@ -37,7 +37,8 @@ function getApi() {
 export class EvolutionApiService {
   static async createInstance(userId: string) {
     const api = getApi();
-    const INSTANCE_TOKEN = process.env.EVOLUTION_AUTH_BASE64 || 'WppAI@2024#Secure123';
+    const INSTANCE_TOKEN = process.env.EVOLUTION_AUTH_BASE64;
+    if (!INSTANCE_TOKEN) throw new Error('EVOLUTION_AUTH_BASE64 env var is not set');
     
     console.log(`[EvolutionAPI] Creating instance for ${userId}...`);
     try {
