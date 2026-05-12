@@ -1,9 +1,13 @@
 import webpush from 'web-push';
 import { supabase } from '../lib/supabaseClient.js';
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BDOHAFAPvb5cd6oJIFLaVFgQSjdWVZQRXk-XzGfQOSeUOiI-n6jv0aoouxhsrXnjJJqkMd7a4f6DN4mnVABAgjg';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'ce4uzMFTGfzByp6V0RkmS78wuLTUpblaBzye9mVenRM';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:contato@zyreo.com.br';
+
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars must be set');
+}
 
 webpush.setVapidDetails(
   VAPID_EMAIL,
