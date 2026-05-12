@@ -51,6 +51,7 @@ export const leoInstagramService = {
       'instagram_manage_messages',
       'pages_show_list',
       'pages_read_engagement',
+      'pages_messaging',
       'business_management'
     ].join(',');
 
@@ -121,7 +122,7 @@ export const leoInstagramService = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subscribed_fields: ['feed'],
+          subscribed_fields: ['messages', 'messaging_postbacks'],
           access_token: pageAccessToken
         })
       });
