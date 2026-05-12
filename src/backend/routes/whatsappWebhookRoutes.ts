@@ -47,6 +47,9 @@ function validateEvolutionToken(tokenFromQuery: string | undefined): boolean {
 
 router.post('/webhook', async (req, res) => {
   const body = req.body;
+  // [DIAG] Log de chegada do webhook ANTES de qualquer validação
+  console.log(`[Webhook] 📨 Received: event=${body?.event} instance=${body?.instance || body?.instanceName} | bodySize=${JSON.stringify(body || {}).length}`);
+
   // Identificador comum de instância (necessário para achar o dono)
   const instanceName = body.instance || body.instanceName || (body.data?.instance) || (body.data?.instanceName);
   const event = body.event;

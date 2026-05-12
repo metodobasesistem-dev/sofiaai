@@ -90,9 +90,15 @@ async function startServer() {
   // 1. Middleware
   app.set('trust proxy', 1); // Confia no primeiro proxy (Coolify/Nginx/Cloudflare)
 
-  app.use(express.json());
-  app.use('/api/', globalLimiter); // Proteção global básica
-  
+  app.use(express.json({ limit: '50mb' })); // Webhooks com mídia podem exceder 100kb default
+
+  // WEBHOOK CRÍTICO: registrado ANTES do globalLimiter para garantir entrega
+  // (Evolution API e Leo Instagram dependem disso para receber mensagens)
+  app.use('/api/whatsapp/evolution', webhookLimiter, whatsappWebhookRoutes);
+  app.use('/api/leo', webhookLimiter, leoRoutes);
+
+  app.use('/api/', globalLimiter); // Proteção global básica (após webhooks)
+
   // REGISTRO DE EMERGÊNCIA - TOPO DO SERVIDOR
   app.use('/api/v2/sofia', apiLimiter, sofiaRoutes);
   app.use('/api/v2/stripe', stripeRoutes);
@@ -275,8 +281,7 @@ async function startServer() {
     app.use('/api/v2/admin', authLimiter, adminApiRoutes);
     app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
-    app.use('/api/whatsapp/evolution', webhookLimiter, whatsappWebhookRoutes); // Novo Webhook
-    app.use('/api/leo', webhookLimiter, leoRoutes);
+    // /api/whatsapp/evolution e /api/leo registrados no topo (antes do globalLimiter)
 
 
 
