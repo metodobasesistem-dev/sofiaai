@@ -36,8 +36,10 @@ class WhatsAppService {
   private lastWebhookSync: Map<string, number> = new Map();
   private messageQueue: Queue;
   private followUpQueue: Queue;
+  private photoSyncQueue: Queue;
   private messageWorker: Worker | null = null;
   private followUpWorker: Worker | null = null;
+  private photoSyncWorker: Worker | null = null;
 
   constructor() {
     console.log('[WhatsAppService] Initializing with BullMQ...');
@@ -49,11 +51,13 @@ class WhatsAppService {
       password: process.env.REDIS_PASSWORD
     };
 
-    this.messageQueue = new Queue('whatsapp-messages', { connection });
-    this.followUpQueue = new Queue('whatsapp-followups', { connection });
-    
+    this.messageQueue  = new Queue('whatsapp-messages',      { connection });
+    this.followUpQueue = new Queue('whatsapp-followups',     { connection });
+    this.photoSyncQueue = new Queue('profile-picture-sync', { connection });
+
     this.setupWorker(connection);
     this.setupFollowUpWorker(connection);
+    this.setupPhotoSyncWorker(connection);
   }
 
   private setupWorker(connection: any) {
@@ -80,6 +84,35 @@ class WhatsAppService {
     this.followUpWorker.on('failed', (job, err) => {
       console.error(`[FollowUp] Job ${job?.id} failed:`, err);
     });
+  }
+
+  private setupPhotoSyncWorker(connection: any) {
+    this.photoSyncWorker = new Worker('profile-picture-sync', async (job: Job) => {
+      const { userId, threadId, remoteJid, force } = job.data;
+      console.log(`[PhotoSync] 🔄 Processing job ${job.id} for thread ${threadId}`);
+      await agentService.syncProfilePicture(userId, threadId, remoteJid, force ?? false);
+    }, { connection, concurrency: 3, limiter: { max: 5, duration: 1000 } });
+
+    this.photoSyncWorker.on('completed', (job) => {
+      console.log(`[PhotoSync] ✅ Job ${job.id} completed for thread ${job.data.threadId}`);
+    });
+    this.photoSyncWorker.on('failed', (job, err) => {
+      console.error(`[PhotoSync] ❌ Job ${job?.id} failed after ${job?.attemptsMade} attempts:`, err.message);
+    });
+  }
+
+  async enqueueProfilePictureSync(data: { userId: string; threadId: string; remoteJid: string; force?: boolean }) {
+    try {
+      await this.photoSyncQueue.add('sync-photo', data, {
+        jobId: `photo-${data.threadId}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { age: 3600 },
+        removeOnFail: { age: 86400 }
+      });
+    } catch (err) {
+      console.warn('[PhotoSync] Failed to enqueue job:', err);
+    }
   }
 
   async enqueueMessage(data: any) {
@@ -829,7 +862,7 @@ class WhatsAppService {
       // 🛑 Idempotência: Verifica se já houve uma resposta outbound recente para esta thread (últimos 30s)
       // para evitar duplicatas por retentativa de webhook/job
       const thirtySecondsAgo = Date.now() - 30000;
-      const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+      const cleanPhone = normalizePhone(from);
       const threadId = `${userId}_${cleanPhone}`;
 
       const { data: recentReply } = await supabase
@@ -1004,7 +1037,7 @@ class WhatsAppService {
    */
   private async processFollowUp(data: any) {
     const { userId, from, level, config, message, isAi, isManual } = data;
-    const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+    const cleanPhone = normalizePhone(from);
     const threadId = `${userId}_${cleanPhone}`;
 
     console.log(`[FollowUp] 🚀 Starting processFollowUp for ${from} (Manual: ${isManual}, Level: ${level || 0})`);

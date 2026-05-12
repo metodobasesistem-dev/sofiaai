@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { whatsappService } from '../services/whatsappService.js';
+import { supabase } from '../lib/supabaseClient.js';
+import { requireAuth, type AuthenticatedRequest } from '../middleware/authMiddleware.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -66,6 +68,57 @@ router.post('/followup/manual', async (req, res) => {
   } catch (err: any) {
     console.error('[WhatsappRoutes] Erro ao agendar follow-up manual:', err);
     res.status(500).json({ error: err.message || 'Erro ao agendar follow-up.' });
+  }
+});
+
+/**
+ * POST /api/whatsapp/threads/refresh-photo
+ *
+ * Chamado pelo frontend quando uma foto de perfil falha ao carregar (onError).
+ * Invalida o cache imediatamente e tenta buscar uma URL nova em background.
+ * A atualização do banco dispara o Supabase Realtime, que notifica o frontend
+ * com a nova URL (ou null, mostrando as iniciais enquanto o fetch não conclui).
+ */
+router.post('/threads/refresh-photo', requireAuth as any, async (req, res) => {
+  const { threadId } = req.body;
+  const userId = (req as AuthenticatedRequest).userId;
+
+  if (!threadId) {
+    return res.status(400).json({ error: 'threadId é obrigatório' });
+  }
+
+  try {
+    // Verifica que a thread pertence ao usuário autenticado (segurança multi-tenant)
+    const { data: thread } = await supabase
+      .from('threads')
+      .select('id, remote_jid')
+      .eq('id', threadId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!thread) {
+      return res.status(404).json({ error: 'Thread não encontrada' });
+    }
+
+    // 1. Invalida a URL expirada imediatamente — Realtime notifica o frontend com null,
+    //    ContactAvatar exibe iniciais enquanto o worker busca a nova URL.
+    await supabase
+      .from('threads')
+      .update({ profile_picture_url: null, profile_picture_updated_at: null })
+      .eq('id', threadId);
+
+    // 2. Enfileira busca com force=true (ignora TTL) via BullMQ.
+    await whatsappService.enqueueProfilePictureSync({
+      userId: userId!,
+      threadId,
+      remoteJid: thread.remote_jid,
+      force: true
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[PhotoRefresh] Erro:', err);
+    res.status(500).json({ error: 'Erro ao processar refresh de foto' });
   }
 });
 

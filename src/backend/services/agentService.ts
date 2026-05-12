@@ -62,7 +62,7 @@ export class AgentService {
     isAudioRequest?: boolean,
     mediaUrl?: string,
     mediaMimeType?: string
-  }): Promise<{ text: string; audioBuffer?: Buffer } | string | null> {
+  }): Promise<{ text: string; audioBuffer?: Buffer; voiceMode?: string; aiMsgId?: string } | string | null> {
     const { from, body, contactName, messageId, displayPhone, skipPersist = false, isAudioRequest = false, mediaUrl, mediaMimeType } = incomingData;
 
     try {
@@ -273,11 +273,11 @@ export class AgentService {
   }
 
   public async persistMessage(
-    threadId: string, 
-    userId: string, 
-    text: string, 
-    direction: 'inbound' | 'outbound', 
-    messageId: string, 
+    threadId: string,
+    userId: string,
+    text: string,
+    direction: 'inbound' | 'outbound',
+    messageId: string,
     contactName?: string,
     remoteJid?: string,
     displayPhone?: string,
@@ -294,151 +294,171 @@ export class AgentService {
     quotedText?: string,
     contactJid?: string
   ) {
+    if (!messageId || messageId === '') {
+      console.warn(`[AgentService] ⚠️ Skipping persistence: messageId is empty for thread ${threadId}`);
+      return;
+    }
+
     const timestamp = Date.now();
     console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
-    
-      // 1. Thread UPSERT FIRST — com retry automático
+
+    const cleanPhone = normalizePhone(
+      displayPhone || (threadId.includes('_') ? threadId.split('_').slice(1).join('_') : threadId)
+    );
+
+    // ── FASE 1: Busca estado existente (thread + contato) em paralelo ──
+    let existingThread: any = null;
+    let existingContact: any = null;
+
     try {
-      const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId));
-      let [{ data: existingThread }, { data: contact }] = await Promise.all([
-        supabase.from('threads').select('contact_name, profile_picture_url, profile_picture_updated_at, unread_count, ticket_status').eq('id', threadId).maybeSingle(),
-        supabase.from('contacts').select('nome, status_funil').eq('id', `${userId}_${cleanPhone}`).maybeSingle()
+      const [{ data: tData }, { data: cData }] = await Promise.all([
+        supabase
+          .from('threads')
+          .select('contact_name, profile_picture_url, profile_picture_updated_at, unread_count, ticket_status')
+          .eq('id', threadId)
+          .maybeSingle(),
+        supabase
+          .from('contacts')
+          .select('nome, status_funil, total_mensagens, primeiro_contato, data_criacao')
+          .eq('id', `${userId}_${cleanPhone}`)
+          .maybeSingle()
       ]);
-      
-      // [FIX] Busca aproximada para lidar com o 9º dígito se não encontrar por ID exato
-      if (!contact && cleanPhone.startsWith('55')) {
+      existingThread = tData;
+      existingContact = cData;
+
+      // [FIX] Busca aproximada para o 9º dígito brasileiro
+      if (!existingContact && cleanPhone.startsWith('55')) {
         const last8 = cleanPhone.slice(-8);
         const { data: fuzzyContact } = await supabase
           .from('contacts')
-          .select('nome, status_funil')
+          .select('nome, status_funil, total_mensagens, primeiro_contato, data_criacao')
           .eq('user_id', userId)
           .ilike('telefone', `%${last8}`)
           .maybeSingle();
-        contact = fuzzyContact;
+        existingContact = fuzzyContact;
       }
+    } catch (fetchErr) {
+      console.warn('[AgentService] Pre-fetch failed, proceeding with defaults:', fetchErr);
+    }
 
-      const newUnreadCount = direction === 'inbound' 
-        ? (existingThread?.unread_count || 0) + 1 
-        : (existingThread?.unread_count || 0);
+    // ── FASE 2: Lógica de negócio (pura, sem I/O) ──
+    const isPhoneOnly = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
 
-      // Lógica de Reabertura Automática (Resolvido -> Lead)
-      let finalTicketStatus = existingThread?.ticket_status || 'open';
-      let finalFunilStatus = contact?.status_funil;
+    // Resolução de nome: CRM > thread existente > PushName > telefone
+    const resolvedContactName = (() => {
+      if (existingContact?.nome && !isPhoneOnly(existingContact.nome)) return existingContact.nome;
+      if (existingThread?.contact_name && !isPhoneOnly(existingThread.contact_name)) return existingThread.contact_name;
+      if (contactName && !isPhoneOnly(contactName)) return contactName;
+      return existingContact?.nome || existingThread?.contact_name || contactName || cleanPhone;
+    })();
 
-      if (direction === 'inbound' && (finalTicketStatus === 'resolved' || finalFunilStatus === 'Resolvido')) {
-        console.log(`[AgentService] 🔄 Reopening resolved thread for ${cleanPhone}. Moving back to Lead.`);
-        finalTicketStatus = 'open';
-        finalFunilStatus = 'Lead';
-        await supabase.from('contacts').update({ status_funil: 'Lead' }).eq('id', `${userId}_${cleanPhone}`);
-      }
+    const newUnreadCount = direction === 'inbound'
+      ? (existingThread?.unread_count || 0) + 1
+      : (existingThread?.unread_count || 0);
 
-      const threadData: any = {
-        id: threadId,
-        user_id: userId,
-        last_message: text.substring(0, 1000),
-        last_message_time: new Date(timestamp).toISOString(),
-        status: 'ia',
-        remote_jid: remoteJid || `${cleanPhone}@s.whatsapp.net`,
-        display_phone: cleanPhone,
-        agent_name: agentName || 'Sofia',
-        // [FIX] Prioridade: CRM > Nome já salvo na Thread > PushName do WhatsApp > Número
-        // Nunca deixa o número sobrescrever um nome real
-        contact_name: (() => {
-          const isPhone = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
-          
-          if (contact?.nome && !isPhone(contact.nome)) return contact.nome;
-          if (existingThread?.contact_name && !isPhone(existingThread.contact_name)) return existingThread.contact_name;
-          if (contactName && !isPhone(contactName)) return contactName;
-          return contact?.nome || existingThread?.contact_name || contactName || cleanPhone;
-        })(),
-        unread_count: newUnreadCount,
-        ticket_status: finalTicketStatus,
-        updated_at: new Date(timestamp).toISOString()
-      };
+    const currentTicketStatus = existingThread?.ticket_status || 'open';
+    const currentFunilStatus  = existingContact?.status_funil || 'Lead';
+    const reopenTicket = direction === 'inbound' &&
+      (currentTicketStatus === 'resolved' || currentFunilStatus === 'Resolvido');
+    const finalTicketStatus = reopenTicket ? 'open' : currentTicketStatus;
 
-      // [FOTO] Preserva a foto existente — nunca sobrescreve com null
-      if (existingThread?.profile_picture_url) {
-        threadData.profile_picture_url = existingThread.profile_picture_url;
-        threadData.profile_picture_updated_at = existingThread.profile_picture_updated_at;
-      }
+    if (reopenTicket) {
+      console.log(`[AgentService] 🔄 Ticket reabertura automática para ${cleanPhone} (Resolvido → Lead)`);
+    }
 
+    // ── FASE 3: Montagem dos payloads para a RPC ──
+    const messagePayload = {
+      id:                  messageId,
+      user_id:             userId,
+      thread_id:           threadId,
+      text:                text,
+      direction:           direction,
+      status:              'sent',
+      timestamp:           timestamp,
+      audio_url:           audioUrl || mediaUrl || null,
+      message_type:        messageType,
+      media_url:           mediaUrl           || null,
+      media_mime_type:     mediaMimeType      || null,
+      media_filename:      mediaFileName      || null,
+      caption:             caption            || null,
+      is_external:         isExternal,
+      quoted_id:           quotedId           || null,
+      quoted_text:         quotedText         || null,
+      whatsapp_id:         messageId,
+      contact_jid:         contactJid         || null,
+      is_ai:               false,
+      tokens_prompt:       usage?.prompt_tokens     || 0,
+      tokens_completion:   usage?.completion_tokens || 0,
+      cost_brl:            usage?.cost_brl          || 0,
+      created_at:          new Date(timestamp).toISOString()
+    };
+
+    const threadPayload = {
+      id:                         threadId,
+      user_id:                    userId,
+      remote_jid:                 remoteJid || `${cleanPhone}@s.whatsapp.net`,
+      display_phone:              cleanPhone,
+      contact_name:               resolvedContactName,
+      last_message:               text.substring(0, 1000),
+      last_message_time:          new Date(timestamp).toISOString(),
+      status:                     'ia',
+      unread_count:               newUnreadCount,
+      ticket_status:              finalTicketStatus,
+      agent_name:                 agentName || 'Sofia',
+      updated_at:                 new Date(timestamp).toISOString(),
+      // Preserva foto existente — nunca sobrescreve com null
+      profile_picture_url:        existingThread?.profile_picture_url        || null,
+      profile_picture_updated_at: existingThread?.profile_picture_updated_at || null
+    };
+
+    const contactPayload = {
+      id:              `${userId}_${cleanPhone}`,
+      user_id:         userId,
+      telefone:        cleanPhone,
+      nome:            resolvedContactName,
+      status_funil:    existingContact?.status_funil || 'Lead',
+      source:          'whatsapp',
+      ultima_mensagem: text.substring(0, 500),
+      ultima_interacao:new Date(timestamp).toISOString(),
+      // Para novos contatos: usa NOW() via COALESCE na SQL se não passado
+      primeiro_contato:existingContact?.primeiro_contato || new Date(timestamp).toISOString(),
+      data_criacao:    existingContact?.data_criacao     || new Date(timestamp).toISOString(),
+      total_mensagens: existingContact?.total_mensagens  || 0,
+      // Flags de controle para a RPC
+      increment_count: direction === 'inbound',
+      reopen_ticket:   reopenTicket
+    };
+
+    // ── FASE 4: Escrita atômica via RPC (tudo ou nada) ──
+    try {
       await withRetry(async () => {
-        const { error: tErr } = await supabase.from('threads').upsert(threadData);
-        if (tErr) throw tErr;
+        const { data: result, error } = await supabase.rpc('upsert_inbound_message', {
+          p_message: messagePayload,
+          p_thread:  threadPayload,
+          p_contact: contactPayload
+        });
+
+        if (error) throw error; // erro de rede/HTTP → retry
+
+        // Erro SQL retornado como dado (SQLSTATE no campo 'code')
+        if (result && result.success === false) {
+          const sqlErr = Object.assign(
+            new Error(`[RPC] upsert_inbound_message: ${result.error}`),
+            { code: result.code }
+          );
+          throw sqlErr; // constraint 23505 → withRetry não retenta
+        }
       });
 
+      console.log(`[AgentService] ✅ Escrita atômica concluída: ${messageId}`);
     } catch (err: any) {
-      console.error('[AgentService] Thread sync error (all retries exhausted):', err?.message || err);
-      // Fallback mínimo para garantir que a thread existe
-      try {
-        const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId));
-        await supabase.from('threads').upsert({
-          id: threadId,
-          user_id: userId,
-          last_message: text.substring(0, 1000),
-          last_message_time: new Date(timestamp).toISOString(),
-          remote_jid: remoteJid || `${cleanPhone}@s.whatsapp.net`
-        });
-      } catch (fbErr) {
-        console.error('[AgentService] FATAL: Even fallback thread upsert failed:', fbErr);
-      }
-    }
-
-    // 2. Message Second
-    try {
-        if (!messageId || messageId === '') {
-          console.warn(`[AgentService] ⚠️ Skipping persistence: messageId is empty for thread ${threadId}`);
-          return;
-        }
-
-        const messageData: any = {
-         id: messageId,
-         user_id: userId,
-         thread_id: threadId,
-         text: text,
-         direction: direction,
-         status: 'sent',        // ← Fase 3: campo status obrigatório
-         timestamp: timestamp,
-         audio_url: audioUrl || mediaUrl, // Compatibility with audio_url
-         message_type: messageType,
-         media_url: mediaUrl,
-         media_mime_type: mediaMimeType,
-         media_filename: mediaFileName,
-         caption: caption,
-         is_external: isExternal,
-         quoted_id: quotedId,
-         quoted_text: quotedText,
-         whatsapp_id: messageId, // id === whatsapp_id sempre neste sistema
-         contact_jid: contactJid,
-         created_at: new Date(timestamp).toISOString()
-       };
- 
-       if (usage) {
-         messageData.tokens_prompt = usage.prompt_tokens || 0;
-         messageData.tokens_completion = usage.completion_tokens || 0;
-         messageData.cost_brl = usage.cost_brl || 0;
-       }
- 
-        // Upsert atômico usando whatsapp_id com retry automático
-        await withRetry(async () => {
-          const { error: mErr } = await supabase
-            .from('messages')
-            .upsert(messageData, { onConflict: 'whatsapp_id' });
-          if (mErr) throw mErr;
-        });
-
-    } catch (mErr) {
-       console.error('[AgentService] Message insert exception:', mErr);
-    }
-
-    // 3. Update Contact
-    try {
-      const cleanPhone = normalizePhone(displayPhone || (threadId.includes('_') ? threadId.split('_')[1] : threadId) || '');
-      if (cleanPhone) {
-        await this.upsertContact(userId, cleanPhone, contactName, text, direction === 'inbound');
-      }
-    } catch (dbErr) {
-      console.error('[AgentService] Contact sync error:', dbErr);
+      console.error(
+        `[AgentService] ❌ FALHA NA ESCRITA ATÔMICA — msgId: ${messageId} | thread: ${threadId} | err:`,
+        err?.message || err
+      );
+      // Todas as 3 operações falharam juntas: nenhum estado parcial foi criado.
+      // O chamador pode decidir se retenta no nível superior.
+      throw err;
     }
   }
   
@@ -932,7 +952,7 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
             rawPhone = thread.id.includes('_') ? thread.id.split('_')[1] : thread.id;
           }
 
-          const cleanPhone = rawPhone.replace(/\D/g, '');
+          const cleanPhone = normalizePhone(rawPhone);
           if (!cleanPhone || cleanPhone.length < 8) {
             console.log(`[AgentService] ⚠️ Skipping thread ${thread.id}: Invalid phone "${cleanPhone}"`);
             skipped++;
@@ -1044,9 +1064,9 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
   }
   public async updateContactTracking(userId: string, phoneNumber: string, trackingData: any) {
     try {
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const cleanPhone = normalizePhone(phoneNumber);
       const contactId = `${userId}_${cleanPhone}`;
-      
+
       console.log(`[AgentService] 🎯 Updating tracking for contact ${contactId}`);
       
       const { error } = await supabase
@@ -1062,7 +1082,7 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
 
   public async syncProfilePicture(userId: string, threadId: string, remoteJid: string, force = false) {
     try {
-      const cleanPhone = remoteJid.split('@')[0].replace(/\D/g, '');
+      const cleanPhone = normalizePhone(remoteJid);
       const contactId = `${userId}_${cleanPhone}`;
 
       if (!force) {
@@ -1075,7 +1095,7 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
         if (existing?.profile_picture_updated_at) {
           const lastUpdate = new Date(existing.profile_picture_updated_at);
           const diffHours = (new Date().getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
-          if (diffHours < 24 && existing.profile_picture_url) return;
+          if (diffHours < 6 && existing.profile_picture_url) return;
         }
       }
 

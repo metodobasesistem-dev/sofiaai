@@ -202,38 +202,9 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
       await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
     }
 
-    // 3. [FOTO] Busca e cacheia a foto de perfil do contato em background (sem bloquear o webhook)
-    // Só dispara se for mensagem inbound (do cliente) para manter a foto sempre atualizada
+    // 3. [FOTO] Enfileira sync de foto de perfil via BullMQ (deduplica por threadId, TTL controlado no worker)
     if (!fromMe) {
-      setImmediate(async () => {
-        try {
-          const { data: thread } = await supabase
-            .from('threads')
-            .select('profile_picture_url, profile_picture_updated_at')
-            .eq('id', threadId)
-            .maybeSingle();
-
-          // Só atualiza se não tiver foto ou se tiver mais de 24h
-          const needsUpdate = !thread?.profile_picture_url || (() => {
-            if (!thread.profile_picture_updated_at) return true;
-            const ageHours = (Date.now() - new Date(thread.profile_picture_updated_at).getTime()) / 3600000;
-            return ageHours >= 24;
-          })();
-
-          if (needsUpdate) {
-            const photoUrl = await provider.fetchProfilePictureUrl(instanceName, cleanPhone);
-            if (photoUrl) {
-              await supabase.from('threads').update({
-                profile_picture_url: photoUrl,
-                profile_picture_updated_at: new Date().toISOString()
-              }).eq('id', threadId);
-              console.log(`[Webhook] 📸 Profile picture cached for ${cleanPhone}`);
-            }
-          }
-        } catch (photoErr) {
-          // Falha silenciosa — foto é opcional
-        }
-      });
+      await whatsappService.enqueueProfilePictureSync({ userId, threadId, remoteJid: from });
     }
   } catch (err: any) {
     // Log detalhado conforme solicitado no Bug 1
@@ -244,7 +215,7 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
 async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any, direction: 'inbound' | 'outbound' = 'inbound') {
   const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, quotedId, quotedText, contactJid, raw } = message;
-  const cleanPhone = from.split('@')[0].replace(/\D/g, '');
+  const cleanPhone = normalizePhone(from);
   const isExternal = direction === 'outbound';
 
   console.log(`[Webhook] 📥 Downloading media for ${direction} message: ${messageId} (${type})`);

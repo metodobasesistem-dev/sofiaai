@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { generateAIResponse, generateEmbedding } from './aiService';
 import { format } from 'date-fns';
+import { normalizePhone } from '../lib/phoneHelper';
 
 export const sofiaService = {
   /**
@@ -403,7 +404,7 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
   },
 
   async fetchThreadMessages(userId: string, phone: string) {
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = normalizePhone(phone);
     
     // Try multiple ID patterns
     const patterns = [

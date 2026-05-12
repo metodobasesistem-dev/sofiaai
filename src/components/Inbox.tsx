@@ -393,7 +393,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
       ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
   >
     <div className="relative shrink-0">
-      <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="lg" />
+      <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="lg" threadId={thread.id} />
       {thread.status === 'ia' && (
         <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-primary-500 border-2 border-white rounded-full z-10" />
       )}
@@ -1460,7 +1460,11 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
                   funilStatus: resolvedFromCRM.funilStatus !== 'Lead' ? resolvedFromCRM.funilStatus : (baseThread?.funilStatus || 'Lead'),
-                  profilePictureUrl: payload.new.profile_picture_url || baseThread?.profilePictureUrl,
+                  // Usa !== undefined para respeitar null explícito do banco
+                  // (ex: quando o refresh invalidou a URL expirada)
+                  profilePictureUrl: payload.new.profile_picture_url !== undefined
+                    ? payload.new.profile_picture_url
+                    : baseThread?.profilePictureUrl,
                   pending_followup: payload.new.pending_followup ?? baseThread?.pending_followup
                 };
 
@@ -2808,7 +2812,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   <ArrowLeft size={20} />
                 </button>
 
-                <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" />
+                <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" threadId={activeThread.id} />
                 <div className="min-w-0">
                   <h3 className="text-[15px] font-black text-slate-900 leading-tight truncate flex items-center gap-2">
                     {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
