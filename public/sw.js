@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1.0.7'; 
+const CACHE_VERSION = 'v1.0.8';
 const CACHE_NAME = 'sofia-chat-' + CACHE_VERSION;
 const ASSETS = [
   './',
@@ -81,10 +81,13 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body,
     icon: data.icon || '/sofia-face.png',
-    badge: data.badge || '/sofiamini.png',
+    badge: data.badge || '/sofia-face.png',
+    image: data.image,
     vibrate: [100, 50, 100],
+    tag: data.tag || 'sofia-chat',
+    renotify: true,
     data: {
-      url: data.url || '/'
+      url: data.url || '/?fullscreen=true'
     },
     actions: [
       { action: 'open', title: 'Ver Mensagem' }
