@@ -270,27 +270,31 @@ export const leoInstagramService = {
       pageAccessToken = page.access_token;
     }
 
-    // 1. Subscrição da PÁGINA — eventos Messenger + roteamento Instagram
+    // 1. Subscrição da PÁGINA — eventos Messenger (campos válidos para /{pageId}/subscribed_apps)
+    //    Nota: eventos de comentário do Instagram chegam via configuração do App Dashboard
+    //    (Webhooks → objeto instagram), não por campo na subscrição da página.
     try {
       const pageRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subscribed_fields: ['messages', 'messaging_postbacks', 'instagram'],
+          subscribed_fields: ['messages', 'messaging_postbacks'],
           access_token: pageAccessToken
         })
       });
       const pageData = await pageRes.json();
       if (pageData.error) {
-        console.warn(`[LeoWebhook] ⚠️ Falha na subscrição da página ${pageId}:`, pageData.error.message);
+        console.warn(`[LeoWebhook] ⚠️ Falha na subscrição da página ${pageId}: ${pageData.error.message}`);
       } else {
-        console.log(`[LeoWebhook] ✅ Página ${pageId} inscrita (messages, messaging_postbacks, instagram)`);
+        console.log(`[LeoWebhook] ✅ Página ${pageId} inscrita (messages, messaging_postbacks)`);
       }
     } catch (err: any) {
       console.error(`[LeoWebhook] ❌ Erro ao inscrever página:`, err.message);
     }
 
-    // 2. Subscrição da CONTA IG — comentários, DMs e menções
+    // 2. Tentativa de subscrição da conta IG diretamente (requer permissões avançadas aprovadas)
+    //    Pode falhar com "Application does not have the capability" se o app ainda não foi
+    //    publicado com as permissões instagram_manage_comments aprovadas — é esperado.
     try {
       const igRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/subscribed_apps`, {
         method: 'POST',
@@ -302,12 +306,13 @@ export const leoInstagramService = {
       });
       const igData = await igRes.json();
       if (igData.error) {
-        console.warn(`[LeoWebhook] ⚠️ Falha na subscrição da conta IG ${igAccountId}:`, igData.error.message);
+        // Erro #3 = capability — app em modo dev sem permissão aprovada. Não é bloqueante.
+        console.warn(`[LeoWebhook] ⚠️ Subscrição direta da conta IG não disponível (code ${igData.error.code}): ${igData.error.message}. Configure manualmente no App Dashboard → Webhooks → instagram.`);
       } else {
         console.log(`[LeoWebhook] ✅ Conta IG ${igAccountId} inscrita (comments, messages, mentions)`);
       }
     } catch (err: any) {
-      console.error(`[LeoWebhook] ❌ Erro ao inscrever conta IG:`, err.message);
+      console.warn(`[LeoWebhook] ⚠️ Erro ao tentar inscrever conta IG (não bloqueante):`, err.message);
     }
   },
 
