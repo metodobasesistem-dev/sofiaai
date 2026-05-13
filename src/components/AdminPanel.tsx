@@ -74,6 +74,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   const [metaAccessToken, setMetaAccessToken] = useState('');
   const [metaPhoneId, setMetaPhoneId] = useState('');
   const [metaWabaId, setMetaWabaId] = useState('');
+  const [metaAppSecret, setMetaAppSecret] = useState('');
   const [isMetaTesting, setIsMetaTesting] = useState(false);
   const [metaTestResult, setMetaTestResult] = useState<{ ok: boolean; phone?: MetaPhoneInfo; error?: string } | null>(null);
   const [metaHelpOpen, setMetaHelpOpen] = useState(false);
@@ -184,6 +185,8 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     if (isEditModalOpen && selectedUser?.id) {
       setMetaPhoneId((selectedUser as any).meta_phone_id || (selectedUser as any).whatsapp_phone_number_id || '');
       setMetaWabaId((selectedUser as any).meta_waba_id || '');
+      // App secret intentionally never echoed back — admin types only to set a new value
+      setMetaAppSecret('');
       const fromProfile = (selectedUser as any).meta_access_token as string | undefined;
       if (fromProfile) {
         setMetaAccessToken(fromProfile);
@@ -197,6 +200,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
       setMetaAccessToken('');
       setMetaPhoneId('');
       setMetaWabaId('');
+      setMetaAppSecret('');
       setMetaTestResult(null);
     }
   }, [isEditModalOpen, selectedUser?.id]);
@@ -1240,6 +1244,22 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
                         />
                       </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                          App Secret <span className="text-slate-400 font-bold normal-case tracking-normal">(opcional — só se cliente trouxer a própria app)</span>
+                          <Lock size={12} className="text-slate-400" />
+                        </label>
+                        <input
+                          type="password"
+                          value={metaAppSecret}
+                          onChange={e => setMetaAppSecret(e.target.value)}
+                          placeholder="Deixe vazio para usar o App Secret global da plataforma"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
+                        />
+                        <p className="text-[10px] text-slate-400 italic font-medium">
+                          Por segurança, o valor atual nunca é exibido. Preencha apenas para definir um novo.
+                        </p>
+                      </div>
 
                       <button
                         type="button"
@@ -1346,7 +1366,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       // 2. Se o provider escolhido é Meta e há credenciais novas,
                       //    valida + persiste via endpoint dedicado (anti-colisão de phone_id).
                       if (selectedUser.whatsapp_provider === 'meta_official' && metaAccessToken && metaPhoneId) {
-                        const r = await saveAdminMetaCredentials(selectedUser.id, metaAccessToken, metaPhoneId, metaWabaId || undefined);
+                        const r = await saveAdminMetaCredentials(selectedUser.id, metaAccessToken, metaPhoneId, metaWabaId || undefined, metaAppSecret || undefined);
                         if (!r.success) {
                           toast.error(r.error || 'Falha ao salvar credenciais Meta');
                           setIsActionLoading(false);

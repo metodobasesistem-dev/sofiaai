@@ -26,20 +26,18 @@ const router = Router();
  *                    → profiles.meta_phone_id → profiles.id (userId)
  */
 
-function verifyMetaSignature(rawBody: Buffer | undefined, signatureHeader: string | undefined): boolean {
-  // WHATSAPP_APP_SECRET é específico da app WhatsApp da Meta. Mantemos fallback
-  // para META_APP_SECRET para compat com setups antigos que tinham só um app.
-  // (Não usamos META_APP_SECRET diretamente porque essa variável é do app Leo
-  // Instagram e tem outros usos — criptografia de tokens, OAuth do IG.)
-  const secret = (process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || '').trim();
-  if (!secret) {
-    // Compat mode: no secret configured → accept (matches Evolution webhook behavior)
-    return true;
-  }
-  if (!rawBody || !signatureHeader) {
-    console.warn('[MetaWebhook] Missing rawBody or X-Hub-Signature-256 header');
-    return false;
-  }
+function isProduction(): boolean {
+  return (process.env.NODE_ENV || '').toLowerCase() === 'production';
+}
+
+function globalAppSecret(): string {
+  return (process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || '').trim();
+}
+
+/**
+ * Performs the actual HMAC comparison given a secret + raw body + header.
+ */
+function hmacMatches(secret: string, rawBody: Buffer, signatureHeader: string): boolean {
   const expectedHex = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   const expected = `sha256=${expectedHex}`;
   try {
@@ -50,6 +48,93 @@ function verifyMetaSignature(rawBody: Buffer | undefined, signatureHeader: strin
   } catch {
     return false;
   }
+}
+
+/**
+ * Extracts the first phone_number_id from a Meta webhook payload so we can
+ * look up the tenant before validating HMAC (per-tenant secret support).
+ *
+ * Returns null if the payload is shaped unexpectedly — caller should reject.
+ */
+function extractPhoneNumberId(body: any): string | null {
+  try {
+    for (const entry of body?.entry || []) {
+      for (const change of entry?.changes || []) {
+        const id = change?.value?.metadata?.phone_number_id;
+        if (id) return String(id);
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+/**
+ * Validates the X-Hub-Signature-256 header against the appropriate secret.
+ *
+ * Resolution order:
+ *   1) Per-tenant: profiles.meta_app_secret (when phone_number_id resolves to a tenant)
+ *   2) Global env: WHATSAPP_APP_SECRET → META_APP_SECRET
+ *   3) Dev compat: if NO secret exists anywhere AND we're not in production,
+ *      accept without validation (preserves local development ergonomics).
+ *      In production this returns false → 403.
+ */
+async function verifyMetaSignaturePerTenant(
+  rawBody: Buffer | undefined,
+  signatureHeader: string | undefined,
+  body: any
+): Promise<{ ok: boolean; userId?: string; reason?: string }> {
+  if (!rawBody) {
+    return { ok: false, reason: 'missing rawBody' };
+  }
+
+  const phoneNumberId = extractPhoneNumberId(body);
+  let tenantSecret: string | null = null;
+  let tenantUserId: string | undefined;
+
+  if (phoneNumberId) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, meta_app_secret')
+      .eq('meta_phone_id', phoneNumberId)
+      .maybeSingle();
+    if (profile) {
+      tenantUserId = profile.id;
+      tenantSecret = (profile.meta_app_secret || '').trim() || null;
+    }
+  }
+
+  const fallbackSecret = globalAppSecret();
+  const effectiveSecret = tenantSecret || fallbackSecret;
+
+  if (!effectiveSecret) {
+    if (isProduction()) {
+      return { ok: false, reason: 'no app secret configured (refusing in production)' };
+    }
+    console.warn('[MetaWebhook] ⚠️ DEV MODE: no app secret configured — accepting without HMAC. DO NOT USE IN PRODUCTION.');
+    return { ok: true, userId: tenantUserId };
+  }
+
+  if (!signatureHeader) {
+    return { ok: false, reason: 'missing X-Hub-Signature-256 header' };
+  }
+
+  if (hmacMatches(effectiveSecret, rawBody, signatureHeader)) {
+    return { ok: true, userId: tenantUserId };
+  }
+
+  // If a per-tenant secret was found and failed, fall back to the global
+  // secret. Useful while migrating from "one app for all" to per-tenant
+  // configuration.
+  if (tenantSecret && fallbackSecret && tenantSecret !== fallbackSecret) {
+    if (hmacMatches(fallbackSecret, rawBody, signatureHeader)) {
+      console.warn(`[MetaWebhook] ⚠️ Tenant ${tenantUserId} HMAC matched only with global fallback — update meta_app_secret`);
+      return { ok: true, userId: tenantUserId };
+    }
+  }
+
+  return { ok: false, reason: 'signature mismatch', userId: tenantUserId };
 }
 
 /**
@@ -84,8 +169,9 @@ router.post('/webhook', webhookLimiter, async (req, res) => {
 
   console.log(`[MetaWebhook] 📨 Received: object=${body?.object} | bodySize=${rawBody?.length || 0}`);
 
-  if (!verifyMetaSignature(rawBody, signature)) {
-    console.warn('[MetaWebhook] ❌ Invalid HMAC signature. Rejecting.');
+  const verifyResult = await verifyMetaSignaturePerTenant(rawBody, signature, body);
+  if (!verifyResult.ok) {
+    console.warn(`[MetaWebhook] ❌ Signature validation failed: ${verifyResult.reason}`);
     return res.status(403).send('Forbidden');
   }
 
@@ -109,7 +195,10 @@ router.post('/webhook', webhookLimiter, async (req, res) => {
           continue;
         }
 
-        // Resolve tenant by meta_phone_id
+        // Resolve tenant by meta_phone_id. If signature validation already
+        // resolved the same tenant, we can skip this lookup for that one
+        // — but webhooks may carry multiple entries (different tenants in
+        // theory), so we re-resolve per change to be safe.
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
           .select('id, whatsapp_provider')

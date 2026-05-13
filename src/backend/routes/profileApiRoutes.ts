@@ -37,7 +37,16 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
       }
     );
 
-    res.json({ success: true, data: profile });
+    // Strip secrets before sending to the client. The browser never needs the
+    // raw token/secret — UI only consumes the `*_set` booleans for status.
+    const { meta_access_token, meta_app_secret, ...safe } = (profile as any) || {};
+    const sanitized = {
+      ...safe,
+      meta_access_token_set: !!meta_access_token,
+      meta_app_secret_set: !!meta_app_secret,
+    };
+
+    res.json({ success: true, data: sanitized });
   } catch (err: any) {
     console.error('[ProfileAPI] GET error:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -45,12 +54,29 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // ─── PATCH /api/v2/profile ───────────────────────────────────────────────
+// Whitelist of fields a tenant can update on their own profile. Privileged
+// fields (role, plano, trial_ends_at) and Meta credentials are excluded —
+// those must go through the admin endpoints or the dedicated meta-credentials
+// flow so the changes get validated + audited.
+const SELF_PROFILE_PATCH_ALLOWED_FIELDS = new Set([
+  'name', 'nome_completo', 'avatar_url', 'phone', 'company_name',
+  'preferred_locale', 'sofia_active', 'feature_flags',
+]);
+
 router.patch('/', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId!;
   try {
+    const payload = Object.fromEntries(
+      Object.entries(req.body || {}).filter(([k]) => SELF_PROFILE_PATCH_ALLOWED_FIELDS.has(k))
+    );
+
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid fields to update.' });
+    }
+
     const { error } = await supabase
       .from('profiles')
-      .update(req.body)
+      .update(payload)
       .eq('id', userId);
 
     if (error) throw error;

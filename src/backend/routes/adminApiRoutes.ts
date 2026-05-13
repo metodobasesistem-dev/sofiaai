@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { parseProviderError } from '../providers/providerErrors.js';
+import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
 
 const router = Router();
 
@@ -75,7 +76,20 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json({ success: true, data: data || [] });
+
+    // Redact sensitive credentials before sending to the admin UI. We expose
+    // only boolean "configured" flags so the panel can render state without
+    // ever holding secret material in browser memory.
+    const redacted = (data || []).map((row: any) => {
+      const { meta_access_token, meta_app_secret, whatsapp_qr, ...safe } = row;
+      return {
+        ...safe,
+        meta_access_token_set: !!meta_access_token,
+        meta_app_secret_set: !!meta_app_secret,
+      };
+    });
+
+    res.json({ success: true, data: redacted });
   } catch (err: any) {
     console.error('[AdminAPI] Users Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -102,16 +116,36 @@ router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ success: false, error: 'No valid fields to update.' });
     }
 
+    // Capture previous provider so we can audit transitions
+    let previousProvider: string | null = null;
+    if ('whatsapp_provider' in payload) {
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('whatsapp_provider')
+        .eq('id', targetUserId)
+        .maybeSingle();
+      previousProvider = existing?.whatsapp_provider || null;
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update(payload)
       .eq('id', targetUserId);
 
     if (error) throw error;
-    
+
     const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
     await invalidateCache(cacheKey.profile(targetUserId));
-    
+
+    if ('whatsapp_provider' in payload && payload.whatsapp_provider !== previousProvider) {
+      logProviderAudit({
+        targetUserId,
+        performedBy: req.userId,
+        action: 'provider_changed',
+        details: { from: previousProvider, to: payload.whatsapp_provider },
+      });
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('[AdminAPI] User Update Error:', err.message);
@@ -125,7 +159,7 @@ router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
 const META_BASE = 'https://graph.facebook.com/v19.0';
 router.post('/users/:id/meta-credentials', async (req: AuthenticatedRequest, res: Response) => {
   const targetUserId = req.params.id;
-  const { access_token, phone_id, waba_id } = req.body || {};
+  const { access_token, phone_id, waba_id, app_secret } = req.body || {};
 
   if (!access_token || !phone_id) {
     return res.status(400).json({ success: false, error: 'access_token and phone_id are required' });
@@ -160,23 +194,35 @@ router.post('/users/:id/meta-credentials', async (req: AuthenticatedRequest, res
       });
     }
 
+    const updatePayload: Record<string, any> = {
+      whatsapp_provider: 'meta_official',
+      meta_access_token: access_token,
+      meta_phone_id: phone_id,
+      meta_waba_id: waba_id || null,
+      meta_last_error: null,
+      meta_last_error_at: null,
+      whatsapp_status: 'connected',
+      updated_at: new Date().toISOString(),
+    };
+    if (typeof app_secret === 'string' && app_secret.trim()) {
+      updatePayload.meta_app_secret = app_secret.trim();
+    }
+
     const { error: updateErr } = await supabase
       .from('profiles')
-      .update({
-        whatsapp_provider: 'meta_official',
-        meta_access_token: access_token,
-        meta_phone_id: phone_id,
-        meta_waba_id: waba_id || null,
-        meta_last_error: null,
-        meta_last_error_at: null,
-        whatsapp_status: 'connected',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', targetUserId);
 
     if (updateErr) throw updateErr;
 
     MetaProvider.invalidateCredentialCache(targetUserId);
+
+    logProviderAudit({
+      targetUserId,
+      performedBy: req.userId,
+      action: 'meta_credentials_saved',
+      details: maskedMetaPayload({ access_token, phone_id, waba_id, app_secret }),
+    });
 
     return res.json({
       success: true,
@@ -206,6 +252,7 @@ router.post('/users/:id/meta-disconnect', async (req: AuthenticatedRequest, res:
         meta_access_token: null,
         meta_phone_id: null,
         meta_waba_id: null,
+        meta_app_secret: null,
         whatsapp_status: 'disconnected',
         updated_at: new Date().toISOString(),
       })
@@ -213,6 +260,12 @@ router.post('/users/:id/meta-disconnect', async (req: AuthenticatedRequest, res:
 
     if (error) throw error;
     MetaProvider.invalidateCredentialCache(targetUserId);
+    logProviderAudit({
+      targetUserId,
+      performedBy: req.userId,
+      action: 'meta_disconnected',
+      details: { reverted_to: 'evolution' },
+    });
     return res.json({ success: true, provider: 'evolution' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });

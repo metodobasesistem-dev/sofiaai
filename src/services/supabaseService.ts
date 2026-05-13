@@ -1780,17 +1780,22 @@ export const testMetaConnection = async (
   return res.json();
 };
 
-/** Admin saves credentials for a target tenant (validated + anti-collision on backend). */
+/**
+ * Admin saves credentials for a target tenant (validated + anti-collision on backend).
+ * Optionally accepts a per-tenant `app_secret` for white-label setups where each
+ * tenant brings their own Meta app. Omit to use the global WHATSAPP_APP_SECRET.
+ */
 export const saveAdminMetaCredentials = async (
   targetUserId: string,
   access_token: string,
   phone_id: string,
-  waba_id?: string
+  waba_id?: string,
+  app_secret?: string
 ): Promise<MetaTestResult & { provider?: string }> => {
   const res = await fetch(`/api/v2/admin/users/${targetUserId}/meta-credentials`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ access_token, phone_id, waba_id }),
+    body: JSON.stringify({ access_token, phone_id, waba_id, app_secret }),
   });
   return res.json();
 };

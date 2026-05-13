@@ -5,6 +5,7 @@ import { MetaProvider } from '../providers/MetaProvider.js';
 import { parseProviderError } from '../providers/providerErrors.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
+import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
 
 const router = Router();
 const META_BASE = 'https://graph.facebook.com/v19.0';
@@ -24,6 +25,8 @@ interface MetaCredsBody {
   access_token: string;
   phone_id: string;
   waba_id?: string;
+  /** Optional per-tenant Meta App Secret. If omitted, falls back to WHATSAPP_APP_SECRET env. */
+  app_secret?: string;
 }
 
 /**
@@ -76,7 +79,7 @@ router.post('/test-connection', requireAuth as any, async (req: AuthenticatedReq
 
 router.post('/save-credentials', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId!;
-  const { access_token, phone_id, waba_id } = (req.body || {}) as MetaCredsBody;
+  const { access_token, phone_id, waba_id, app_secret } = (req.body || {}) as MetaCredsBody;
   if (!access_token || !phone_id) {
     return res.status(400).json({ success: false, error: 'access_token and phone_id are required' });
   }
@@ -105,17 +108,24 @@ router.post('/save-credentials', requireAuth as any, async (req: AuthenticatedRe
     });
   }
 
+  const updatePayload: Record<string, any> = {
+    whatsapp_provider: 'meta_official',
+    meta_access_token: access_token,
+    meta_phone_id: phone_id,
+    meta_waba_id: waba_id || null,
+    meta_last_error: null,
+    meta_last_error_at: null,
+    updated_at: new Date().toISOString(),
+  };
+  // Only overwrite app_secret when explicitly supplied — keeps existing
+  // per-tenant secret intact if the admin re-saves other fields.
+  if (typeof app_secret === 'string' && app_secret.trim()) {
+    updatePayload.meta_app_secret = app_secret.trim();
+  }
+
   const { error: updateErr } = await supabase
     .from('profiles')
-    .update({
-      whatsapp_provider: 'meta_official',
-      meta_access_token: access_token,
-      meta_phone_id: phone_id,
-      meta_waba_id: waba_id || null,
-      meta_last_error: null,
-      meta_last_error_at: null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', userId);
 
   if (updateErr) {
@@ -124,6 +134,13 @@ router.post('/save-credentials', requireAuth as any, async (req: AuthenticatedRe
 
   // Invalidate the credential cache so the next outbound message uses fresh values
   MetaProvider.invalidateCredentialCache(userId);
+
+  logProviderAudit({
+    targetUserId: userId,
+    performedBy: userId, // self-service: tenant configurou o próprio
+    action: 'meta_credentials_saved',
+    details: maskedMetaPayload({ access_token, phone_id, waba_id, app_secret }),
+  });
 
   return res.json({
     success: true,
@@ -146,6 +163,7 @@ router.post('/disconnect', requireAuth as any, async (req: AuthenticatedRequest,
       meta_access_token: null,
       meta_phone_id: null,
       meta_waba_id: null,
+      meta_app_secret: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
@@ -155,6 +173,12 @@ router.post('/disconnect', requireAuth as any, async (req: AuthenticatedRequest,
   }
 
   MetaProvider.invalidateCredentialCache(userId);
+  logProviderAudit({
+    targetUserId: userId,
+    performedBy: userId,
+    action: 'meta_disconnected',
+    details: { reverted_to: 'evolution' },
+  });
   return res.json({ success: true, provider: 'evolution' });
 });
 
