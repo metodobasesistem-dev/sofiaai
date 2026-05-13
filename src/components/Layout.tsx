@@ -177,6 +177,19 @@ export default function Layout({
   const { flags } = useFeatureContext();
 
   const menuItems = [
+    ...(role === 'admin' ? [
+      {
+        id: 'admin_group',
+        icon: <Shield size={20} />,
+        label: 'Administração',
+        subItems: [
+          { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
+          { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
+          { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
+          { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
+        ]
+      }
+    ] : []),
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
     {
@@ -211,19 +224,6 @@ export default function Layout({
     { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
     { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
 
-    ...(role === 'admin' ? [
-      {
-        id: 'admin_group',
-        icon: <Shield size={20} />,
-        label: 'Administração',
-        subItems: [
-          { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
-          { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
-          { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
-          { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
-        ]
-      }
-    ] : []),
 
     { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
     { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
