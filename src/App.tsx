@@ -194,11 +194,11 @@ export default function App() {
       case 'dashboard':
         return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} plano={plano} />;
       case 'admin_hub':
-        return <AdminPanel initialView="hub" onTabChange={handleTabChange} />;
+        return <AdminPanel key={activeTab} initialView="hub" onTabChange={handleTabChange} />;
       case 'admin':
-        return <AdminPanel onTabChange={handleTabChange} />;
+        return <AdminPanel key={activeTab} onTabChange={handleTabChange} />;
       case 'lead_radar':
-        return <AdminPanel initialTab="lead_radar" onTabChange={handleTabChange} />;
+        return <AdminPanel key={activeTab} initialTab="lead_radar" onTabChange={handleTabChange} />;
       case 'sofia_config':
         return <SofiaConfig />;
       case 'reports':
