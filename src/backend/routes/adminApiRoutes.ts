@@ -11,6 +11,7 @@ import { requireAuth, requireAdmin, AuthenticatedRequest } from '../middleware/a
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { parseProviderError } from '../providers/providerErrors.js';
 import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
+import { generateAIResponse } from '../services/aiService.js';
 
 const router = Router();
 
@@ -596,6 +597,150 @@ router.get('/dashboard/growth', async (req: AuthenticatedRequest, res: Response)
     });
 
     res.json({ success: true, data: Object.values(dailyData).reverse() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── LEAD RADAR (CAPTAÇÃO) ──────────────────────────────────────────────────
+
+// GET /api/v2/admin/leads - Listar leads capturados
+router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('leads_radar')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v2/admin/leads/scan - Iniciar varredura no Google Maps
+router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { niche, city, zip } = req.body;
+    if (!niche || !city) return res.status(400).json({ success: false, error: 'Nicho e Cidade são obrigatórios' });
+
+    // 1. Obter Google API Key das configurações
+    const { data: settings } = await supabase.from('global_settings').select('google_maps_api_key').single();
+    const apiKey = settings?.google_maps_api_key;
+
+    if (!apiKey) return res.status(400).json({ success: false, error: 'Chave do Google Maps não configurada' });
+
+    // 2. Chamar Google Places API (v1 searchText)
+    const query = `${niche} em ${city} ${zip || ''}`.trim();
+    console.log(`[LeadRadar] Iniciando busca: "${query}"`);
+
+    const gResponse = await axios.post(
+      'https://places.googleapis.com/v1/places:searchText',
+      { textQuery: query },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.websiteUri,places.reviews,places.types'
+        }
+      }
+    );
+
+    const rawPlaces = gResponse.data.places || [];
+    console.log(`[LeadRadar] Encontrados ${rawPlaces.length} locais brutos.`);
+
+    const leadsProcessados = [];
+
+    // 3. Processar e Filtrar Leads (Lógica do n8n)
+    for (const place of rawPlaces) {
+      // Filtros: Rating > 3, Tem telefone, Tem avaliações
+      const rating = place.rating || 0;
+      const phone = place.nationalPhoneNumber;
+      const ratingCount = place.userRatingCount || 0;
+
+      if (rating < 3 || !phone || ratingCount < 1) continue;
+
+      // Validador de WhatsApp (Mobile Check: começa com 9 após o DDD)
+      const digitsOnly = phone.replace(/\D/g, '');
+      const isMobile = digitsOnly.length >= 11 && digitsOnly.substring(2, 3) === '9';
+      
+      if (!isMobile) continue;
+
+      // 4. Gerar Resumo com IA
+      let reviewSummary = 'Sem avaliações detalhadas para resumir.';
+      if (place.reviews && place.reviews.length > 0) {
+        const reviewsText = place.reviews.map((r: any) => r.text?.text || '').join('\n---\n');
+        try {
+          const aiRes = await generateAIResponse(
+            "Você é um analista comercial. Resuma as avaliações deste estabelecimento em 2 ou 3 frases curtas, focando no que os clientes mais gostam e no que reclamam. Use isso para ajudar em uma abordagem de vendas.",
+            [{ role: 'user', content: `Avaliações:\n${reviewsText}` }]
+          );
+          reviewSummary = aiRes.text || reviewSummary;
+        } catch (aiErr) {
+          console.error('[LeadRadar] Erro ao gerar resumo IA:', aiErr);
+        }
+      }
+
+      // 5. Salvar/Upsert no Banco
+      const leadData = {
+        name: place.displayName?.text || 'Sem nome',
+        phone: phone,
+        address: place.formattedAddress,
+        rating: rating,
+        user_rating_count: ratingCount,
+        website: place.websiteUri,
+        review_summary: reviewSummary,
+        place_id: place.id,
+        niche: niche,
+        city: city,
+        status: 'novo'
+      };
+
+      const { data: savedLead, error: upsertErr } = await supabase
+        .from('leads_radar')
+        .upsert(leadData, { onConflict: 'place_id' })
+        .select()
+        .single();
+
+      if (!upsertErr) leadsProcessados.push(savedLead);
+    }
+
+    res.json({ success: true, count: leadsProcessados.length, data: leadsProcessados });
+  } catch (err: any) {
+    console.error('[LeadRadar] Erro geral:', err.response?.data || err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/v2/admin/leads/:id - Atualizar status do lead
+router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status } = req.body;
+    const { data, error } = await supabase
+      .from('leads_radar')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/v2/admin/leads/:id - Remover lead
+router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { error } = await supabase
+      .from('leads_radar')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

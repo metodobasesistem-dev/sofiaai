@@ -39,14 +39,14 @@ import {
   Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch } from '../services/supabaseService';
 import MetaSetupHelpModal from './MetaSetupHelpModal';
 import WhatsAppDiagnosticModal from './WhatsAppDiagnosticModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_activator';
+type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_activator' | 'lead_radar';
 
 interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
@@ -58,7 +58,11 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [radarNiche, setRadarNiche] = useState('');
+  const [radarCity, setRadarCity] = useState('');
+  const [radarLeads, setRadarLeads] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -93,6 +97,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     admin_notification_user_id: '',
     support_whatsapp: '',
     knowledge_analysis_prompt: '',
+    google_maps_api_key: '',
     updated_at: ''
   });
   const [financeStats, setFinanceStats] = useState<any>({
@@ -157,11 +162,72 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
       if (financeData) setFinanceStats(financeData);
       if (activityData) setActivityData(activityData);
       await fetchFeatureFlags();
+      await fetchLeads();
     } catch (error: any) {
       console.error('Admin Fetch Error:', error);
       toast.error('Erro ao carregar dados administrativos.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchLeads = async () => {
+    try {
+      const res = await standardFetch('/api/v2/admin/leads');
+      if (res.success) setRadarLeads(res.data);
+    } catch (err) {
+      console.error('Error fetching leads:', err);
+    }
+  };
+
+  const startScan = async () => {
+    if (!radarNiche || !radarCity) return toast.error('Nicho e Cidade são obrigatórios');
+    setIsScanning(true);
+    try {
+      const res = await standardFetch('/api/v2/admin/leads/scan', {
+        method: 'POST',
+        body: JSON.stringify({ niche: radarNiche, city: radarCity })
+      });
+      if (res.success) {
+        toast.success(`Busca finalizada! ${res.count} novos leads encontrados.`);
+        fetchLeads();
+      } else {
+        toast.error(res.error || 'Erro na varredura');
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const updateLeadStatus = async (id: string, status: string) => {
+    try {
+      const res = await standardFetch(`/api/v2/admin/leads/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+      });
+      if (res.success) {
+        setRadarLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+        toast.success('Status atualizado!');
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const deleteLead = async (id: string) => {
+    if (!confirm('Tem certeza?')) return;
+    try {
+      const res = await standardFetch(`/api/v2/admin/leads/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.success) {
+        setRadarLeads(prev => prev.filter(l => l.id !== id));
+        toast.success('Lead removido');
+      }
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -232,6 +298,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     { id: 'users', label: 'Inquilinos', icon: <Users size={20} /> },
     { id: 'config', label: 'Configurações', icon: <Server size={20} /> },
     { id: 'billing', label: 'Financeiro', icon: <CreditCard size={20} /> },
+    { id: 'lead_radar', label: 'Radar de Leads', icon: <Search size={20} className="text-primary-500" /> },
     { id: 'meta_activator', label: 'Ativador Meta', icon: <Zap size={20} className="text-amber-500" /> },
     { id: 'flags', label: 'Features', icon: <ToggleLeft size={20} /> },
   ];
@@ -303,6 +370,157 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                <h4 className="text-xl font-black text-white mb-2">Controle de Engenharia</h4>
                <p className="text-sm text-slate-400 max-w-md mx-auto">As Feature Flags permitem habilitar funcionalidades em tempo real para todos os usuários. Use com responsabilidade durante lançamentos faseados.</p>
             </div>
+          </div>
+        );
+      case 'lead_radar':
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                {/* Search Sidebar */}
+                <div className="lg:col-span-1 space-y-6">
+                   <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
+                      <div className="flex items-center gap-3 mb-6">
+                         <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                            <Search size={20} />
+                         </div>
+                         <h3 className="text-lg font-black text-slate-900">Nova Busca</h3>
+                      </div>
+
+                      <div className="space-y-4">
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nicho / Categoria</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: Clínicas, Dentistas..." 
+                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                              value={radarNiche}
+                              onChange={(e) => setRadarNiche(e.target.value)}
+                            />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cidade / Região</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: Rio de Janeiro" 
+                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                              value={radarCity}
+                              onChange={(e) => setRadarCity(e.target.value)}
+                            />
+                         </div>
+                         
+                         <button 
+                           onClick={startScan}
+                           disabled={isScanning}
+                           className="w-full py-4 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
+                         >
+                            {isScanning ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />}
+                            {isScanning ? 'Varrendo...' : 'Iniciar Radar'}
+                         </button>
+                      </div>
+                      
+                      <div className="mt-8 pt-8 border-t border-slate-50">
+                         <p className="text-[10px] text-slate-400 font-bold leading-relaxed">
+                            O Radar usa IA para filtrar estabelecimentos com WhatsApp válido e resumir o feedback dos clientes.
+                         </p>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Results Table */}
+                <div className="lg:col-span-3 space-y-6">
+                   <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[600px]">
+                      <div className="p-8 border-b border-slate-50 flex items-center justify-between">
+                         <div>
+                            <h2 className="text-2xl font-black text-slate-900">Leads Capturados</h2>
+                            <p className="text-sm text-slate-500">Controle a prospecção dos leads qualificados.</p>
+                         </div>
+                         <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-primary-50 text-primary-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                               {radarLeads.length} Total
+                            </span>
+                         </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                         <table className="w-full text-left">
+                            <thead>
+                               <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                                  <th className="px-8 py-5">Estabelecimento</th>
+                                  <th className="px-8 py-5">Contato</th>
+                                  <th className="px-8 py-5">Feedback IA</th>
+                                  <th className="px-8 py-5">Status</th>
+                                  <th className="px-8 py-5 text-right">Ações</th>
+                               </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                               {radarLeads.map((lead) => (
+                                 <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
+                                   <td className="px-8 py-5">
+                                      <div className="flex flex-col">
+                                         <span className="text-sm font-black text-slate-900">{lead.name}</span>
+                                         <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">{lead.address}</span>
+                                      </div>
+                                   </td>
+                                   <td className="px-8 py-5">
+                                      <div className="flex flex-col gap-1">
+                                         <span className="text-xs font-bold text-slate-700">{lead.phone}</span>
+                                         <div className="flex items-center gap-1.5">
+                                            <Star size={10} className="text-amber-500 fill-amber-500" />
+                                            <span className="text-[10px] font-black text-slate-400">{lead.rating} ({lead.user_rating_count})</span>
+                                         </div>
+                                      </div>
+                                   </td>
+                                   <td className="px-8 py-5">
+                                      <div className="max-w-[300px]">
+                                         <p className="text-[11px] text-slate-500 leading-relaxed italic line-clamp-3">
+                                            "{lead.review_summary}"
+                                         </p>
+                                      </div>
+                                   </td>
+                                   <td className="px-8 py-5">
+                                      <select 
+                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border outline-none ${
+                                          lead.status === 'qualificado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                          lead.status === 'contatado' ? 'bg-primary-50 text-primary-600 border-primary-100' :
+                                          'bg-slate-100 text-slate-500 border-slate-200'
+                                        }`}
+                                        value={lead.status}
+                                        onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
+                                      >
+                                         <option value="novo">Novo</option>
+                                         <option value="qualificado">Qualificado</option>
+                                         <option value="contatado">Contatado</option>
+                                         <option value="descartado">Descartado</option>
+                                      </select>
+                                   </td>
+                                   <td className="px-8 py-5 text-right">
+                                      <div className="flex items-center justify-end gap-2">
+                                         <button 
+                                            onClick={() => deleteLead(lead.id)}
+                                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                         >
+                                            <Trash2 size={16} />
+                                         </button>
+                                      </div>
+                                   </td>
+                                 </tr>
+                               ))}
+                               {radarLeads.length === 0 && (
+                                 <tr>
+                                    <td colSpan={5} className="px-8 py-20 text-center">
+                                       <div className="flex flex-col items-center gap-4 opacity-30">
+                                          <Search size={48} />
+                                          <p className="text-sm font-bold uppercase tracking-widest">Nenhum lead no radar. Inicie uma busca!</p>
+                                       </div>
+                                    </td>
+                                 </tr>
+                               )}
+                            </tbody>
+                         </table>
+                      </div>
+                   </div>
+                </div>
+             </div>
           </div>
         );
       case 'meta_activator':
@@ -715,7 +933,20 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <div className="space-y-2">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Google Maps API Key (Radar)</label>
+                        <div className="relative">
+                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <input 
+                            type="password" 
+                            placeholder="Chave do Maps..." 
+                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-primary-500 outline-none transition-all"
+                            value={globalSettings.google_maps_api_key || ''}
+                            onChange={(e) => setGlobalSettings({...globalSettings, google_maps_api_key: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Modelo Ativo ({globalSettings.llm_provider?.toUpperCase()})</label>
                         <div className="relative">
                           <Bot className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
