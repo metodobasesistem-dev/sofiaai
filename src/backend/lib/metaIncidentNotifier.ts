@@ -18,7 +18,12 @@ export type MetaIncidentKind =
   | 'quality_red'
   | 'quality_yellow'
   | 'phone_banned'
-  | 'webhook_signature_invalid';
+  | 'webhook_signature_invalid'
+  | 'template_paused'
+  | 'template_disabled'
+  | 'template_rejected'
+  | 'template_quality_red'
+  | 'template_quality_yellow';
 
 const DEBOUNCE_MS = 6 * 60 * 60 * 1000;
 const recentNotifications = new Map<string, number>();
@@ -67,6 +72,11 @@ function titleFor(kind: MetaIncidentKind): string {
     case 'quality_yellow':return 'Meta: qualidade YELLOW';
     case 'phone_banned':  return 'Meta: número banido ⛔';
     case 'webhook_signature_invalid': return 'Meta: assinatura webhook inválida';
+    case 'template_paused':       return 'Meta: template pausado ⏸️';
+    case 'template_disabled':     return 'Meta: template desativado ⛔';
+    case 'template_rejected':     return 'Meta: template rejeitado ❌';
+    case 'template_quality_red':  return 'Meta: template em RED ⚠️';
+    case 'template_quality_yellow':return 'Meta: template em YELLOW';
     default:              return 'Meta: incidente';
   }
 }

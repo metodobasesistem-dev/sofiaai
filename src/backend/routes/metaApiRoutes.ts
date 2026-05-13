@@ -250,7 +250,32 @@ router.get('/templates', requireAuth as any, async (req: AuthenticatedRequest, r
   try {
     const provider = new MetaProvider(userId);
     const templates = await provider.listTemplates(userId, { status, limit });
-    return res.json({ success: true, templates, count: templates.length });
+
+    // Merge com template_status_cache local (atualizado por webhook em tempo real).
+    // Quando o cache tiver entrada mais recente, ela sobrescreve o status da Graph
+    // API — webhook geralmente chega antes do refresh da listagem.
+    const { data: cached } = await supabase
+      .from('template_status_cache')
+      .select('template_name, language_code, status, reason, last_event, last_event_at')
+      .eq('user_id', userId);
+
+    const cacheMap = new Map<string, any>();
+    (cached || []).forEach(c => cacheMap.set(`${c.template_name}__${c.language_code}`, c));
+
+    const enriched = templates.map((t: any) => {
+      const c = cacheMap.get(`${t.name}__${t.language}`);
+      if (!c) return t;
+      return {
+        ...t,
+        // Cache vence quando tem evento mais recente que a Graph API refletiria
+        status: c.status || t.status,
+        cache_last_event: c.last_event,
+        cache_last_event_at: c.last_event_at,
+        cache_reason: c.reason,
+      };
+    });
+
+    return res.json({ success: true, templates: enriched, count: enriched.length });
   } catch (err: any) {
     const info = parseProviderError(err);
     return res.status(400).json({ success: false, error: info.message, errorInfo: info });

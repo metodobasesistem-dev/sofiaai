@@ -71,11 +71,23 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
     }
     setLoading(true);
     setError(null);
-    listMetaTemplates('APPROVED')
+    // Listar TODOS para que o atendente VEJA os bloqueados também
+    // (com motivo claro), em vez de ficar achando que não existem.
+    listMetaTemplates('')
       .then(t => setTemplates(t))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [isOpen]);
+
+  // Separa disponíveis (APPROVED) dos bloqueados (PAUSED/DISABLED/REJECTED/PENDING)
+  const usableTemplates = useMemo(
+    () => templates.filter(t => (t.status || '').toUpperCase() === 'APPROVED'),
+    [templates]
+  );
+  const blockedTemplates = useMemo(
+    () => templates.filter(t => ['PAUSED', 'DISABLED', 'REJECTED', 'FLAGGED', 'PENDING'].includes((t.status || '').toUpperCase())),
+    [templates]
+  );
 
   // When user picks a template, reset variable inputs to empty strings
   useEffect(() => {
@@ -189,7 +201,7 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
 
               {!loading && !error && templates.length === 0 && (
                 <div className="p-6 rounded-2xl bg-slate-50 text-slate-600 text-sm text-center">
-                  <p className="font-bold mb-1">Nenhum template aprovado disponível.</p>
+                  <p className="font-bold mb-1">Nenhum template encontrado.</p>
                   <p className="text-xs text-slate-500">
                     Crie e aguarde aprovação de templates no Business Manager da Meta antes de tentar re-engajar clientes fora da janela de 24h.
                   </p>
@@ -199,20 +211,74 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
               {!loading && !error && templates.length > 0 && (
                 <>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Template</label>
-                    <select
-                      value={selectedName || ''}
-                      onChange={e => setSelectedName(e.target.value || null)}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white"
-                    >
-                      <option value="">Selecione um template…</option>
-                      {templates.map(t => (
-                        <option key={`${t.name}_${t.language}`} value={t.name}>
-                          {t.name} ({t.language}) · {t.category || 'GENERAL'}
-                        </option>
-                      ))}
-                    </select>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Template disponível ({usableTemplates.length})
+                    </label>
+                    {usableTemplates.length === 0 ? (
+                      <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-xs">
+                        <p className="font-black uppercase tracking-widest text-[10px] mb-1">⚠️ Nenhum template aprovado</p>
+                        <p>Todos os templates estão pausados, desativados ou pendentes. Veja a lista abaixo e aja conforme o status.</p>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedName || ''}
+                        onChange={e => setSelectedName(e.target.value || null)}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white"
+                      >
+                        <option value="">Selecione um template…</option>
+                        {usableTemplates.map(t => (
+                          <option key={`${t.name}_${t.language}`} value={t.name}>
+                            {t.name} ({t.language}) · {t.category || 'GENERAL'}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
+
+                  {blockedTemplates.length > 0 && (
+                    <details className="rounded-2xl border border-slate-200 bg-slate-50">
+                      <summary className="px-4 py-3 cursor-pointer text-[10px] font-black uppercase tracking-widest text-slate-500 select-none">
+                        Templates indisponíveis ({blockedTemplates.length})
+                      </summary>
+                      <div className="px-4 pb-4 space-y-2">
+                        {blockedTemplates.map(t => {
+                          const status = (t.status || '').toUpperCase();
+                          const reason = (t as any).cache_reason as string | undefined;
+                          const lastEvent = (t as any).cache_last_event_at as string | undefined;
+                          const tone =
+                            status === 'PAUSED' ? 'bg-amber-50 border-amber-200 text-amber-900' :
+                            status === 'DISABLED' ? 'bg-red-50 border-red-200 text-red-900' :
+                            status === 'REJECTED' ? 'bg-red-50 border-red-200 text-red-900' :
+                            status === 'FLAGGED' ? 'bg-amber-50 border-amber-200 text-amber-900' :
+                            'bg-slate-100 border-slate-200 text-slate-700';
+                          const label =
+                            status === 'PAUSED' ? '⏸️ Pausado pela Meta' :
+                            status === 'DISABLED' ? '⛔ Desativado' :
+                            status === 'REJECTED' ? '❌ Rejeitado' :
+                            status === 'FLAGGED' ? '⚠️ Sinalizado' :
+                            status === 'PENDING' ? '⏳ Aguardando aprovação' :
+                            status;
+                          return (
+                            <div key={`${t.name}_${t.language}`} className={`p-3 rounded-xl border text-[11px] ${tone}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-black text-slate-900">{t.name}</span>
+                                <span className="font-bold uppercase tracking-widest text-[9px]">{label}</span>
+                              </div>
+                              <div className="text-[10px] mt-1 opacity-80">
+                                {t.language} · {t.category || 'GENERAL'}
+                                {lastEvent && ` · ${new Date(lastEvent).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`}
+                              </div>
+                              {reason && (
+                                <div className="text-[10px] mt-1 opacity-90">
+                                  <strong>Motivo:</strong> {reason}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
 
                   {selected && (
                     <>

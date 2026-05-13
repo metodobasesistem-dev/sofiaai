@@ -241,6 +241,12 @@ router.post('/webhook', webhookLimiter, async (req, res) => {
         if (field === 'account_alerts') {
           await handleAccountAlert(userId, value);
         }
+
+        // Template status — APPROVED/PAUSED/DISABLED/REJECTED/FLAGGED.
+        // Atualiza cache local e notifica admins em estados críticos.
+        if (field === 'message_template_status_update') {
+          await handleTemplateStatusUpdate(userId, value);
+        }
       }
     }
   } catch (err: any) {
@@ -335,6 +341,79 @@ async function handleAccountAlert(userId: string, value: any): Promise<void> {
     }
   } catch (err: any) {
     console.error('[MetaWebhook] handleAccountAlert error:', err.message || err);
+  }
+}
+
+/**
+ * Template status changed na Meta — APPROVED, PAUSED, DISABLED, REJECTED, FLAGGED.
+ * Atualiza template_status_cache e notifica admins em estados críticos.
+ *
+ * Payload típico:
+ *   { event, message_template_id, message_template_name, message_template_language, reason }
+ */
+async function handleTemplateStatusUpdate(userId: string, value: any): Promise<void> {
+  try {
+    const event = (value?.event || '').toUpperCase();
+    const name = value?.message_template_name;
+    const language = value?.message_template_language || 'pt_BR';
+    const reason = value?.reason || null;
+
+    if (!event || !name) {
+      console.warn('[MetaWebhook] template_status_update missing event/name, skipping');
+      return;
+    }
+
+    // Map event → status. FLAGGED é um aviso, não muda status formal — guardamos
+    // o evento em last_event mas mantemos o status anterior (não temos como
+    // saber qual era a partir do payload sozinho).
+    const statusMap: Record<string, string> = {
+      APPROVED: 'APPROVED',
+      REJECTED: 'REJECTED',
+      PAUSED: 'PAUSED',
+      DISABLED: 'DISABLED',
+    };
+    const newStatus = statusMap[event];
+
+    const payload: Record<string, any> = {
+      user_id: userId,
+      template_name: name,
+      language_code: language,
+      last_event: event,
+      last_event_at: new Date().toISOString(),
+      reason,
+    };
+    if (newStatus) payload.status = newStatus;
+
+    // UPSERT — se já existe linha para esse (user, template, language) atualiza
+    const { error } = await supabase
+      .from('template_status_cache')
+      .upsert(payload, { onConflict: 'user_id,template_name,language_code' });
+
+    if (error) {
+      console.error('[MetaWebhook] template_status_cache upsert error:', error.message);
+      return;
+    }
+
+    console.log(`[MetaWebhook] 📝 Template "${name}" (${language}) → ${event}${reason ? ` — ${reason}` : ''}`);
+
+    // Notifica admins em estados críticos
+    const criticalKind: Record<string, 'template_paused' | 'template_disabled' | 'template_rejected'> = {
+      PAUSED: 'template_paused',
+      DISABLED: 'template_disabled',
+      REJECTED: 'template_rejected',
+    };
+    if (criticalKind[event]) {
+      const { notifyAdminOfMetaIncident } = await import('../lib/metaIncidentNotifier.js');
+      const { data: prof } = await supabase.from('profiles').select('email').eq('id', userId).maybeSingle();
+      notifyAdminOfMetaIncident({
+        tenantUserId: userId,
+        tenantEmail: prof?.email,
+        kind: criticalKind[event],
+        detail: `${name} (${language})${reason ? ` — ${reason}` : ''}`,
+      });
+    }
+  } catch (err: any) {
+    console.error('[MetaWebhook] handleTemplateStatusUpdate error:', err.message || err);
   }
 }
 
