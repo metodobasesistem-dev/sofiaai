@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { agentService, logToDB } from './agentService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
-import { parseProviderError } from '../providers/providerErrors.js';
+import { parseProviderError, recordMetaError } from '../providers/providerErrors.js';
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { Queue, Worker, Job } from 'bullmq';
 import { PushNotificationService } from './pushNotificationService.js';
@@ -626,6 +626,7 @@ class WhatsAppService {
       }
       await supabase.from('messages').update({ status: failureStatus }).eq('id', tempId);
       await logToDB(userId, 'error', 'send-message', info.message, info.raw || err);
+      recordMetaError(userId, info, supabase);
       return { success: false, error: info.message, errorInfo: info };
     }
 
@@ -716,6 +717,7 @@ class WhatsAppService {
       console.error(`[WhatsAppService] ❌ sendTemplate (${info.provider}) "${templateName}": ${info.message}`);
       await supabase.from('messages').update({ status: 'failed' }).eq('id', tempId);
       await logToDB(userId, 'error', 'send-template', info.message, info.raw || err);
+      recordMetaError(userId, info, supabase);
       return { success: false, error: info.message, errorInfo: info };
     }
   }
@@ -787,8 +789,8 @@ class WhatsAppService {
   }
 
   async sendReaction(userId: string, to: string, messageId: string, emoji: string) {
+    let dbUserId = userId;
     try {
-      let dbUserId = userId;
       if (userId.includes('@')) {
         const { data: prof } = await supabase.from('profiles').select('id').eq('email', userId).maybeSingle();
         if (prof?.id) dbUserId = prof.id;
@@ -816,6 +818,7 @@ class WhatsAppService {
     } catch (err: any) {
       const info = parseProviderError(err);
       console.error(`[WhatsAppService] sendReaction (${info.provider}) to ${messageId}: ${info.message}`);
+      recordMetaError(dbUserId, info, supabase);
       return { success: false, error: info.message, errorInfo: info };
     }
   }
@@ -857,6 +860,7 @@ class WhatsAppService {
       const info = parseProviderError(err);
       console.error(`[WhatsAppService] ❌ sendVoice failed (${info.provider}): ${info.message}`);
       await logToDB(userId, 'error', 'send-voice', info.message, info.raw || err);
+      recordMetaError(userId, info, supabase);
       return { success: false, error: info.message, errorInfo: info };
     }
   }
@@ -903,6 +907,7 @@ class WhatsAppService {
       const info = parseProviderError(err);
       console.error(`[WhatsAppService] ❌ sendMedia failed (${info.provider}): ${info.message}`);
       await logToDB(userId, 'error', 'send-media', info.message, info.raw || err);
+      recordMetaError(userId, info, supabase);
       return { success: false, error: info.message, errorInfo: info };
     }
   }
@@ -1240,14 +1245,19 @@ class WhatsAppService {
    */
   async runMaintenanceSync() {
     try {
+      // Sincronização aplica-se apenas a tenants Evolution. Tenants Meta não
+      // têm "instance" para sincronizar — webhook + cache de credenciais
+      // tomam conta do estado. Ignorá-los aqui evita poluição de logs com
+      // chamadas falhas ao Evolution para esses tenants.
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, whatsapp_instance_id, whatsapp_status')
-        .not('whatsapp_instance_id', 'is', null);
+        .select('id, whatsapp_instance_id, whatsapp_status, whatsapp_provider')
+        .not('whatsapp_instance_id', 'is', null)
+        .or('whatsapp_provider.is.null,whatsapp_provider.neq.meta_official');
 
       if (!profiles) return;
 
-      console.log(`[Maintenance] 🔄 Syncing ${profiles.length} active profiles...`);
+      console.log(`[Maintenance] 🔄 Syncing ${profiles.length} Evolution profiles (Meta tenants skipped)...`);
 
       // --- PARTE A: Sincronização de Status e Webhooks ---
       for (const profile of profiles) {

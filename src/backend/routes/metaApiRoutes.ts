@@ -112,6 +112,8 @@ router.post('/save-credentials', requireAuth as any, async (req: AuthenticatedRe
       meta_access_token: access_token,
       meta_phone_id: phone_id,
       meta_waba_id: waba_id || null,
+      meta_last_error: null,
+      meta_last_error_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);

@@ -29,6 +29,30 @@ const META_CODE_24H_WINDOW = 131047;
 const META_CODE_RECIPIENT_INVALID = 131026;
 const META_CODE_AUTH = 190;
 
+/**
+ * Persists the last Meta error to profiles.meta_last_error for admin visibility.
+ * No-op for non-Meta errors. Fire-and-forget (errors swallowed to avoid masking
+ * the original failure).
+ */
+export async function recordMetaError(
+  userId: string,
+  info: ProviderErrorInfo,
+  supabase: any
+): Promise<void> {
+  if (info.provider !== 'meta' || !userId) return;
+  try {
+    await supabase
+      .from('profiles')
+      .update({
+        meta_last_error: info.message.substring(0, 500),
+        meta_last_error_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+  } catch {
+    // intentionally silent — recording the error must never throw
+  }
+}
+
 export function parseProviderError(err: any): ProviderErrorInfo {
   // Meta Graph API shape: err.response.data.error.{code, message, error_subcode, type}
   const metaError = err?.response?.data?.error;

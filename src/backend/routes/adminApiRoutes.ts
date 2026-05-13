@@ -167,6 +167,8 @@ router.post('/users/:id/meta-credentials', async (req: AuthenticatedRequest, res
         meta_access_token: access_token,
         meta_phone_id: phone_id,
         meta_waba_id: waba_id || null,
+        meta_last_error: null,
+        meta_last_error_at: null,
         whatsapp_status: 'connected',
         updated_at: new Date().toISOString(),
       })

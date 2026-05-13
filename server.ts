@@ -178,7 +178,27 @@ async function startServer() {
       checks.stuck_messages = { ok: false, detail: e.message };
     }
 
-    // 6. Threads sem mensagens (órfãs — indica falha no ciclo de persistência)
+    // 6. Tenants Meta com erro recente (token expirado, qualidade ruim, etc)
+    try {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: failingMeta, error } = await supabase
+        .from('profiles')
+        .select('id, email, meta_last_error')
+        .eq('whatsapp_provider', 'meta_official')
+        .not('meta_last_error', 'is', null)
+        .gt('meta_last_error_at', oneHourAgo)
+        .limit(5);
+      checks.meta_tenants_healthy = {
+        ok: !error && (failingMeta?.length ?? 0) === 0,
+        detail: failingMeta?.length
+          ? `${failingMeta.length} Meta tenant(s) with recent errors`
+          : undefined,
+      };
+    } catch (e: any) {
+      checks.meta_tenants_healthy = { ok: false, detail: e.message };
+    }
+
+    // 7. Threads sem mensagens (órfãs — indica falha no ciclo de persistência)
     try {
       const { data: orphans, error } = await supabase
         .from('threads')
