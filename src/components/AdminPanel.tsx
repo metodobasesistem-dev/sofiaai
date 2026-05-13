@@ -290,6 +290,18 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   }, []);
 
   useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (initialView) {
+      setCurrentView(initialView);
+    }
+  }, [initialView]);
+
+  useEffect(() => {
     if (isAutopilotModalOpen) {
       setLoadingTemplates(true);
       listMetaTemplates('APPROVED')
