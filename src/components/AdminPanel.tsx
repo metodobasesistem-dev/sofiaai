@@ -407,6 +407,18 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                               onChange={(e) => setRadarCity(e.target.value)}
                             />
                          </div>
+
+                         <div className="space-y-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Chave da API (Google Maps)</label>
+                           <input 
+                             type="password" 
+                             placeholder="AIza..." 
+                             className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                             value={globalSettings.google_maps_api_key || ''}
+                             onChange={(e) => setGlobalSettings({...globalSettings, google_maps_api_key: e.target.value})}
+                             onBlur={handleSaveSettings}
+                           />
+                         </div>
                          
                          <button 
                            onClick={startScan}
@@ -934,17 +946,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Google Maps API Key (Radar)</label>
-                        <div className="relative">
-                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                          <input 
-                            type="password" 
-                            placeholder="Chave do Maps..." 
-                            className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-primary-500 outline-none transition-all"
-                            value={globalSettings.google_maps_api_key || ''}
-                            onChange={(e) => setGlobalSettings({...globalSettings, google_maps_api_key: e.target.value})}
-                          />
-                        </div>
+                        {/* Google Maps API Key was moved to Lead Radar tab */}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Modelo Ativo ({globalSettings.llm_provider?.toUpperCase()})</label>
@@ -1435,31 +1437,36 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                Restrito: Administrador
              </div>
              <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-               Painel do <span className="text-primary-600">Ecossistema</span>.
+               {activeTab === 'lead_radar' ? 'Radar de Leads' : <>Painel do <span className="text-primary-600">Ecossistema</span>.</>}
              </h1>
-             <p className="text-slate-500 mt-2 font-medium">Controle central de instâncias, usuários e provedores de IA.</p>
+             <p className="text-slate-500 mt-2 font-medium">
+               {activeTab === 'lead_radar' ? 'Encontre clientes em potencial e use IA para prospectar.' : 'Controle central de instâncias, usuários e provedores de IA.'}
+             </p>
           </div>
         </div>
         
         {/* Sub-Nav Bar */}
-        <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as AdminTab)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                activeTab === item.id 
-                ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' 
-                : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              <div className={activeTab === item.id ? 'scale-110 transition-transform' : ''}>
-                {item.icon}
-              </div>
-              <span className="hidden sm:inline">{item.label}</span>
-            </button>
-          ))}
-        </div>
+        {activeTab !== 'lead_radar' && (
+          <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+            {navItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as AdminTab)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  activeTab === item.id 
+                  ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' 
+                  : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <div className={activeTab === item.id ? 'scale-110 transition-transform' : ''}>
+                  {item.icon}
+                </div>
+                <span className="hidden sm:inline">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
       </div>
 
       <div className="space-y-12">
