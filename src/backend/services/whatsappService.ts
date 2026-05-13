@@ -7,6 +7,7 @@ import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { parseProviderError, recordMetaError } from '../providers/providerErrors.js';
 import { MetaProvider } from '../providers/MetaProvider.js';
+import { validateTemplateVariables, maskVariableValue, hashVariables, extractBodyParameters, type Violation } from '../lib/templateValidator.js';
 import { Queue, Worker, Job } from 'bullmq';
 import { PushNotificationService } from './pushNotificationService.js';
 import { whatsappService as selfRef } from './whatsappService.js'; // Para evitar circular dependency se necessário
@@ -643,7 +644,7 @@ class WhatsAppService {
     templateName: string,
     languageCode: string = 'pt_BR',
     components?: any[]
-  ): Promise<{ success: boolean; messageId?: string; error?: string; errorInfo?: any }> {
+  ): Promise<{ success: boolean; messageId?: string; error?: string; errorInfo?: any; warnings?: Violation[] }> {
     if (!userId) return { success: false, error: 'userId is required' };
 
     const { data: prof } = await supabase
@@ -660,6 +661,34 @@ class WhatsAppService {
     const tempId = `tpl-sending-${Date.now()}-${cleanTo}`;
     const sendTimestamp = Date.now();
     const previewText = `[Template: ${templateName}]`;
+
+    // Template Defense — Camada 3: valida variáveis antes de chamar Meta
+    const variables = extractBodyParameters(components);
+    const { warnings, blocked } = validateTemplateVariables(variables);
+    const variablesMasked = variables.map((v, i) => ({ idx: i + 1, value_masked: maskVariableValue(v) }));
+    const variablesHash = hashVariables(variables);
+
+    // Block hard violations (empty/too_long) — Meta rejeita do lado deles
+    if (blocked.length > 0) {
+      console.warn(`[WhatsAppService] 🛑 sendTemplate "${templateName}" blocked locally:`, blocked.map(b => b.message).join('; '));
+      await supabase.from('template_send_log').insert({
+        user_id: userId,
+        template_name: templateName,
+        language_code: languageCode,
+        to_phone: cleanTo,
+        variables_masked: variablesMasked,
+        variables_hash: variablesHash,
+        warnings: [...warnings, ...blocked],
+        status: 'blocked_local',
+        error_message: blocked[0].message,
+      });
+      return {
+        success: false,
+        error: blocked[0].message,
+        errorInfo: { code: 'blocked_local', is24hWindowClosed: false, isAuthError: false },
+        warnings: blocked,
+      };
+    }
 
     // Pre-persist with status='sending' so the UI reflects the outbound attempt immediately
     await supabase.from('threads').upsert({
@@ -710,15 +739,41 @@ class WhatsAppService {
         await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
       }
 
-      console.log(`[WhatsAppService] ✅ Template "${templateName}" sent to ${to}: ${msgId}`);
-      return { success: true, messageId: msgId };
+      console.log(`[WhatsAppService] ✅ Template "${templateName}" sent to ${to}: ${msgId}${warnings.length ? ` (${warnings.length} warnings)` : ''}`);
+
+      await supabase.from('template_send_log').insert({
+        user_id: userId,
+        template_name: templateName,
+        language_code: languageCode,
+        to_phone: cleanTo,
+        variables_masked: variablesMasked,
+        variables_hash: variablesHash,
+        warnings: warnings.length > 0 ? warnings : null,
+        status: 'sent',
+        meta_message_id: msgId,
+      });
+
+      return { success: true, messageId: msgId, warnings: warnings.length > 0 ? warnings : undefined };
     } catch (err: any) {
       const info = parseProviderError(err);
       console.error(`[WhatsAppService] ❌ sendTemplate (${info.provider}) "${templateName}": ${info.message}`);
       await supabase.from('messages').update({ status: 'failed' }).eq('id', tempId);
       await logToDB(userId, 'error', 'send-template', info.message, info.raw || err);
       recordMetaError(userId, info, supabase);
-      return { success: false, error: info.message, errorInfo: info };
+
+      await supabase.from('template_send_log').insert({
+        user_id: userId,
+        template_name: templateName,
+        language_code: languageCode,
+        to_phone: cleanTo,
+        variables_masked: variablesMasked,
+        variables_hash: variablesHash,
+        warnings: warnings.length > 0 ? warnings : null,
+        status: 'failed',
+        error_message: info.message,
+      });
+
+      return { success: false, error: info.message, errorInfo: info, warnings: warnings.length > 0 ? warnings : undefined };
     }
   }
 

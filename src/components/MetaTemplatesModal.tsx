@@ -1,8 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, AlertCircle, Loader2, MessageSquare } from 'lucide-react';
+import { X, Send, AlertCircle, Loader2, MessageSquare, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { listMetaTemplates, sendMetaTemplate, type MetaTemplate } from '../services/supabaseService';
+
+// Validação client-side leve, espelhando as regras críticas do
+// templateValidator.ts (backend). A validação autoritativa acontece no
+// servidor — aqui é só feedback visual rápido enquanto o usuário digita.
+const URL_SHORTENERS = /(bit\.ly|tinyurl\.com|cutt\.ly|t\.co|shorte\.st|encurtaurl|rebrand\.ly|is\.gd|ow\.ly|buff\.ly|adf\.ly)/i;
+const MONEY_PROMISES = /(ganhe\s+r\$|renda\s+extra|investimento\s+garantido|lucro\s+de\s+\d+%|milhares?\s+por\s+m[êe]s|fique\s+rico|dinheiro\s+f[áa]cil)/i;
+
+function detectVariableWarnings(value: string): string[] {
+  const out: string[] = [];
+  if (!value) return out;
+  const m1 = value.match(URL_SHORTENERS);
+  if (m1) out.push(`URL encurtado (${m1[1]}) — pode aumentar denúncias e pausar o template.`);
+  const m2 = value.match(MONEY_PROMISES);
+  if (m2) out.push(`Linguagem promocional suspeita ("${m2[0]}").`);
+  if (value.length >= 10) {
+    const letters = value.replace(/[^a-zA-ZÀ-ú]/g, '');
+    if (letters.length >= 10) {
+      const upper = letters.replace(/[^A-ZÀ-Ú]/g, '');
+      if (upper.length / letters.length > 0.7) {
+        out.push('Texto majoritariamente em CAIXA ALTA — Meta interpreta como agressivo.');
+      }
+    }
+  }
+  return out;
+}
 
 interface MetaTemplatesModalProps {
   isOpen: boolean;
@@ -87,7 +112,16 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
         toast.error(result.error || 'Falha ao enviar template');
         return;
       }
-      toast.success('Template enviado com sucesso');
+      // Server pode retornar warnings detectadas pelo templateValidator —
+      // mensagem foi entregue, mas registramos aviso pro atendente.
+      const serverWarnings = (result as any).warnings as Array<{ message: string }> | undefined;
+      if (serverWarnings && serverWarnings.length > 0) {
+        toast.warning(`Template enviado com ${serverWarnings.length} aviso(s)`, {
+          description: serverWarnings.map(w => w.message).join(' · '),
+        });
+      } else {
+        toast.success('Template enviado com sucesso');
+      }
       onSent?.(result.messageId);
       onClose();
     } catch (e: any) {
@@ -187,22 +221,38 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                             Variáveis do corpo ({bodyVarCount})
                           </label>
-                          {bodyVars.map((v, i) => (
-                            <div key={i} className="space-y-1">
-                              <label className="text-[10px] text-slate-400 font-bold">{`{{${i + 1}}}`}</label>
-                              <input
-                                type="text"
-                                value={v}
-                                onChange={e => {
-                                  const next = [...bodyVars];
-                                  next[i] = e.target.value;
-                                  setBodyVars(next);
-                                }}
-                                placeholder={`Valor para {{${i + 1}}}`}
-                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-primary-500 outline-none text-sm"
-                              />
-                            </div>
-                          ))}
+                          {bodyVars.map((v, i) => {
+                            const varWarnings = detectVariableWarnings(v);
+                            return (
+                              <div key={i} className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-bold">{`{{${i + 1}}}`}</label>
+                                <input
+                                  type="text"
+                                  value={v}
+                                  onChange={e => {
+                                    const next = [...bodyVars];
+                                    next[i] = e.target.value;
+                                    setBodyVars(next);
+                                  }}
+                                  placeholder={`Valor para {{${i + 1}}}`}
+                                  className={`w-full px-4 py-2.5 rounded-xl border outline-none text-sm transition-all ${
+                                    varWarnings.length > 0
+                                      ? 'border-amber-300 focus:border-amber-500 bg-amber-50/30'
+                                      : 'border-slate-200 focus:border-primary-500'
+                                  }`}
+                                />
+                                {varWarnings.map((w, wi) => (
+                                  <div
+                                    key={wi}
+                                    className="flex items-start gap-1.5 px-2 py-1 text-[10px] text-amber-700 leading-snug"
+                                  >
+                                    <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                                    <span>{w}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
