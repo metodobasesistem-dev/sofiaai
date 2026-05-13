@@ -1794,7 +1794,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     if (currentProvider !== 'meta_official' || !activeThread) return null;
     const lastInbound = messages
       .filter(m => m.sender === 'lead')
-      .map(m => Number(m.timestamp) || 0)
+      .map(m => new Date(m.timestamp).getTime() || 0)
       .reduce((max, t) => Math.max(max, t), 0);
     if (lastInbound === 0) return { state: 'never' as const, hoursLeft: 0 };
     const hoursSince = (Date.now() - lastInbound) / (1000 * 60 * 60);
