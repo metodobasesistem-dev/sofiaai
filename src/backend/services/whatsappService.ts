@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabaseClient.js';
 import { agentService, logToDB } from './agentService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+import { parseProviderError } from '../providers/providerErrors.js';
+import { MetaProvider } from '../providers/MetaProvider.js';
 import { Queue, Worker, Job } from 'bullmq';
 import { PushNotificationService } from './pushNotificationService.js';
 import { whatsappService as selfRef } from './whatsappService.js'; // Para evitar circular dependency se necessário
@@ -613,13 +615,110 @@ class WhatsAppService {
       return { success: true, messageId: msgId };
     } catch (err: any) {
       // API falhou — marca a mensagem temporária como 'failed'
-      console.error(`[WhatsAppService] ❌ Error in sendMessage to ${to}:`, err.message);
-      await supabase.from('messages').update({ status: 'failed' }).eq('id', tempId);
-      return { success: false, error: err.message };
+      const info = parseProviderError(err);
+      const failureStatus = info.is24hWindowClosed ? 'failed_24h_window' : 'failed';
+      console.error(`[WhatsAppService] ❌ sendMessage to ${to} (${info.provider}): ${info.message}`);
+      if (info.is24hWindowClosed) {
+        console.warn(`[WhatsAppService] ⚠️ Meta 24h window closed for ${to}. Use an approved template to re-engage.`);
+      }
+      if (info.isAuthError) {
+        console.error(`[WhatsAppService] 🔑 Auth error — credentials may be invalid/expired for user ${userId}.`);
+      }
+      await supabase.from('messages').update({ status: failureStatus }).eq('id', tempId);
+      await logToDB(userId, 'error', 'send-message', info.message, info.raw || err);
+      return { success: false, error: info.message, errorInfo: info };
     }
 
   }
 
+
+  /**
+   * Sends an approved Meta template. Required for re-engagement outside the 24h window.
+   * Only works when the tenant's provider is meta_official.
+   */
+  async sendTemplate(
+    userId: string,
+    to: string,
+    templateName: string,
+    languageCode: string = 'pt_BR',
+    components?: any[]
+  ): Promise<{ success: boolean; messageId?: string; error?: string; errorInfo?: any }> {
+    if (!userId) return { success: false, error: 'userId is required' };
+
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('whatsapp_provider')
+      .eq('id', userId)
+      .maybeSingle();
+    if (prof?.whatsapp_provider !== 'meta_official') {
+      return { success: false, error: 'Templates are only supported on the meta_official provider' };
+    }
+
+    const cleanTo = normalizePhone(to);
+    const threadId = `${userId}_${cleanTo}`;
+    const tempId = `tpl-sending-${Date.now()}-${cleanTo}`;
+    const sendTimestamp = Date.now();
+    const previewText = `[Template: ${templateName}]`;
+
+    // Pre-persist with status='sending' so the UI reflects the outbound attempt immediately
+    await supabase.from('threads').upsert({
+      id: threadId,
+      user_id: userId,
+      last_message: previewText,
+      last_message_time: new Date(sendTimestamp).toISOString(),
+      remote_jid: to.includes('@') ? to : `${cleanTo}@s.whatsapp.net`,
+      display_phone: cleanTo,
+      updated_at: new Date(sendTimestamp).toISOString(),
+    });
+    await supabase.from('messages').insert({
+      id: tempId,
+      whatsapp_id: tempId,
+      user_id: userId,
+      thread_id: threadId,
+      text: previewText,
+      direction: 'outbound',
+      message_type: 'template',
+      status: 'sending',
+      timestamp: sendTimestamp,
+      created_at: new Date(sendTimestamp).toISOString(),
+    });
+
+    try {
+      const provider = new MetaProvider(userId);
+      const result = await provider.sendTemplate(userId, to, templateName, languageCode, components);
+      const msgId = result.messageId || tempId;
+
+      if (msgId !== tempId) {
+        const { error: insErr } = await supabase.from('messages').insert({
+          id: msgId,
+          whatsapp_id: msgId,
+          user_id: userId,
+          thread_id: threadId,
+          text: previewText,
+          direction: 'outbound',
+          message_type: 'template',
+          status: 'sent',
+          timestamp: sendTimestamp,
+          created_at: new Date(sendTimestamp).toISOString(),
+        });
+        if (insErr && insErr.code === '23505') {
+          await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId).eq('user_id', userId);
+        }
+        await supabase.from('messages').delete().eq('id', tempId);
+      } else {
+        await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
+      }
+
+      console.log(`[WhatsAppService] ✅ Template "${templateName}" sent to ${to}: ${msgId}`);
+      return { success: true, messageId: msgId };
+    } catch (err: any) {
+      const info = parseProviderError(err);
+      console.error(`[WhatsAppService] ❌ sendTemplate (${info.provider}) "${templateName}": ${info.message}`);
+      await supabase.from('messages').update({ status: 'failed' }).eq('id', tempId);
+      await logToDB(userId, 'error', 'send-template', info.message, info.raw || err);
+      return { success: false, error: info.message, errorInfo: info };
+    }
+  }
 
   async deleteMessage(userId: string, messageId: string) {
     try {
@@ -715,52 +814,69 @@ class WhatsAppService {
       }
       return { success };
     } catch (err: any) {
-      console.error(`[WhatsAppService] Error sending reaction to ${messageId}:`, err);
-      return { success: false, error: err.message };
+      const info = parseProviderError(err);
+      console.error(`[WhatsAppService] sendReaction (${info.provider}) to ${messageId}: ${info.message}`);
+      return { success: false, error: info.message, errorInfo: info };
     }
   }
 
   async sendVoice(userId: string, to: string, audioBuffer: Buffer) {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const instanceName = await this.getInstanceName(userId);
     const provider = await WhatsAppProviderFactory.getProvider(userId);
-    const result = await provider.sendMedia(instanceName, to, audioBuffer.toString('base64'), undefined, 'audio');
+
+    // Upload primeiro: Meta exige URL pública. Evolution aceita ambos.
     const audioUrl = await this.uploadToStorage(userId, audioBuffer, `manual_${Date.now()}.ogg`);
+    if (!audioUrl) {
+      const errMsg = 'Failed to upload voice to storage';
+      console.error(`[WhatsAppService] ❌ ${errMsg}`);
+      return { success: false, error: errMsg };
+    }
+
     try {
+      const result = await provider.sendMedia(instanceName, to, audioUrl, undefined, 'audio');
       const cleanTo = normalizePhone(to);
       const threadId = `${userId}_${cleanTo}`;
-      
-      // Garante que a thread existe antes da mensagem
+
       await agentService.persistMessage(
         threadId,
         userId,
         '[Áudio]',
         'outbound',
         result.messageId || `ai-${Date.now()}`,
-        undefined, // contactName
+        undefined,
         to,
         cleanTo,
-        'Atendente', // agentName
+        'Atendente',
         undefined,
-        audioUrl || undefined,
-        'audio', // messageType
-        audioUrl || undefined // mediaUrl
+        audioUrl,
+        'audio',
+        audioUrl
       );
+      return { success: true, messageId: result.messageId };
     } catch (err: any) {
-      console.error('[WhatsAppService] ❌ Error persisting sent voice message:', err);
-      await logToDB(userId, 'error', 'persistence', `Voice message persistence failed: ${result.messageId}`, err);
+      const info = parseProviderError(err);
+      console.error(`[WhatsAppService] ❌ sendVoice failed (${info.provider}): ${info.message}`);
+      await logToDB(userId, 'error', 'send-voice', info.message, info.raw || err);
+      return { success: false, error: info.message, errorInfo: info };
     }
-    return { success: true, messageId: result.messageId };
   }
 
   async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string, caption?: string) {
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const instanceName = await this.getInstanceName(userId);
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     const type = mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document';
-    const result = await provider.sendMedia(instanceName, to, buffer.toString('base64'), caption || filename, type);
 
+    // Upload primeiro: Meta Cloud API exige URL pública (link). Evolution
+    // também aceita URL, então essa ordem é compatível com ambos os providers.
     const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
+    if (!mediaUrl) {
+      const errMsg = 'Failed to upload media to storage';
+      console.error(`[WhatsAppService] ❌ ${errMsg}`);
+      return { success: false, error: errMsg };
+    }
 
     try {
+      const result = await provider.sendMedia(instanceName, to, mediaUrl, caption || filename, type);
       const cleanTo = normalizePhone(to);
       const threadId = `${userId}_${cleanTo}`;
 
@@ -770,23 +886,25 @@ class WhatsAppService {
         caption || `[Mídia]: ${filename}`,
         'outbound',
         result.messageId || `med-${Date.now()}`,
-        undefined, // contactName
+        undefined,
         to,
         cleanTo,
         'Atendente',
-        undefined, // usage
-        undefined, // audioUrl
-        type,      // messageType
-        mediaUrl || undefined, // mediaUrl
+        undefined,
+        undefined,
+        type,
+        mediaUrl,
         mimetype,
         filename,
         caption
       );
+      return { success: true, messageId: result.messageId };
     } catch (err: any) {
-      console.error('[WhatsAppService] ❌ Error persisting sent media:', err);
-      await logToDB(userId, 'error', 'persistence', `Media persistence failed: ${result.messageId}`, err);
+      const info = parseProviderError(err);
+      console.error(`[WhatsAppService] ❌ sendMedia failed (${info.provider}): ${info.message}`);
+      await logToDB(userId, 'error', 'send-media', info.message, info.raw || err);
+      return { success: false, error: info.message, errorInfo: info };
     }
-    return { success: true, messageId: result.messageId };
   }
 
 

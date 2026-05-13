@@ -42,7 +42,7 @@ export class WhatsAppProviderFactory {
         case 'uazapi':
           return new UazApiProvider();
         case 'meta_official':
-          return new MetaProvider(); 
+          return new MetaProvider(userId);
         case 'evolution':
         default:
           return new EvolutionProvider();

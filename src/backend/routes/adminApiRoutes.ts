@@ -5,8 +5,11 @@
  * Uses service role key to access all tenant data.
  */
 import { Router, Response } from 'express';
+import axios from 'axios';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../middleware/authMiddleware.js';
+import { MetaProvider } from '../providers/MetaProvider.js';
+import { parseProviderError } from '../providers/providerErrors.js';
 
 const router = Router();
 
@@ -83,7 +86,8 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
 // SEC-06: Whitelist de campos para evitar injeção de campos sensíveis (role, id, email)
 const ADMIN_USER_PATCH_ALLOWED_FIELDS = [
   'name', 'plan', 'trial_ends_at', 'is_active',
-  'feature_flags', 'sofia_active', 'whatsapp_status'
+  'feature_flags', 'sofia_active', 'whatsapp_status',
+  'whatsapp_provider', // admin can switch a tenant between evolution/uazapi/meta_official
 ];
 
 router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
@@ -112,6 +116,102 @@ router.patch('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   } catch (err: any) {
     console.error('[AdminAPI] User Update Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/admin/users/:id/meta-credentials ────────────────────────
+// Admin sets Meta Cloud API credentials for a tenant. Validates via Graph API
+// before persisting and switches whatsapp_provider to 'meta_official'.
+const META_BASE = 'https://graph.facebook.com/v19.0';
+router.post('/users/:id/meta-credentials', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  const { access_token, phone_id, waba_id } = req.body || {};
+
+  if (!access_token || !phone_id) {
+    return res.status(400).json({ success: false, error: 'access_token and phone_id are required' });
+  }
+
+  try {
+    // Validate against Graph API before storing
+    let probeData: any;
+    try {
+      const { data } = await axios.get(`${META_BASE}/${phone_id}`, {
+        params: { fields: 'verified_name,display_phone_number,quality_rating,code_verification_status' },
+        headers: { Authorization: `Bearer ${access_token}` },
+        timeout: 15000,
+      });
+      probeData = data;
+    } catch (err: any) {
+      const info = parseProviderError(err);
+      return res.status(400).json({ success: false, error: info.message, errorInfo: info });
+    }
+
+    // Anti-collision: no other tenant can claim the same phone_id
+    const { data: clash } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .eq('meta_phone_id', phone_id)
+      .neq('id', targetUserId)
+      .maybeSingle();
+    if (clash) {
+      return res.status(409).json({
+        success: false,
+        error: `phone_id ${phone_id} já está vinculado a outro inquilino (${clash.email})`,
+      });
+    }
+
+    const { error: updateErr } = await supabase
+      .from('profiles')
+      .update({
+        whatsapp_provider: 'meta_official',
+        meta_access_token: access_token,
+        meta_phone_id: phone_id,
+        meta_waba_id: waba_id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', targetUserId);
+
+    if (updateErr) throw updateErr;
+
+    MetaProvider.invalidateCredentialCache(targetUserId);
+
+    return res.json({
+      success: true,
+      provider: 'meta_official',
+      phone: {
+        phone_id,
+        display_phone_number: probeData.display_phone_number,
+        verified_name: probeData.verified_name,
+        quality_rating: probeData.quality_rating,
+        verification_status: probeData.code_verification_status,
+      },
+    });
+  } catch (err: any) {
+    console.error('[AdminAPI] meta-credentials error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/admin/users/:id/meta-disconnect ─────────────────────────
+router.post('/users/:id/meta-disconnect', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        whatsapp_provider: 'evolution',
+        meta_access_token: null,
+        meta_phone_id: null,
+        meta_waba_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', targetUserId);
+
+    if (error) throw error;
+    MetaProvider.invalidateCredentialCache(targetUserId);
+    return res.json({ success: true, provider: 'evolution' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

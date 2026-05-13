@@ -39,7 +39,7 @@ import {
   Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo } from '../services/supabaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -71,6 +71,10 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   const [userActivity, setUserActivity] = useState<any[]>([]);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [metaAccessToken, setMetaAccessToken] = useState('');
+  const [metaPhoneId, setMetaPhoneId] = useState('');
+  const [metaWabaId, setMetaWabaId] = useState('');
+  const [isMetaTesting, setIsMetaTesting] = useState(false);
+  const [metaTestResult, setMetaTestResult] = useState<{ ok: boolean; phone?: MetaPhoneInfo; error?: string } | null>(null);
 
   const [globalSettings, setGlobalSettings] = useState<any>({
     openai_api_key: '',
@@ -172,14 +176,26 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     fetchData();
   }, []);
 
-  // Buscar segredo da Meta quando selecionar usuário para editar
+  // Carrega credenciais Meta quando seleciona usuário. Lê do profile (novas colunas)
+  // com fallback para tenant_secrets (legacy) caso o admin ainda não tenha migrado.
   useEffect(() => {
     if (isEditModalOpen && selectedUser?.id) {
-      getTenantSecret(selectedUser.id, 'meta_access_token')
-        .then(token => setMetaAccessToken(token))
-        .catch(() => setMetaAccessToken(''));
+      setMetaPhoneId((selectedUser as any).meta_phone_id || (selectedUser as any).whatsapp_phone_number_id || '');
+      setMetaWabaId((selectedUser as any).meta_waba_id || '');
+      const fromProfile = (selectedUser as any).meta_access_token as string | undefined;
+      if (fromProfile) {
+        setMetaAccessToken(fromProfile);
+      } else {
+        getTenantSecret(selectedUser.id, 'meta_access_token')
+          .then(token => setMetaAccessToken(token || ''))
+          .catch(() => setMetaAccessToken(''));
+      }
+      setMetaTestResult(null);
     } else if (!isEditModalOpen) {
       setMetaAccessToken('');
+      setMetaPhoneId('');
+      setMetaWabaId('');
+      setMetaTestResult(null);
     }
   }, [isEditModalOpen, selectedUser?.id]);
 
@@ -1176,18 +1192,28 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   </div>
 
                   {selectedUser.whatsapp_provider === 'meta_official' && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4"
                     >
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Phone Number ID</label>
-                        <input 
+                        <input
                           type="text"
-                          value={selectedUser.whatsapp_phone_number_id || ''}
-                          onChange={e => setSelectedUser({...selectedUser, whatsapp_phone_number_id: e.target.value})}
+                          value={metaPhoneId}
+                          onChange={e => { setMetaPhoneId(e.target.value); setMetaTestResult(null); }}
                           placeholder="Ex: 1029384756..."
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WABA ID <span className="text-slate-400 font-bold normal-case tracking-normal">(necessário para templates)</span></label>
+                        <input
+                          type="text"
+                          value={metaWabaId}
+                          onChange={e => { setMetaWabaId(e.target.value); setMetaTestResult(null); }}
+                          placeholder="Ex: 5678901234..."
                           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
                         />
                       </div>
@@ -1196,14 +1222,66 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                           Access Token
                           <Lock size={12} className="text-slate-400" />
                         </label>
-                        <input 
+                        <input
                           type="password"
                           value={metaAccessToken}
-                          onChange={e => setMetaAccessToken(e.target.value)}
+                          onChange={e => { setMetaAccessToken(e.target.value); setMetaTestResult(null); }}
                           placeholder="EAA..."
                           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm"
                         />
                       </div>
+
+                      <button
+                        type="button"
+                        disabled={isMetaTesting || !metaAccessToken || !metaPhoneId}
+                        onClick={async () => {
+                          setIsMetaTesting(true);
+                          setMetaTestResult(null);
+                          try {
+                            const r = await testMetaConnection(metaAccessToken, metaPhoneId, metaWabaId || undefined);
+                            if (r.success) {
+                              setMetaTestResult({ ok: true, phone: r.phone });
+                              toast.success('Credenciais válidas');
+                            } else {
+                              setMetaTestResult({ ok: false, error: r.error || 'Falha na validação' });
+                              toast.error(r.error || 'Credenciais inválidas');
+                            }
+                          } catch (e: any) {
+                            setMetaTestResult({ ok: false, error: e.message });
+                            toast.error(e.message);
+                          } finally {
+                            setIsMetaTesting(false);
+                          }
+                        }}
+                        className="w-full py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        {isMetaTesting ? 'Validando...' : 'Testar Conexão'}
+                      </button>
+
+                      {metaTestResult && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className={`p-4 rounded-2xl border text-xs ${metaTestResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-red-50 border-red-200 text-red-900'}`}
+                        >
+                          {metaTestResult.ok && metaTestResult.phone ? (
+                            <div className="space-y-1">
+                              <div className="font-black uppercase tracking-widest text-[10px]">✓ Conexão OK</div>
+                              <div><strong>Número:</strong> {metaTestResult.phone.display_phone_number || '—'}</div>
+                              <div><strong>Nome verificado:</strong> {metaTestResult.phone.verified_name || '—'}</div>
+                              <div><strong>Qualidade:</strong> {metaTestResult.phone.quality_rating || '—'}</div>
+                              {metaTestResult.phone.verification_status && (
+                                <div><strong>Verificação:</strong> {metaTestResult.phone.verification_status}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-black uppercase tracking-widest text-[10px] mb-1">✗ Falha</div>
+                              <div>{metaTestResult.error}</div>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
                     </motion.div>
                   )}
                   <p className="text-[10px] text-slate-400 italic font-medium">
@@ -1242,23 +1320,35 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       setIsActionLoading(true);
+
+                      // 1. Campos gerais via PATCH (whitelist no backend)
                       await updateAdminUser(selectedUser.id, {
                         plano: selectedUser.plano,
                         role: selectedUser.role,
                         trial_ends_at: selectedUser.trial_ends_at,
                         whatsapp_provider: selectedUser.whatsapp_provider,
-                        whatsapp_provider_config: selectedUser.whatsapp_provider_config,
-                        whatsapp_phone_number_id: selectedUser.whatsapp_phone_number_id
-                      });
-                      
-                      // Salvar segredo se for Meta
-                      if (selectedUser.whatsapp_provider === 'meta_official' && metaAccessToken) {
-                        await saveTenantSecret(selectedUser.id, 'meta_access_token', metaAccessToken);
+                      } as Partial<UserProfile>);
+
+                      // 2. Se o provider escolhido é Meta e há credenciais novas,
+                      //    valida + persiste via endpoint dedicado (anti-colisão de phone_id).
+                      if (selectedUser.whatsapp_provider === 'meta_official' && metaAccessToken && metaPhoneId) {
+                        const r = await saveAdminMetaCredentials(selectedUser.id, metaAccessToken, metaPhoneId, metaWabaId || undefined);
+                        if (!r.success) {
+                          toast.error(r.error || 'Falha ao salvar credenciais Meta');
+                          setIsActionLoading(false);
+                          return;
+                        }
                       }
+
+                      // 3. Se mudou de meta_official para outro provider, limpa credenciais.
+                      if (selectedUser.whatsapp_provider !== 'meta_official' && (selectedUser as any).meta_phone_id) {
+                        await disconnectAdminMeta(selectedUser.id).catch(() => {});
+                      }
+
                       toast.success('Inquilino atualizado!');
                       setIsEditModalOpen(false);
                       fetchData();

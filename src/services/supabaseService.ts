@@ -1738,6 +1738,72 @@ export const getDashboardGrowth = async () => {
 /**
  * Tenant Secrets (Vault)
  */
+/**
+ * Meta Cloud API admin helpers (S6).
+ * All endpoints require an authenticated admin Supabase session.
+ */
+export interface MetaPhoneInfo {
+  phone_id: string;
+  display_phone_number?: string;
+  verified_name?: string;
+  quality_rating?: string;
+  verification_status?: string;
+}
+
+export interface MetaTestResult {
+  success: boolean;
+  phone?: MetaPhoneInfo;
+  error?: string;
+  errorInfo?: { code?: string | number; is24hWindowClosed?: boolean; isAuthError?: boolean };
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session.access_token}`,
+  };
+}
+
+/** Stateless test — does NOT persist. Use before saving to validate input. */
+export const testMetaConnection = async (
+  access_token: string,
+  phone_id: string,
+  waba_id?: string
+): Promise<MetaTestResult> => {
+  const res = await fetch('/api/v2/whatsapp/meta/test-connection', {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ access_token, phone_id, waba_id }),
+  });
+  return res.json();
+};
+
+/** Admin saves credentials for a target tenant (validated + anti-collision on backend). */
+export const saveAdminMetaCredentials = async (
+  targetUserId: string,
+  access_token: string,
+  phone_id: string,
+  waba_id?: string
+): Promise<MetaTestResult & { provider?: string }> => {
+  const res = await fetch(`/api/v2/admin/users/${targetUserId}/meta-credentials`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ access_token, phone_id, waba_id }),
+  });
+  return res.json();
+};
+
+/** Admin reverts a tenant back to evolution, clearing Meta credentials. */
+export const disconnectAdminMeta = async (targetUserId: string): Promise<{ success: boolean; error?: string }> => {
+  const res = await fetch(`/api/v2/admin/users/${targetUserId}/meta-disconnect`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  return res.json();
+};
+
 export const saveTenantSecret = async (tenantId: string, key: string, value: string) => {
   const { error } = await supabase
     .from('tenant_secrets')

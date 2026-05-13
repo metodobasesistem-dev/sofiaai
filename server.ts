@@ -61,6 +61,8 @@ import quickReplyApiRoutes from './src/backend/routes/quickReplyApiRoutes.js';
 import adminApiRoutes from './src/backend/routes/adminApiRoutes.js';
 import whatsappRoutes from './src/backend/routes/whatsappRoutes.js';
 import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js';
+import metaWebhookRoutes from './src/backend/routes/metaWebhookRoutes.js';
+import metaApiRoutes from './src/backend/routes/metaApiRoutes.js';
 import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
@@ -90,11 +92,16 @@ async function startServer() {
   // 1. Middleware
   app.set('trust proxy', 1); // Confia no primeiro proxy (Coolify/Nginx/Cloudflare)
 
-  app.use(express.json({ limit: '50mb' })); // Webhooks com mídia podem exceder 100kb default
+  // rawBody é preservado para validação HMAC (ex.: X-Hub-Signature-256 do Meta webhook)
+  app.use(express.json({
+    limit: '50mb',
+    verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  }));
 
   // WEBHOOK CRÍTICO: registrado ANTES do globalLimiter para garantir entrega
-  // (Evolution API e Leo Instagram dependem disso para receber mensagens)
+  // (Evolution API, Meta Cloud API e Leo Instagram dependem disso para receber mensagens)
   app.use('/api/whatsapp/evolution', webhookLimiter, whatsappWebhookRoutes);
+  app.use('/api/whatsapp/meta', webhookLimiter, metaWebhookRoutes);
   app.use('/api/leo', webhookLimiter, leoRoutes);
 
   app.use('/api/', globalLimiter); // Proteção global básica (após webhooks)
@@ -281,7 +288,8 @@ async function startServer() {
     app.use('/api/v2/admin', authLimiter, adminApiRoutes);
     app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
-    // /api/whatsapp/evolution e /api/leo registrados no topo (antes do globalLimiter)
+    app.use('/api/v2/whatsapp/meta', apiLimiter, metaApiRoutes);
+    // /api/whatsapp/evolution, /api/whatsapp/meta (webhook) e /api/leo registrados no topo (antes do globalLimiter)
 
 
 
