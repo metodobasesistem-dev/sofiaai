@@ -622,107 +622,141 @@ router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
 // POST /api/v2/admin/leads/scan - Iniciar varredura no Google Maps
 router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { niche, city, zip, limit = 10 } = req.body;
+    const { niche, city, zip, limit = 10, context = '' } = req.body;
     if (!niche || !city) return res.status(400).json({ success: false, error: 'Nicho e Cidade são obrigatórios' });
 
-    // 1. Obter Google API Key das configurações
-    const { data: settings } = await supabase.from('global_settings').select('google_maps_api_key').single();
-    const apiKey = settings?.google_maps_api_key;
+    // 1. Obter Apify API Token das configurações
+    const { data: settings } = await supabase.from('global_settings').select('apify_api_token').single();
+    const apifyToken = settings?.apify_api_token;
 
-    if (!apiKey) return res.status(400).json({ success: false, error: 'Chave do Google Maps não configurada' });
+    if (!apifyToken) return res.status(400).json({ success: false, error: 'Apify API Token não configurado' });
 
-    // 2. Chamar Google Places API (v1 searchText) com paginação
+    // 2. Chamar Apify API (Google Maps Scraper - compass/crawler-google-places)
     const query = `${niche} em ${city} ${zip || ''}`.trim();
-    console.log(`[LeadRadar] Iniciando busca: "${query}" com meta de ${limit} leads.`);
+    console.log(`[LeadRadar] Iniciando busca Apify: "${query}" com meta de ${limit} leads.`);
 
     let rawPlaces: any[] = [];
-    let nextPageToken: string | undefined = undefined;
-    let pagesFetched = 0;
-    const maxPages = limit > 10 ? 3 : 1; // Busca mais páginas se o limite for maior
-
-    while (pagesFetched < maxPages) {
-      const payload: any = { textQuery: query, pageSize: 20 };
-      if (nextPageToken) payload.pageToken = nextPageToken;
-
-      try {
-        const gResponse = await axios.post(
-          'https://places.googleapis.com/v1/places:searchText',
-          payload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': apiKey,
-              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.websiteUri,places.reviews,places.types,nextPageToken'
-            }
-          }
-        );
-
-        const newPlaces = gResponse.data.places || [];
-        rawPlaces = rawPlaces.concat(newPlaces);
-        nextPageToken = gResponse.data.nextPageToken;
-        pagesFetched++;
-
-        // Se não houver mais páginas ou já pegamos o suficiente (bruto), paramos
-        if (!nextPageToken || rawPlaces.length >= limit * 3) break;
-        
-        // Pausa obrigatória do Google antes de usar o nextPageToken
-        if (nextPageToken) await new Promise(r => setTimeout(r, 2000));
-      } catch (gErr: any) {
-        console.warn('[LeadRadar] Erro na requisição Google Places:', gErr.response?.data || gErr.message);
-        if (pagesFetched === 0) {
-          // Se falhou logo na primeira página, é erro de chave/permissão. Vamos repassar pro usuário.
-          throw new Error(`Google API: ${gErr.response?.data?.error?.message || gErr.message}`);
+    
+    try {
+      const apifyResponse = await axios.post(
+        `https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset?token=${apifyToken}`,
+        {
+          searchStringsArray: [query],
+          maxCrawledPlacesPerSearch: limit * 2, // Buscamos um pouco mais para compensar os descartes
+          language: "pt-BR",
+          countryCode: "br",
+          scrapeContacts: true
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 120000 // O scraper pode demorar um pouco (2 minutos)
         }
-        break; // Se falhou numa página seguinte, apenas pare de buscar mais
-      }
+      );
+      
+      rawPlaces = apifyResponse.data || [];
+    } catch (apifyErr: any) {
+      console.warn('[LeadRadar] Erro na requisição Apify:', apifyErr.response?.data || apifyErr.message);
+      throw new Error(`Apify API: ${apifyErr.response?.data?.error?.message || apifyErr.message}`);
     }
 
-    console.log(`[LeadRadar] Encontrados ${rawPlaces.length} locais brutos.`);
+    console.log(`[LeadRadar] Encontrados ${rawPlaces.length} locais brutos no Apify.`);
 
     const leadsProcessados = [];
 
-    // 3. Processar e Filtrar Leads
+    // 3. Processar, Filtrar e Pontuar Leads
     for (const place of rawPlaces) {
       if (leadsProcessados.length >= limit) break; // Para quando atingir o limite solicitado
 
-      // Filtros: Rating > 3, Tem telefone, Tem avaliações
-      const rating = place.rating || 0;
-      const phone = place.nationalPhoneNumber;
-      const ratingCount = place.userRatingCount || 0;
+      const rating = place.totalScore || 0;
+      let phone = place.phoneUnformatted || place.phone || '';
+      const ratingCount = place.reviewsCount || 0;
 
+      // Filtros Básicos
       if (rating < 3 || !phone || ratingCount < 1) continue;
 
-      // Validador de WhatsApp (Mobile Check: começa com 9 após o DDD)
+      // Limpar Telefone e Verificar se é Celular/WhatsApp
       const digitsOnly = phone.replace(/\D/g, '');
-      const isMobile = digitsOnly.length >= 11 && digitsOnly.substring(2, 3) === '9';
+      const isMobile = digitsOnly.length >= 10 && (digitsOnly.length === 11 ? digitsOnly.substring(2, 3) === '9' : true);
       
       if (!isMobile) continue;
 
-      // 4. Gerar Resumo com IA
-      let reviewSummary = 'Sem avaliações detalhadas para resumir.';
-      if (place.reviews && place.reviews.length > 0) {
-        const reviewsText = place.reviews.map((r: any) => r.text?.text || '').join('\n---\n');
+      // Cálculo de Scoring Matemático
+      let pain_score = 0;
+      let opportunity_score = 0;
+
+      const website = place.website || '';
+      const instagram = (place.instagrams && place.instagrams.length > 0) ? place.instagrams[0] : null;
+      const email = (place.emails && place.emails.length > 0) ? place.emails[0] : null;
+
+      // Dor (Pain)
+      if (!website || website.includes('ifood') || website.includes('rappi')) pain_score += 2;
+      if (ratingCount < 50) pain_score += 1;
+      if (rating < 4.3 && ratingCount > 20) pain_score += 1;
+      if (!instagram) pain_score += 1;
+
+      // Oportunidade (Opportunity)
+      if (rating > 4.5 && ratingCount < 150) opportunity_score += 2;
+      if (place.price && place.price.length > 2) opportunity_score += 1; // Ticket Alto ($$$)
+      if (place.additionalInfo && place.additionalInfo['Opções de serviço'] && 
+          Array.isArray(place.additionalInfo['Opções de serviço']) && 
+          place.additionalInfo['Opções de serviço'].some((s: any) => s['Entrega'])) opportunity_score += 1;
+
+      // 4. Inteligência Estratégica (IA)
+      let reviewSummary = 'Sem resumo';
+      let personalizedMessage = '';
+
+      try {
+        const aiContextStr = context ? `\nContexto da Prospecção / Estratégia do Usuário: ${context}` : '';
+        const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este negócio local e criar uma mensagem de abordagem para WhatsApp implacável, baseada no Nível de Dor e Oportunidade.
+
+Dados do Negócio:
+Nome: ${place.title}
+Especialidade: ${place.categoryName}
+Avaliação: ${rating} (${ratingCount} depoimentos)
+Site: ${website || 'Não possui'}
+Instagram: ${instagram || 'Não possui'}
+Score de Dor (1 a 5): ${pain_score} (Quanto maior, mais o negócio está "sangrando" online)
+Score de Oportunidade (1 a 5): ${opportunity_score} (Quanto maior, mais premium e mal explorado é o negócio)${aiContextStr}
+
+Tarefas (Retorne estritamente um JSON, nada fora do formato):
+1. observacao_ia: Em UMA frase comercial, diga por que esse lead vale a pena focar.
+2. mensagem_personalizada: Uma mensagem CARTA e direta de WhatsApp, soando humano, se apresentando e tocando na "Dor" ou "Oportunidade" descoberta. Inclua um Call to Action simples no final.
+
+Formato esperado:
+{
+  "observacao_ia": "...",
+  "mensagem_personalizada": "..."
+}`;
+
+        const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: "Gere a análise conforme as instruções." }]);
+        
+        let aiJson;
         try {
-          const aiRes = await generateAIResponse(
-            "Você é um analista comercial. Resuma as avaliações deste estabelecimento em 2 ou 3 frases curtas, focando no que os clientes mais gostam e no que reclamam. Use isso para ajudar em uma abordagem de vendas.",
-            [{ role: 'user', content: `Avaliações:\n${reviewsText}` }]
-          );
-          reviewSummary = aiRes.text || reviewSummary;
-        } catch (aiErr) {
-          console.error('[LeadRadar] Erro ao gerar resumo IA:', aiErr);
+           aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
+           reviewSummary = aiJson.observacao_ia || reviewSummary;
+           personalizedMessage = aiJson.mensagem_personalizada || '';
+        } catch (e) {
+           reviewSummary = aiRes.text || reviewSummary;
         }
+      } catch (aiErr) {
+        console.error('[LeadRadar] Erro ao gerar resumo IA:', aiErr);
       }
 
       // 5. Salvar/Upsert no Banco
       const leadData = {
-        name: place.displayName?.text || 'Sem nome',
-        phone: phone,
-        address: place.formattedAddress,
+        name: place.title || 'Sem nome',
+        phone: digitsOnly,
+        address: place.address,
         rating: rating,
         user_rating_count: ratingCount,
-        website: place.websiteUri,
+        website: website,
         review_summary: reviewSummary,
-        place_id: place.id,
+        personalized_message: personalizedMessage,
+        instagram: instagram,
+        email: email,
+        pain_score: pain_score,
+        opportunity_score: opportunity_score,
+        place_id: place.placeId || place.id || Date.now().toString(),
         niche: niche,
         city: city,
         status: 'novo'

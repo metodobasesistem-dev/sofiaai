@@ -36,7 +36,8 @@ import {
   ChevronLeft, 
   Calendar,
   Trash2,
-  Send
+  Send,
+  Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch } from '../services/supabaseService';
@@ -63,6 +64,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [searchTerm, setSearchTerm] = useState('');
   const [radarNiche, setRadarNiche] = useState('');
   const [radarCity, setRadarCity] = useState('');
+  const [radarContext, setRadarContext] = useState('');
   const [radarLimit, setRadarLimit] = useState(10);
   const [radarLeads, setRadarLeads] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -188,7 +190,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     try {
       const res = await standardFetch('/api/v2/admin/leads/scan', {
         method: 'POST',
-        body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit })
+        body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
       });
       if (res.success) {
         toast.success(`Busca finalizada! ${res.count} novos leads encontrados.`);
@@ -424,15 +426,25 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          </div>
 
                          <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Chave da API (Google Maps)</label>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Apify API Token</label>
                            <input 
                              type="password" 
-                             placeholder="AIza..." 
+                             placeholder="apify_api_..." 
                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
-                             value={globalSettings.google_maps_api_key || ''}
-                             onChange={(e) => setGlobalSettings({...globalSettings, google_maps_api_key: e.target.value})}
+                             value={globalSettings.apify_api_token || ''}
+                             onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
                              onBlur={handleSaveSettings}
                            />
+                         </div>
+
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Contexto da Abordagem (Opcional)</label>
+                            <textarea 
+                              placeholder="Ex: Focar na dor de quem atende muito convênio e quer atrair consultas particulares." 
+                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all resize-none h-24"
+                              value={radarContext}
+                              onChange={(e) => setRadarContext(e.target.value)}
+                            />
                          </div>
                          
                          <button 
@@ -471,10 +483,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                       <div className="overflow-x-auto">
                          <table className="w-full text-left">
                             <thead>
-                               <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                              <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
                                   <th className="px-8 py-5">Estabelecimento</th>
-                                  <th className="px-8 py-5">Contato</th>
-                                  <th className="px-8 py-5">Feedback IA</th>
+                                  <th className="px-8 py-5">Contato & Rating</th>
+                                  <th className="px-8 py-5 text-center">Scoring (Dor/Oport.)</th>
+                                  <th className="px-8 py-5">Abordagem IA</th>
                                   <th className="px-8 py-5">Status</th>
                                   <th className="px-8 py-5 text-right">Ações</th>
                                </tr>
@@ -486,11 +499,15 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                       <div className="flex flex-col">
                                          <span className="text-sm font-black text-slate-900">{lead.name}</span>
                                          <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">{lead.address}</span>
+                                         <div className="flex gap-2 mt-1">
+                                            {lead.instagram && <a href={lead.instagram} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-600"><span className="text-[10px] font-bold flex items-center gap-1"><ExternalLink size={10} /> Inst</span></a>}
+                                            {lead.email && <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Mail size={10} /> Email</span>}
+                                         </div>
                                       </div>
                                    </td>
                                    <td className="px-8 py-5">
                                       <div className="flex flex-col gap-1">
-                                         <span className="text-xs font-bold text-slate-700">{lead.phone}</span>
+                                         <span className="text-xs font-bold text-slate-700">{lead.phone || 'Sem Telefone'}</span>
                                          <div className="flex items-center gap-1.5">
                                             <Star size={10} className="text-amber-500 fill-amber-500" />
                                             <span className="text-[10px] font-black text-slate-400">{lead.rating} ({lead.user_rating_count})</span>
@@ -498,13 +515,41 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                       </div>
                                    </td>
                                    <td className="px-8 py-5">
-                                      <div className="max-w-[300px]">
-                                         <p className="text-[11px] text-slate-500 leading-relaxed italic line-clamp-3">
-                                            "{lead.review_summary}"
-                                         </p>
+                                      <div className="flex flex-col items-center gap-1.5">
+                                         <div className="flex gap-2">
+                                            <div className="flex items-center gap-1 bg-red-50 text-red-600 px-2 py-0.5 rounded-md border border-red-100">
+                                               <span className="text-[9px] font-black uppercase tracking-widest">Dor</span>
+                                               <span className="text-[11px] font-black">{lead.pain_score || 0}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md border border-emerald-100">
+                                               <span className="text-[9px] font-black uppercase tracking-widest">Potencial</span>
+                                               <span className="text-[11px] font-black">{lead.opportunity_score || 0}</span>
+                                            </div>
+                                         </div>
+                                         {lead.pain_score >= 3 && lead.opportunity_score >= 2 && (
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-orange-500 flex items-center gap-1">🔥 Hot Lead</span>
+                                         )}
                                       </div>
                                    </td>
                                    <td className="px-8 py-5">
+                                      <div className="max-w-[250px] flex flex-col gap-2">
+                                         <p className="text-[10px] text-slate-500 font-medium italic line-clamp-2">
+                                            {lead.review_summary || 'Resumo indisponível'}
+                                         </p>
+                                         {lead.personalized_message && lead.phone && (
+                                            <a 
+                                              href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(lead.personalized_message)}`} 
+                                              target="_blank" 
+                                              rel="noreferrer"
+                                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#128C7E] transition-all shadow-sm"
+                                            >
+                                               <MessageSquare size={10} /> Enviar Abordagem
+                                            </a>
+                                         )}
+                                      </div>
+                                   </td>
+                                   <td className="px-8 py-5">
+
                                       <select 
                                         className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border outline-none ${
                                           lead.status === 'qualificado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
