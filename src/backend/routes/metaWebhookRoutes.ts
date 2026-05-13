@@ -27,7 +27,11 @@ const router = Router();
  */
 
 function verifyMetaSignature(rawBody: Buffer | undefined, signatureHeader: string | undefined): boolean {
-  const secret = (process.env.META_APP_SECRET || '').trim();
+  // WHATSAPP_APP_SECRET é específico da app WhatsApp da Meta. Mantemos fallback
+  // para META_APP_SECRET para compat com setups antigos que tinham só um app.
+  // (Não usamos META_APP_SECRET diretamente porque essa variável é do app Leo
+  // Instagram e tem outros usos — criptografia de tokens, OAuth do IG.)
+  const secret = (process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || '').trim();
   if (!secret) {
     // Compat mode: no secret configured → accept (matches Evolution webhook behavior)
     return true;
