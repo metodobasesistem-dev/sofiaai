@@ -783,7 +783,7 @@ Formato esperado:
 router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const adminId = req.user.id;
-    const { limit = 40, minDelay = 60, maxDelay = 180 } = req.body;
+    const { limit = 40, minDelay = 60, maxDelay = 180, templateName, injectVariable } = req.body;
 
     // Verificar se o admin tem provedor conectado
     const provider = await WhatsAppProviderFactory.getProvider(adminId);
@@ -822,7 +822,24 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
           if (!jid.includes('@')) jid = `${jid}@s.whatsapp.net`;
           if (!jid.startsWith('55')) jid = `55${jid}`;
           
-          await provider.sendMessage(jid, lead.personalized_message);
+          if (templateName && provider.sendTemplate) {
+            // Usa envio de template (padrão oficial da Meta para abrir conversas)
+            let components: any[] = [];
+            if (injectVariable && lead.personalized_message) {
+              components = [
+                {
+                  type: 'body',
+                  parameters: [
+                    { type: 'text', text: lead.personalized_message }
+                  ]
+                }
+              ];
+            }
+            await provider.sendTemplate(adminId, jid, templateName, 'pt_BR', components);
+          } else {
+            // Fallback para envio padrão de texto (caso seja Baileys ou Evolution)
+            await provider.sendMessage(jid, lead.personalized_message);
+          }
           
           // Atualiza status para 'contatado'
           await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);

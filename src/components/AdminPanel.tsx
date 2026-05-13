@@ -63,6 +63,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [isAutopilotRunning, setIsAutopilotRunning] = useState(false);
+  const [isAutopilotModalOpen, setIsAutopilotModalOpen] = useState(false);
+  const [autopilotTemplateName, setAutopilotTemplateName] = useState('prospeccao_fria');
+  const [autopilotInjectVar, setAutopilotInjectVar] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [radarNiche, setRadarNiche] = useState('');
   const [radarCity, setRadarCity] = useState('');
@@ -209,12 +212,21 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
-  const startAutopilot = async () => {
+  const confirmAutopilot = async () =>想定
+    if (!autopilotTemplateName) return toast.error('Nome do template é obrigatório');
+    
+    setIsAutopilotModalOpen(false);
     setIsAutopilotRunning(true);
     try {
       const response = await standardFetch('/api/v2/admin/leads/autopilot', {
         method: 'POST',
-        body: JSON.stringify({ limit: 40, minDelay: 60, maxDelay: 180 })
+        body: JSON.stringify({ 
+          limit: 40, 
+          minDelay: 60, 
+          maxDelay: 180,
+          templateName: autopilotTemplateName,
+          injectVariable: autopilotInjectVar 
+        })
       });
       const res = await response.json();
       if (res.success) {
@@ -225,7 +237,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     } catch (err: any) {
       toast.error(err.message);
     } finally {
-      setIsAutopilotRunning(false); // Fica false rápido porque a API responde imediatamente, a execução roda em background
+      setIsAutopilotRunning(false);
     }
   };
 
@@ -482,7 +494,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                            </button>
 
                            <button 
-                             onClick={startAutopilot}
+                             onClick={() => setIsAutopilotModalOpen(true)}
                              disabled={isScanning || isAutopilotRunning}
                              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2"
                            >
@@ -1945,6 +1957,72 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                   className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all"
                  >
                    Fechar Visualização
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Autopilot Modal */}
+        {isAutopilotModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsAutopilotModalOpen(false)}></div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              <div className="p-10 border-b border-slate-50 relative">
+                 <button onClick={() => setIsAutopilotModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-slate-600">
+                    <XCircle size={24} />
+                 </button>
+                 <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner mb-6">
+                    <Rocket size={32} />
+                 </div>
+                 <h3 className="text-2xl font-black text-slate-900 mb-2">Configurar Disparo</h3>
+                 <p className="text-sm text-slate-500 font-medium">Como as mensagens são enviadas via API Oficial, o primeiro contato deve ser feito através de um <b>Template Aprovado</b> pela Meta.</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
+                 <div className="space-y-3">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Template (Meta)</label>
+                   <input 
+                     type="text" 
+                     className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                     placeholder="Ex: prospeccao_fria"
+                     value={autopilotTemplateName}
+                     onChange={(e) => setAutopilotTemplateName(e.target.value)}
+                   />
+                   <p className="text-xs text-slate-400 px-1">Deve ser exatamente o nome configurado no seu Gerenciador do WhatsApp.</p>
+                 </div>
+
+                 <div className="p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-start gap-4">
+                   <input 
+                     type="checkbox" 
+                     className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                     checked={autopilotInjectVar}
+                     onChange={(e) => setAutopilotInjectVar(e.target.checked)}
+                     id="inject-var"
+                   />
+                   <label htmlFor="inject-var" className="cursor-pointer">
+                     <span className="block text-sm font-bold text-slate-700 mb-1">Injetar Contexto da IA</span>
+                     <span className="block text-xs text-slate-500">Se ativado, a mensagem hiper-personalizada gerada pela IA será enviada como a variável <code className="bg-blue-100 px-1 rounded text-blue-700">{'{{1}}'}</code> do seu template. O seu template <b>precisa</b> ter pelo menos 1 variável no corpo do texto.</span>
+                   </label>
+                 </div>
+              </div>
+
+              <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex gap-4">
+                 <button 
+                  onClick={() => setIsAutopilotModalOpen(false)}
+                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
+                 >
+                   Cancelar
+                 </button>
+                 <button 
+                  onClick={confirmAutopilot}
+                  className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                 >
+                   Iniciar Disparos
                  </button>
               </div>
             </motion.div>

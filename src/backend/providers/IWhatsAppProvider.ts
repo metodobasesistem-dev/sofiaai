@@ -59,6 +59,11 @@ export interface IWhatsAppProvider {
   sendMessage(instanceId: string, to: string, message: string, quoted?: { id: string, fromMe: boolean, text?: string }): Promise<{ messageId: string }>;
 
   /**
+   * Sends an approved template message (Meta API specific)
+   */
+  sendTemplate?(instanceId: string, to: string, templateName: string, languageCode: string, components?: any[]): Promise<{ messageId: string }>;
+
+  /**
    * Sends media (image, video, document)
    */
   sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type?: 'image' | 'video' | 'document' | 'audio'): Promise<{ messageId: string }>;
