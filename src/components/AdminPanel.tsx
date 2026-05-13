@@ -191,7 +191,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       const res = await standardFetch('/api/v2/admin/leads/scan', {
         method: 'POST',
         body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
-      });
+      }, 120000);
       if (res.success) {
         toast.success(`Busca finalizada! ${res.count} novos leads encontrados.`);
         fetchLeads();
