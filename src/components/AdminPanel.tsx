@@ -177,7 +177,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const fetchLeads = async () => {
     try {
-      const res = await standardFetch('/api/v2/admin/leads');
+      const response = await standardFetch('/api/v2/admin/leads');
+      const res = await response.json();
       if (res.success) setRadarLeads(res.data);
     } catch (err) {
       console.error('Error fetching leads:', err);
@@ -188,10 +189,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     if (!radarNiche || !radarCity) return toast.error('Nicho e Cidade são obrigatórios');
     setIsScanning(true);
     try {
-      const res = await standardFetch('/api/v2/admin/leads/scan', {
+      const response = await standardFetch('/api/v2/admin/leads/scan', {
         method: 'POST',
         body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
       }, 120000);
+      const res = await response.json();
       if (res.success) {
         toast.success(`Busca finalizada! ${res.count} novos leads encontrados.`);
         fetchLeads();
@@ -207,10 +209,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const updateLeadStatus = async (id: string, status: string) => {
     try {
-      const res = await standardFetch(`/api/v2/admin/leads/${id}`, {
+      const response = await standardFetch(`/api/v2/admin/leads/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
+      const res = await response.json();
       if (res.success) {
         setRadarLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
         toast.success('Status atualizado!');
@@ -223,9 +226,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const deleteLead = async (id: string) => {
     if (!confirm('Tem certeza?')) return;
     try {
-      const res = await standardFetch(`/api/v2/admin/leads/${id}`, {
-        method: 'DELETE'
-      });
+      const response = await standardFetch(`/api/v2/admin/leads/${id}`, { method: 'DELETE' });
+      const res = await response.json();
       if (res.success) {
         setRadarLeads(prev => prev.filter(l => l.id !== id));
         toast.success('Lead removido');
