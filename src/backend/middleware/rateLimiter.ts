@@ -38,7 +38,17 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 4. Limite Global (Segurança geral)
+// 4. Limite para Painel Administrativo (Inquilinos, Stats, etc)
+// Maior capacidade para suportar o carregamento de múltiplos dashboards simultâneos.
+export const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 500,
+  message: { error: 'Limite do painel administrativo atingido. Aguarde um momento.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 5. Limite Global (Segurança geral)
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 1000,

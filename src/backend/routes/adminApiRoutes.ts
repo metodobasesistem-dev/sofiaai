@@ -167,6 +167,7 @@ router.post('/users/:id/meta-credentials', async (req: AuthenticatedRequest, res
         meta_access_token: access_token,
         meta_phone_id: phone_id,
         meta_waba_id: waba_id || null,
+        whatsapp_status: 'connected',
         updated_at: new Date().toISOString(),
       })
       .eq('id', targetUserId);
@@ -203,6 +204,7 @@ router.post('/users/:id/meta-disconnect', async (req: AuthenticatedRequest, res:
         meta_access_token: null,
         meta_phone_id: null,
         meta_waba_id: null,
+        whatsapp_status: 'disconnected',
         updated_at: new Date().toISOString(),
       })
       .eq('id', targetUserId);

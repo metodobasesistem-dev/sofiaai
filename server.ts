@@ -68,7 +68,7 @@ import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
 import stripeRoutes from './src/backend/routes/stripeRoutes.js';
 import { requireAuth, requireAdmin } from './src/backend/middleware/authMiddleware.js';
-import { globalLimiter, apiLimiter, authLimiter, webhookLimiter } from './src/backend/middleware/rateLimiter.js';
+import { globalLimiter, apiLimiter, authLimiter, webhookLimiter, adminLimiter } from './src/backend/middleware/rateLimiter.js';
 
 
 
@@ -230,7 +230,7 @@ async function startServer() {
   });
 
   // Diagnostic route to troubleshoot production issues (ADMIN ONLY)
-  app.get('/api/diag/system', authLimiter, requireAuth as any, requireAdmin as any, async (req, res) => {
+  app.get('/api/diag/system', adminLimiter, requireAuth as any, requireAdmin as any, async (req, res) => {
     const mask = (str?: string) => str ? `${str.substring(0, 5)}...${str.substring(str.length - 4)}` : 'MISSING';
     
     const diag = {
@@ -285,7 +285,7 @@ async function startServer() {
     app.use('/api/v2/contacts', contactApiRoutes);
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
-    app.use('/api/v2/admin', authLimiter, adminApiRoutes);
+    app.use('/api/v2/admin', adminLimiter, adminApiRoutes);
     app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/v2/whatsapp/meta', apiLimiter, metaApiRoutes);
