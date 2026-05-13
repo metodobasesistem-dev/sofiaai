@@ -2032,19 +2032,36 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                    </p>
                  </div>
 
-                 <div className="p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-start gap-4">
-                   <input 
-                     type="checkbox" 
-                     className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                     checked={autopilotInjectVar}
-                     onChange={(e) => setAutopilotInjectVar(e.target.checked)}
-                     id="inject-var"
-                   />
-                   <label htmlFor="inject-var" className="cursor-pointer">
-                     <span className="block text-sm font-bold text-slate-700 mb-1">Injetar Contexto da IA</span>
-                     <span className="block text-xs text-slate-500">Se ativado, a mensagem hiper-personalizada gerada pela IA será enviada como a variável <code className="bg-blue-100 px-1 rounded text-blue-700">{'{{1}}'}</code> do seu template. O seu template <b>precisa</b> ter pelo menos 1 variável no corpo do texto.</span>
-                   </label>
-                 </div>
+                 {metaTemplates.length > 0 && autopilotTemplateName && (
+                   <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pré-visualização do Template</label>
+                     <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                       {(() => {
+                         const t = metaTemplates.find(x => x.name === autopilotTemplateName);
+                         if (!t) return <span className="text-slate-400 italic">Template não encontrado...</span>;
+                         const body = t.components.find((c: any) => c.type === 'BODY')?.text || '';
+                         if (!body) return <span className="text-slate-400 italic">Template sem corpo de texto.</span>;
+                         
+                         if (body.includes('{{1}}')) {
+                           const parts = body.split('{{1}}');
+                           return (
+                             <>
+                               {parts[0]}
+                               <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold mx-1 border border-blue-200 text-xs">
+                                 [Mensagem gerada pela IA]
+                               </span>
+                               {parts.slice(1).join('{{1}}')}
+                             </>
+                           );
+                         }
+                         return body;
+                       })()}
+                     </div>
+                     <p className="text-[10px] text-slate-400 font-medium px-1">
+                       A abordagem personalizada gerada pela IA será injetada automaticamente na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{1}}'}</code> do template.
+                     </p>
+                   </div>
+                 )}
               </div>
 
               <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex gap-4">
