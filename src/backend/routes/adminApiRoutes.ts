@@ -668,8 +668,12 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
         // Pausa obrigatória do Google antes de usar o nextPageToken
         if (nextPageToken) await new Promise(r => setTimeout(r, 2000));
       } catch (gErr: any) {
-        console.warn('[LeadRadar] Erro na paginação:', gErr.message);
-        break; // Para se der erro em uma página
+        console.warn('[LeadRadar] Erro na requisição Google Places:', gErr.response?.data || gErr.message);
+        if (pagesFetched === 0) {
+          // Se falhou logo na primeira página, é erro de chave/permissão. Vamos repassar pro usuário.
+          throw new Error(`Google API: ${gErr.response?.data?.error?.message || gErr.message}`);
+        }
+        break; // Se falhou numa página seguinte, apenas pare de buscar mais
       }
     }
 
