@@ -448,6 +448,67 @@ router.patch('/settings', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── POST /api/v2/admin/meta/register ────────────────────────────────────
+// Mirrors the n8n "Registrar Número de Whatsapp" node.
+// Activates the phone number on the Meta Cloud API with a security PIN.
+router.post('/meta/register', async (req: AuthenticatedRequest, res: Response) => {
+  const { access_token, phone_id, pin } = req.body;
+
+  if (!access_token || !phone_id) {
+    return res.status(400).json({ success: false, error: 'access_token and phone_id are required' });
+  }
+
+  try {
+    const response = await axios.post(
+      `${META_BASE}/${phone_id}/register`,
+      {
+        messaging_product: 'whatsapp',
+        pin: pin || '123456'
+      },
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+        timeout: 15000
+      }
+    );
+
+    res.json({ success: true, data: response.data });
+  } catch (err: any) {
+    const info = parseProviderError(err);
+    console.error('[AdminAPI] Meta Register Error:', info.message);
+    res.status(err.response?.status || 500).json({ success: false, error: info.message, errorInfo: info });
+  }
+});
+
+// ─── POST /api/v2/admin/meta/subscribe ───────────────────────────────────
+// Mirrors the n8n "Inscreve no App" node.
+// Connects the WABA/BM to the platform's app to receive webhook events.
+router.post('/meta/subscribe', async (req: AuthenticatedRequest, res: Response) => {
+  const { access_token, waba_id } = req.body;
+
+  if (!access_token || !waba_id) {
+    return res.status(400).json({ success: false, error: 'access_token and waba_id are required' });
+  }
+
+  try {
+    const response = await axios.post(
+      `${META_BASE}/${waba_id}/subscribed_apps`,
+      {
+        subscribed_fields: 'messages,message_status,messaging_postbacks,message_echoes'
+      },
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+        timeout: 15000
+      }
+    );
+
+    res.json({ success: true, data: response.data });
+  } catch (err: any) {
+    const info = parseProviderError(err);
+    console.error('[AdminAPI] Meta Subscribe Error:', info.message);
+    res.status(err.response?.status || 500).json({ success: false, error: info.message, errorInfo: info });
+  }
+});
+
 // ─── GET /api/v2/admin/finance/stats ─────────────────────────────────────
 router.get('/finance/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {

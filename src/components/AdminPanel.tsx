@@ -46,7 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags';
+type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_activator';
 
 interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
@@ -232,6 +232,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     { id: 'users', label: 'Inquilinos', icon: <Users size={20} /> },
     { id: 'config', label: 'Configurações', icon: <Server size={20} /> },
     { id: 'billing', label: 'Financeiro', icon: <CreditCard size={20} /> },
+    { id: 'meta_activator', label: 'Ativador Meta', icon: <Zap size={20} className="text-amber-500" /> },
     { id: 'flags', label: 'Features', icon: <ToggleLeft size={20} /> },
   ];
 
@@ -301,6 +302,149 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                <Shield size={40} className="mx-auto text-teal-500 mb-6" />
                <h4 className="text-xl font-black text-white mb-2">Controle de Engenharia</h4>
                <p className="text-sm text-slate-400 max-w-md mx-auto">As Feature Flags permitem habilitar funcionalidades em tempo real para todos os usuários. Use com responsabilidade durante lançamentos faseados.</p>
+            </div>
+          </div>
+        );
+      case 'meta_activator':
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500 max-w-4xl mx-auto">
+            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 group-hover:opacity-10 transition-all"><Globe size={120} /></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                    <Zap size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black">Ativador de API Oficial</h3>
+                    <p className="text-slate-400 text-xs">Ative números e configure webhooks da Meta sem precisar de ferramentas externas.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Access Token (Meta Admin)</label>
+                      <div className="relative">
+                        <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                          type="password" 
+                          placeholder="EAA..." 
+                          className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-amber-500 outline-none transition-all"
+                          value={metaAccessToken}
+                          onChange={(e) => setMetaAccessToken(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Phone Number ID</label>
+                      <div className="relative">
+                        <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="ID do número..." 
+                          className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-amber-500 outline-none transition-all"
+                          value={metaPhoneId}
+                          onChange={(e) => setMetaPhoneId(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">WABA ID / Business ID</label>
+                      <div className="relative">
+                        <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="ID do WABA..." 
+                          className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-amber-500 outline-none transition-all"
+                          value={metaWabaId}
+                          onChange={(e) => setMetaWabaId(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">PIN de Segurança (Opcional)</label>
+                      <div className="relative">
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="Padrão: 123456" 
+                          className="w-full bg-slate-800 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-slate-200 focus:border-amber-500 outline-none transition-all"
+                          value={metaAppSecret} // Reusing this field as temporary PIN for this UI
+                          onChange={(e) => setMetaAppSecret(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4 mt-8">
+                    <button 
+                      onClick={async () => {
+                        if (!metaAccessToken || !metaPhoneId) return toast.error('Preencha o Token e o Phone ID');
+                        setIsActionLoading(true);
+                        try {
+                          const { registerMetaNumber } = await import('../services/supabaseService');
+                          const r = await registerMetaNumber(metaAccessToken, metaPhoneId, metaAppSecret || '123456');
+                          if (r.success) toast.success('Número ativado com sucesso! ✓');
+                          else toast.error(r.error || 'Erro ao ativar número');
+                        } catch (e: any) {
+                          toast.error(e.message);
+                        } finally {
+                          setIsActionLoading(false);
+                        }
+                      }}
+                      disabled={isActionLoading}
+                      className="flex-1 py-5 bg-amber-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-amber-700 transition-all flex items-center justify-center gap-2 group shadow-xl"
+                    >
+                      {isActionLoading ? <RefreshCw className="animate-spin" size={16} /> : <Zap size={16} />}
+                      1. Ativar Número na API
+                    </button>
+
+                    <button 
+                      onClick={async () => {
+                        if (!metaAccessToken || !metaWabaId) return toast.error('Preencha o Token e o WABA ID');
+                        setIsActionLoading(true);
+                        try {
+                          const { subscribeMetaApp } = await import('../services/supabaseService');
+                          const r = await subscribeMetaApp(metaAccessToken, metaWabaId);
+                          if (r.success) toast.success('Webhook inscrito com sucesso! ✓');
+                          else toast.error(r.error || 'Erro ao inscrever webhook');
+                        } catch (e: any) {
+                          toast.error(e.message);
+                        } finally {
+                          setIsActionLoading(false);
+                        }
+                      }}
+                      disabled={isActionLoading}
+                      className="flex-1 py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 group shadow-xl"
+                    >
+                      {isActionLoading ? <RefreshCw className="animate-spin" size={16} /> : <Globe size={16} />}
+                      2. Inscrever Webhook no App
+                    </button>
+                  </div>
+
+                  <div className="bg-black/30 rounded-3xl p-6 mt-10 border border-white/5">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-4">Instruções de Onboarding</h4>
+                    <ul className="space-y-3">
+                      {[
+                        'Certifique-se de que o Token de Acesso tenha as permissões whatsapp_business_management e whatsapp_business_messaging.',
+                        'O Phone Number ID é encontrado nas configurações de API do WhatsApp no Meta Developers.',
+                        'Após ativar o número, aguarde 30 segundos antes de realizar a inscrição no App.',
+                        'Uma vez inscrito, as mensagens do cliente começarão a chegar automaticamente.'
+                      ].map((text, i) => (
+                        <li key={i} className="flex gap-3 text-[11px] text-slate-400 leading-relaxed">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-700 mt-1.5 shrink-0"></div>
+                          {text}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );

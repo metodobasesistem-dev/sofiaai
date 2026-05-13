@@ -1800,6 +1800,26 @@ export const saveAdminMetaCredentials = async (
   return res.json();
 };
 
+/** Activates/Registers a phone number on the Meta Cloud API. */
+export const registerMetaNumber = async (access_token: string, phone_id: string, pin?: string): Promise<{ success: boolean; error?: string }> => {
+  const res = await fetch('/api/v2/admin/meta/register', {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ access_token, phone_id, pin }),
+  });
+  return res.json();
+};
+
+/** Subscribes the WABA/App to webhook events. */
+export const subscribeMetaApp = async (access_token: string, waba_id: string): Promise<{ success: boolean; error?: string }> => {
+  const res = await fetch('/api/v2/admin/meta/subscribe', {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ access_token, waba_id }),
+  });
+  return res.json();
+};
+
 /**
  * Meta template (S5+S7) helpers — used by the Inbox when the 24h window closes.
  */
