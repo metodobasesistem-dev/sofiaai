@@ -63,6 +63,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [searchTerm, setSearchTerm] = useState('');
   const [radarNiche, setRadarNiche] = useState('');
   const [radarCity, setRadarCity] = useState('');
+  const [radarLimit, setRadarLimit] = useState(10);
   const [radarLeads, setRadarLeads] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -187,7 +188,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     try {
       const res = await standardFetch('/api/v2/admin/leads/scan', {
         method: 'POST',
-        body: JSON.stringify({ niche: radarNiche, city: radarCity })
+        body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit })
       });
       if (res.success) {
         toast.success(`Busca finalizada! ${res.count} novos leads encontrados.`);
@@ -406,6 +407,20 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                               value={radarCity}
                               onChange={(e) => setRadarCity(e.target.value)}
                             />
+                         </div>
+
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Limite de Resultados</label>
+                            <select 
+                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all appearance-none"
+                              value={radarLimit}
+                              onChange={(e) => setRadarLimit(Number(e.target.value))}
+                            >
+                               <option value={5}>Máximo de 5 leads</option>
+                               <option value={10}>Máximo de 10 leads</option>
+                               <option value={20}>Máximo de 20 leads</option>
+                               <option value={50}>Máximo de 50 leads</option>
+                            </select>
                          </div>
 
                          <div className="space-y-2">

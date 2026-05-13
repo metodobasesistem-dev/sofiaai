@@ -622,7 +622,7 @@ router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
 // POST /api/v2/admin/leads/scan - Iniciar varredura no Google Maps
 router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { niche, city, zip } = req.body;
+    const { niche, city, zip, limit = 10 } = req.body;
     if (!niche || !city) return res.status(400).json({ success: false, error: 'Nicho e Cidade são obrigatórios' });
 
     // 1. Obter Google API Key das configurações
@@ -631,29 +631,56 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
 
     if (!apiKey) return res.status(400).json({ success: false, error: 'Chave do Google Maps não configurada' });
 
-    // 2. Chamar Google Places API (v1 searchText)
+    // 2. Chamar Google Places API (v1 searchText) com paginação
     const query = `${niche} em ${city} ${zip || ''}`.trim();
-    console.log(`[LeadRadar] Iniciando busca: "${query}"`);
+    console.log(`[LeadRadar] Iniciando busca: "${query}" com meta de ${limit} leads.`);
 
-    const gResponse = await axios.post(
-      'https://places.googleapis.com/v1/places:searchText',
-      { textQuery: query },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.websiteUri,places.reviews,places.types'
-        }
+    let rawPlaces: any[] = [];
+    let nextPageToken: string | undefined = undefined;
+    let pagesFetched = 0;
+    const maxPages = limit > 10 ? 3 : 1; // Busca mais páginas se o limite for maior
+
+    while (pagesFetched < maxPages) {
+      const payload: any = { textQuery: query, pageSize: 20 };
+      if (nextPageToken) payload.pageToken = nextPageToken;
+
+      try {
+        const gResponse = await axios.post(
+          'https://places.googleapis.com/v1/places:searchText',
+          payload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': apiKey,
+              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.websiteUri,places.reviews,places.types,nextPageToken'
+            }
+          }
+        );
+
+        const newPlaces = gResponse.data.places || [];
+        rawPlaces = rawPlaces.concat(newPlaces);
+        nextPageToken = gResponse.data.nextPageToken;
+        pagesFetched++;
+
+        // Se não houver mais páginas ou já pegamos o suficiente (bruto), paramos
+        if (!nextPageToken || rawPlaces.length >= limit * 3) break;
+        
+        // Pausa obrigatória do Google antes de usar o nextPageToken
+        if (nextPageToken) await new Promise(r => setTimeout(r, 2000));
+      } catch (gErr: any) {
+        console.warn('[LeadRadar] Erro na paginação:', gErr.message);
+        break; // Para se der erro em uma página
       }
-    );
+    }
 
-    const rawPlaces = gResponse.data.places || [];
     console.log(`[LeadRadar] Encontrados ${rawPlaces.length} locais brutos.`);
 
     const leadsProcessados = [];
 
-    // 3. Processar e Filtrar Leads (Lógica do n8n)
+    // 3. Processar e Filtrar Leads
     for (const place of rawPlaces) {
+      if (leadsProcessados.length >= limit) break; // Para quando atingir o limite solicitado
+
       // Filtros: Rating > 3, Tem telefone, Tem avaliações
       const rating = place.rating || 0;
       const phone = place.nationalPhoneNumber;
