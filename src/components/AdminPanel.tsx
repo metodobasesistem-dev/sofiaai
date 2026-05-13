@@ -1107,14 +1107,14 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative z-10 overflow-hidden border border-slate-100"
+              className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative z-10 overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]"
             >
-              <div className="p-10 border-b border-slate-50">
+              <div className="p-10 border-b border-slate-50 shrink-0">
                   <h3 className="text-2xl font-black text-slate-900">Editar Inquilino</h3>
                   <p className="text-xs text-slate-500 font-medium">Você está gerenciando as permissões de <b>{selectedUser.email}</b></p>
               </div>
 
-              <div className="p-10 space-y-8">
+              <div className="p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
                 <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Plano da Assinatura</label>
                   <div className="grid grid-cols-4 gap-3">
@@ -1313,7 +1313,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                 </div>
               </div>
 
-              <div className="p-10 bg-slate-50 flex gap-4">
+              <div className="p-10 bg-slate-50 flex gap-4 shrink-0">
                 <button 
                   onClick={() => setIsEditModalOpen(false)}
                   className="flex-1 py-5 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all"
