@@ -101,7 +101,10 @@ async function startServer() {
   // WEBHOOK CRÍTICO: registrado ANTES do globalLimiter para garantir entrega
   // (Evolution API, Meta Cloud API e Leo Instagram dependem disso para receber mensagens)
   app.use('/api/whatsapp/evolution', webhookLimiter, whatsappWebhookRoutes);
-  app.use('/api/whatsapp/meta', webhookLimiter, metaWebhookRoutes);
+  app.use('/api/whatsapp/meta', (req, res, next) => {
+    console.log(`[Server] Webhook Request: ${req.method} ${req.url}`);
+    next();
+  }, metaWebhookRoutes);
   app.use('/api/leo', webhookLimiter, leoRoutes);
 
   app.use('/api/', globalLimiter); // Proteção global básica (após webhooks)

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
+import { webhookLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -57,19 +58,22 @@ router.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
   const expected = (process.env.META_VERIFY_TOKEN || '').trim();
 
+  console.log(`[MetaWebhook] 🔍 Handshake Attempt: mode=${mode} | token=${token} | challenge=${challenge}`);
+  console.log(`[MetaWebhook] 🎯 Expected Token: ${expected ? expected.substring(0, 3) + '...' : 'NOT_SET'}`);
+
   if (mode === 'subscribe' && token === expected && expected) {
     console.log('[MetaWebhook] ✅ Verification handshake succeeded');
     return res.status(200).send(challenge);
   }
 
-  console.warn(`[MetaWebhook] ❌ Verification failed (mode=${mode}, tokenMatch=${token === expected})`);
-  return res.sendStatus(403);
+  console.warn(`[MetaWebhook] ❌ Verification failed (mode=${mode}, tokenMatch=${token === expected}, expectedLen=${expected.length})`);
+  return res.status(403).send('Forbidden: Token Mismatch');
 });
 
 /**
  * POST /webhook — Meta message + status ingestion
  */
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', webhookLimiter, async (req, res) => {
   const rawBody = (req as any).rawBody as Buffer | undefined;
   const signature = req.header('X-Hub-Signature-256');
   const body = req.body;
