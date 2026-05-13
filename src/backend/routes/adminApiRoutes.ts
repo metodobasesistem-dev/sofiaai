@@ -639,7 +639,7 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
     
     try {
       const apifyResponse = await axios.post(
-        `https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset?token=${apifyToken}`,
+        `https://api.apify.com/v2/acts/nwua9Gu5YrADL7ZDj/run-sync-get-dataset-items?token=${apifyToken}`,
         {
           searchStringsArray: [query],
           maxCrawledPlacesPerSearch: limit * 2, // Buscamos um pouco mais para compensar os descartes
