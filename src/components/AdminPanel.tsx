@@ -212,7 +212,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
-  const confirmAutopilot = async () =>想定
+  const confirmAutopilot = async () => {
     if (!autopilotTemplateName) return toast.error('Nome do template é obrigatório');
     
     setIsAutopilotModalOpen(false);
