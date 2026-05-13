@@ -50,12 +50,13 @@ type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_ac
 
 interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
+  initialTab?: AdminTab;
   onTabChange?: (tab: string) => void;
 }
 
-export default function AdminPanel({ initialView = 'standard', onTabChange }: AdminPanelProps) {
+export default function AdminPanel({ initialView = 'standard', initialTab, onTabChange }: AdminPanelProps) {
   const [currentView, setCurrentView] = useState<'hub' | 'standard'>(initialView);
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'overview');
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
@@ -298,7 +299,6 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
     { id: 'users', label: 'Inquilinos', icon: <Users size={20} /> },
     { id: 'config', label: 'Configurações', icon: <Server size={20} /> },
     { id: 'billing', label: 'Financeiro', icon: <CreditCard size={20} /> },
-    { id: 'lead_radar', label: 'Radar de Leads', icon: <Search size={20} className="text-primary-500" /> },
     { id: 'meta_activator', label: 'Ativador Meta', icon: <Zap size={20} className="text-amber-500" /> },
     { id: 'flags', label: 'Features', icon: <ToggleLeft size={20} /> },
   ];

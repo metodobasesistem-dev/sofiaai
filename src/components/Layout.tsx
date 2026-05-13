@@ -108,6 +108,7 @@ export default function Layout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [agendasOpen, setAgendasOpen] = useState(true);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isProspecOpen, setIsProspecOpen] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -188,6 +189,14 @@ export default function Layout({
           { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
           { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
         ]
+      },
+      {
+        id: 'prospecção_group',
+        icon: <Search size={20} />,
+        label: 'Prospecção Ativa',
+        subItems: [
+          { id: 'lead_radar', icon: <Search size={16} />, label: 'Radar de Leads' },
+        ]
       }
     ] : []),
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
@@ -265,6 +274,7 @@ export default function Layout({
     if (hasSubmenu) {
       if (id === 'agendas') setAgendasOpen(!agendasOpen);
       if (id === 'admin_group') setIsAdminOpen(!isAdminOpen);
+      if (id === 'prospecção_group') setIsProspecOpen(!isProspecOpen);
       return;
     }
     onTabChange(id);
@@ -318,12 +328,15 @@ export default function Layout({
                 hasSubmenu={!!item.subItems}
                 isSubmenuOpen={
                   item.id === 'agendas' ? agendasOpen : 
-                  item.id === 'admin_group' ? isAdminOpen : false
+                  item.id === 'admin_group' ? isAdminOpen : 
+                  item.id === 'prospecção_group' ? isProspecOpen : false
                 }
               />
               
               {item.subItems && !collapsed && (
-                (item.id === 'agendas' ? agendasOpen : item.id === 'admin_group' ? isAdminOpen : false)
+                (item.id === 'agendas' ? agendasOpen : 
+                 item.id === 'admin_group' ? isAdminOpen : 
+                 item.id === 'prospecção_group' ? isProspecOpen : false)
               ) && (
                 <motion.div 
                   initial={{ opacity: 0, height: 0 }}
@@ -415,11 +428,14 @@ export default function Layout({
                       hasSubmenu={!!item.subItems}
                       isSubmenuOpen={
                         item.id === 'agendas' ? agendasOpen : 
-                        item.id === 'admin_group' ? isAdminOpen : false
+                        item.id === 'admin_group' ? isAdminOpen : 
+                        item.id === 'prospecção_group' ? isProspecOpen : false
                       }
                     />
                     {item.subItems && (
-                      (item.id === 'agendas' ? agendasOpen : item.id === 'admin_group' ? isAdminOpen : false)
+                      (item.id === 'agendas' ? agendasOpen : 
+                       item.id === 'admin_group' ? isAdminOpen : 
+                       item.id === 'prospecção_group' ? isProspecOpen : false)
                     ) && (
                       <div className="ml-9 mt-1 space-y-1">
                         {item.subItems.map((sub) => (

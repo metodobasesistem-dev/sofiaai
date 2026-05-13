@@ -197,6 +197,8 @@ export default function App() {
         return <AdminPanel initialView="hub" onTabChange={handleTabChange} />;
       case 'admin':
         return <AdminPanel onTabChange={handleTabChange} />;
+      case 'lead_radar':
+        return <AdminPanel initialTab="lead_radar" onTabChange={handleTabChange} />;
       case 'sofia_config':
         return <SofiaConfig />;
       case 'reports':
