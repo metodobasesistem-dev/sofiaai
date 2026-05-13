@@ -22,6 +22,7 @@ import {
   ChevronRight,
   TrendingUp,
   Bot,
+  Rocket,
   Globe,
   LayoutDashboard,
   Server,
@@ -61,6 +62,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
+  const [isAutopilotRunning, setIsAutopilotRunning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [radarNiche, setRadarNiche] = useState('');
   const [radarCity, setRadarCity] = useState('');
@@ -204,6 +206,26 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       toast.error(err.message);
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const startAutopilot = async () => {
+    setIsAutopilotRunning(true);
+    try {
+      const response = await standardFetch('/api/v2/admin/leads/autopilot', {
+        method: 'POST',
+        body: JSON.stringify({ limit: 40, minDelay: 60, maxDelay: 180 })
+      });
+      const res = await response.json();
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.error || 'Erro ao iniciar Piloto Automático');
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsAutopilotRunning(false); // Fica false rápido porque a API responde imediatamente, a execução roda em background
     }
   };
 
@@ -449,14 +471,25 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                             />
                          </div>
                          
-                         <button 
-                           onClick={startScan}
-                           disabled={isScanning}
-                           className="w-full py-4 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
-                         >
-                            {isScanning ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />}
-                            {isScanning ? 'Varrendo...' : 'Iniciar Radar'}
-                         </button>
+                         <div className="space-y-3">
+                           <button 
+                             onClick={startScan}
+                             disabled={isScanning || isAutopilotRunning}
+                             className="w-full py-4 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
+                           >
+                              {isScanning ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />}
+                              {isScanning ? 'Varrendo...' : 'Iniciar Radar'}
+                           </button>
+
+                           <button 
+                             onClick={startAutopilot}
+                             disabled={isScanning || isAutopilotRunning}
+                             className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2"
+                           >
+                              {isAutopilotRunning ? <RefreshCw size={16} className="animate-spin text-green-400" /> : <Rocket size={16} className="text-green-400" />}
+                              {isAutopilotRunning ? 'Iniciando Piloto...' : 'Disparar Piloto Automático'}
+                           </button>
+                         </div>
                       </div>
                       
                       <div className="mt-8 pt-8 border-t border-slate-50">

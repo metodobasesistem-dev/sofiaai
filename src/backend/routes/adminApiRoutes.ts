@@ -12,6 +12,7 @@ import { MetaProvider } from '../providers/MetaProvider.js';
 import { parseProviderError } from '../providers/providerErrors.js';
 import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
 import { generateAIResponse } from '../services/aiService.js';
+import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 
 const router = Router();
 
@@ -774,6 +775,80 @@ Formato esperado:
     res.json({ success: true, count: leadsProcessados.length, data: leadsProcessados });
   } catch (err: any) {
     console.error('[LeadRadar] Erro geral:', err.response?.data || err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v2/admin/leads/autopilot - Iniciar disparos automáticos
+router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const adminId = req.user.id;
+    const { limit = 40, minDelay = 60, maxDelay = 180 } = req.body;
+
+    // Verificar se o admin tem provedor conectado
+    const provider = await WhatsAppProviderFactory.getProvider(adminId);
+    if (!provider) {
+      return res.status(400).json({ success: false, error: 'Nenhuma conexão de WhatsApp ativa encontrada para a Sofia.' });
+    }
+    
+    const statusInfo = await provider.getStatus();
+    if (statusInfo.status !== 'connected') {
+      return res.status(400).json({ success: false, error: 'O WhatsApp da Sofia não está conectado.' });
+    }
+
+    // Buscar leads pendentes
+    const { data: leads, error } = await supabase
+      .from('leads_radar')
+      .select('*')
+      .eq('status', 'novo')
+      .not('personalized_message', 'is', null)
+      .not('phone', 'is', null)
+      .limit(limit);
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.status(400).json({ success: false, error: 'Nenhum lead com status "novo" e mensagem gerada foi encontrado.' });
+    }
+
+    // Função assíncrona de background (fire-and-forget)
+    const runAutopilot = async () => {
+      console.log(`[LeadRadar] Piloto Automático iniciado para ${leads.length} leads.`);
+      for (let i = 0; i < leads.length; i++) {
+        const lead = leads[i];
+        
+        try {
+          // Verifica se o telefone está formatado corretamente para o provedor
+          let jid = lead.phone;
+          if (!jid.includes('@')) jid = `${jid}@s.whatsapp.net`;
+          if (!jid.startsWith('55')) jid = `55${jid}`;
+          
+          await provider.sendMessage(jid, lead.personalized_message);
+          
+          // Atualiza status para 'contatado'
+          await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
+          console.log(`[LeadRadar] Piloto Automático: Mensagem enviada para ${lead.phone} (${i+1}/${leads.length})`);
+        } catch (sendErr: any) {
+          console.error(`[LeadRadar] Piloto Automático: Erro ao enviar para ${lead.phone}:`, sendErr.message);
+          // Atualiza status para 'erro'
+          await supabase.from('leads_radar').update({ status: 'erro', updated_at: new Date().toISOString() }).eq('id', lead.id);
+        }
+
+        // Se não for o último lead, aguarda o delay aleatório para evitar banimento
+        if (i < leads.length - 1) {
+          const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+          console.log(`[LeadRadar] Piloto Automático: Aguardando ${delaySeconds}s antes do próximo envio...`);
+          await new Promise(r => setTimeout(r, delaySeconds * 1000));
+        }
+      }
+      console.log(`[LeadRadar] Piloto Automático finalizado com sucesso.`);
+    };
+
+    // Inicia a função sem travar a resposta da API (O usuário recebe o feedback na hora)
+    runAutopilot().catch(err => console.error('[LeadRadar] Erro fatal no Piloto Automático:', err));
+
+    res.json({ success: true, count: leads.length, message: `Piloto Automático iniciado em background para ${leads.length} leads.` });
+  } catch (err: any) {
+    console.error('[LeadRadar] Erro ao iniciar Piloto Automático:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
