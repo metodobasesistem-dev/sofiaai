@@ -1852,6 +1852,55 @@ export const getMetaStatus = async (): Promise<{
   return res.json();
 };
 
+/**
+ * Snapshot completo da saúde da conexão WhatsApp de um tenant.
+ * Usado pelo botão "Diagnóstico" do AdminPanel.
+ */
+export interface WhatsAppDiagnostic {
+  profile: {
+    id: string;
+    email: string;
+    provider: string;
+    status: string;
+    updated_at: string;
+  };
+  meta?: {
+    phone_id: string;
+    waba_id: string | null;
+    access_token_set: boolean;
+    app_secret_set: boolean;
+    last_error: string | null;
+    last_error_at: string | null;
+    live: {
+      display_phone_number?: string;
+      verified_name?: string;
+      quality_rating?: string;
+      verification_status?: string;
+      name_status?: string;
+    } | null;
+    live_error: string | null;
+    templates: { approved: number; total?: number } | null;
+  } | null;
+  evolution?: { instance_id: string | null } | null;
+  messages_24h: number;
+  failed_messages_total: number;
+  audit: Array<{
+    action: string;
+    performed_at: string;
+    details: any;
+    performed_by: string | null;
+  }>;
+}
+
+export const getAdminWhatsAppDiagnostic = async (targetUserId: string): Promise<WhatsAppDiagnostic> => {
+  const res = await fetch(`/api/v2/admin/users/${targetUserId}/diagnostic`, {
+    headers: await authHeaders(),
+  });
+  const body = await res.json();
+  if (!body.success) throw new Error(body.error || 'Falha ao buscar diagnóstico');
+  return body.diagnostic as WhatsAppDiagnostic;
+};
+
 /** Admin reverts a tenant back to evolution, clearing Meta credentials. */
 export const disconnectAdminMeta = async (targetUserId: string): Promise<{ success: boolean; error?: string }> => {
   const res = await fetch(`/api/v2/admin/users/${targetUserId}/meta-disconnect`, {

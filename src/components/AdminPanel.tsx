@@ -41,6 +41,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo } from '../services/supabaseService';
 import MetaSetupHelpModal from './MetaSetupHelpModal';
+import WhatsAppDiagnosticModal from './WhatsAppDiagnosticModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -78,6 +79,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   const [isMetaTesting, setIsMetaTesting] = useState(false);
   const [metaTestResult, setMetaTestResult] = useState<{ ok: boolean; phone?: MetaPhoneInfo; error?: string } | null>(null);
   const [metaHelpOpen, setMetaHelpOpen] = useState(false);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 
   const [globalSettings, setGlobalSettings] = useState<any>({
     openai_api_key: '',
@@ -1319,8 +1321,15 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                   </p>
                 </div>
 
-                <div className="pt-8 border-t border-slate-100">
-                   <button 
+                <div className="pt-8 border-t border-slate-100 space-y-3">
+                   <button
+                    type="button"
+                    onClick={() => setDiagnosticOpen(true)}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-800 transition-all active:scale-95"
+                   >
+                     <Activity size={16} /> Diagnóstico Completo
+                   </button>
+                   <button
                     onClick={async () => {
                       if (!window.confirm(`Tem certeza que deseja excluir permanentemente o usuário ${selectedUser.email}? Esta ação não pode ser desfeita.`)) return;
                       try {
@@ -1469,6 +1478,13 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
       <MetaSetupHelpModal
         isOpen={metaHelpOpen}
         onClose={() => setMetaHelpOpen(false)}
+      />
+
+      <WhatsAppDiagnosticModal
+        isOpen={diagnosticOpen}
+        onClose={() => setDiagnosticOpen(false)}
+        targetUserId={selectedUser?.id || null}
+        targetUserEmail={selectedUser?.email}
       />
     </div>
   );

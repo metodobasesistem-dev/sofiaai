@@ -300,6 +300,100 @@ router.post('/users/:id/reset-whatsapp', async (req: AuthenticatedRequest, res: 
   }
 });
 
+// ─── GET /api/v2/admin/users/:id/diagnostic ───────────────────────────────
+// One-shot health snapshot of a tenant's WhatsApp setup. Used by the
+// AdminPanel "Diagnóstico" button — pulls profile state, live Meta probe,
+// recent errors, message counts and provider audit history in one round trip.
+router.get('/users/:id/diagnostic', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  const META_BASE = 'https://graph.facebook.com/v19.0';
+  try {
+    const { data: profile, error: pErr } = await supabase
+      .from('profiles')
+      .select('id, email, whatsapp_provider, whatsapp_status, whatsapp_instance_id, meta_phone_id, meta_waba_id, meta_access_token, meta_app_secret, meta_last_error, meta_last_error_at, updated_at')
+      .eq('id', targetUserId)
+      .maybeSingle();
+    if (pErr || !profile) {
+      return res.status(404).json({ success: false, error: pErr?.message || 'Profile not found' });
+    }
+
+    const isMeta = profile.whatsapp_provider === 'meta_official';
+
+    // Run independent probes in parallel
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [messagesAgg, failedAgg, auditRows, livePhone, templatesCount] = await Promise.all([
+      supabase.from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', targetUserId)
+        .gte('created_at', since24h),
+      supabase.from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', targetUserId)
+        .in('status', ['failed', 'failed_24h_window']),
+      supabase.from('provider_audit_log')
+        .select('action, performed_at, details, performed_by')
+        .eq('target_user_id', targetUserId)
+        .order('performed_at', { ascending: false })
+        .limit(10),
+      // Live Meta phone probe
+      isMeta && profile.meta_access_token && profile.meta_phone_id
+        ? axios.get(`${META_BASE}/${profile.meta_phone_id}`, {
+            params: { fields: 'verified_name,display_phone_number,quality_rating,code_verification_status,name_status' },
+            headers: { Authorization: `Bearer ${profile.meta_access_token}` },
+            timeout: 10000,
+          }).then(r => ({ ok: true as const, data: r.data })).catch(e => ({ ok: false as const, error: parseProviderError(e) }))
+        : Promise.resolve(null),
+      // Templates count (only if WABA configured)
+      isMeta && profile.meta_access_token && profile.meta_waba_id
+        ? axios.get(`${META_BASE}/${profile.meta_waba_id}/message_templates`, {
+            params: { limit: 1, fields: 'name', summary: 'total_count' },
+            headers: { Authorization: `Bearer ${profile.meta_access_token}` },
+            timeout: 10000,
+          }).then(r => ({ approved: r.data?.data?.length || 0, total: r.data?.summary?.total_count })).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    return res.json({
+      success: true,
+      diagnostic: {
+        profile: {
+          id: profile.id,
+          email: profile.email,
+          provider: profile.whatsapp_provider || 'evolution',
+          status: profile.whatsapp_status,
+          updated_at: profile.updated_at,
+        },
+        meta: isMeta ? {
+          phone_id: profile.meta_phone_id,
+          waba_id: profile.meta_waba_id,
+          access_token_set: !!profile.meta_access_token,
+          app_secret_set: !!profile.meta_app_secret,
+          last_error: profile.meta_last_error,
+          last_error_at: profile.meta_last_error_at,
+          live: livePhone?.ok ? {
+            display_phone_number: (livePhone as any).data.display_phone_number,
+            verified_name: (livePhone as any).data.verified_name,
+            quality_rating: (livePhone as any).data.quality_rating,
+            verification_status: (livePhone as any).data.code_verification_status,
+            name_status: (livePhone as any).data.name_status,
+          } : null,
+          live_error: livePhone && !livePhone.ok ? (livePhone as any).error?.message : null,
+          templates: templatesCount,
+        } : null,
+        evolution: !isMeta ? {
+          instance_id: profile.whatsapp_instance_id,
+        } : null,
+        messages_24h: messagesAgg.count || 0,
+        failed_messages_total: failedAgg.count || 0,
+        audit: auditRows.data || [],
+      },
+    });
+  } catch (err: any) {
+    console.error('[AdminAPI] Diagnostic error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── GET /api/v2/admin/users/:id/activity ─────────────────────────────────
 router.get('/users/:id/activity', async (req: AuthenticatedRequest, res: Response) => {
   const targetUserId = req.params.id;

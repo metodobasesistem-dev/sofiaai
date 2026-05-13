@@ -219,6 +219,7 @@ router.post('/webhook', webhookLimiter, async (req, res) => {
         }
 
         const userId = profile.id;
+        const field = (change as any).field || '';
 
         // Status updates (sent/delivered/read/failed) — handled independently
         if (Array.isArray(value.statuses) && value.statuses.length > 0) {
@@ -228,6 +229,17 @@ router.post('/webhook', webhookLimiter, async (req, res) => {
         // Messages ingestion
         if (Array.isArray(value.messages) && value.messages.length > 0) {
           await handleMetaMessages(userId, phoneNumberId, value);
+        }
+
+        // Phone number quality degradation — Meta envia event=FLAGGED quando
+        // o número entra em RED. Registramos no profile e notificamos admins.
+        if (field === 'phone_number_quality_update') {
+          await handlePhoneQualityUpdate(userId, value);
+        }
+
+        // Account alerts — banimentos, restrições, mudança de tier.
+        if (field === 'account_alerts') {
+          await handleAccountAlert(userId, value);
         }
       }
     }
@@ -261,6 +273,68 @@ async function handleMetaStatuses(userId: string, statuses: any[]): Promise<void
       .update({ status: mapped })
       .eq('whatsapp_id', msgId)
       .eq('user_id', userId);
+  }
+}
+
+/**
+ * Phone quality degradation. Meta payload:
+ *   { display_phone_number, event: 'FLAGGED'|'UNFLAGGED'|'ONBOARDING', current_limit }
+ * 'FLAGGED' indica que o número entrou em RED — risco de banimento.
+ */
+async function handlePhoneQualityUpdate(userId: string, value: any): Promise<void> {
+  try {
+    const event = (value?.event || '').toUpperCase();
+    const limit = value?.current_limit;
+    const display = value?.display_phone_number;
+    const msg = `phone_quality: event=${event}${limit ? `, limit=${limit}` : ''}${display ? `, number=${display}` : ''}`;
+    console.log(`[MetaWebhook] 📉 Quality update for ${userId}: ${msg}`);
+
+    if (event === 'FLAGGED') {
+      await supabase.from('profiles').update({
+        meta_last_error: msg,
+        meta_last_error_at: new Date().toISOString(),
+      }).eq('id', userId);
+
+      const { notifyAdminOfMetaIncident } = await import('../lib/metaIncidentNotifier.js');
+      const { data: prof } = await supabase.from('profiles').select('email').eq('id', userId).maybeSingle();
+      notifyAdminOfMetaIncident({ tenantUserId: userId, tenantEmail: prof?.email, kind: 'quality_red', detail: msg });
+    } else if (event === 'UNFLAGGED') {
+      // Recuperou — limpa o erro
+      await supabase.from('profiles').update({
+        meta_last_error: null,
+        meta_last_error_at: null,
+      }).eq('id', userId);
+    }
+  } catch (err: any) {
+    console.error('[MetaWebhook] handlePhoneQualityUpdate error:', err.message || err);
+  }
+}
+
+/**
+ * Account-level alerts: banimentos, restrições, mudanças de tier de mensagens.
+ * Payload típico: { alert_severity, alert_status, alert_type, entity_type, entity_id }
+ */
+async function handleAccountAlert(userId: string, value: any): Promise<void> {
+  try {
+    const severity = (value?.alert_severity || '').toUpperCase();
+    const alertType = value?.alert_type || 'unknown';
+    const status = value?.alert_status || '';
+    const msg = `account_alert: type=${alertType}, severity=${severity}, status=${status}`;
+    console.log(`[MetaWebhook] 🚨 Account alert for ${userId}: ${msg}`);
+
+    if (severity === 'CRITICAL' || severity === 'WARNING') {
+      await supabase.from('profiles').update({
+        meta_last_error: msg,
+        meta_last_error_at: new Date().toISOString(),
+      }).eq('id', userId);
+
+      const { notifyAdminOfMetaIncident } = await import('../lib/metaIncidentNotifier.js');
+      const { data: prof } = await supabase.from('profiles').select('email').eq('id', userId).maybeSingle();
+      const kind = alertType.toLowerCase().includes('ban') ? 'phone_banned' : 'quality_red';
+      notifyAdminOfMetaIncident({ tenantUserId: userId, tenantEmail: prof?.email, kind, detail: msg });
+    }
+  } catch (err: any) {
+    console.error('[MetaWebhook] handleAccountAlert error:', err.message || err);
   }
 }
 

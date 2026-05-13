@@ -1233,11 +1233,79 @@ class WhatsAppService {
     });
 
     this.startMaintenanceWorker();
-    
+
     // Rodar limpeza de storage uma vez ao dia (ou a cada 24h)
     setInterval(() => this.cleanupOldStorageFiles(), 86400000);
     // Rodar uma vez agora no boot
     this.cleanupOldStorageFiles();
+
+    // Meta quality monitoring — probe a cada 30 min cada tenant em meta_official
+    // e detecta degradação de qualidade do número OU token inválido/expirado.
+    setInterval(() => this.runMetaQualitySync().catch(() => {}), 30 * 60 * 1000);
+    setTimeout(() => this.runMetaQualitySync().catch(() => {}), 60_000);
+  }
+
+  /**
+   * Verifica a saúde de cada tenant em meta_official: faz um GET no
+   * /{phone_id} e compara quality_rating com o que estava registrado.
+   * Se mudar para YELLOW/RED ou se o token falhar, registra o erro no
+   * profile (meta_last_error) e dispara notificação push aos admins.
+   */
+  async runMetaQualitySync() {
+    try {
+      const axios = (await import('axios')).default;
+      const { notifyAdminOfMetaIncident } = await import('../lib/metaIncidentNotifier.js');
+      const META_BASE = 'https://graph.facebook.com/v19.0';
+
+      const { data: tenants } = await supabase
+        .from('profiles')
+        .select('id, email, meta_phone_id, meta_access_token')
+        .eq('whatsapp_provider', 'meta_official')
+        .not('meta_access_token', 'is', null)
+        .not('meta_phone_id', 'is', null);
+
+      if (!tenants || tenants.length === 0) return;
+      console.log(`[MetaQualitySync] 🔍 Probing ${tenants.length} Meta tenants...`);
+
+      for (const t of tenants) {
+        try {
+          const { data } = await axios.get(`${META_BASE}/${t.meta_phone_id}`, {
+            params: { fields: 'quality_rating,name_status,code_verification_status' },
+            headers: { Authorization: `Bearer ${t.meta_access_token}` },
+            timeout: 10000,
+          });
+          const q = (data?.quality_rating || '').toUpperCase();
+          // Persist current quality so the AdminPanel can show it (overrides
+          // last_error when probe succeeded)
+          await supabase.from('profiles').update({
+            meta_last_error: q === 'RED' || q === 'YELLOW' ? `phone_quality: ${q}` : null,
+            meta_last_error_at: q === 'RED' || q === 'YELLOW' ? new Date().toISOString() : null,
+          }).eq('id', t.id);
+
+          if (q === 'RED') {
+            notifyAdminOfMetaIncident({ tenantUserId: t.id, tenantEmail: t.email, kind: 'quality_red', detail: data.name_status });
+          } else if (q === 'YELLOW') {
+            notifyAdminOfMetaIncident({ tenantUserId: t.id, tenantEmail: t.email, kind: 'quality_yellow' });
+          }
+        } catch (err: any) {
+          const status = err?.response?.status;
+          const code = err?.response?.data?.error?.code;
+          const errorMsg = `[Meta ${code || status || '?'}] ${err?.response?.data?.error?.message || err.message}`;
+          await supabase.from('profiles').update({
+            meta_last_error: errorMsg,
+            meta_last_error_at: new Date().toISOString(),
+          }).eq('id', t.id);
+
+          if (code === 190 || status === 401) {
+            notifyAdminOfMetaIncident({ tenantUserId: t.id, tenantEmail: t.email, kind: 'token_expired', detail: errorMsg });
+          } else if (code === 100 || status === 400) {
+            notifyAdminOfMetaIncident({ tenantUserId: t.id, tenantEmail: t.email, kind: 'token_invalid', detail: errorMsg });
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('[MetaQualitySync] Error:', err.message || err);
+    }
   }
 
   /**
