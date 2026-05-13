@@ -41,7 +41,7 @@ import {
   Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch, listMetaTemplates, type MetaTemplate } from '../services/supabaseService';
 import MetaSetupHelpModal from './MetaSetupHelpModal';
 import WhatsAppDiagnosticModal from './WhatsAppDiagnosticModal';
 import { motion, AnimatePresence } from 'motion/react';
@@ -66,6 +66,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [isAutopilotModalOpen, setIsAutopilotModalOpen] = useState(false);
   const [autopilotTemplateName, setAutopilotTemplateName] = useState('prospeccao_fria');
   const [autopilotInjectVar, setAutopilotInjectVar] = useState(true);
+  const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [radarNiche, setRadarNiche] = useState('');
   const [radarCity, setRadarCity] = useState('');
@@ -286,6 +288,18 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (isAutopilotModalOpen) {
+      setLoadingTemplates(true);
+      listMetaTemplates('APPROVED')
+        .then(t => setMetaTemplates(t))
+        .catch(e => console.error('Erro ao buscar templates:', e))
+        .finally(() => setLoadingTemplates(false));
+    } else {
+      setMetaTemplates([]);
+    }
+  }, [isAutopilotModalOpen]);
 
   // Carrega credenciais Meta quando seleciona usuário. Lê do profile (novas colunas)
   // com fallback para tenant_secrets (legacy) caso o admin ainda não tenha migrado.
@@ -1985,15 +1999,37 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
               <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
                  <div className="space-y-3">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Template (Meta)</label>
-                   <input 
-                     type="text" 
-                     className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
-                     placeholder="Ex: prospeccao_fria"
-                     value={autopilotTemplateName}
-                     onChange={(e) => setAutopilotTemplateName(e.target.value)}
-                   />
-                   <p className="text-xs text-slate-400 px-1">Deve ser exatamente o nome configurado no seu Gerenciador do WhatsApp.</p>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">
+                     Nome do Template (Meta)
+                     {loadingTemplates && <RefreshCw size={12} className="animate-spin" />}
+                   </label>
+                   {metaTemplates.length > 0 ? (
+                     <select 
+                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none"
+                       value={autopilotTemplateName}
+                       onChange={(e) => setAutopilotTemplateName(e.target.value)}
+                     >
+                       <option value="">Selecione um template aprovado...</option>
+                       {metaTemplates.map(t => (
+                         <option key={`${t.name}_${t.language}`} value={t.name}>
+                           {t.name} ({t.language}) · {t.category || 'GENERAL'}
+                         </option>
+                       ))}
+                     </select>
+                   ) : (
+                     <input 
+                       type="text" 
+                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                       placeholder="Ex: prospeccao_fria"
+                       value={autopilotTemplateName}
+                       onChange={(e) => setAutopilotTemplateName(e.target.value)}
+                     />
+                   )}
+                   <p className="text-xs text-slate-400 px-1">
+                     {metaTemplates.length > 0 
+                       ? 'Templates aprovados carregados automaticamente da sua conta Meta.' 
+                       : 'Deve ser exatamente o nome configurado no seu Gerenciador do WhatsApp.'}
+                   </p>
                  </div>
 
                  <div className="p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-start gap-4">
