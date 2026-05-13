@@ -89,7 +89,22 @@ export const getWhatsAppStatus = async (): Promise<WhatsAppStatusResponse> => {
 
 
 /**
+ * Custom error that preserves structured provider error info
+ * (e.g. is24hWindowClosed, isAuthError) so the UI can branch on it.
+ */
+export class SendMessageError extends Error {
+  errorInfo?: { is24hWindowClosed?: boolean; isAuthError?: boolean; code?: string | number; provider?: string };
+  constructor(message: string, errorInfo?: any) {
+    super(message);
+    this.name = 'SendMessageError';
+    this.errorInfo = errorInfo;
+  }
+}
+
+/**
  * Send a WhatsApp message via the backend API.
+ * Throws SendMessageError with errorInfo if the backend returns success=false
+ * — the UI uses errorInfo.is24hWindowClosed to decide whether to prompt for a template.
  */
 export const sendMessage = async (to: string, message: string, quotedMessageId?: string) => {
   const response = await standardFetch('/api/messages/send', {
@@ -101,12 +116,17 @@ export const sendMessage = async (to: string, message: string, quotedMessageId?:
     }),
   });
 
+  const data = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to send message');
+    throw new SendMessageError(data.error || 'Failed to send message', data.errorInfo);
+  }
+  // Backend may return 200 with success=false (logical failure with structured errorInfo)
+  if (data && data.success === false) {
+    throw new SendMessageError(data.error || 'Send failed', data.errorInfo);
   }
 
-  return response.json();
+  return data;
 };
 
 

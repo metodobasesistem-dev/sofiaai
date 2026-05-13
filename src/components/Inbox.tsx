@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   FileText,
   MapPin,
@@ -60,7 +60,9 @@ import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import Finance from './Finance';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
-import { sendMessage } from '../services/whatsappService';
+import { sendMessage, SendMessageError } from '../services/whatsappService';
+import MetaTemplatesModal from './MetaTemplatesModal';
+import { getMetaStatus } from '../services/supabaseService';
 import { listQuickReplies, type QuickReply, listProfessionals, type Professional, updateContact } from '../services/supabaseService';
 import Contacts from './Contacts';
 import { notificationService } from '../services/notificationService';
@@ -974,6 +976,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState('');
+  // Meta Cloud API state — used for the 24h re-engagement modal and provider badge
+  const [currentProvider, setCurrentProvider] = useState<string | null>(null);
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  const [templatesModalTo, setTemplatesModalTo] = useState<string>('');
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1013,6 +1019,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   useEffect(() => {
     selectedThreadIdRef.current = selectedThreadId;
   }, [selectedThreadId]);
+
+  // Loads the active provider once on mount — used for the provider badge and
+  // to decide whether to surface the 24h re-engagement modal on send failures.
+  useEffect(() => {
+    if (!user?.id) return;
+    getMetaStatus()
+      .then(s => setCurrentProvider(s.provider || 'evolution'))
+      .catch(() => setCurrentProvider('evolution'));
+  }, [user?.id]);
 
   const { setActiveThreadId } = useNotification();
 
@@ -1771,6 +1786,23 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
   const activeThread = threads.find(t => t.id === selectedThreadId);
 
+  // Meta 24h window check — surfaces a warning above the input when a tenant
+  // on the official Meta provider has no inbound message in >23h. After 24h,
+  // free-form messages are rejected by Meta (code 131047) and only approved
+  // templates can be sent.
+  const meta24hWindowState = useMemo(() => {
+    if (currentProvider !== 'meta_official' || !activeThread) return null;
+    const lastInbound = messages
+      .filter(m => m.sender === 'lead')
+      .map(m => Number(m.timestamp) || 0)
+      .reduce((max, t) => Math.max(max, t), 0);
+    if (lastInbound === 0) return { state: 'never' as const, hoursLeft: 0 };
+    const hoursSince = (Date.now() - lastInbound) / (1000 * 60 * 60);
+    if (hoursSince >= 24) return { state: 'closed' as const, hoursLeft: 0 };
+    if (hoursSince >= 23) return { state: 'warning' as const, hoursLeft: Math.max(0, 24 - hoursSince) };
+    return null;
+  }, [currentProvider, activeThread, messages]);
+
   const renderContactDetails = () => {
     if (!activeThread) return null;
     
@@ -1845,6 +1877,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               {activeThread.is_client && (
                 <span className="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
                   <Star size={10} className="fill-amber-500" /> Cliente
+                </span>
+              )}
+              {currentProvider === 'meta_official' && (
+                <span
+                  className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm"
+                  title="Este número usa a API Oficial da Meta. Mensagens livres só funcionam dentro da janela de 24h após a última mensagem do cliente."
+                >
+                  Meta Oficial
                 </span>
               )}
             </div>
@@ -2371,9 +2411,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         })
         .eq('id', selectedThreadId);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      toast.error('Erro ao enviar mensagem');
+      // If the Meta 24h window is closed, restore the input and open the templates modal
+      if (error instanceof SendMessageError && error.errorInfo?.is24hWindowClosed) {
+        setMessageText(text);
+        setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
+        setTemplatesModalOpen(true);
+        toast.warning('Janela de 24h fechada. Use um template aprovado para re-engajar este contato.');
+      } else if (error instanceof SendMessageError && error.errorInfo?.isAuthError) {
+        setMessageText(text);
+        toast.error('Credenciais Meta expiradas. Avise o admin para renovar o token.');
+      } else {
+        toast.error(error?.message || 'Erro ao enviar mensagem');
+      }
     }
   };
 
@@ -3083,6 +3134,42 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
             {/* Input Area */}
             <div className="p-1 md:p-2 border-t border-slate-200 bg-[#f0f2f5] shrink-0 relative">
+              {meta24hWindowState && (
+                <div
+                  className={`mx-2 mb-2 px-3 py-2.5 rounded-xl border text-xs flex items-start gap-2 ${
+                    meta24hWindowState.state === 'closed' || meta24hWindowState.state === 'never'
+                      ? 'bg-red-50 border-red-200 text-red-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
+                >
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-black uppercase tracking-widest text-[10px] mb-0.5">
+                      {meta24hWindowState.state === 'closed'
+                        ? 'Janela de 24h fechada'
+                        : meta24hWindowState.state === 'never'
+                        ? 'Cliente nunca enviou mensagem'
+                        : 'Janela fechando em breve'}
+                    </p>
+                    <p className="text-[11px] leading-snug">
+                      {meta24hWindowState.state === 'warning'
+                        ? `Restam ~${meta24hWindowState.hoursLeft.toFixed(1)}h para enviar mensagens livres. Depois disso só templates aprovados.`
+                        : 'Mensagens livres serão rejeitadas pela Meta. Use um template aprovado.'}
+                    </p>
+                  </div>
+                  {(meta24hWindowState.state === 'closed' || meta24hWindowState.state === 'never') && (
+                    <button
+                      onClick={() => {
+                        setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
+                        setTemplatesModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-white border border-red-300 text-red-700 rounded-lg font-black uppercase tracking-widest text-[10px] hover:bg-red-100 transition-all"
+                    >
+                      Templates
+                    </button>
+                  )}
+                </div>
+              )}
               {replyingTo && (
                 <div className="mx-2 mb-2 bg-white rounded-xl border-l-4 border-primary-500 p-3 shadow-sm flex items-start justify-between animate-in slide-in-from-bottom-2 duration-200">
                   <div className="min-w-0">
@@ -3535,10 +3622,16 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         contactName={activeThread?.name || ''}
       />
 
-      <TrackingModal 
+      <TrackingModal
         isOpen={showTrackingModal}
         onClose={() => setShowTrackingModal(false)}
         trackingData={selectedContact?.ad_tracking || activeThread?.ad_tracking}
+      />
+
+      <MetaTemplatesModal
+        isOpen={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        to={templatesModalTo}
       />
     </div>
   );

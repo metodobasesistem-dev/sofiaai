@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo } from '../services/supabaseService';
+import MetaSetupHelpModal from './MetaSetupHelpModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -75,6 +76,7 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
   const [metaWabaId, setMetaWabaId] = useState('');
   const [isMetaTesting, setIsMetaTesting] = useState(false);
   const [metaTestResult, setMetaTestResult] = useState<{ ok: boolean; phone?: MetaPhoneInfo; error?: string } | null>(null);
+  const [metaHelpOpen, setMetaHelpOpen] = useState(false);
 
   const [globalSettings, setGlobalSettings] = useState<any>({
     openai_api_key: '',
@@ -1197,6 +1199,14 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
                       animate={{ opacity: 1, y: 0 }}
                       className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4"
                     >
+                      <button
+                        type="button"
+                        onClick={() => setMetaHelpOpen(true)}
+                        className="w-full text-left px-4 py-2.5 rounded-xl bg-white border border-primary-200 text-primary-700 text-[11px] font-bold hover:bg-primary-50 transition-all flex items-center justify-between"
+                      >
+                        <span>Não sabe onde achar esses dados? Veja o guia passo-a-passo</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Abrir</span>
+                      </button>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Phone Number ID</label>
                         <input
@@ -1435,6 +1445,11 @@ export default function AdminPanel({ initialView = 'standard', onTabChange }: Ad
           </div>
         )}
       </AnimatePresence>
+
+      <MetaSetupHelpModal
+        isOpen={metaHelpOpen}
+        onClose={() => setMetaHelpOpen(false)}
+      />
     </div>
   );
 }

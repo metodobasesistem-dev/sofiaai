@@ -1795,6 +1795,58 @@ export const saveAdminMetaCredentials = async (
   return res.json();
 };
 
+/**
+ * Meta template (S5+S7) helpers — used by the Inbox when the 24h window closes.
+ */
+export interface MetaTemplate {
+  name: string;
+  status: string;
+  category?: string;
+  language: string;
+  components: Array<{
+    type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS' | string;
+    text?: string;
+    format?: string;
+    buttons?: any[];
+    example?: any;
+  }>;
+  quality_score?: { score?: string };
+}
+
+export const listMetaTemplates = async (status: 'APPROVED' | 'PENDING' | 'REJECTED' | '' = 'APPROVED'): Promise<MetaTemplate[]> => {
+  const params = status ? `?status=${status}&limit=100` : '?limit=100';
+  const res = await fetch(`/api/v2/whatsapp/meta/templates${params}`, {
+    headers: await authHeaders(),
+  });
+  const body = await res.json();
+  if (!body.success) throw new Error(body.error || 'Falha ao listar templates');
+  return body.templates as MetaTemplate[];
+};
+
+export const sendMetaTemplate = async (
+  to: string,
+  template_name: string,
+  language_code: string,
+  components?: any[]
+): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+  const res = await fetch('/api/v2/whatsapp/meta/send-template', {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ to, template_name, language_code, components }),
+  });
+  return res.json();
+};
+
+/** Returns the current Meta provider status for the authed user. */
+export const getMetaStatus = async (): Promise<{
+  success: boolean;
+  provider: string;
+  meta?: { configured: boolean; phone_id?: string; live_ok?: boolean; verified_name?: string; quality_rating?: string; error?: string };
+}> => {
+  const res = await fetch('/api/v2/whatsapp/meta/status', { headers: await authHeaders() });
+  return res.json();
+};
+
 /** Admin reverts a tenant back to evolution, clearing Meta credentials. */
 export const disconnectAdminMeta = async (targetUserId: string): Promise<{ success: boolean; error?: string }> => {
   const res = await fetch(`/api/v2/admin/users/${targetUserId}/meta-disconnect`, {
