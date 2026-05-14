@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, AlertCircle, Loader2, MessageSquare, AlertTriangle } from 'lucide-react';
+import { X, Send, AlertCircle, Loader2, MessageSquare, AlertTriangle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { listMetaTemplates, sendMetaTemplate, type MetaTemplate } from '../services/supabaseService';
 import TemplateQualityBadge, { type QualityScore } from './TemplateQualityBadge';
+import TemplateBuilderModal from './TemplateBuilderModal';
 
 // Validação client-side leve, espelhando as regras críticas do
 // templateValidator.ts (backend). A validação autoritativa acontece no
@@ -50,6 +51,7 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [bodyVars, setBodyVars] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  const [showBuilder, setShowBuilder] = useState(false);
 
   const selected = useMemo(() => templates.find(t => t.name === selectedName) || null, [templates, selectedName]);
 
@@ -145,6 +147,7 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
   };
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -174,12 +177,21 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
                   </p>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors"
-              >
-                <X size={18} className="text-slate-500" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowBuilder(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 font-black uppercase tracking-widest text-[10px] transition-colors"
+                >
+                  <Plus size={13} />
+                  Criar Template
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors"
+                >
+                  <X size={18} className="text-slate-500" />
+                </button>
+              </div>
             </div>
 
             {/* Body */}
@@ -376,5 +388,15 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
         </motion.div>
       )}
     </AnimatePresence>
+
+      <TemplateBuilderModal
+        isOpen={showBuilder}
+        onClose={() => setShowBuilder(false)}
+        onSubmitted={() => {
+          setShowBuilder(false);
+          listMetaTemplates('').then(t => setTemplates(t)).catch(() => {});
+        }}
+      />
+    </>
   );
 }

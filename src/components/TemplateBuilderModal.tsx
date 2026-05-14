@@ -1,0 +1,506 @@
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  X, Sparkles, Send, Loader2, ChevronRight, ChevronLeft,
+  CheckCircle2, AlertTriangle, AlertCircle, RefreshCw, FileText,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { generateMetaTemplate, submitMetaTemplate } from '../services/supabaseService';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmitted?: () => void;
+}
+
+const CATEGORIES = [
+  { value: 'UTILITY', label: 'Utilitário', desc: 'Confirmações, lembretes, atualizações de pedido' },
+  { value: 'MARKETING', label: 'Marketing', desc: 'Promoções, ofertas, novidades' },
+  { value: 'AUTHENTICATION', label: 'Autenticação', desc: 'Códigos OTP, verificação de conta' },
+];
+
+const LANGUAGES = [
+  { value: 'pt_BR', label: 'Português (BR)' },
+  { value: 'en_US', label: 'English (US)' },
+  { value: 'es', label: 'Español' },
+];
+
+type Step = 'intent' | 'preview' | 'done';
+
+function toSnakeCase(s: string) {
+  return s.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+function countVars(text: string) {
+  return text.match(/\{\{\d+\}\}/g)?.length || 0;
+}
+
+/** Pre-flight checklist item */
+function Check({ ok, warn, label }: { ok?: boolean; warn?: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px]">
+      {ok === false || warn ? (
+        <AlertTriangle size={12} className={warn ? 'text-amber-500' : 'text-red-500'} />
+      ) : (
+        <CheckCircle2 size={12} className="text-emerald-500" />
+      )}
+      <span className={ok === false ? 'text-red-700' : warn ? 'text-amber-700' : 'text-slate-600'}>{label}</span>
+    </div>
+  );
+}
+
+export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted }: Props) {
+  // Step 1 — intent
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('UTILITY');
+  const [language, setLanguage] = useState('pt_BR');
+  const [description, setDescription] = useState('');
+
+  // Step 2 — preview
+  const [bodyText, setBodyText] = useState('');
+  const [exampleValues, setExampleValues] = useState<string[]>([]);
+  const [headerText, setHeaderText] = useState('');
+  const [footerText, setFooterText] = useState('');
+  const [aiNotes, setAiNotes] = useState('');
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+
+  // State
+  const [step, setStep] = useState<Step>('intent');
+  const [generating, setGenerating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [metaId, setMetaId] = useState<string | null>(null);
+
+  const slug = useMemo(() => toSnakeCase(name), [name]);
+  const varCount = useMemo(() => countVars(bodyText), [bodyText]);
+  const charCount = bodyText.length;
+
+  // Pre-flight checks for step 2
+  const checks = useMemo(() => ({
+    nameOk: /^[a-z0-9_]{3,}$/.test(slug),
+    charOk: charCount > 0 && charCount <= 1024,
+    examplesOk: varCount === 0 || exampleValues.slice(0, varCount).every(v => v.trim().length > 0),
+    noShortUrl: !/(bit\.ly|tinyurl)/i.test(bodyText),
+    noSpam: !/(ganhe r\$|renda extra|investimento garantido)/i.test(bodyText),
+    noCaps: (() => {
+      const letters = bodyText.replace(/[^a-zA-ZÀ-ú]/g, '');
+      if (letters.length < 10) return true;
+      const upper = letters.replace(/[^A-ZÀ-Ú]/g, '');
+      return upper.length / letters.length <= 0.7;
+    })(),
+  }), [slug, charCount, varCount, exampleValues, bodyText]);
+
+  const canSubmit =
+    checks.nameOk && checks.charOk && checks.examplesOk &&
+    checks.noShortUrl && checks.noSpam && checks.noCaps && !submitting;
+
+  function reset() {
+    setStep('intent');
+    setName(''); setCategory('UTILITY'); setLanguage('pt_BR'); setDescription('');
+    setBodyText(''); setExampleValues([]); setHeaderText(''); setFooterText('');
+    setAiNotes(''); setAiWarnings([]); setMetaId(null);
+  }
+
+  async function handleGenerate() {
+    if (!name.trim() || !description.trim()) {
+      toast.error('Preencha o nome e a descrição antes de gerar');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const res = await generateMetaTemplate({ template_name: slug, category, language, description });
+      if (!res.success) {
+        toast.error(res.error || 'Falha na geração por IA');
+        return;
+      }
+      setBodyText(res.body_text);
+      setExampleValues(res.example_values || Array(res.var_count).fill(''));
+      setAiNotes(res.notes || '');
+      setAiWarnings(res.warnings || []);
+      setStep('preview');
+    } catch (e: any) {
+      toast.error(e.message || 'Erro na geração');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    try {
+      const res = await submitMetaTemplate({
+        template_name: slug,
+        category,
+        language,
+        body_text: bodyText,
+        example_values: exampleValues.slice(0, varCount),
+        header_text: headerText || undefined,
+        footer_text: footerText || undefined,
+      });
+      if (!res.success) {
+        toast.error(res.error || 'Falha ao enviar para a Meta');
+        return;
+      }
+      setMetaId(res.meta_id || null);
+      setStep('done');
+      onSubmitted?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao submeter template');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Sync example values array length when body text changes
+  function handleBodyChange(val: string) {
+    setBodyText(val);
+    const n = countVars(val);
+    setExampleValues(prev => {
+      if (prev.length === n) return prev;
+      const next = [...prev];
+      while (next.length < n) next.push('');
+      return next.slice(0, n);
+    });
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.95, y: 20 }}
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-violet-50 flex items-center justify-center">
+                  <Sparkles size={18} className="text-violet-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-slate-900">Criar Novo Template</h2>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    {step === 'intent' && 'Descreva o objetivo — a IA gera o texto'}
+                    {step === 'preview' && 'Revise, edite e envie para aprovação da Meta'}
+                    {step === 'done' && 'Template enviado para revisão'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center">
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Step indicators */}
+            <div className="px-6 pt-4 flex items-center gap-2">
+              {(['intent', 'preview', 'done'] as Step[]).map((s, i) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${
+                    step === s ? 'bg-violet-600 text-white' :
+                    (['intent', 'preview', 'done'].indexOf(step) > i) ? 'bg-emerald-500 text-white' :
+                    'bg-slate-100 text-slate-400'
+                  }`}>{i + 1}</div>
+                  {i < 2 && <div className={`h-0.5 w-8 rounded ${(['intent', 'preview', 'done'].indexOf(step) > i) ? 'bg-emerald-400' : 'bg-slate-100'}`} />}
+                </div>
+              ))}
+              <span className="ml-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                {step === 'intent' ? 'Intenção' : step === 'preview' ? 'Revisão' : 'Enviado'}
+              </span>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+
+              {/* ── STEP 1: Intent ── */}
+              {step === 'intent' && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome do template</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="ex: confirmacao_pedido"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                    />
+                    {name && (
+                      <p className="text-[10px] text-slate-400">
+                        Slug: <span className={`font-mono ${/^[a-z0-9_]{3,}$/.test(slug) ? 'text-emerald-600' : 'text-red-500'}`}>{slug || '—'}</span>
+                        {!/^[a-z0-9_]{3,}$/.test(slug) && <span className="ml-1 text-red-500">(apenas letras minúsculas, números e _)</span>}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Categoria</label>
+                      <div className="space-y-1.5">
+                        {CATEGORIES.map(c => (
+                          <button
+                            key={c.value}
+                            type="button"
+                            onClick={() => setCategory(c.value)}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
+                              category === c.value
+                                ? 'border-violet-400 bg-violet-50 ring-1 ring-violet-300'
+                                : 'border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="font-bold text-slate-900">{c.label}</div>
+                            <div className="text-slate-400 text-[10px] mt-0.5">{c.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Idioma</label>
+                      <div className="space-y-1.5">
+                        {LANGUAGES.map(l => (
+                          <button
+                            key={l.value}
+                            type="button"
+                            onClick={() => setLanguage(l.value)}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
+                              language === l.value
+                                ? 'border-violet-400 bg-violet-50 ring-1 ring-violet-300'
+                                : 'border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <span className="font-bold text-slate-900">{l.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Descreva o objetivo</label>
+                    <textarea
+                      value={description}
+                      onChange={e => setDescription(e.target.value)}
+                      rows={3}
+                      placeholder="Ex: Confirmar ao cliente que o pedido foi aprovado e informar o prazo estimado de entrega."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm resize-none"
+                    />
+                    <p className="text-[10px] text-slate-400">Quanto mais detalhado, melhor o resultado da IA.</p>
+                  </div>
+                </>
+              )}
+
+              {/* ── STEP 2: Preview & Edit ── */}
+              {step === 'preview' && (
+                <>
+                  {aiWarnings.length > 0 && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-1">
+                      {aiWarnings.map((w, i) => (
+                        <div key={i} className="flex items-start gap-1.5 text-[11px] text-amber-700">
+                          <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                          <span>{w}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corpo do template</label>
+                      <span className={`text-[10px] font-bold ${charCount > 1024 ? 'text-red-500' : 'text-slate-400'}`}>{charCount}/1024</span>
+                    </div>
+                    <textarea
+                      value={bodyText}
+                      onChange={e => handleBodyChange(e.target.value)}
+                      rows={6}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm font-mono resize-none"
+                    />
+                    <p className="text-[10px] text-slate-400">Use {'{{1}}'}, {'{{2}}'}, … para variáveis dinâmicas.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cabeçalho <span className="font-normal normal-case">(opcional)</span></label>
+                      <input
+                        type="text"
+                        value={headerText}
+                        onChange={e => setHeaderText(e.target.value)}
+                        maxLength={60}
+                        placeholder="Título curto (max 60)"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rodapé <span className="font-normal normal-case">(opcional)</span></label>
+                      <input
+                        type="text"
+                        value={footerText}
+                        onChange={e => setFooterText(e.target.value)}
+                        maxLength={60}
+                        placeholder="Texto pequeno ao fim"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {varCount > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        Exemplos de valores ({varCount} variável{varCount !== 1 ? 'is' : ''})
+                        <span className="ml-1 font-normal normal-case text-slate-400">— obrigatório para aprovação da Meta</span>
+                      </label>
+                      {Array.from({ length: varCount }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-slate-400 w-8">{`{{${i+1}}}`}</span>
+                          <input
+                            type="text"
+                            value={exampleValues[i] || ''}
+                            onChange={e => {
+                              const next = [...exampleValues];
+                              next[i] = e.target.value;
+                              setExampleValues(next);
+                            }}
+                            placeholder={`Exemplo para {{${i+1}}}`}
+                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                          />
+                        </div>
+                      ))}
+                      {aiNotes && <p className="text-[10px] text-slate-400 italic">{aiNotes}</p>}
+                    </div>
+                  )}
+
+                  {/* Pre-flight checklist */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Checklist pré-envio</p>
+                    <Check ok={checks.nameOk} label={`Nome válido: ${slug}`} />
+                    <Check ok={checks.charOk} label={`Comprimento: ${charCount} / 1024 chars`} />
+                    {varCount > 0 && <Check ok={checks.examplesOk} label={`Exemplos preenchidos (${varCount} variável${varCount !== 1 ? 'is' : ''})`} />}
+                    <Check ok={checks.noShortUrl} label="Sem URLs encurtadas" />
+                    <Check ok={checks.noSpam} warn={!checks.noSpam} label="Sem linguagem financeira/spam" />
+                    <Check ok={checks.noCaps} warn={!checks.noCaps} label="Sem excesso de MAIÚSCULAS" />
+                  </div>
+
+                  {/* Live preview */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pré-visualização final</label>
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-sm text-slate-800 whitespace-pre-wrap">
+                      {(() => {
+                        let t = bodyText;
+                        exampleValues.forEach((v, i) => { t = t.replace(`{{${i+1}}}`, v || `{{${i+1}}}`); });
+                        return t || <span className="text-slate-400 italic">Escreva o corpo acima…</span>;
+                      })()}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ── STEP 3: Done ── */}
+              {step === 'done' && (
+                <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
+                    <CheckCircle2 size={36} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">Template enviado!</h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      A Meta irá revisar <span className="font-bold text-slate-700">{slug}</span> em até 1-3 dias úteis.
+                    </p>
+                    {metaId && <p className="text-[10px] text-slate-400 mt-2 font-mono">ID Meta: {metaId}</p>}
+                  </div>
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 text-left max-w-sm">
+                    <p className="font-black uppercase tracking-widest text-[10px] mb-1">Próximos passos</p>
+                    <ul className="space-y-1 list-disc list-inside">
+                      <li>Aguarde o e-mail de aprovação da Meta</li>
+                      <li>O status aparecerá como PENDING na lista de templates</li>
+                      <li>Após aprovação (APPROVED), o template estará disponível para envio</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+              <div>
+                {step === 'preview' && (
+                  <button
+                    onClick={() => setStep('intent')}
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    <ChevronLeft size={13} /> Voltar
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                {step !== 'done' && (
+                  <button
+                    onClick={onClose}
+                    className="px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                )}
+
+                {step === 'intent' && (
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating || !name.trim() || !description.trim()}
+                    className="px-6 py-3 rounded-2xl bg-violet-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                  >
+                    {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {generating ? 'Gerando…' : 'Gerar com IA'}
+                  </button>
+                )}
+
+                {step === 'preview' && (
+                  <>
+                    <button
+                      onClick={handleGenerate}
+                      disabled={generating}
+                      className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 disabled:opacity-40 transition-all flex items-center gap-2"
+                    >
+                      {generating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                      Regenerar
+                    </button>
+                    <button
+                      onClick={handleSubmit}
+                      disabled={!canSubmit}
+                      className="px-6 py-3 rounded-2xl bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                    >
+                      {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                      {submitting ? 'Enviando…' : 'Enviar para Meta'}
+                    </button>
+                  </>
+                )}
+
+                {step === 'done' && (
+                  <>
+                    <button
+                      onClick={reset}
+                      className="px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all flex items-center gap-2"
+                    >
+                      <FileText size={13} /> Criar Outro
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="px-6 py-3 rounded-2xl bg-primary-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all"
+                    >
+                      Fechar
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

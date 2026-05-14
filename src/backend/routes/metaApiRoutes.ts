@@ -283,6 +283,140 @@ router.get('/templates', requireAuth as any, async (req: AuthenticatedRequest, r
 });
 
 /**
+ * POST /templates/generate — AI-powered template text generator.
+ * Costs are absorbed by the platform (uses global OPENAI_API_KEY, no userId billing).
+ * Body: { template_name, category, language, description }
+ * Returns: { success, body_text, var_count, example_values, warnings }
+ */
+router.post('/templates/generate', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const { template_name, category, language, description } = req.body || {};
+  if (!template_name || !category || !description) {
+    return res.status(400).json({ success: false, error: 'template_name, category e description são obrigatórios' });
+  }
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) {
+    return res.status(503).json({ success: false, error: 'OPENAI_API_KEY não configurada na plataforma' });
+  }
+
+  const langLabel: Record<string, string> = {
+    pt_BR: 'Português (Brasil)', en_US: 'English (US)', es: 'Español',
+  };
+  const lang = langLabel[language] || language || 'Português (Brasil)';
+  const systemPrompt = `Você é um especialista em templates de WhatsApp Business da Meta.
+Regras obrigatórias que você DEVE seguir:
+- Escreva APENAS o texto do corpo (BODY) do template — sem header, footer ou botões.
+- Use {{1}}, {{2}}, etc. para variáveis dinâmicas (ex: nome do cliente, número do pedido).
+- Máximo 1024 caracteres.
+- Proibido: URLs encurtadas (bit.ly, tinyurl), promessas financeiras ("ganhe R$", "renda extra"), texto todo em maiúsculas, conteúdo adulto.
+- A mensagem deve ser natural, profissional e direta.
+- Idioma: ${lang}.
+- Categoria: ${category} (UTILITY = transacional/confirmação, MARKETING = promoções, AUTHENTICATION = códigos).
+- Responda APENAS com um JSON no formato exato:
+{
+  "body_text": "texto do template com {{1}} e {{2}} se necessário",
+  "var_count": 2,
+  "example_values": ["valor exemplo 1", "valor exemplo 2"],
+  "notes": "breve explicação do que cada variável representa"
+}`;
+
+  try {
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI({ apiKey: openaiKey });
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Crie um template para: ${description}\nNome do template: ${template_name}` },
+      ],
+      max_tokens: 600,
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = completion.choices[0]?.message?.content || '{}';
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(500).json({ success: false, error: 'IA retornou JSON inválido' });
+    }
+
+    const body_text: string = parsed.body_text || '';
+    const var_count: number = parsed.var_count ?? (body_text.match(/\{\{\d+\}\}/g)?.length || 0);
+    const example_values: string[] = parsed.example_values || Array(var_count).fill('exemplo');
+    const notes: string = parsed.notes || '';
+
+    // Basic client-side-mirrored warnings
+    const warnings: string[] = [];
+    if (body_text.length > 1024) warnings.push(`Texto muito longo (${body_text.length} / 1024 chars)`);
+    if (/(bit\.ly|tinyurl)/i.test(body_text)) warnings.push('URL encurtada detectada');
+    if (/(ganhe r\$|renda extra)/i.test(body_text)) warnings.push('Linguagem financeira suspeita');
+
+    return res.json({ success: true, body_text, var_count, example_values, notes, warnings });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Erro na geração por IA' });
+  }
+});
+
+/**
+ * POST /templates/submit — submits a template to Meta Graph API for review.
+ * Body: { template_name, category, language, body_text, example_values, header_text?, footer_text? }
+ * Returns: { success, meta_id, status }
+ */
+router.post('/templates/submit', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { template_name, category, language, body_text, example_values, header_text, footer_text } = req.body || {};
+
+  if (!template_name || !category || !body_text) {
+    return res.status(400).json({ success: false, error: 'template_name, category e body_text são obrigatórios' });
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('meta_access_token, meta_waba_id, whatsapp_provider')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profile?.whatsapp_provider !== 'meta_official') {
+    return res.status(400).json({ success: false, error: 'Tenant não usa meta_official' });
+  }
+  if (!profile?.meta_waba_id || !profile?.meta_access_token) {
+    return res.status(400).json({ success: false, error: 'WABA ID ou access token não configurados' });
+  }
+
+  // Build components
+  const components: any[] = [];
+  if (header_text?.trim()) {
+    components.push({ type: 'HEADER', format: 'TEXT', text: header_text.trim() });
+  }
+
+  const bodyComponent: any = { type: 'BODY', text: body_text };
+  const varCount = (body_text.match(/\{\{\d+\}\}/g) || []).length;
+  if (varCount > 0 && Array.isArray(example_values) && example_values.length >= varCount) {
+    bodyComponent.example = { body_text: [example_values.slice(0, varCount)] };
+  }
+  components.push(bodyComponent);
+
+  if (footer_text?.trim()) {
+    components.push({ type: 'FOOTER', text: footer_text.trim() });
+  }
+
+  try {
+    const { data } = await axios.post(
+      `${META_BASE}/${profile.meta_waba_id}/message_templates`,
+      { name: template_name, language: language || 'pt_BR', category, components },
+      { headers: { Authorization: `Bearer ${profile.meta_access_token}` }, timeout: 20000 }
+    );
+    return res.json({ success: true, meta_id: data.id, status: data.status || 'PENDING' });
+  } catch (err: any) {
+    const { parseProviderError: _parseErr } = await import('../providers/providerErrors.js');
+    const info = parseProviderError(err);
+    return res.status(400).json({ success: false, error: info.message, errorInfo: info });
+  }
+});
+
+/**
  * POST /send-template — sends an approved template message.
  * Body: { to, template_name, language_code?, components? }
  */

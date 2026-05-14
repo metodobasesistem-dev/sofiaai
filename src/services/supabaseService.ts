@@ -1862,6 +1862,47 @@ export const sendMetaTemplate = async (
   return res.json();
 };
 
+export interface TemplateGenerateResult {
+  success: boolean;
+  body_text: string;
+  var_count: number;
+  example_values: string[];
+  notes: string;
+  warnings: string[];
+  error?: string;
+}
+
+export const generateMetaTemplate = async (params: {
+  template_name: string;
+  category: string;
+  language: string;
+  description: string;
+}): Promise<TemplateGenerateResult> => {
+  const res = await fetch('/api/v2/whatsapp/meta/templates/generate', {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(params),
+  });
+  return res.json();
+};
+
+export const submitMetaTemplate = async (params: {
+  template_name: string;
+  category: string;
+  language: string;
+  body_text: string;
+  example_values: string[];
+  header_text?: string;
+  footer_text?: string;
+}): Promise<{ success: boolean; meta_id?: string; status?: string; error?: string }> => {
+  const res = await fetch('/api/v2/whatsapp/meta/templates/submit', {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(params),
+  });
+  return res.json();
+};
+
 /** Returns the current Meta provider status for the authed user. */
 export const getMetaStatus = async (): Promise<{
   success: boolean;
