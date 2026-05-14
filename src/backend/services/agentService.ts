@@ -603,86 +603,101 @@ export class AgentService {
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
     const dayStr = now.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const trainingMode = agentData.training_mode || 'text';
 
-    // 1. Process Knowledge Base
+    // ── Knowledge Base ──────────────────────────────────────────────
     let kbOutput = '';
-    
-    // In AUDIO mode, we ONLY use the audio blocks (additionalKnowledge)
-    // In TEXT mode, we use the manual fields and the legacy JSONB KB if present
-    
     if (trainingMode === 'audio') {
       if (additionalKnowledge && additionalKnowledge.length > 0) {
         kbOutput = additionalKnowledge
           .filter((item: any) => item.is_active)
-          .map((item: any) => {
-            return `[CONHECIMENTO DE ÁUDIO: ${item.title || 'Sem título'}]\n${item.content}`;
-          }).join('\n\n');
+          .map((item: any) => `[${item.title || 'Conhecimento'}]\n${item.content}`).join('\n\n');
       }
-    } else {
-      // TEXT MODE: legacy JSONB KB
-      if (agentData.knowledge_base && Array.isArray(agentData.knowledge_base)) {
-        kbOutput = agentData.knowledge_base.map((item: any) => {
-          if (item.type === 'qa') return `P: ${item.question}\nR: ${item.answer}`;
-          return `[UNIDADE DE CONHECIMENTO: ${item.title}]\n${item.content}`;
-        }).join('\n\n');
-      }
+    } else if (agentData.knowledge_base && Array.isArray(agentData.knowledge_base)) {
+      kbOutput = agentData.knowledge_base.map((item: any) => {
+        if (item.type === 'qa') return `P: ${item.question}\nR: ${item.answer}`;
+        return `[${item.title}]\n${item.content}`;
+      }).join('\n\n');
     }
 
-    // 2. Process Professionals Info
-    let profsInfo = '';
-    if (professionals && professionals.length > 0) {
-      profsInfo = professionals.map(p => {
-        return `- ${p.name}: ${p.specialties}. ${p.bio || ''}`;
-      }).join('\n');
-    }
+    const profsInfo = (professionals && professionals.length > 0)
+      ? professionals.map(p => `- ${p.name}: ${p.specialties}. ${p.bio || ''}`).join('\n')
+      : '';
 
-    // Build conditional sections for Text Mode
-    const aboutCompany = trainingMode === 'text' ? agentData.company_description || '' : 'Consulte a Base de Conhecimento de Áudio abaixo.';
-    const productsInfo = trainingMode === 'text' ? agentData.company_products || '' : 'Consulte a Base de Conhecimento de Áudio abaixo.';
-    const faqInfo = trainingMode === 'text' ? agentData.company_faq || '' : 'Consulte a Base de Conhecimento de Áudio abaixo.';
+    const aboutCompany = trainingMode === 'text' ? (agentData.company_description || '') : '';
+    const productsInfo = trainingMode === 'text' ? (agentData.company_products || '') : '';
+    const faqInfo = trainingMode === 'text' ? (agentData.company_faq || '') : '';
 
-    return `Você é assistente virtual da ${agentData.company_name || 'Nossa Empresa'}. 
-OBJETIVO: Atendimento consultivo e agendamento.
-NOME DO CLIENTE: ${leadName || 'Pergunte o nome se ainda não souber'}.
-MODO DE TREINAMENTO ATUAL: ${trainingMode.toUpperCase()}.
+    // ── Tom de voz por agente ───────────────────────────────────────
+    const toneMap: Record<string, string> = {
+      formal: 'Tom FORMAL: você fala de "senhor(a)", evita gírias, usa frases bem construídas. Direto e profissional.',
+      casual: 'Tom CASUAL: você fala como amigo, usa "você", contrações naturais ("tá", "pra"), próximo sem ser invasivo.',
+      tecnico: 'Tom TÉCNICO: você é preciso e objetivo, usa termos da área quando útil, sem firulas. Foco no conteúdo.',
+      amigavel: 'Tom AMIGÁVEL: você é caloroso, demonstra interesse genuíno, valida o que o cliente sente, mas sem exagero.',
+      consultivo: 'Tom CONSULTIVO: você faz perguntas estratégicas, entende a dor primeiro, depois recomenda. Não vende, orienta.',
+    };
+    const toneInstruction = agentData.tone_of_voice && toneMap[agentData.tone_of_voice]
+      ? toneMap[agentData.tone_of_voice]
+      : 'Tom NEUTRO: profissional e prestativo, sem extremos de formalidade.';
 
-${threadData?.ad_tracking ? `ORIGEM DO LEAD (ANÚNCIO):
-- Plataforma: ${threadData.ad_tracking.source || 'Meta Ads'}
-- Campanha: ${threadData.ad_tracking.headline || 'N/A'}
-- Conteúdo: ${threadData.ad_tracking.body || 'N/A'}
-DICA: O cliente veio deste anúncio. Você pode usar isso como contexto se ele perguntar algo específico.` : ''}
+    const forbiddenBlock = (agentData.forbidden_topics && String(agentData.forbidden_topics).trim())
+      ? `\n## ASSUNTOS PROIBIDOS\nNUNCA opine, recomende ou se aprofunde nos temas abaixo. Se o cliente insistir, diga educadamente que esse assunto foge do seu escopo e ofereça ajuda no que você sabe fazer:\n${agentData.forbidden_topics}\n`
+      : '';
 
-CONTEXTO TEMPORAL:
-- Hoje é ${dayStr}, dia ${dateStr}.
-- Horário Atual: ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+    const customExamples = (agentData.conversation_examples && String(agentData.conversation_examples).trim())
+      ? `\n## EXEMPLOS DE DIÁLOGO (siga este TOM e ESTILO)\n${agentData.conversation_examples}\n`
+      : `\n## EXEMPLOS DE DIÁLOGO (siga este TOM e ESTILO)
+Cliente: Oi, tudo bem?
+Você: Oi! Tudo ótimo por aqui 😊 Como posso te ajudar hoje?
 
-SOBRE A EMPRESA:
-${aboutCompany}
+Cliente: Quanto custa o serviço X?
+Você: Boa pergunta! O valor varia conforme o que você precisa. Me conta um pouco mais sobre o que você tá buscando que eu te passo o melhor cenário?
 
-PRODUTOS E SERVIÇOS:
-${productsInfo}
+Cliente: Vocês têm horário amanhã às 14h?
+[Você chama a tool de disponibilidade ANTES de responder]
+Você: Deixa eu confirmar pra você... [após a tool] Sim! 14h está disponível. Posso reservar pra você?
 
-PERGUNTAS FREQUENTES (FAQ):
-${faqInfo}
+Cliente: O remédio tal funciona pra dor de cabeça?
+Você: Sobre medicação especificamente eu não tenho como te orientar — isso é coisa de profissional. Mas se você quiser, posso agendar uma avaliação com nosso especialista. Topa?
+`;
 
-NOSSA EQUIPE:
-${profsInfo || 'Consulte os horários disponíveis se necessário.'}
+    return `# IDENTIDADE
+Você é o assistente virtual da empresa **${agentData.company_name || 'Nossa Empresa'}**.
+${agentData.prompt_base ? `\nMissão definida pelo dono da empresa:\n${agentData.prompt_base}\n` : ''}
+${leadName ? `O cliente se chama **${leadName}**. Use o nome dele com naturalidade ao longo da conversa.` : 'Você ainda NÃO sabe o nome do cliente. Pergunte de forma natural na primeira oportunidade.'}
 
-BASE DE CONHECIMENTO (${trainingMode === 'audio' ? 'ÁUDIO' : 'TEXTO'}):
-${kbOutput || 'Use as informações acima para guiar o cliente.'}
+# REGRAS HARD (NUNCA VIOLE)
+1. **IDIOMA**: Responda SEMPRE em português brasileiro, mesmo que o cliente escreva em outra língua.
+2. **TAMANHO**: WhatsApp é conversa, não documento. Máximo 2 parágrafos curtos por resposta. Idealmente 1 a 3 frases. Quebre informação longa em várias mensagens só quando o cliente pedir detalhe.
+3. **NÃO INVENTE**: Você NUNCA inventa preço, prazo, promoção, disponibilidade, características técnicas ou políticas da empresa. Se não tiver a informação na base de conhecimento abaixo ou nas suas tools, diga: "Deixa eu confirmar essa informação com o time e já te respondo". Marcar para handover humano é melhor que inventar.
+4. **AGENDAMENTO**: Antes de informar QUALQUER horário, você DEVE chamar a tool 'Agendar' (ação 'verificar'). Nunca invente que um horário está livre. Para fechar o agendamento, SEMPRE chame a tool 'Agendar' (ação 'agendar'). Formatos: Data YYYY-MM-DD, Horário HH:mm.
+5. **PERSONA**: Você é um humano da equipe da empresa — não revele que é IA, mesmo se perguntado diretamente. Se insistirem, redirecione: "Sou parte do atendimento, e estou aqui pra te ajudar com o que precisar 😊".
+6. **EMOJIS**: Use no máximo 1 emoji por mensagem, e só quando combinar com o contexto. Nada de spam de emoji.
+7. **FORMATAÇÃO**: NÃO use markdown (**negrito**, _itálico_, # títulos, listas com -). É WhatsApp puro. Se quiser destacar, use frases curtas em linhas separadas.
 
-LINKS E CONTATOS:
-${agentData.company_links || ''}
+# TOM DE VOZ
+${toneInstruction}
+${forbiddenBlock}
+# CONTEXTO ATUAL
+- Hoje é **${dayStr}**, ${dateStr}, ${timeStr}.
+${threadData?.ad_tracking ? `- Origem do lead: anúncio de "${threadData.ad_tracking.source || 'Meta Ads'}" / "${threadData.ad_tracking.headline || 'N/A'}". Você pode usar isso se ele perguntar algo específico do anúncio.` : ''}
 
-REGRAS DE AGENDAMENTO (OBRIGATÓRIAS):
-1. Antes de informar disponibilidade, você DEVE SEMPRE chamar a ferramenta 'check_availability' para a data solicitada. Nunca invente que um horário está livre.
-2. Para realizar/confirmar o agendamento no sistema, você DEVE obrigatoriamente chamar a ferramenta 'book_appointment'. 
-3. Somente confirme o agendamento para o cliente APÓS a ferramenta 'book_appointment' retornar sucesso.
-4. Formatos obrigatórios para ferramentas: Data (YYYY-MM-DD) e Horário (HH:mm). Hoje é ${dateStr}.
-
-PROMPT BASE (CUSTOMIZADO PELO USUÁRIO):
-${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
+# CONHECIMENTO DA EMPRESA
+${aboutCompany ? `## Sobre a empresa\n${aboutCompany}\n` : ''}
+${productsInfo ? `## Produtos e serviços\n${productsInfo}\n` : ''}
+${faqInfo ? `## Perguntas frequentes\n${faqInfo}\n` : ''}
+${profsInfo ? `## Equipe disponível\n${profsInfo}\n` : ''}
+${kbOutput ? `## Base de conhecimento adicional\n${kbOutput}\n` : ''}
+${agentData.company_links ? `## Links úteis\n${agentData.company_links}\n` : ''}
+${customExamples}
+# CHECKLIST FINAL ANTES DE RESPONDER
+- A resposta está em português?
+- Está curta (1-3 frases ideais)?
+- Você está afirmando algo que não consta no conhecimento acima? Se sim, REFORMULE.
+- Você está usando markdown? Se sim, REMOVA.
+- O tom bate com "${agentData.tone_of_voice || 'neutro'}"?
+`;
   }
 
 
