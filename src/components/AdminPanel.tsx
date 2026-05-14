@@ -44,11 +44,12 @@ import { supabase } from '../lib/supabase';
 import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch, listMetaTemplates, type MetaTemplate } from '../services/supabaseService';
 import MetaSetupHelpModal from './MetaSetupHelpModal';
 import WhatsAppDiagnosticModal from './WhatsAppDiagnosticModal';
+import AdminTemplatesTab from './AdminTemplatesTab';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_activator' | 'lead_radar';
+type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_activator' | 'lead_radar' | 'templates';
 
 interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
@@ -362,6 +363,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const navItems = [
     { id: 'overview', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { id: 'users', label: 'Inquilinos', icon: <Users size={20} /> },
+    { id: 'templates', label: 'Templates', icon: <FileText size={20} className="text-violet-500" /> },
     { id: 'config', label: 'Configurações', icon: <Server size={20} /> },
     { id: 'billing', label: 'Financeiro', icon: <CreditCard size={20} /> },
     { id: 'meta_activator', label: 'Ativador Meta', icon: <Zap size={20} className="text-amber-500" /> },
@@ -370,6 +372,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'templates':
+        return <AdminTemplatesTab />;
+
       case 'flags':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1509,6 +1514,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
           { id: 'reports', label: 'Relatórios de Uso', icon: <BarChart3 size={24} />, desc: 'Analytics e performance da rede', color: 'bg-primary-600', tab: 'reports', type: 'external' },
           { id: 'config', label: 'Configurações Globais', icon: <Settings size={24} />, desc: 'API Keys, Modelos e Prompts', color: 'bg-amber-500', tab: 'config', type: 'internal' },
           { id: 'clients', label: 'Carteira Master', icon: <Star size={24} />, desc: 'Visão CRM de toda a base', color: 'bg-pink-500', tab: 'clients', type: 'external' },
+          { id: 'templates_hub', label: 'Templates Meta', icon: <FileText size={24} />, desc: 'Status, qualidade e envios por tenant', color: 'bg-violet-600', tab: 'templates', type: 'internal' },
           { id: 'flags_hub', label: 'Funcionalidades', icon: <ToggleLeft size={24} />, desc: 'Feature Flags & Releases', color: 'bg-teal-500', tab: 'flags', type: 'internal' },
           { id: 'billing', label: 'Consumo & Billing', icon: <CreditCard size={24} />, desc: 'Tokens, custos e faturamento', color: 'bg-slate-900', tab: 'billing', type: 'internal' },
         ].map((item) => (

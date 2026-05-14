@@ -903,4 +903,86 @@ router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => 
   }
 });
 
+/**
+ * GET /templates — cross-tenant template overview for admin dashboard.
+ * Returns template_status_cache enriched with send metrics and latest quality.
+ */
+router.get('/templates', async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data: cacheRows, error: cacheErr } = await supabase
+      .from('template_status_cache')
+      .select('user_id, template_name, language_code, status, reason, last_event, last_event_at');
+    if (cacheErr) throw cacheErr;
+
+    const userIds = [...new Set((cacheRows || []).map((r: any) => r.user_id))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .in('id', userIds.length ? userIds : ['00000000-0000-0000-0000-000000000000']);
+    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+    const since30d = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const { data: sendRows } = await supabase
+      .from('template_send_log')
+      .select('user_id, template_name, status, warnings')
+      .gte('created_at', since30d);
+
+    const metricsMap = new Map<string, { total: number; sent: number; with_warnings: number }>();
+    for (const r of sendRows || []) {
+      const k = `${r.user_id}__${r.template_name}`;
+      if (!metricsMap.has(k)) metricsMap.set(k, { total: 0, sent: 0, with_warnings: 0 });
+      const m = metricsMap.get(k)!;
+      m.total++;
+      if (r.status === 'sent') m.sent++;
+      if (Array.isArray(r.warnings) && r.warnings.length > 0) m.with_warnings++;
+    }
+
+    const { data: qualityRows } = await supabase
+      .from('template_quality_history')
+      .select('user_id, template_name, language_code, quality_score, recorded_at')
+      .order('recorded_at', { ascending: false });
+
+    const qualityMap = new Map<string, string>();
+    for (const r of qualityRows || []) {
+      const k = `${r.user_id}__${r.template_name}__${r.language_code}`;
+      if (!qualityMap.has(k)) qualityMap.set(k, r.quality_score);
+    }
+
+    let totalApproved = 0, totalPaused = 0, totalRejected = 0, totalSends30d = 0;
+
+    const rows = (cacheRows || []).map((r: any) => {
+      const profile = profileMap.get(r.user_id);
+      const metrics = metricsMap.get(`${r.user_id}__${r.template_name}`) || { total: 0, sent: 0, with_warnings: 0 };
+      const quality = qualityMap.get(`${r.user_id}__${r.template_name}__${r.language_code}`) || null;
+      const s = (r.status || '').toUpperCase();
+      if (s === 'APPROVED') totalApproved++;
+      else if (s === 'PAUSED') totalPaused++;
+      else if (s === 'REJECTED') totalRejected++;
+      totalSends30d += metrics.total;
+      return {
+        user_id: r.user_id,
+        tenant_email: profile?.email || r.user_id.slice(0, 8),
+        template_name: r.template_name,
+        language_code: r.language_code,
+        status: r.status,
+        reason: r.reason,
+        last_event: r.last_event,
+        last_event_at: r.last_event_at,
+        sends_30d: metrics.total,
+        sent_ok_30d: metrics.sent,
+        warnings_30d: metrics.with_warnings,
+        quality_score: quality,
+      };
+    });
+
+    return res.json({
+      success: true,
+      rows,
+      stats: { total: rows.length, approved: totalApproved, paused: totalPaused, rejected: totalRejected, sends_30d: totalSends30d },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

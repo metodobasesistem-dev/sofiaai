@@ -1694,6 +1694,37 @@ export const getAdminActivity = async () => {
   return result.data;
 };
 
+export interface AdminTemplateRow {
+  user_id: string;
+  tenant_email: string;
+  template_name: string;
+  language_code: string;
+  status: string;
+  reason: string | null;
+  last_event: string | null;
+  last_event_at: string | null;
+  sends_30d: number;
+  sent_ok_30d: number;
+  warnings_30d: number;
+  quality_score: string | null;
+}
+
+export interface AdminTemplatesOverview {
+  rows: AdminTemplateRow[];
+  stats: { total: number; approved: number; paused: number; rejected: number; sends_30d: number };
+}
+
+export const getAdminTemplatesOverview = async (): Promise<AdminTemplatesOverview> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+  const res = await fetch('/api/v2/admin/templates', {
+    headers: { 'Authorization': `Bearer ${session.access_token}` },
+  });
+  const body = await res.json();
+  if (!body.success) throw new Error(body.error || 'Falha ao carregar templates');
+  return { rows: body.rows, stats: body.stats };
+};
+
 /**
  * Agent Secrets (Vault)
  */
