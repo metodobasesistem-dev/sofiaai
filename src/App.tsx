@@ -1,34 +1,42 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
-import Agents from './components/Agents';
 import Inbox from './components/Inbox';
-import Contacts from './components/Contacts';
-import Clients from './components/Clients';
-import Schedules from './components/Schedules';
-import Availability from './components/Availability';
-import Integrations from './components/Integrations';
-import Settings from './components/Settings';
-import Reports from './components/Reports';
-import Professionals from './components/Professionals';
-import Overview from './components/Overview';
-import AdminPanel from './components/AdminPanel';
-import Campaigns from './components/Campaigns';
-import QuickReplies from './components/QuickReplies';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
-import LeoApp from './pages/Leo/LeoApp';
-import Finance from './components/Finance';
-import MetaTemplatesAdminPage from './components/MetaTemplatesAdminPage';
 
  import Login from './components/Login';
  import MaintenancePage from './components/MaintenancePage';
 import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
-import SofiaConfig from './components/Sofia/SofiaConfig';
 import { Toaster } from 'sonner';
 import { useFeatureContext } from './contexts/FeatureFlagContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+
+// Code splitting: telas secundárias só carregam quando o usuário navega para elas
+const Agents = lazy(() => import('./components/Agents'));
+const Contacts = lazy(() => import('./components/Contacts'));
+const Clients = lazy(() => import('./components/Clients'));
+const Schedules = lazy(() => import('./components/Schedules'));
+const Availability = lazy(() => import('./components/Availability'));
+const Integrations = lazy(() => import('./components/Integrations'));
+const Settings = lazy(() => import('./components/Settings'));
+const Reports = lazy(() => import('./components/Reports'));
+const Professionals = lazy(() => import('./components/Professionals'));
+const Overview = lazy(() => import('./components/Overview'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const Campaigns = lazy(() => import('./components/Campaigns'));
+const QuickReplies = lazy(() => import('./components/QuickReplies'));
+const LeoApp = lazy(() => import('./pages/Leo/LeoApp'));
+const Finance = lazy(() => import('./components/Finance'));
+const MetaTemplatesAdminPage = lazy(() => import('./components/MetaTemplatesAdminPage'));
+const SofiaConfig = lazy(() => import('./components/Sofia/SofiaConfig'));
+
+const PageFallback = () => (
+  <div className="h-[60vh] w-full flex items-center justify-center text-primary-500">
+    <Loader2 size={36} className="animate-spin" />
+  </div>
+);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -271,7 +279,9 @@ export default function App() {
               role={role}
               plano={plano}
             >
-              {renderContent()}
+              <Suspense fallback={<PageFallback />}>
+                {renderContent()}
+              </Suspense>
             </Layout>
           )}
         </NotificationProvider>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, Suspense, lazy } from 'react';
 import { 
   FileText,
   MapPin,
@@ -57,21 +57,29 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
-import Finance from './Finance';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { sendMessage, SendMessageError } from '../services/whatsappService';
 import MetaTemplatesModal from './MetaTemplatesModal';
 import { getMetaStatus } from '../services/supabaseService';
 import { listQuickReplies, type QuickReply, listProfessionals, type Professional, updateContact } from '../services/supabaseService';
-import Contacts from './Contacts';
 import { notificationService } from '../services/notificationService';
-import KanbanBoard from './KanbanBoard';
-import ReportsDashboard from './ReportsDashboard';
-import Integrations from './Integrations';
-import QuickReplies from './QuickReplies';
 import { NotificationProvider, useNotification } from '../contexts/NotificationContext';
 import { ContactAvatar } from './ContactAvatar';
+
+// Code splitting: estas abas só carregam quando o usuário navega para elas
+const Finance = lazy(() => import('./Finance'));
+const Contacts = lazy(() => import('./Contacts'));
+const KanbanBoard = lazy(() => import('./KanbanBoard'));
+const ReportsDashboard = lazy(() => import('./ReportsDashboard'));
+const Integrations = lazy(() => import('./Integrations'));
+const QuickReplies = lazy(() => import('./QuickReplies'));
+
+const LazyFallback = () => (
+  <div className="flex-1 flex items-center justify-center bg-slate-50">
+    <Loader2 size={28} className="animate-spin text-primary-500" />
+  </div>
+);
 
 interface Thread {
   id: string;
@@ -508,7 +516,7 @@ const TypingIndicator: React.FC = () => (
   </div>
 );
 
-const ChatBubble: React.FC<{
+type ChatBubbleProps = {
   message: Message;
   onPreview: (media: any) => void;
   onDelete: (messageId: string) => void;
@@ -522,7 +530,9 @@ const ChatBubble: React.FC<{
   onSelect?: (id: string) => void;
   onForward?: (msg: Message) => void;
   highlightQuery?: string;
-}> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onOpenContact, onImageLoad, isSelected, isSelectionMode, onSelect, onForward, highlightQuery }) => {
+};
+
+const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onOpenContact, onImageLoad, isSelected, isSelectionMode, onSelect, onForward, highlightQuery }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -583,10 +593,12 @@ const ChatBubble: React.FC<{
           <div className="space-y-2">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity"
                  onClick={() => onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
-              <img 
-                src={message.media_url} 
-                alt="WhatsApp" 
-                className="max-w-full max-h-[300px] object-contain" 
+              <img
+                src={message.media_url}
+                alt="WhatsApp"
+                loading="lazy"
+                decoding="async"
+                className="max-w-full max-h-[300px] object-contain"
                 onLoad={() => {
                   if (onImageLoad) onImageLoad();
                 }}
@@ -602,7 +614,7 @@ const ChatBubble: React.FC<{
           <div className="space-y-2">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group/video"
                  onClick={() => onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
-              <video className="max-w-full max-h-[300px]">
+              <video className="max-w-full max-h-[300px]" preload="none" playsInline>
                 <source src={message.media_url} type={message.media_mime_type} />
               </video>
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity">
@@ -636,7 +648,7 @@ const ChatBubble: React.FC<{
       case 'sticker':
         return (
           <div className="w-32 h-32">
-            <img src={message.media_url} alt="Sticker" className="w-full h-full object-contain" />
+            <img src={message.media_url} alt="Sticker" loading="lazy" decoding="async" className="w-full h-full object-contain" />
           </div>
         );
 
@@ -915,7 +927,25 @@ const ChatBubble: React.FC<{
   );
 };
 
-const TrackingModal: React.FC<{ 
+const ChatBubble = React.memo(ChatBubbleInner, (prev, next) => {
+  const pm = prev.message;
+  const nm = next.message;
+  return (
+    pm.id === nm.id &&
+    pm.text === nm.text &&
+    (pm as any).status === (nm as any).status &&
+    pm.is_starred === nm.is_starred &&
+    pm.reaction === nm.reaction &&
+    pm.message_type === nm.message_type &&
+    pm.media_url === nm.media_url &&
+    pm.quoted_text === nm.quoted_text &&
+    prev.isSelected === next.isSelected &&
+    prev.isSelectionMode === next.isSelectionMode &&
+    prev.highlightQuery === next.highlightQuery
+  );
+});
+
+const TrackingModal: React.FC<{
   isOpen: boolean, 
   onClose: () => void, 
   trackingData: any 
@@ -1180,7 +1210,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   // Fase 3 — search, seleção múltipla, encaminhar
   const [isSearchingMessages, setIsSearchingMessages] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [messageSearchDebounced, setMessageSearchDebounced] = useState('');
   const [searchResultIdx, setSearchResultIdx] = useState(0);
+
+  // Debounce da busca para evitar filtrar a cada keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setMessageSearchDebounced(messageSearchQuery), 200);
+    return () => clearTimeout(t);
+  }, [messageSearchQuery]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
@@ -2064,6 +2101,42 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     return null;
   }, [currentProvider, activeThread, messages]);
 
+  // Dedupe O(N) via Set — antes era O(N²) com findIndex a cada render
+  const dedupedMessages = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Message[] = [];
+    for (const m of messages) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      out.push(m);
+    }
+    return out;
+  }, [messages]);
+
+  const searchHits = useMemo(() => {
+    if (!messageSearchDebounced) return [] as Message[];
+    const q = messageSearchDebounced.toLowerCase();
+    return dedupedMessages.filter(m => m.text?.toLowerCase().includes(q));
+  }, [dedupedMessages, messageSearchDebounced]);
+
+  const visibleMessages = messageSearchDebounced ? searchHits : dedupedMessages;
+  const currentSearchHitId = searchHits[searchResultIdx]?.id;
+
+  // Refs estáveis para handlers passados ao ChatBubble — preservam memoização
+  const showScrollButtonRef = useRef(showScrollButton);
+  useEffect(() => { showScrollButtonRef.current = showScrollButton; }, [showScrollButton]);
+  const onImageLoadStable = React.useCallback(() => {
+    if (!showScrollButtonRef.current) scrollToBottom("smooth");
+  }, []);
+  const onMessageSelect = React.useCallback((id: string) => {
+    setIsSelectionMode(prev => prev || true);
+    setSelectedMsgIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
   const renderContactDetails = () => {
     if (!activeThread) return null;
     
@@ -2081,7 +2154,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           <div className="relative z-10">
             <div className="w-20 h-20 rounded-[1.5rem] bg-white text-slate-400 flex items-center justify-center mx-auto mb-4 border border-slate-200/50 shadow-xl overflow-hidden group">
               {activeThread.profilePictureUrl ? (
-                <img src={activeThread.profilePictureUrl} alt={activeThread.name} className="w-full h-full object-cover" />
+                <img src={activeThread.profilePictureUrl} alt={activeThread.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
               ) : (
                 <User size={48} className="text-slate-200" />
               )}
@@ -2902,16 +2975,19 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     (window as any).handleDeleteThread = handleDeleteThread;
   }, [threads, selectedThreadId]);
 
-  const filteredThreads = threads.filter(t => {
-    const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.remoteJid.includes(searchTerm);
-    let matchesFilter = true;
-    if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
-    else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
-    else if (filterStatus === 'Cliente') matchesFilter = !!t.is_client;
-    else if (filterStatus === 'Não Lidos') matchesFilter = (t.unreadCount || 0) > 0;
-    else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredThreads = useMemo(() => {
+    const lowerSearch = searchTerm.toLowerCase();
+    return threads.filter(t => {
+      const matchesSearch = !lowerSearch || t.name.toLowerCase().includes(lowerSearch) || t.remoteJid.includes(searchTerm);
+      let matchesFilter = true;
+      if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
+      else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
+      else if (filterStatus === 'Cliente') matchesFilter = !!t.is_client;
+      else if (filterStatus === 'Não Lidos') matchesFilter = (t.unreadCount || 0) > 0;
+      else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
+      return matchesSearch && matchesFilter;
+    });
+  }, [threads, searchTerm, filterStatus]);
 
   return (
     <div className={isFullscreen 
@@ -3010,35 +3086,37 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       )}
 
       {activeTab === 'kanban' ? (
-        <KanbanBoard user={user} threads={threads} onThreadsChange={setThreads} />
+        <Suspense fallback={<LazyFallback />}><KanbanBoard user={user} threads={threads} onThreadsChange={setThreads} /></Suspense>
       ) : activeTab === 'reports' ? (
-        <ReportsDashboard />
+        <Suspense fallback={<LazyFallback />}><ReportsDashboard /></Suspense>
       ) : activeTab === 'quick_replies' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10">
-          <QuickReplies />
+          <Suspense fallback={<LazyFallback />}><QuickReplies /></Suspense>
         </div>
       ) : activeTab === 'integrations' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10">
-          <Integrations user={user} role={user?.role || null} />
+          <Suspense fallback={<LazyFallback />}><Integrations user={user} role={user?.role || null} /></Suspense>
         </div>
       ) : activeTab === 'contacts' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 relative z-10 p-4 md:p-6 lg:p-8">
-          <Contacts user={user} role={user?.role || null} onTabChange={(tab, passedPhone) => {
-            if (tab === 'inbox') {
-              setActiveTab('conversations');
-              if (passedPhone) {
-                const thread = threads.find(t => t.remoteJid.includes(passedPhone));
-                if (thread) {
-                   setSelectedThreadId(thread.id);
-                } else {
-                   toast.error('Nenhuma conversa encontrada para este contato.');
+          <Suspense fallback={<LazyFallback />}>
+            <Contacts user={user} role={user?.role || null} onTabChange={(tab, passedPhone) => {
+              if (tab === 'inbox') {
+                setActiveTab('conversations');
+                if (passedPhone) {
+                  const thread = threads.find(t => t.remoteJid.includes(passedPhone));
+                  if (thread) {
+                     setSelectedThreadId(thread.id);
+                  } else {
+                     toast.error('Nenhuma conversa encontrada para este contato.');
+                  }
                 }
               }
-            }
-          }} />
+            }} />
+          </Suspense>
         </div>
       ) : activeTab === 'finance' ? (
-        <Finance />
+        <Suspense fallback={<LazyFallback />}><Finance /></Suspense>
       ) : (
         <>
           <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[32%] lg:w-[26%] border-r border-gray-100 flex-col bg-gray-50/30`}>
@@ -3364,22 +3442,21 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     placeholder="Buscar na conversa..."
                     className="flex-1 text-sm outline-none bg-transparent placeholder-slate-400"
                   />
-                  {messageSearchQuery && (() => {
-                    const hits = messages.filter(m => m.text?.toLowerCase().includes(messageSearchQuery.toLowerCase()));
-                    return hits.length > 0 ? (
+                  {messageSearchDebounced && (
+                    searchHits.length > 0 ? (
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[11px] text-slate-400 font-medium">{searchResultIdx + 1}/{hits.length}</span>
+                        <span className="text-[11px] text-slate-400 font-medium">{searchResultIdx + 1}/{searchHits.length}</span>
                         <button onClick={() => setSearchResultIdx(i => Math.max(0, i - 1))} className="p-1 text-slate-400 hover:text-primary-600 rounded">
                           <ChevronLeft size={14} />
                         </button>
-                        <button onClick={() => setSearchResultIdx(i => Math.min(hits.length - 1, i + 1))} className="p-1 text-slate-400 hover:text-primary-600 rounded">
+                        <button onClick={() => setSearchResultIdx(i => Math.min(searchHits.length - 1, i + 1))} className="p-1 text-slate-400 hover:text-primary-600 rounded">
                           <ChevronRight size={14} />
                         </button>
                       </div>
                     ) : (
                       <span className="text-[11px] text-slate-400 shrink-0">Sem resultados</span>
-                    );
-                  })()}
+                    )
+                  )}
                   <button onClick={() => { setIsSearchingMessages(false); setMessageSearchQuery(''); }} className="p-1 text-slate-400 hover:text-red-500 rounded shrink-0">
                     <X size={14} />
                   </button>
@@ -3451,65 +3528,45 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       </button>
                     </div>
                   )}
-                  {(() => {
-                    const deduped = messages.filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id));
-                    const searchHits = messageSearchQuery
-                      ? deduped.filter(m => m.text?.toLowerCase().includes(messageSearchQuery.toLowerCase()))
-                      : [];
-                    const visibleMsgs = messageSearchQuery
-                      ? deduped.filter(m => m.text?.toLowerCase().includes(messageSearchQuery.toLowerCase()))
-                      : deduped;
-                    const currentHitId = searchHits[searchResultIdx]?.id;
+                  {visibleMessages.map((msg, idx, arr) => {
+                    const prevMsg = idx > 0 ? arr[idx - 1] : null;
+                    const showDateHeader = !prevMsg ||
+                      new Date(msg.timestamp).toDateString() !== new Date(prevMsg.timestamp).toDateString();
+                    const isCurrentSearchHit = msg.id === currentSearchHitId;
 
-                    return visibleMsgs.map((msg, idx, arr) => {
-                      const prevMsg = idx > 0 ? arr[idx - 1] : null;
-                      const showDateHeader = !prevMsg ||
-                        new Date(msg.timestamp).toDateString() !== new Date(prevMsg.timestamp).toDateString();
-                      const isCurrentSearchHit = msg.id === currentHitId;
-
-                      return (
-                        <React.Fragment key={msg.id}>
-                          {showDateHeader && (
-                            <div className="flex justify-center my-8 sticky top-2 z-[30]">
-                              <span className="px-5 py-1.5 bg-white/70 backdrop-blur-md text-slate-500 text-[12.5px] font-semibold rounded-2xl shadow-sm border border-white/50">
-                                {formatDateHeader(msg.timestamp)}
-                              </span>
-                            </div>
-                          )}
-                          <div
-                            id={`msg-${msg.id}`}
-                            className="transition-all duration-500"
-                            ref={isCurrentSearchHit ? (el) => { if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } : undefined}
-                          >
-                            <ChatBubble
-                              message={msg}
-                              onPreview={setPreviewMedia}
-                              onDelete={handleDeleteMessage}
-                              onReact={handleReactToMessage}
-                              onReply={(m) => setReplyingTo(m)}
-                              onStar={handleToggleStar}
-                              onOpenContact={handleOpenContactChat}
-                              onImageLoad={() => {
-                                if (!showScrollButton) scrollToBottom("smooth");
-                              }}
-                              isSelected={selectedMsgIds.has(msg.id)}
-                              isSelectionMode={isSelectionMode}
-                              onSelect={(id) => {
-                                if (!isSelectionMode) setIsSelectionMode(true);
-                                setSelectedMsgIds(prev => {
-                                  const next = new Set(prev);
-                                  next.has(id) ? next.delete(id) : next.add(id);
-                                  return next;
-                                });
-                              }}
-                              onForward={(m) => setForwardingMessage(m)}
-                              highlightQuery={messageSearchQuery || undefined}
-                            />
+                    return (
+                      <React.Fragment key={msg.id}>
+                        {showDateHeader && (
+                          <div className="flex justify-center my-8 sticky top-2 z-[30]">
+                            <span className="px-5 py-1.5 bg-white/70 backdrop-blur-md text-slate-500 text-[12.5px] font-semibold rounded-2xl shadow-sm border border-white/50">
+                              {formatDateHeader(msg.timestamp)}
+                            </span>
                           </div>
-                        </React.Fragment>
-                      );
-                    });
-                  })()}
+                        )}
+                        <div
+                          id={`msg-${msg.id}`}
+                          className="transition-all duration-500"
+                          ref={isCurrentSearchHit ? (el) => { if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } : undefined}
+                        >
+                          <ChatBubble
+                            message={msg}
+                            onPreview={setPreviewMedia}
+                            onDelete={handleDeleteMessage}
+                            onReact={handleReactToMessage}
+                            onReply={setReplyingTo}
+                            onStar={handleToggleStar}
+                            onOpenContact={handleOpenContactChat}
+                            onImageLoad={onImageLoadStable}
+                            isSelected={selectedMsgIds.has(msg.id)}
+                            isSelectionMode={isSelectionMode}
+                            onSelect={onMessageSelect}
+                            onForward={setForwardingMessage}
+                            highlightQuery={messageSearchDebounced || undefined}
+                          />
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
                   {/* Indicador de digitação */}
                   {(activeThread as any)?.isTyping && (
                     <div className="px-1">
@@ -3999,10 +4056,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <div className="p-6 flex-1 overflow-y-auto bg-slate-50/30">
               <div className="relative group rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
                 {pastedImageUrl && (
-                  <img 
-                    src={pastedImageUrl} 
-                    alt="Pasted" 
-                    className="w-full max-h-[350px] object-contain mx-auto" 
+                  <img
+                    src={pastedImageUrl}
+                    alt="Pasted"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full max-h-[350px] object-contain mx-auto"
                   />
                 )}
               </div>
