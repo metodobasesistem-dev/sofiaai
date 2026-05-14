@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, AlertCircle, Loader2, MessageSquare, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { listMetaTemplates, sendMetaTemplate, type MetaTemplate } from '../services/supabaseService';
+import TemplateQualityBadge, { type QualityScore } from './TemplateQualityBadge';
 
 // Validação client-side leve, espelhando as regras críticas do
 // templateValidator.ts (backend). A validação autoritativa acontece no
@@ -220,18 +221,30 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
                         <p>Todos os templates estão pausados, desativados ou pendentes. Veja a lista abaixo e aja conforme o status.</p>
                       </div>
                     ) : (
-                      <select
-                        value={selectedName || ''}
-                        onChange={e => setSelectedName(e.target.value || null)}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white"
-                      >
-                        <option value="">Selecione um template…</option>
-                        {usableTemplates.map(t => (
-                          <option key={`${t.name}_${t.language}`} value={t.name}>
-                            {t.name} ({t.language}) · {t.category || 'GENERAL'}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="space-y-1.5">
+                        {usableTemplates.map(t => {
+                          const qScore = ((t.quality_score as any)?.score || (t as any).quality_score || 'UNKNOWN') as QualityScore;
+                          const isSelected = selectedName === t.name;
+                          return (
+                            <button
+                              key={`${t.name}_${t.language}`}
+                              type="button"
+                              onClick={() => setSelectedName(isSelected ? null : t.name)}
+                              className={`w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                                isSelected
+                                  ? 'border-primary-400 bg-primary-50 ring-1 ring-primary-300'
+                                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm font-bold text-slate-900 truncate">{t.name}</div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">{t.language} · {t.category || 'GENERAL'}</div>
+                              </div>
+                              <TemplateQualityBadge score={qScore} />
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
 
@@ -323,7 +336,15 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
                       )}
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pré-visualização</label>
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pré-visualização</label>
+                          {selected && (
+                            <TemplateQualityBadge
+                              score={((selected.quality_score as any)?.score || (selected as any).quality_score || 'UNKNOWN') as QualityScore}
+                              size="sm"
+                            />
+                          )}
+                        </div>
                         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-sm text-slate-800 whitespace-pre-wrap">
                           {livePreview || <span className="text-slate-400 italic">Selecione um template…</span>}
                         </div>

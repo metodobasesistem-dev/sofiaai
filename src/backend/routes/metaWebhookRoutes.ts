@@ -247,6 +247,12 @@ router.post('/webhook', webhookLimiter, async (req, res) => {
         if (field === 'message_template_status_update') {
           await handleTemplateStatusUpdate(userId, value);
         }
+
+        // Template quality changed — score moved to GREEN/YELLOW/RED.
+        // Salva snapshot no histórico e notifica admins em RED/YELLOW.
+        if (field === 'message_template_quality_update') {
+          await handleTemplateQualityUpdate(userId, value);
+        }
       }
     }
   } catch (err: any) {
@@ -414,6 +420,51 @@ async function handleTemplateStatusUpdate(userId: string, value: any): Promise<v
     }
   } catch (err: any) {
     console.error('[MetaWebhook] handleTemplateStatusUpdate error:', err.message || err);
+  }
+}
+
+/**
+ * Template quality changed — score moved to GREEN | YELLOW | RED.
+ * Records a snapshot in template_quality_history and notifies admins for
+ * YELLOW and RED scores.
+ *
+ * Meta payload (field: message_template_quality_update):
+ *   { message_template_name, message_template_language, quality_score,
+ *     message_template_id }
+ */
+async function handleTemplateQualityUpdate(userId: string, value: any): Promise<void> {
+  try {
+    const name = value?.message_template_name;
+    const language = value?.message_template_language || 'pt_BR';
+    const score = (value?.quality_score || 'UNKNOWN').toUpperCase();
+
+    if (!name) {
+      console.warn('[MetaWebhook] template_quality_update missing name, skipping');
+      return;
+    }
+
+    console.log(`[MetaWebhook] 📊 Template quality update: "${name}" (${language}) → ${score}`);
+
+    const { error } = await supabase
+      .from('template_quality_history')
+      .insert({ user_id: userId, template_name: name, language_code: language, quality_score: score });
+
+    if (error) {
+      console.error('[MetaWebhook] template_quality_history insert error:', error.message);
+    }
+
+    if (score === 'RED' || score === 'YELLOW') {
+      const { notifyAdminOfMetaIncident } = await import('../lib/metaIncidentNotifier.js');
+      const { data: prof } = await supabase.from('profiles').select('email').eq('id', userId).maybeSingle();
+      notifyAdminOfMetaIncident({
+        tenantUserId: userId,
+        tenantEmail: prof?.email,
+        kind: score === 'RED' ? 'template_quality_red' : 'template_quality_yellow',
+        detail: `${name} (${language}) → ${score}`,
+      });
+    }
+  } catch (err: any) {
+    console.error('[MetaWebhook] handleTemplateQualityUpdate error:', err.message || err);
   }
 }
 

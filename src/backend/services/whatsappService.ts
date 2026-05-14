@@ -1298,6 +1298,13 @@ class WhatsAppService {
     // e detecta degradação de qualidade do número OU token inválido/expirado.
     setInterval(() => this.runMetaQualitySync().catch(() => {}), 30 * 60 * 1000);
     setTimeout(() => this.runMetaQualitySync().catch(() => {}), 60_000);
+
+    // Template quality snapshots — registra quality_score a cada 6h para histórico
+    // de tendência. Só insere nova linha quando o score muda (sem duplicatas).
+    import('../services/templateQualityWorker.js').then(({ runTemplateQualitySnapshot }) => {
+      setInterval(() => runTemplateQualitySnapshot().catch(() => {}), 6 * 60 * 60 * 1000);
+      setTimeout(() => runTemplateQualitySnapshot().catch(() => {}), 5 * 60 * 1000);
+    }).catch(() => {});
   }
 
   /**
