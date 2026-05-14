@@ -379,12 +379,14 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           >
             <MessageSquare size={18} /> Ver Inbox
           </button>
-          <button 
-            onClick={() => onTabChange?.('schedule')}
-            className="px-4 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all flex items-center gap-2"
-          >
-            <Calendar size={18} /> Nova Task
-          </button>
+          {checkPlan('Pro') && (
+            <button 
+              onClick={() => onTabChange?.('schedule')}
+              className="px-4 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all flex items-center gap-2"
+            >
+              <Calendar size={18} /> Nova Task
+            </button>
+          )}
         </div>
       </div>
 
@@ -462,12 +464,14 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
 
           return (
             <>
-              <QuickNavCard 
-                imageSrc="/sofiamini.png" 
-                title="Agentes" 
-                subtitle="Configure seu agente" 
-                onClick={() => onTabChange?.('agents')}
-              />
+              {checkPlan('Pro') && (
+                <QuickNavCard 
+                  imageSrc="/sofiamini.png" 
+                  title="Agentes" 
+                  subtitle="Configure seu agente" 
+                  onClick={() => onTabChange?.('agents')}
+                />
+              )}
               {(role === 'admin' || flags['chat'] !== false) && (
                 <QuickNavCard 
                   icon={MessageSquare} 
@@ -476,7 +480,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('inbox')}
                 />
               )}
-              {(role === 'admin' || flags['agendas'] !== false) && (
+              {checkPlan('Pro') && (role === 'admin' || flags['agendas'] !== false) && (
                 <QuickNavCard 
                   icon={Calendar} 
                   title="Agendamentos" 
@@ -492,7 +496,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('contacts')}
                 />
               )}
-              {(role === 'admin' || flags['agendas'] !== false) && (
+              {checkPlan('Pro') && (role === 'admin' || flags['agendas'] !== false) && (
                 <QuickNavCard 
                   icon={Clock} 
                   title="Disponibilidade" 
@@ -524,7 +528,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   onClick={() => onTabChange?.('inbox', 'kanban')}
                 />
               )}
-              {checkPlan('Starter') && (role === 'admin' || flags['reports'] !== false) && (
+              {checkPlan('Pro') && (role === 'admin' || flags['reports'] !== false) && (
                 <QuickNavCard 
                   icon={BarChart3} 
                   title="Relatórios" 
