@@ -69,6 +69,7 @@ export default function AdminTemplatesTab() {
       await load();
     } catch (e: any) {
       setError(e.message);
+    } finally {
       setSyncing(false);
     }
   }
