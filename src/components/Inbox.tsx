@@ -479,8 +479,22 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
   </div>
 );
 
-const ChatBubble: React.FC<{ 
-  message: Message; 
+const TypingIndicator: React.FC = () => (
+  <div className="flex items-start mb-1.5">
+    <div className="max-w-[85%] px-4 py-3 rounded-2xl bg-white border border-slate-200/50 shadow-sm rounded-tl-none flex items-center gap-1.5">
+      {[0, 1, 2].map(i => (
+        <span
+          key={i}
+          className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+          style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.8s' }}
+        />
+      ))}
+    </div>
+  </div>
+);
+
+const ChatBubble: React.FC<{
+  message: Message;
   onPreview: (media: any) => void;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
@@ -493,6 +507,33 @@ const ChatBubble: React.FC<{
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
   const isRevoked = message.message_type === 'revoked';
+
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTouchStart = () => {
+    longPressTimerRef.current = setTimeout(() => {
+      setShowMobileActions(true);
+      if (window.navigator?.vibrate) window.navigator.vibrate(30);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!showMobileActions) return;
+    const timer = setTimeout(() => {
+      const close = () => setShowMobileActions(false);
+      document.addEventListener('touchstart', close, { once: true });
+      return () => document.removeEventListener('touchstart', close);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [showMobileActions]);
   
   const renderMediaContent = () => {
     if (isRevoked) {
@@ -625,7 +666,72 @@ const ChatBubble: React.FC<{
   };
   
   return (
-    <div className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'} relative overflow-hidden`}>
+    <div
+      className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'} relative overflow-hidden`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchEnd}
+    >
+      {/* Long press mobile action sheet */}
+      <AnimatePresence>
+        {showMobileActions && !isRevoked && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[210] flex flex-col justify-end"
+          >
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileActions(false)} />
+            <motion.div
+              initial={{ y: 80 }}
+              animate={{ y: 0 }}
+              exit={{ y: 80 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+              className="relative bg-white rounded-t-3xl px-4 pt-4 pb-8 shadow-2xl"
+            >
+              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+              {/* Emoji rápido */}
+              <div className="flex justify-around mb-4 px-2">
+                {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => { onReact(message.id, emoji); setShowMobileActions(false); }}
+                    className="text-3xl active:scale-110 transition-transform p-1"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <div className="h-px bg-slate-100 mb-2" />
+              {/* Ações */}
+              <button
+                onClick={() => { onReply(message); setShowMobileActions(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+              >
+                <ChevronLeft size={20} className="rotate-180 text-primary-600 shrink-0" />
+                <span className="text-[15px] font-semibold text-slate-800">Responder</span>
+              </button>
+              <button
+                onClick={() => { onStar(message.id, !!message.is_starred); setShowMobileActions(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+              >
+                <Star size={20} className={message.is_starred ? 'fill-amber-500 text-amber-500 shrink-0' : 'text-slate-400 shrink-0'} />
+                <span className="text-[15px] font-semibold text-slate-800">
+                  {message.is_starred ? 'Remover dos favoritos' : 'Favoritar'}
+                </span>
+              </button>
+              <button
+                onClick={() => { onDelete(message.id); setShowMobileActions(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 active:bg-red-100 rounded-2xl transition-all text-left"
+              >
+                <Trash size={20} className="text-red-500 shrink-0" />
+                <span className="text-[15px] font-semibold text-red-500">Apagar</span>
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Background Reply Icon (appears when dragging) */}
       <div className={`absolute inset-y-0 left-0 flex items-center pl-6 pointer-events-none text-primary-500 opacity-0 group-active:opacity-100 transition-opacity`}>
         <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center">
@@ -638,10 +744,10 @@ const ChatBubble: React.FC<{
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={{ left: 0, right: 0.6 }}
         onDragEnd={(_e, info) => {
-          if (info.offset.x > 80) {
+          if (info.offset.x > 50) {
             onReply(message);
             if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-              window.navigator.vibrate(10);
+              window.navigator.vibrate(15);
             }
           }
         }}
@@ -1029,6 +1135,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
+  const [threadsRefreshKey, setThreadsRefreshKey] = useState(0);
+  const [pullDelta, setPullDelta] = useState(0);
+  const [isRefreshingThreads, setIsRefreshingThreads] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const pullStartYRef = useRef(0);
+  const isPullingRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pendingScrollRestoreRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1059,6 +1171,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       setLoadingOlder(false);
     }
   }, [messages]);
+
+  // Fix do teclado virtual no mobile via visualViewport API
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => setViewportHeight(vv.height);
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    update();
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
 
   // Monitor de conexão via eventos de rede do navegador
   useEffect(() => {
@@ -1660,7 +1786,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, threadsRefreshKey]);
 
   // Listen to messages
   useEffect(() => {
@@ -2890,7 +3016,44 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto">
+        <div
+          className="flex-1 overflow-y-auto relative"
+          onTouchStart={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollTop === 0) {
+              pullStartYRef.current = e.touches[0].clientY;
+              isPullingRef.current = true;
+            }
+          }}
+          onTouchMove={(e) => {
+            if (!isPullingRef.current) return;
+            const delta = e.touches[0].clientY - pullStartYRef.current;
+            if (delta > 0 && delta < 90) setPullDelta(delta);
+          }}
+          onTouchEnd={async () => {
+            if (!isPullingRef.current) return;
+            isPullingRef.current = false;
+            if (pullDelta >= 60) {
+              if (window.navigator?.vibrate) window.navigator.vibrate(10);
+              setIsRefreshingThreads(true);
+              setThreadsRefreshKey(k => k + 1);
+              setTimeout(() => setIsRefreshingThreads(false), 1200);
+            }
+            setPullDelta(0);
+          }}
+        >
+          {/* Indicador pull-to-refresh */}
+          <div
+            className="flex items-center justify-center overflow-hidden transition-all duration-200"
+            style={{ height: pullDelta > 0 ? pullDelta : isRefreshingThreads ? 44 : 0 }}
+          >
+            <Loader2
+              size={18}
+              className={`text-primary-500 ${isRefreshingThreads || pullDelta >= 60 ? 'animate-spin' : ''}`}
+              style={{ opacity: pullDelta > 0 ? Math.min(pullDelta / 60, 1) : 1 }}
+            />
+          </div>
+
           {loadingThreads ? (
             <div className="p-2">
               <ListSkeleton rows={8} />
@@ -2902,9 +3065,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             </div>
           ) : (
             filteredThreads.map(thread => (
-              <ContactItem 
-                key={thread.id} 
-                thread={thread} 
+              <ContactItem
+                key={thread.id}
+                thread={thread}
                 active={selectedThreadId === thread.id}
                 onClick={() => setSelectedThreadId(thread.id)}
                 onDelete={() => handleDeleteThread(thread)}
@@ -2915,7 +3078,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       </div>
 
       {/* Right Column: Chat Area */}
-      <div className={`${selectedThreadId ? 'flex fixed inset-0 z-[60] md:relative md:inset-auto md:z-0' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}>
+      <div
+        className={`${selectedThreadId ? 'flex fixed inset-0 z-[60] md:relative md:inset-auto md:z-0' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}
+        style={viewportHeight && selectedThreadId ? { height: viewportHeight } : undefined}
+      >
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
@@ -3186,6 +3352,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                         </React.Fragment>
                       );
                     })}
+                  {/* Indicador de digitação */}
+                  {(activeThread as any)?.isTyping && (
+                    <div className="px-1">
+                      <TypingIndicator />
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </>
               )}
