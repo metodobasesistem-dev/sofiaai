@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { 
   FileText,
   MapPin,
@@ -126,6 +126,30 @@ const formatDateHeader = (dateStr: string) => {
   // Fallback para data completa
   return date.toLocaleDateString('pt-BR');
 };
+
+const PAGE_SIZE = 50;
+
+const formatMsgRow = (d: any): Message => ({
+  id: d.id,
+  text: d.text || '',
+  sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+  time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+  timestamp: d.created_at,
+  audio_url: d.audio_url,
+  message_type: d.message_type || 'text',
+  media_url: d.media_url,
+  media_mime_type: d.media_mime_type,
+  media_filename: d.media_filename,
+  caption: d.caption,
+  is_external: d.is_external,
+  reaction: d.reaction,
+  whatsapp_id: d.whatsapp_id,
+  status: d.status,
+  is_starred: d.is_starred || false,
+  quoted_id: d.quoted_id,
+  quoted_text: d.quoted_text,
+  contact_jid: d.contact_jid,
+});
 
 const formatPhone = (phone: string) => {
   const p = phone.replace(/\D/g, '');
@@ -1001,7 +1025,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const pendingScrollRestoreRef = useRef<number | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     contactsRef.current = contacts;
@@ -1019,6 +1049,35 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   useEffect(() => {
     selectedThreadIdRef.current = selectedThreadId;
   }, [selectedThreadId]);
+
+  // Restaura posição do scroll após carregar mensagens antigas (sem pular para o fundo)
+  useLayoutEffect(() => {
+    if (pendingScrollRestoreRef.current !== null && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      container.scrollTop = container.scrollHeight - pendingScrollRestoreRef.current;
+      pendingScrollRestoreRef.current = null;
+      setLoadingOlder(false);
+    }
+  }, [messages]);
+
+  // Monitor de conexão via eventos de rede do navegador
+  useEffect(() => {
+    const handleOnline = () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      setConnectionStatus('reconnecting');
+      setTimeout(() => setConnectionStatus('connected'), 2000);
+    };
+    const handleOffline = () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      setConnectionStatus('disconnected');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Loads the active provider once on mount — used for the provider badge and
   // to decide whether to surface the 24h re-engagement modal on send failures.
@@ -1175,22 +1234,48 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
-    // Usamos múltiplos timeouts para garantir que o scroll aconteça mesmo se o DOM demorar (ex: imagens)
     const container = scrollContainerRef.current;
     if (!container) return;
-
     const performScroll = () => {
       messagesEndRef.current?.scrollIntoView({ behavior });
     };
-
-    // Primeira tentativa imediata
     performScroll();
-    
-    // Segunda tentativa após 100ms
     setTimeout(performScroll, 100);
-    
-    // Terceira tentativa após 500ms (para imagens pesadas)
     setTimeout(performScroll, 500);
+  };
+
+  const loadOlderMessages = async () => {
+    if (!hasMoreMessages || loadingOlder || !selectedThreadId) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    setLoadingOlder(true);
+    const oldestTimestamp = messages[0]?.timestamp;
+    if (!oldestTimestamp) { setLoadingOlder(false); return; }
+
+    try {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('thread_id', selectedThreadId)
+        .lt('created_at', oldestTimestamp)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE);
+
+      if (!data || data.length === 0) {
+        setHasMoreMessages(false);
+        setLoadingOlder(false);
+        return;
+      }
+
+      setHasMoreMessages(data.length === PAGE_SIZE);
+      // Salva scrollHeight antes de prepender — useLayoutEffect restaura após render
+      pendingScrollRestoreRef.current = container.scrollHeight;
+      setMessages(prev => [...[...data].reverse().map(formatMsgRow) as any, ...prev]);
+    } catch (err) {
+      console.error('[Inbox] Erro ao carregar mensagens antigas:', err);
+      setLoadingOlder(false);
+    }
   };
 
   useEffect(() => {
@@ -1209,11 +1294,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    
-    // Se estiver a mais de 400px do fundo, mostra o botão (ajustado de 300 para 400 para ser mais sensível)
     const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-    const isAtBottom = distanceToBottom < 150; // Tolerância menor para considerar "no fundo"
-    setShowScrollButton(!isAtBottom);
+    setShowScrollButton(distanceToBottom > 150);
+    // Carrega mensagens mais antigas quando o usuário chegar perto do topo
+    if (scrollTop < 120 && hasMoreMessages && !loadingOlder) {
+      loadOlderMessages();
+    }
   };
 
 
@@ -1405,6 +1491,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
       channel = supabase
         .channel(`threads-${userId}`)
+        .on('system', {}, (status: any) => {
+          if (status === 'SUBSCRIBED') {
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+            setConnectionStatus(prev => prev !== 'connected' ? 'connected' : prev);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setConnectionStatus('reconnecting');
+            reconnectTimerRef.current = setTimeout(() => setConnectionStatus('disconnected'), 10000);
+          }
+        })
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'threads', filter: `user_id=eq.${userId}` },
@@ -1584,37 +1679,19 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       setMessages([]);
 
       try {
+        // Carrega as últimas PAGE_SIZE mensagens (DESC) e reverte para ordem cronológica
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .eq('thread_id', selectedThreadId)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false })
+          .limit(PAGE_SIZE);
 
         if (error) {
           console.error('[Inbox] Erro ao buscar mensagens:', error);
         } else if (data) {
-          const formatted = data.map(d => ({
-            id: d.id,
-            text: d.text || '',
-            sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
-            time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-            timestamp: d.created_at,
-            audio_url: d.audio_url,
-            message_type: d.message_type || 'text',
-            media_url: d.media_url,
-            media_mime_type: d.media_mime_type,
-            media_filename: d.media_filename,
-            caption: d.caption,
-            is_external: d.is_external,
-            reaction: d.reaction,
-            whatsapp_id: d.whatsapp_id,
-            status: d.status,
-            is_starred: d.is_starred || false,
-            quoted_id: d.quoted_id,
-            quoted_text: d.quoted_text,
-            contact_jid: d.contact_jid
-          }));
-          setMessages(formatted as any);
+          setHasMoreMessages(data.length === PAGE_SIZE);
+          setMessages([...data].reverse().map(formatMsgRow) as any);
         }
       } catch (msgErr) {
         console.error('[Inbox] Falha crítica ao carregar mensagens:', msgErr);
@@ -1623,28 +1700,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       }
 
       // ── BLOCO 2: Realtime listener ────────────────────────────────────
-      // Fase 4: escuta INSERT (novas mensagens) e UPDATE (mudança de status)
-      const formatMsg = (d: any) => ({
-        id: d.id,
-        text: d.text || '',
-        sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
-        time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-        timestamp: d.created_at,
-        audio_url: d.audio_url,
-        status: d.status,
-        message_type: d.message_type || 'text',
-        media_url: d.media_url,
-        media_mime_type: d.media_mime_type,
-        media_filename: d.media_filename,
-        caption: d.caption,
-        is_external: d.is_external,
-        reaction: d.reaction,
-        whatsapp_id: d.whatsapp_id,
-        is_starred: d.is_starred || false,
-        quoted_id: d.quoted_id,
-        quoted_text: d.quoted_text,
-        contact_jid: d.contact_jid
-      });
+      const formatMsg = formatMsgRow;
 
       // Variável para guardar o timestamp da última mensagem conhecida (reconciliação de lacunas)
       let lastKnownMsgTimestamp: string | null = null;
@@ -2359,11 +2415,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   };
 
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedThreadId || !activeThread) return;
+    if (!messageText.trim() || !selectedThreadId || !activeThread || isSending) return;
 
     const userId = user?.id;
     if (!userId) return;
 
+    setIsSending(true);
     const text = messageText;
     setMessageText('');
 
@@ -2425,6 +2482,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       } else {
         toast.error(error?.message || 'Erro ao enviar mensagem');
       }
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -3029,20 +3088,42 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
             )}
 
+            {/* Banner de status de conexão */}
+            <AnimatePresence>
+              {connectionStatus !== 'connected' && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`overflow-hidden shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold z-20 ${
+                    connectionStatus === 'reconnecting'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-red-600 text-white'
+                  }`}
+                >
+                  <Loader2 size={12} className="animate-spin" />
+                  {connectionStatus === 'reconnecting'
+                    ? 'Reconectando ao servidor...'
+                    : 'Sem conexão — verifique sua internet'}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Messages Area */}
-            <div 
+            <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative no-scrollbar" 
-              style={{ 
-                backgroundColor: '#e5ddd5', // Cor base similar ao WhatsApp
-                backgroundImage: 'url(/chat-bg.png)', 
-                backgroundSize: '400px', 
-                backgroundRepeat: 'repeat' 
+              className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative no-scrollbar"
+              style={{
+                backgroundColor: '#e5ddd5',
+                backgroundImage: 'url(/chat-bg.png)',
+                backgroundSize: '400px',
+                backgroundRepeat: 'repeat'
               }}>
               {/* Overlay suave para integrar melhor com o tema claro */}
               <div className="absolute inset-0 bg-white/40 pointer-events-none" />
-              
+
               <div className="relative z-10 space-y-4">
               {loadingMessages ? (
                 <div className="space-y-6">
@@ -3051,6 +3132,26 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               ) : (
                 <>
+                  {/* Indicador de carregamento de mensagens antigas */}
+                  {loadingOlder && (
+                    <div className="flex justify-center py-3">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full shadow-sm text-xs text-slate-500 font-medium">
+                        <Loader2 size={12} className="animate-spin text-primary-500" />
+                        Carregando mensagens anteriores...
+                      </div>
+                    </div>
+                  )}
+                  {/* Botão para carregar mais quando não está carregando */}
+                  {!loadingOlder && hasMoreMessages && messages.length > 0 && (
+                    <div className="flex justify-center py-2">
+                      <button
+                        onClick={loadOlderMessages}
+                        className="px-4 py-1.5 bg-white/80 rounded-full shadow-sm text-xs text-slate-500 font-medium hover:bg-white transition-colors"
+                      >
+                        Ver mensagens anteriores
+                      </button>
+                    </div>
+                  )}
                   {messages
                     .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
                     .map((msg, idx, filteredArr) => {
@@ -3311,11 +3412,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 {/* Floating Action Button */}
                 <div className={`${isRecording ? 'flex-1 md:shrink-0' : 'shrink-0'} pb-0.5`}>
                   {messageText.trim() ? (
-                    <button 
+                    <button
                       onClick={handleSendMessage}
-                      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95"
+                      disabled={isSending}
+                      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Send size={20} className="md:size-[22px] ml-1" />
+                      {isSending
+                        ? <Loader2 size={20} className="animate-spin" />
+                        : <Send size={20} className="md:size-[22px] ml-1" />}
                     </button>
                   ) : (
                     <VoiceRecorder onStop={handleSendVoice} onRecordingChange={setIsRecording} />
