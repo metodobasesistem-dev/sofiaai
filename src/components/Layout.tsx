@@ -28,7 +28,8 @@ import {
   Zap,
   Send,
   Plug,
-  Wallet
+  Wallet,
+  FileText
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -188,6 +189,7 @@ export default function Layout({
           { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
           { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
           { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
+          { id: 'meta_templates', icon: <FileText size={16} className="text-violet-500" />, label: 'Templates' },
         ]
       },
       {

@@ -18,6 +18,7 @@ import QuickReplies from './components/QuickReplies';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LeoApp from './pages/Leo/LeoApp';
 import Finance from './components/Finance';
+import MetaTemplatesAdminPage from './components/MetaTemplatesAdminPage';
 
  import Login from './components/Login';
  import MaintenancePage from './components/MaintenancePage';
@@ -224,6 +225,8 @@ export default function App() {
         return <Contacts onTabChange={handleTabChange} />;
       case 'clients':
         return <Clients onTabChange={handleTabChange} user={user} role={role} />;
+      case 'meta_templates':
+        return <MetaTemplatesAdminPage />;
       case 'integrations':
         return <Integrations user={user} role={role} />;
       case 'settings':
