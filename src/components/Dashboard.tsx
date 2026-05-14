@@ -93,6 +93,15 @@ const MetricCard = ({ icon: Icon, title, value }: { icon: any, title: string, va
 export default function Dashboard({ onTabChange, role, user, plano }: { onTabChange?: (tab: string, subTab?: string) => void, role?: string, user: SupabaseUser | null, plano?: string | null }) {
   const { flags } = useFeatureContext();
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+
+  const checkPlan = (minPlan: string) => {
+    if (role === 'admin') return true;
+    const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
+    const userPlanIdx = plans.indexOf(plano || 'Trial');
+    const minPlanIdx = plans.indexOf(minPlan);
+    return userPlanIdx >= minPlanIdx;
+  };
+
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [stats, setStats] = useState({ 
@@ -454,14 +463,6 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
       {/* 2. Grid de Navegação Rápida */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {(() => {
-          const checkPlan = (minPlan: string) => {
-            if (role === 'admin') return true;
-            const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
-            const userPlanIdx = plans.indexOf(plano || 'Trial');
-            const minPlanIdx = plans.indexOf(minPlan);
-            return userPlanIdx >= minPlanIdx;
-          };
-
           return (
             <>
               {checkPlan('Pro') && (
