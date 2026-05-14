@@ -548,14 +548,32 @@ class WhatsAppService {
         await logToDB(userId, 'warning', 'persistence', `Pre-persist failed for ${tempId}`, mErr);
       }
 
-      // 3. Chama o provider via Abstração
+      // 3. Chama o provider via Abstração — com retry para erros transitórios
       const provider = await WhatsAppProviderFactory.getProvider(userId);
-      
+
       if (quoted) {
         console.log(`[WhatsAppService] 📤 Replying to message ${quoted.id} | text: ${quoted.text}`);
       }
 
-      const result = await provider.sendMessage(instanceName, to, message, quoted);
+      // Retry com backoff (1s, 3s, 9s) — NÃO retenta em erros permanentes
+      // (24h window fechada, credenciais inválidas, 4xx específicos)
+      const sendDelays = [1000, 3000, 9000];
+      let result: any;
+      for (let attempt = 0; attempt <= sendDelays.length; attempt++) {
+        try {
+          result = await provider.sendMessage(instanceName, to, message, quoted);
+          break;
+        } catch (err: any) {
+          const errInfo = parseProviderError(err);
+          // Erros permanentes não devem ser retentados
+          if (errInfo.is24hWindowClosed || errInfo.isAuthError || attempt === sendDelays.length) {
+            throw err;
+          }
+          const delay = sendDelays[attempt];
+          console.warn(`[WhatsAppService] ⚠️ sendMessage para ${to} falhou (tentativa ${attempt + 1}): ${errInfo.message}. Tentando em ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
       const msgId = (result as any).messageId || (result as any).key?.id || tempId;
 
       // 4. Substitui o registro temporário pelo definitivo com o ID real do WhatsApp

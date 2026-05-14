@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { generateAIResponse, generateEmbedding } from './aiService';
+import { generateAIResponse, generateEmbedding, truncateHistoryByTokens } from './aiService';
 import { format } from 'date-fns';
 import { normalizePhone } from '../lib/phoneHelper';
 
@@ -57,9 +57,11 @@ export const sofiaService = {
       .limit(20);
 
     const formattedHistory = (history || []).reverse().map(h => ({
-      role: h.role as 'user' | 'assistant',
-      content: h.content
+      role: (h.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: (h.content as string) || ''
     }));
+    // Aplica limite duro de tokens (8k) — evita estouro de context length
+    const truncatedHistory = truncateHistoryByTokens(formattedHistory, 8000);
 
     // 5. Sofia's Persona
     const { data: profile } = await supabase.from('profiles')
@@ -191,8 +193,8 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
     ];
 
     // 7. AI Loop with Tools (Max 5 iterations to prevent infinite loops)
-    let currentMessages = [
-      ...formattedHistory,
+    let currentMessages: any[] = [
+      ...truncatedHistory,
       { role: 'user', content: message }
     ];
 

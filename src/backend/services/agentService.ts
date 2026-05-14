@@ -1,6 +1,6 @@
 import { audioService } from './audioService.js';
 import { supabase } from '../lib/supabaseClient.js';
-import { generateAIResponse } from './aiService.js';
+import { generateAIResponse, truncateHistoryByTokens } from './aiService.js';
 import { redisService } from './redisService.js';
 import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fns';
 import { googleCalendarService } from './googleCalendarService.js';
@@ -173,19 +173,27 @@ export class AgentService {
       const tools = this.getAgentTools();
 
 
+      // Aplica limite duro de tokens (8k) — evita estouro de context length
+      // em conversas longas. Sempre preserva as mensagens mais recentes.
+      const filteredHistory = history
+        .filter((m: any) => (m.role === 'user' || m.role === 'assistant') && m.content)
+        .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content as string }));
+      const truncatedHistory = truncateHistoryByTokens(filteredHistory, 8000);
+
       let currentMessages: any[] = [
-        ...history
-          .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
-          .map(m => ({ role: m.role, content: m.content })),
+        ...truncatedHistory,
         { role: 'user', content: body, mediaUrl, mediaMimeType }
       ];
 
       let finalUsage = null;
       let aiFinalText: string | null = null;
       let toolCalledInThisTurn = false;
+      const MAX_TOOL_ITERATIONS = 5;
+      let iterationCount = 0;
 
-      while (true) {
-        console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId})`);
+      while (iterationCount < MAX_TOOL_ITERATIONS) {
+        iterationCount++;
+        console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId}, Iter: ${iterationCount}/${MAX_TOOL_ITERATIONS})`);
         const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', dbUserId);
         
         if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
@@ -205,24 +213,43 @@ export class AgentService {
 
           for (const toolCall of response.toolCalls) {
             const functionName = toolCall.function.name;
-            const args = JSON.parse(toolCall.function.arguments);
+            let args: any = {};
+            try {
+              args = JSON.parse(toolCall.function.arguments || '{}');
+            } catch (pErr) {
+              console.error(`[AgentService] ❌ JSON Parse Error em tool ${functionName}:`, toolCall.function.arguments?.substring(0, 200));
+              // Devolve um erro estruturado pra IA reformular a chamada
+              currentMessages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                name: functionName,
+                content: JSON.stringify({ error: 'Argumentos da tool em formato JSON inválido. Tente novamente com JSON correto.' })
+              });
+              continue;
+            }
             console.log(`[AgentService] 🛠️ TOOL CALL: ${functionName}`, args);
-            
-            let toolResult;
 
-            if (functionName === 'Agendar') {
-              if (args.acao === 'agendar') {
-                toolResult = await this.handleBookAppointment(dbUserId, threadId, contactName, args, agentData, activeProfessionals);
-                if (toolResult.success && args.clientName) {
-                  await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
+            let toolResult;
+            try {
+              if (functionName === 'Agendar') {
+                if (args.acao === 'agendar') {
+                  toolResult = await this.handleBookAppointment(dbUserId, threadId, contactName, args, agentData, activeProfessionals);
+                  if (toolResult?.success && args.clientName) {
+                    await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
+                  }
+                } else {
+                  toolResult = await this.handleCheckAvailability(dbUserId, args.date, agentData, activeProfessionals, args.professional_name);
                 }
+              } else if (functionName === 'servicoTool') {
+                toolResult = await this.handleSearchCatalog(dbUserId, args.pergunta || args.query);
+              } else if (functionName === 'consultarEcommerce') {
+                toolResult = await this.handleEcommerceSearch(dbUserId, agentData, args.query || args.pergunta);
               } else {
-                toolResult = await this.handleCheckAvailability(dbUserId, args.date, agentData, activeProfessionals, args.professional_name);
+                toolResult = { error: `Tool "${functionName}" não reconhecida` };
               }
-            } else if (functionName === 'servicoTool') {
-              toolResult = await this.handleSearchCatalog(dbUserId, args.pergunta || args.query);
-            } else if (functionName === 'consultarEcommerce') {
-              toolResult = await this.handleEcommerceSearch(dbUserId, agentData, args.query || args.pergunta);
+            } catch (toolErr: any) {
+              console.error(`[AgentService] ❌ Tool ${functionName} falhou:`, toolErr?.message || toolErr);
+              toolResult = { error: toolErr?.message || 'Erro interno ao executar a tool' };
             }
 
             console.log(`[AgentService] ✅ TOOL RESULT: ${functionName}`, toolResult);
@@ -241,6 +268,11 @@ export class AgentService {
         }
       }
 
+      if (!aiFinalText && iterationCount >= MAX_TOOL_ITERATIONS) {
+        console.warn(`[AgentService] ⚠️ Limite de iterações de tool atingido (${MAX_TOOL_ITERATIONS}) na thread ${threadId}`);
+        aiFinalText = "Estou processando várias informações ao mesmo tempo. Pode reformular sua pergunta de forma mais específica?";
+      }
+
       if (!aiFinalText && !toolCalledInThisTurn) {
         aiFinalText = "Hm, tive um pequeno problema técnico aqui. Poderia repetir o que você disse? Vou adorar te ajudar!";
       }
@@ -257,6 +289,25 @@ export class AgentService {
       }
 
       if (aiFinalText) {
+        // ──────────────────────────────────────────────────────────────
+        // GUARD FINAL: re-checa estado da thread imediatamente antes de
+        // enviar. Fecha a janela de corrida onde o operador assume durante
+        // o processamento da IA (que pode levar segundos com tools).
+        // ──────────────────────────────────────────────────────────────
+        try {
+          const { data: latestThread } = await supabase
+            .from('threads')
+            .select('status')
+            .eq('id', threadId)
+            .maybeSingle();
+          if (latestThread?.status === 'human') {
+            console.log(`[AgentService] 🛑 Thread ${threadId} virou 'human' durante o processamento. Descartando resposta da IA.`);
+            return { status: 'human' } as any;
+          }
+        } catch (lockErr) {
+          console.warn('[AgentService] Falha ao revalidar status da thread, prosseguindo:', lockErr);
+        }
+
         const aiMsgId = `ai-${Date.now()}`;
         if (!skipPersist) {
           await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome, finalUsage);
@@ -827,7 +878,17 @@ ${agentData.prompt_base || 'Seja prestativo e profissional.'}`;
   }
 
   private async getHistoryFromSupabase(threadId: string, limit: number) {
-    const { data } = await supabase.from('messages').select('text, direction').eq('thread_id', threadId).order('timestamp', { ascending: false }).limit(limit);
+    // Exclui notas privadas (id LIKE 'private-%') — elas são internas do operador
+    // e NÃO devem entrar no contexto da IA. Também filtra mensagens vazias.
+    const { data } = await supabase
+      .from('messages')
+      .select('id, text, direction')
+      .eq('thread_id', threadId)
+      .not('id', 'like', 'private-%')
+      .not('text', 'is', null)
+      .neq('text', '')
+      .order('timestamp', { ascending: false })
+      .limit(limit);
     return (data || []).reverse().map(d => ({
       role: d.direction === 'inbound' ? 'user' : 'assistant',
       content: d.text
