@@ -283,6 +283,42 @@ router.get('/templates', requireAuth as any, async (req: AuthenticatedRequest, r
 });
 
 /**
+ * GET /templates/metrics — aggregated send stats from template_send_log.
+ * Query: ?days=30 (default)
+ */
+router.get('/templates/metrics', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const days = Math.min(parseInt((req.query.days as string) || '30', 10) || 30, 90);
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+
+  const { data, error } = await supabase
+    .from('template_send_log')
+    .select('template_name, status, warnings, created_at')
+    .eq('user_id', userId)
+    .gte('created_at', since);
+
+  if (error) return res.status(500).json({ success: false, error: error.message });
+
+  const agg: Record<string, { total: number; sent: number; failed: number; blocked: number; with_warnings: number; last_sent: string }> = {};
+  for (const row of data || []) {
+    const k = row.template_name;
+    if (!agg[k]) agg[k] = { total: 0, sent: 0, failed: 0, blocked: 0, with_warnings: 0, last_sent: '' };
+    agg[k].total++;
+    if (row.status === 'sent') agg[k].sent++;
+    else if (row.status === 'failed') agg[k].failed++;
+    else if (row.status === 'blocked_local') agg[k].blocked++;
+    if (Array.isArray(row.warnings) && row.warnings.length > 0) agg[k].with_warnings++;
+    if (!agg[k].last_sent || row.created_at > agg[k].last_sent) agg[k].last_sent = row.created_at;
+  }
+
+  const metrics = Object.entries(agg)
+    .map(([template_name, s]) => ({ template_name, ...s }))
+    .sort((a, b) => b.total - a.total);
+
+  return res.json({ success: true, metrics, period_days: days });
+});
+
+/**
  * POST /templates/generate — AI-powered template text generator.
  * Costs are absorbed by the platform (uses global OPENAI_API_KEY, no userId billing).
  * Body: { template_name, category, language, description }

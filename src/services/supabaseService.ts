@@ -1862,6 +1862,25 @@ export const sendMetaTemplate = async (
   return res.json();
 };
 
+export interface TemplateMetric {
+  template_name: string;
+  total: number;
+  sent: number;
+  failed: number;
+  blocked: number;
+  with_warnings: number;
+  last_sent: string;
+}
+
+export const getTemplateMetrics = async (days = 30): Promise<TemplateMetric[]> => {
+  const res = await fetch(`/api/v2/whatsapp/meta/templates/metrics?days=${days}`, {
+    headers: await authHeaders(),
+  });
+  const body = await res.json();
+  if (!body.success) throw new Error(body.error || 'Falha ao carregar métricas');
+  return body.metrics as TemplateMetric[];
+};
+
 export interface TemplateGenerateResult {
   success: boolean;
   body_text: string;

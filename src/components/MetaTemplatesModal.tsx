@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, AlertCircle, Loader2, MessageSquare, AlertTriangle, Plus } from 'lucide-react';
+import { X, Send, AlertCircle, Loader2, MessageSquare, AlertTriangle, Plus, Copy, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { listMetaTemplates, sendMetaTemplate, type MetaTemplate } from '../services/supabaseService';
 import TemplateQualityBadge, { type QualityScore } from './TemplateQualityBadge';
 import TemplateBuilderModal from './TemplateBuilderModal';
+import TemplateMetricsPanel from './TemplateMetricsPanel';
 
 // Validação client-side leve, espelhando as regras críticas do
 // templateValidator.ts (backend). A validação autoritativa acontece no
@@ -52,6 +53,8 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
   const [bodyVars, setBodyVars] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
+  const [cloneData, setCloneData] = useState<{ name?: string; category?: string; language?: string; bodyText?: string; skipToPreview?: boolean } | undefined>(undefined);
+  const [showMetrics, setShowMetrics] = useState(false);
 
   const selected = useMemo(() => templates.find(t => t.name === selectedName) || null, [templates, selectedName]);
 
@@ -237,23 +240,42 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
                         {usableTemplates.map(t => {
                           const qScore = ((t.quality_score as any)?.score || (t as any).quality_score || 'UNKNOWN') as QualityScore;
                           const isSelected = selectedName === t.name;
+                          const bodyText = t.components.find(c => c.type === 'BODY')?.text || '';
                           return (
-                            <button
+                            <div
                               key={`${t.name}_${t.language}`}
-                              type="button"
-                              onClick={() => setSelectedName(isSelected ? null : t.name)}
-                              className={`w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                              className={`rounded-xl border transition-all ${
                                 isSelected
                                   ? 'border-primary-400 bg-primary-50 ring-1 ring-primary-300'
-                                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
                               }`}
                             >
-                              <div className="min-w-0">
-                                <div className="text-sm font-bold text-slate-900 truncate">{t.name}</div>
-                                <div className="text-[10px] text-slate-500 mt-0.5">{t.language} · {t.category || 'GENERAL'}</div>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedName(isSelected ? null : t.name)}
+                                className="w-full text-left px-4 py-3 flex items-center justify-between gap-3"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-sm font-bold text-slate-900 truncate">{t.name}</div>
+                                  <div className="text-[10px] text-slate-500 mt-0.5">{t.language} · {t.category || 'GENERAL'}</div>
+                                </div>
+                                <TemplateQualityBadge score={qScore} />
+                              </button>
+                              <div className="px-3 pb-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  title="Clonar este template"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setCloneData({ name: `${t.name}_v2`, category: t.category || 'UTILITY', language: t.language, bodyText, skipToPreview: true });
+                                    setShowBuilder(true);
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                                >
+                                  <Copy size={11} /> Clonar
+                                </button>
                               </div>
-                              <TemplateQualityBadge score={qScore} />
-                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -304,6 +326,16 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
                       </div>
                     </details>
                   )}
+
+                  {/* Métricas 30 dias */}
+                  <details className="rounded-2xl border border-slate-200 bg-slate-50" onToggle={e => setShowMetrics((e.target as HTMLDetailsElement).open)}>
+                    <summary className="px-4 py-3 cursor-pointer text-[10px] font-black uppercase tracking-widest text-slate-500 select-none flex items-center gap-2">
+                      <BarChart3 size={12} /> Métricas dos últimos 30 dias
+                    </summary>
+                    <div className="px-4 pb-4">
+                      <TemplateMetricsPanel visible={showMetrics} />
+                    </div>
+                  </details>
 
                   {selected && (
                     <>
@@ -391,9 +423,11 @@ export default function MetaTemplatesModal({ isOpen, onClose, to, onSent }: Meta
 
       <TemplateBuilderModal
         isOpen={showBuilder}
-        onClose={() => setShowBuilder(false)}
+        initialData={cloneData}
+        onClose={() => { setShowBuilder(false); setCloneData(undefined); }}
         onSubmitted={() => {
           setShowBuilder(false);
+          setCloneData(undefined);
           listMetaTemplates('').then(t => setTemplates(t)).catch(() => {});
         }}
       />

@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Sparkles, Send, Loader2, ChevronRight, ChevronLeft,
-  CheckCircle2, AlertTriangle, AlertCircle, RefreshCw, FileText,
+  X, Sparkles, Send, Loader2, ChevronLeft,
+  CheckCircle2, AlertTriangle, RefreshCw, FileText, Library,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateMetaTemplate, submitMetaTemplate } from '../services/supabaseService';
@@ -11,7 +11,79 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSubmitted?: () => void;
+  /** Pre-fill form and optionally jump to preview (for clone / library quick-start) */
+  initialData?: {
+    name?: string;
+    category?: string;
+    language?: string;
+    bodyText?: string;
+    description?: string;
+    skipToPreview?: boolean;
+  };
 }
+
+const LIBRARY = [
+  {
+    slug: 'confirmacao_pedido', category: 'UTILITY', language: 'pt_BR',
+    label: 'Confirmação de pedido',
+    body: 'Olá {{1}}! Seu pedido #{{2}} foi confirmado. Valor: R$ {{3}}. Prazo de entrega: {{4}}. Qualquer dúvida, estamos aqui!',
+    examples: ['João', '12345', '129,90', '3 dias úteis'],
+  },
+  {
+    slug: 'lembrete_agendamento', category: 'UTILITY', language: 'pt_BR',
+    label: 'Lembrete de agendamento',
+    body: 'Olá {{1}}, passando para lembrar do seu agendamento amanhã às {{2}}. Para confirmar responda *SIM*, para reagendar responda *REAGENDAR*.',
+    examples: ['Maria', '14h'],
+  },
+  {
+    slug: 'boas_vindas', category: 'UTILITY', language: 'pt_BR',
+    label: 'Boas-vindas ao cliente',
+    body: 'Olá {{1}}, seja muito bem-vindo(a) à {{2}}! Estou aqui para te ajudar com o que precisar. Como posso te ajudar hoje?',
+    examples: ['Carlos', 'Zyreo'],
+  },
+  {
+    slug: 'codigo_verificacao', category: 'AUTHENTICATION', language: 'pt_BR',
+    label: 'Código de verificação',
+    body: 'Seu código de verificação é: *{{1}}*. Válido por {{2}} minutos. Nunca compartilhe este código.',
+    examples: ['482910', '10'],
+  },
+  {
+    slug: 'atualizacao_entrega', category: 'UTILITY', language: 'pt_BR',
+    label: 'Atualização de entrega',
+    body: 'Olá {{1}}! Seu pedido #{{2}} está a caminho. Previsão: {{3}}. Rastreio: {{4}}. Bom recebimento!',
+    examples: ['Ana', '67890', 'amanhã até 18h', 'BR12345'],
+  },
+  {
+    slug: 'lembrete_pagamento', category: 'UTILITY', language: 'pt_BR',
+    label: 'Lembrete de vencimento',
+    body: 'Olá {{1}}, sua fatura de R$ {{2}} vence em {{3}}. Evite juros e pague em dia. Em caso de dúvidas, responda esta mensagem.',
+    examples: ['Pedro', '350,00', '30/05'],
+  },
+  {
+    slug: 'pesquisa_satisfacao', category: 'UTILITY', language: 'pt_BR',
+    label: 'Pesquisa de satisfação',
+    body: 'Olá {{1}}, gostaríamos de saber sua opinião sobre o atendimento de {{2}}. De 0 a 10, qual nota você daria? Sua resposta é muito importante para nós!',
+    examples: ['Juliana', 'ontem'],
+  },
+  {
+    slug: 'cancelamento_confirmado', category: 'UTILITY', language: 'pt_BR',
+    label: 'Cancelamento confirmado',
+    body: 'Olá {{1}}, confirmamos o cancelamento do pedido #{{2}}. O estorno de R$ {{3}} será realizado em até {{4}} dias úteis.',
+    examples: ['Lucas', '99001', '89,90', '5'],
+  },
+  {
+    slug: 'produto_disponivel', category: 'MARKETING', language: 'pt_BR',
+    label: 'Produto disponível',
+    body: 'Olá {{1}}! O produto {{2}} que você se interessou está disponível novamente. Aproveite enquanto há estoque!',
+    examples: ['Sara', 'Tênis Nike Air Max'],
+  },
+  {
+    slug: 'reativacao_cliente', category: 'MARKETING', language: 'pt_BR',
+    label: 'Reativação de cliente',
+    body: 'Olá {{1}}, sentimos sua falta! Você não nos visita há {{2}} dias. Temos novidades e ofertas esperando por você. Que tal dar uma olhada?',
+    examples: ['Marcos', '30'],
+  },
+] as const;
 
 const CATEGORIES = [
   { value: 'UTILITY', label: 'Utilitário', desc: 'Confirmações, lembretes, atualizações de pedido' },
@@ -49,12 +121,13 @@ function Check({ ok, warn, label }: { ok?: boolean; warn?: boolean; label: strin
   );
 }
 
-export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted }: Props) {
+export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, initialData }: Props) {
   // Step 1 — intent
   const [name, setName] = useState('');
   const [category, setCategory] = useState('UTILITY');
   const [language, setLanguage] = useState('pt_BR');
   const [description, setDescription] = useState('');
+  const [showLibrary, setShowLibrary] = useState(false);
 
   // Step 2 — preview
   const [bodyText, setBodyText] = useState('');
@@ -69,6 +142,25 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted }: P
   const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [metaId, setMetaId] = useState<string | null>(null);
+
+  // Apply initialData when modal opens (clone / quick-start)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialData) {
+      if (initialData.name) setName(initialData.name);
+      if (initialData.category) setCategory(initialData.category);
+      if (initialData.language) setLanguage(initialData.language);
+      if (initialData.description) setDescription(initialData.description);
+      if (initialData.bodyText) {
+        setBodyText(initialData.bodyText);
+        const n = countVars(initialData.bodyText);
+        setExampleValues(Array(n).fill(''));
+      }
+      if (initialData.skipToPreview && initialData.bodyText) {
+        setStep('preview');
+      }
+    }
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const slug = useMemo(() => toSnakeCase(name), [name]);
   const varCount = useMemo(() => countVars(bodyText), [bodyText]);
@@ -95,9 +187,22 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted }: P
 
   function reset() {
     setStep('intent');
+    setShowLibrary(false);
     setName(''); setCategory('UTILITY'); setLanguage('pt_BR'); setDescription('');
     setBodyText(''); setExampleValues([]); setHeaderText(''); setFooterText('');
     setAiNotes(''); setAiWarnings([]); setMetaId(null);
+  }
+
+  function applyLibraryItem(item: typeof LIBRARY[number]) {
+    setName(item.slug);
+    setCategory(item.category);
+    setLanguage(item.language);
+    setBodyText(item.body);
+    setExampleValues([...item.examples]);
+    setAiNotes('');
+    setAiWarnings([]);
+    setShowLibrary(false);
+    setStep('preview');
   }
 
   async function handleGenerate() {
@@ -222,6 +327,35 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted }: P
               {/* ── STEP 1: Intent ── */}
               {step === 'intent' && (
                 <>
+                  {/* Quick-start library */}
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowLibrary(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 transition-colors"
+                    >
+                      <span className="flex items-center gap-2 text-[11px] font-black text-violet-700 uppercase tracking-widest">
+                        <Library size={13} /> Início Rápido — Biblioteca de templates
+                      </span>
+                      <span className="text-[10px] text-violet-500">{showLibrary ? 'Fechar ▲' : 'Ver modelos ▼'}</span>
+                    </button>
+                    {showLibrary && (
+                      <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                        {LIBRARY.map(item => (
+                          <button
+                            key={item.slug}
+                            type="button"
+                            onClick={() => applyLibraryItem(item)}
+                            className="text-left p-3 rounded-xl border border-slate-200 hover:border-violet-300 hover:bg-violet-50 transition-all group"
+                          >
+                            <p className="text-[11px] font-bold text-slate-900 group-hover:text-violet-700">{item.label}</p>
+                            <p className="text-[9px] text-slate-400 mt-0.5 uppercase tracking-widest">{item.category}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome do template</label>
                     <input
