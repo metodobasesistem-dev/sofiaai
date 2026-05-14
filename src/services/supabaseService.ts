@@ -1725,6 +1725,18 @@ export const getAdminTemplatesOverview = async (): Promise<AdminTemplatesOvervie
   return { rows: body.rows, stats: body.stats };
 };
 
+export const syncAdminTemplates = async (): Promise<{ synced: number; tenants: number }> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+  const res = await fetch('/api/v2/admin/templates/sync', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${session.access_token}` },
+  });
+  const body = await res.json();
+  if (!body.success) throw new Error(body.error || 'Falha ao sincronizar templates');
+  return { synced: body.synced, tenants: body.tenants };
+};
+
 /**
  * Agent Secrets (Vault)
  */

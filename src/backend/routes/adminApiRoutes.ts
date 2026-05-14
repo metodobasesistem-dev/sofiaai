@@ -985,4 +985,58 @@ router.get('/templates', async (_req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+/**
+ * POST /templates/sync — busca templates de todos os tenants na Meta e
+ * faz upsert em template_status_cache. Corrige a defasagem entre a API
+ * da Meta e o cache local (que normalmente só é atualizado via webhook).
+ */
+router.post('/templates/sync', async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data: tenants, error: tenantsErr } = await supabase
+      .from('profiles')
+      .select('id, meta_waba_id')
+      .eq('whatsapp_provider', 'meta_official')
+      .not('meta_waba_id', 'is', null);
+
+    if (tenantsErr) throw tenantsErr;
+    if (!tenants || tenants.length === 0) {
+      return res.json({ success: true, synced: 0, tenants: 0 });
+    }
+
+    let totalSynced = 0;
+    for (const tenant of tenants) {
+      try {
+        const provider = new MetaProvider(tenant.id);
+        const templates = await provider.listTemplates(tenant.id, { limit: 200 });
+        if (!templates || templates.length === 0) continue;
+
+        const upserts = templates.map((t: any) => ({
+          user_id: tenant.id,
+          template_name: t.name,
+          language_code: t.language || 'pt_BR',
+          status: (t.status || 'UNKNOWN').toUpperCase(),
+          category: t.category || null,
+          quality_score: t.quality_score ? t.quality_score.toUpperCase() : null,
+          reason: t.rejected_reason || null,
+          last_event: 'SYNC',
+          last_event_at: new Date().toISOString(),
+        }));
+
+        const { error } = await supabase
+          .from('template_status_cache')
+          .upsert(upserts, { onConflict: 'user_id,template_name,language_code' });
+
+        if (!error) totalSynced += upserts.length;
+        else console.warn(`[Templates/Sync] Tenant ${tenant.id} upsert error:`, error.message);
+      } catch (err: any) {
+        console.warn(`[Templates/Sync] Tenant ${tenant.id} failed:`, err.message || err);
+      }
+    }
+
+    return res.json({ success: true, synced: totalSynced, tenants: tenants.length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

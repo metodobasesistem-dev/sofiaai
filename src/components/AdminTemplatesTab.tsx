@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Loader2, Search, CheckCircle2, AlertTriangle, XCircle, Clock, BarChart3, TrendingUp } from 'lucide-react';
-import { getAdminTemplatesOverview, type AdminTemplatesOverview } from '../services/supabaseService';
+import { RefreshCw, Loader2, Search, CheckCircle2, AlertTriangle, XCircle, Clock, BarChart3, TrendingUp, CloudDownload } from 'lucide-react';
+import { getAdminTemplatesOverview, syncAdminTemplates, type AdminTemplatesOverview } from '../services/supabaseService';
 import TemplateQualityBadge, { type QualityScore } from './TemplateQualityBadge';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactElement }> = {
@@ -41,6 +41,7 @@ type SortKey = 'tenant_email' | 'template_name' | 'status' | 'sends_30d' | 'warn
 export default function AdminTemplatesTab() {
   const [data, setData] = useState<AdminTemplatesOverview | null>(null);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -57,6 +58,18 @@ export default function AdminTemplatesTab() {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setError(null);
+    try {
+      await syncAdminTemplates();
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+      setSyncing(false);
     }
   }
 
@@ -115,14 +128,24 @@ export default function AdminTemplatesTab() {
           <h2 className="text-xl font-black text-slate-900">Gestão de Templates</h2>
           <p className="text-xs text-slate-400 mt-0.5">Visão consolidada de todos os tenants · status, qualidade e envios 30 dias</p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-colors disabled:opacity-40"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={syncing || loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-colors disabled:opacity-40 border border-violet-200"
+          >
+            {syncing ? <Loader2 size={14} className="animate-spin" /> : <CloudDownload size={14} />}
+            {syncing ? 'Sincronizando…' : 'Sincronizar da Meta'}
+          </button>
+          <button
+            onClick={load}
+            disabled={loading || syncing}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-colors disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

@@ -68,6 +68,26 @@ async function snapshotTenant(userId: string): Promise<void> {
     });
   }
 
+  // Upsert no cache de status para manter sincronizado sem depender só de webhooks
+  const cacheUpserts = templates.map((t: any) => ({
+    user_id: userId,
+    template_name: t.name,
+    language_code: t.language || 'pt_BR',
+    status: (t.status || 'UNKNOWN').toUpperCase(),
+    category: t.category || null,
+    quality_score: t.quality_score ? (t.quality_score as string).toUpperCase() : null,
+    reason: t.rejected_reason || null,
+    last_event: 'WORKER_SYNC',
+    last_event_at: new Date().toISOString(),
+  }));
+
+  if (cacheUpserts.length > 0) {
+    const { error: cacheErr } = await supabase
+      .from('template_status_cache')
+      .upsert(cacheUpserts, { onConflict: 'user_id,template_name,language_code' });
+    if (cacheErr) console.warn('[TemplateQualityWorker] Cache upsert error:', cacheErr.message);
+  }
+
   if (inserts.length === 0) return;
 
   const { error } = await supabase.from('template_quality_history').insert(inserts);
