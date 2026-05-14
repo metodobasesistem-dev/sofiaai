@@ -13,7 +13,9 @@ import {
   Smartphone,
   Building2,
   Target,
-  ArrowLeft
+  ArrowLeft,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -26,6 +28,7 @@ export default function Login() {
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   
   // New Registration Fields
   const [nomeCompleto, setNomeCompleto] = useState('');
@@ -410,13 +413,20 @@ export default function Login() {
                           <div className="relative">
                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                             <input
-                              type="password"
+                              type={showPassword ? 'text' : 'password'}
                               placeholder="••••••••"
-                              className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
+                              className="w-full pl-12 pr-12 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
                               value={password}
                               onChange={(e) => setPassword(e.target.value)}
                               required
                             />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                            >
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
                           </div>
                         </div>
                       </motion.div>
