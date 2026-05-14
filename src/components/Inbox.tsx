@@ -479,6 +479,21 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
   </div>
 );
 
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase()
+          ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{part}</mark>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
+
 const TypingIndicator: React.FC = () => (
   <div className="flex items-start mb-1.5">
     <div className="max-w-[85%] px-4 py-3 rounded-2xl bg-white border border-slate-200/50 shadow-sm rounded-tl-none flex items-center gap-1.5">
@@ -502,7 +517,12 @@ const ChatBubble: React.FC<{
   onStar: (messageId: string, currentStatus: boolean) => void;
   onOpenContact: (jid: string) => void;
   onImageLoad?: () => void;
-}> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onOpenContact, onImageLoad }) => {
+  isSelected?: boolean;
+  isSelectionMode?: boolean;
+  onSelect?: (id: string) => void;
+  onForward?: (msg: Message) => void;
+  highlightQuery?: string;
+}> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onOpenContact, onImageLoad, isSelected, isSelectionMode, onSelect, onForward, highlightQuery }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
@@ -659,7 +679,10 @@ const ChatBubble: React.FC<{
       default:
         return (
           <p className="whitespace-pre-wrap break-all">
-            {message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : '')}
+            {highlightQuery
+              ? <HighlightedText text={message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : '')} query={highlightQuery} />
+              : (message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''))
+            }
           </p>
         );
     }
@@ -667,10 +690,11 @@ const ChatBubble: React.FC<{
   
   return (
     <div
-      className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'} relative overflow-hidden`}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={handleTouchEnd}
+      className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'} relative overflow-hidden transition-colors ${isSelected ? 'bg-primary-50/60 rounded-2xl' : ''}`}
+      onTouchStart={isSelectionMode ? undefined : handleTouchStart}
+      onTouchEnd={isSelectionMode ? undefined : handleTouchEnd}
+      onTouchMove={isSelectionMode ? undefined : handleTouchEnd}
+      onClick={isSelectionMode ? () => onSelect?.(message.id) : undefined}
     >
       {/* Long press mobile action sheet */}
       <AnimatePresence>
@@ -720,6 +744,24 @@ const ChatBubble: React.FC<{
                   {message.is_starred ? 'Remover dos favoritos' : 'Favoritar'}
                 </span>
               </button>
+              {onForward && (
+                <button
+                  onClick={() => { onForward(message); setShowMobileActions(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+                >
+                  <ChevronRight size={20} className="text-primary-600 shrink-0" />
+                  <span className="text-[15px] font-semibold text-slate-800">Encaminhar</span>
+                </button>
+              )}
+              {onSelect && (
+                <button
+                  onClick={() => { onSelect(message.id); setShowMobileActions(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+                >
+                  <CheckCircle2 size={20} className="text-slate-400 shrink-0" />
+                  <span className="text-[15px] font-semibold text-slate-800">Selecionar</span>
+                </button>
+              )}
               <button
                 onClick={() => { onDelete(message.id); setShowMobileActions(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 active:bg-red-100 rounded-2xl transition-all text-left"
@@ -1135,6 +1177,14 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
+  // Fase 3 — search, seleção múltipla, encaminhar
+  const [isSearchingMessages, setIsSearchingMessages] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [searchResultIdx, setSearchResultIdx] = useState(0);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
   const [threadsRefreshKey, setThreadsRefreshKey] = useState(0);
   const [pullDelta, setPullDelta] = useState(0);
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false);
@@ -1358,6 +1408,32 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     return () => window.removeEventListener('popstate', handleUrlJid);
   }, [threads.length, user?.id, window.location.search]);
 
+
+  const playSound = (type: 'send' | 'receive') => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (type === 'send') {
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12);
+      } else {
+        osc.frequency.setValueAtTime(1100, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.07);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.1);
+      }
+      setTimeout(() => ctx.close(), 500);
+    } catch {}
+  };
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     const container = scrollContainerRef.current;
@@ -1842,9 +1918,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
             setMessages(prev => {
               const newMsg = formatMsg(payload.new);
-              
+
               // 1. Deduplicação por ID (ID idêntico já está no estado)
               if (prev.some(m => m.id === newMsg.id)) return prev;
+
+              // Som de recebimento apenas para mensagens inbound (lead)
+              if (newMsg.sender === 'lead') playSound('receive');
 
               const isTemp = newMsg.id.toString().startsWith('sending-');
               const newTime = new Date(newMsg.timestamp).getTime();
@@ -2584,6 +2663,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       // Fase 4: apenas envia — o banco é atualizado pelo backend (Fase 2)
       // e o Realtime listener reflete a mensagem assim que for inserida.
       await sendMessage(activeThread.remoteJid, finalMessageText, currentQuotedId);
+      playSound('send');
 
       // Atualiza status da thread para 'human'
       await supabase
@@ -3120,7 +3200,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
 
               <div className="flex items-center gap-1 md:gap-3 shrink-0">
-                <button 
+                <button
+                  onClick={() => {
+                    setIsSearchingMessages(v => !v);
+                    setMessageSearchQuery('');
+                    setSearchResultIdx(0);
+                  }}
+                  className={`p-2 rounded-lg transition-all ${isSearchingMessages ? 'text-primary-600 bg-primary-50 border border-primary-100' : 'text-slate-400 hover:bg-slate-50 border border-transparent'}`}
+                  title="Buscar na conversa"
+                >
+                  <Search size={18} />
+                </button>
+                <button
                   onClick={() => {
                     if (window.innerWidth < 1024) {
                       setIsMobileDetailsOpen(true);
@@ -3254,6 +3345,48 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
             )}
 
+            {/* Barra de busca dentro da conversa */}
+            <AnimatePresence>
+              {isSearchingMessages && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden shrink-0 bg-white border-b border-slate-100 px-3 py-2 flex items-center gap-2"
+                >
+                  <Search size={14} className="text-slate-400 shrink-0" />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={messageSearchQuery}
+                    onChange={e => { setMessageSearchQuery(e.target.value); setSearchResultIdx(0); }}
+                    placeholder="Buscar na conversa..."
+                    className="flex-1 text-sm outline-none bg-transparent placeholder-slate-400"
+                  />
+                  {messageSearchQuery && (() => {
+                    const hits = messages.filter(m => m.text?.toLowerCase().includes(messageSearchQuery.toLowerCase()));
+                    return hits.length > 0 ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[11px] text-slate-400 font-medium">{searchResultIdx + 1}/{hits.length}</span>
+                        <button onClick={() => setSearchResultIdx(i => Math.max(0, i - 1))} className="p-1 text-slate-400 hover:text-primary-600 rounded">
+                          <ChevronLeft size={14} />
+                        </button>
+                        <button onClick={() => setSearchResultIdx(i => Math.min(hits.length - 1, i + 1))} className="p-1 text-slate-400 hover:text-primary-600 rounded">
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 shrink-0">Sem resultados</span>
+                    );
+                  })()}
+                  <button onClick={() => { setIsSearchingMessages(false); setMessageSearchQuery(''); }} className="p-1 text-slate-400 hover:text-red-500 rounded shrink-0">
+                    <X size={14} />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Banner de status de conexão */}
             <AnimatePresence>
               {connectionStatus !== 'connected' && (
@@ -3318,13 +3451,22 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       </button>
                     </div>
                   )}
-                  {messages
-                    .filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id))
-                    .map((msg, idx, filteredArr) => {
-                      const prevMsg = idx > 0 ? filteredArr[idx - 1] : null;
-                      const showDateHeader = !prevMsg || 
+                  {(() => {
+                    const deduped = messages.filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id));
+                    const searchHits = messageSearchQuery
+                      ? deduped.filter(m => m.text?.toLowerCase().includes(messageSearchQuery.toLowerCase()))
+                      : [];
+                    const visibleMsgs = messageSearchQuery
+                      ? deduped.filter(m => m.text?.toLowerCase().includes(messageSearchQuery.toLowerCase()))
+                      : deduped;
+                    const currentHitId = searchHits[searchResultIdx]?.id;
+
+                    return visibleMsgs.map((msg, idx, arr) => {
+                      const prevMsg = idx > 0 ? arr[idx - 1] : null;
+                      const showDateHeader = !prevMsg ||
                         new Date(msg.timestamp).toDateString() !== new Date(prevMsg.timestamp).toDateString();
-                      
+                      const isCurrentSearchHit = msg.id === currentHitId;
+
                       return (
                         <React.Fragment key={msg.id}>
                           {showDateHeader && (
@@ -3334,24 +3476,40 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                               </span>
                             </div>
                           )}
-                          <div id={`msg-${msg.id}`} className="transition-all duration-500">
-                            <ChatBubble 
-                              message={msg} 
-                              onPreview={setPreviewMedia} 
-                              onDelete={handleDeleteMessage} 
+                          <div
+                            id={`msg-${msg.id}`}
+                            className="transition-all duration-500"
+                            ref={isCurrentSearchHit ? (el) => { if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } : undefined}
+                          >
+                            <ChatBubble
+                              message={msg}
+                              onPreview={setPreviewMedia}
+                              onDelete={handleDeleteMessage}
                               onReact={handleReactToMessage}
                               onReply={(m) => setReplyingTo(m)}
                               onStar={handleToggleStar}
                               onOpenContact={handleOpenContactChat}
                               onImageLoad={() => {
-                                // Só rola se o usuário já estiver próximo ao fundo
                                 if (!showScrollButton) scrollToBottom("smooth");
                               }}
+                              isSelected={selectedMsgIds.has(msg.id)}
+                              isSelectionMode={isSelectionMode}
+                              onSelect={(id) => {
+                                if (!isSelectionMode) setIsSelectionMode(true);
+                                setSelectedMsgIds(prev => {
+                                  const next = new Set(prev);
+                                  next.has(id) ? next.delete(id) : next.add(id);
+                                  return next;
+                                });
+                              }}
+                              onForward={(m) => setForwardingMessage(m)}
+                              highlightQuery={messageSearchQuery || undefined}
                             />
                           </div>
                         </React.Fragment>
                       );
-                    })}
+                    });
+                  })()}
                   {/* Indicador de digitação */}
                   {(activeThread as any)?.isTyping && (
                     <div className="px-1">
@@ -3405,7 +3563,57 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
             )}
 
+            {/* Barra de seleção múltipla */}
+            <AnimatePresence>
+              {isSelectionMode && (
+                <motion.div
+                  initial={{ y: 60, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 60, opacity: 0 }}
+                  transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+                  className="border-t border-slate-200 bg-white shrink-0 px-4 py-3 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => { setIsSelectionMode(false); setSelectedMsgIds(new Set()); }}
+                      className="p-2 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+                    >
+                      <X size={20} />
+                    </button>
+                    <span className="text-sm font-bold text-slate-700">
+                      {selectedMsgIds.size} selecionada{selectedMsgIds.size !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={selectedMsgIds.size === 0 || isDeletingSelected}
+                      onClick={async () => {
+                        if (selectedMsgIds.size === 0) return;
+                        setIsDeletingSelected(true);
+                        try {
+                          await supabase.from('messages').delete().in('id', Array.from(selectedMsgIds));
+                          setMessages(prev => prev.filter(m => !selectedMsgIds.has(m.id)));
+                          setSelectedMsgIds(new Set());
+                          setIsSelectionMode(false);
+                          toast.success(`${selectedMsgIds.size} mensagem${selectedMsgIds.size > 1 ? 's apagadas' : ' apagada'}`);
+                        } catch {
+                          toast.error('Erro ao apagar mensagens');
+                        } finally {
+                          setIsDeletingSelected(false);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+                    >
+                      {isDeletingSelected ? <Loader2 size={14} className="animate-spin" /> : <Trash size={14} />}
+                      Apagar
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Input Area */}
+            {!isSelectionMode && (
             <div className="p-1 md:p-2 border-t border-slate-200 bg-[#f0f2f5] shrink-0 relative">
               {meta24hWindowState && (
                 <div
@@ -3599,6 +3807,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 </div>
               </div>
             </div>
+            )}
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50 relative">
@@ -3636,6 +3845,65 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
           {renderContactDetails()}
         </motion.div>
       )}
+
+      {/* Modal de Encaminhar Mensagem */}
+      <AnimatePresence>
+        {forwardingMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[250] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/50"
+            onClick={() => setForwardingMessage(null)}
+          >
+            <motion.div
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 280 }}
+              className="bg-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-black text-slate-900">Encaminhar mensagem</h3>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[240px]">"{forwardingMessage.text?.slice(0, 60)}{(forwardingMessage.text?.length || 0) > 60 ? '…' : ''}"</p>
+                </div>
+                <button onClick={() => setForwardingMessage(null)} className="p-2 text-slate-400 hover:text-red-500 rounded-xl transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                {threads
+                  .filter(t => t.id !== selectedThreadId)
+                  .slice(0, 20)
+                  .map(t => (
+                    <button
+                      key={t.id}
+                      onClick={async () => {
+                        if (!forwardingMessage.text) return;
+                        try {
+                          await sendMessage(t.remoteJid, `↪️ ${forwardingMessage.text}`, undefined);
+                          toast.success(`Encaminhado para ${t.name}`);
+                          setForwardingMessage(null);
+                        } catch {
+                          toast.error('Erro ao encaminhar mensagem');
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 active:bg-slate-100 transition-all text-left"
+                    >
+                      <ContactAvatar url={t.profilePictureUrl} name={t.name} size="sm" threadId={t.id} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{t.name}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{t.lastMessage}</p>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Contact Info Modal */}
       {selectedThreadId && activeThread && isMobileDetailsOpen && (
