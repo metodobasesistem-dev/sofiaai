@@ -640,7 +640,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-h-[180px]">
           {[
             { label: 'Novos Leads', value: stats.contacts, icon: Users, color: '#3b82f6', trend: '+12%', data: [4, 6, 5, 8, 7, 10, stats.contacts] },
             { label: 'Qualificados', value: stats.qualified, icon: Sparkles, color: '#a855f7', trend: '+5%', data: [2, 3, 2, 4, 3, 5, stats.qualified] },
@@ -649,10 +649,10 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           ].map((item, i) => (
             <motion.div 
               key={i}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
+              transition={{ delay: i * 0.05, duration: 0.4 }}
+              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group transform-gpu backface-visibility-hidden"
             >
               <div className="flex items-start justify-between relative z-10">
                 <div className="space-y-4">
@@ -703,7 +703,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
       </div>
 
         {/* Gráfico de Evolução Premium */}
-        <div className="glass-card p-8 rounded-3xl mt-2">
+        <div className="glass-card p-8 rounded-3xl mt-2 transform-gpu">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div>
               <h3 className="text-xl font-black text-slate-900 tracking-tight">Crescimento da Operação</h3>
