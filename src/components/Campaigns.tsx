@@ -31,7 +31,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { Skeleton } from './common/SkeletonLoader';
-import { sendTemplateMessage } from '../services/whatsappService';
+import { sendTemplateMessage, getMetaTemplates } from '../services/whatsappService';
 
 interface Campaign {
   id: string;
@@ -61,6 +61,10 @@ export default function Campaigns() {
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [templateSource, setTemplateSource] = useState<'internal' | 'meta'>('internal');
+  const [metaTemplates, setMetaTemplates] = useState<any[]>([]);
+  const [isFetchingMeta, setIsFetchingMeta] = useState(false);
+  const [userProvider, setUserProvider] = useState<string>('evolution');
   
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -132,6 +136,31 @@ export default function Campaigns() {
     }
   };
 
+  const fetchMetaTemplates = async () => {
+    try {
+      setIsFetchingMeta(true);
+      const res = await getMetaTemplates();
+      if (res.success) {
+        setMetaTemplates(res.templates);
+      }
+    } catch (err: any) {
+      console.warn('Erro ao carregar templates Meta:', err.message);
+    } finally {
+      setIsFetchingMeta(false);
+    }
+  };
+
+  const fetchUserProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('whatsapp_provider').eq('id', user.id).single();
+      setUserProvider(profile?.whatsapp_provider || 'evolution');
+      if (profile?.whatsapp_provider === 'meta_official') {
+        fetchMetaTemplates();
+      }
+    }
+  };
+
   const startCampaign = async (campaign: Campaign) => {
     if (processingCampaignId) {
       toast.error('Já existe uma campanha sendo processada.');
@@ -152,9 +181,13 @@ export default function Campaigns() {
       const { data: profile } = await supabase.from('profiles').select('whatsapp_provider').eq('id', user.id).single();
       const provider = profile?.whatsapp_provider || 'evolution';
 
-      // 2.1 Fetch the template body for Web providers
-      const { data: templateData } = await supabase.from('message_templates').select('body').eq('id', campaign.template_id).single();
-      const templateBody = templateData?.body || '';
+      // 2.1 Fetch the template body for Web providers (Evolution/UazAPI)
+      // Only needed if we are NOT on meta_official
+      let templateBody = '';
+      if (provider !== 'meta_official') {
+        const { data: templateData } = await supabase.from('message_templates').select('body').eq('id', campaign.template_id).single();
+        templateBody = templateData?.body || '';
+      }
 
       let finalContacts: any[] = [];
       const { data: allContacts, error: contactsErr } = await supabase
@@ -235,10 +268,16 @@ export default function Campaigns() {
         }
 
         try {
-          // Map variables based on the contact fields
-          const mappedVars = Object.entries(campaign.variables || {}).map(([key, field]) => {
-            return contact[field as keyof typeof contact] || '';
-          });
+          // Map variables based on the contact fields, sorted by var index (var1, var2...)
+          const mappedVars = Object.entries(campaign.variables || {})
+            .sort((a, b) => {
+              const aNum = parseInt(a[0].replace('var', ''));
+              const bNum = parseInt(b[0].replace('var', ''));
+              return aNum - bNum;
+            })
+            .map(([key, field]) => {
+              return (contact as any)[field] || '';
+            });
 
           const phoneToSend = contact.telefone || contact.phone;
 
@@ -336,6 +375,7 @@ export default function Campaigns() {
   useEffect(() => {
     fetchCampaigns();
     fetchTemplates();
+    fetchUserProfile();
   }, []);
 
   const getStatusBadge = (status: string) => {
@@ -587,42 +627,122 @@ export default function Campaigns() {
       case 2:
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+            {userProvider === 'meta_official' && (
+              <div className="flex p-1 bg-slate-100 rounded-2xl">
+                <button
+                  onClick={() => setTemplateSource('internal')}
+                  className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${
+                    templateSource === 'internal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  Modelos Internos
+                </button>
+                <button
+                  onClick={() => {
+                    setTemplateSource('meta');
+                    if (metaTemplates.length === 0) fetchMetaTemplates();
+                  }}
+                  className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    templateSource === 'meta' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  Modelos Meta API
+                  <ShieldCheck size={14} className={templateSource === 'meta' ? 'text-primary-500' : ''} />
+                </button>
+              </div>
+            )}
+
             <div className="space-y-4">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Selecione o Modelo</label>
-              <div className="grid grid-cols-1 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                {templates.length === 0 ? (
-                  <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-                     <p className="text-sm font-bold text-slate-400">Nenhum modelo cadastrado.</p>
-                     <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Vá em "Gerenciar Modelos" primeiro.</p>
-                  </div>
-                ) : templates.map(template => (
-                  <button
-                    key={template.id}
-                    onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
-                    className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${
-                      campaignData.templateId === template.id 
-                        ? 'border-primary-500 bg-primary-50/30' 
-                        : 'border-slate-50 bg-white hover:border-slate-100'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-black text-slate-900">{template.name}</p>
-                      <div className="flex items-center gap-3">
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
-                         <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</p>
-                      </div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                {templateSource === 'internal' ? 'Selecione o Modelo Interno' : 'Selecione o Modelo da Meta'}
+              </label>
+              <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                {templateSource === 'internal' ? (
+                  templates.length === 0 ? (
+                    <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                      <p className="text-sm font-bold text-slate-400">Nenhum modelo cadastrado.</p>
+                      <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Vá em "Gerenciar Modelos" primeiro.</p>
                     </div>
-                    {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
-                  </button>
-                ))}
+                  ) : templates.map(template => (
+                    <button
+                      key={template.id}
+                      onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
+                      className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${
+                        campaignData.templateId === template.id 
+                          ? 'border-primary-500 bg-primary-50/30' 
+                          : 'border-slate-50 bg-white hover:border-slate-100'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-black text-slate-900">{template.name}</p>
+                        <div className="flex items-center gap-3">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
+                           <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</p>
+                        </div>
+                      </div>
+                      {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
+                    </button>
+                  ))
+                ) : (
+                  isFetchingMeta ? (
+                    <div className="p-10 flex flex-col items-center justify-center gap-4">
+                      <Loader2 size={32} className="text-primary-500 animate-spin" />
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Buscando na Meta...</p>
+                    </div>
+                  ) : metaTemplates.length === 0 ? (
+                    <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                      <p className="text-sm font-bold text-slate-400">Nenhum template aprovado na Meta.</p>
+                      <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Verifique seu Gerenciador de WhatsApp.</p>
+                    </div>
+                  ) : metaTemplates.map(template => {
+                    // Extract variable count from body components
+                    const body = template.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                    const varCount = (body.match(/\{\{\d+\}\}/g) || []).length;
+
+                    return (
+                      <button
+                        key={template.id}
+                        onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
+                        className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${
+                          campaignData.templateId === template.id 
+                            ? 'border-primary-500 bg-primary-50/30' 
+                            : 'border-slate-50 bg-white hover:border-slate-100'
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-black text-slate-900">{template.name}</p>
+                          <div className="flex items-center gap-3">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
+                             <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                             <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                               <ShieldCheck size={10} /> {template.status}
+                             </p>
+                             <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{varCount} Variáveis</p>
+                          </div>
+                        </div>
+                        {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 
             {campaignData.templateId && (
               (() => {
-                const selectedTemplate = templates.find(t => t.id === campaignData.templateId);
-                if (!selectedTemplate || selectedTemplate.variables_count === 0) return null;
+                let varCount = 0;
+                if (templateSource === 'internal') {
+                  const selectedTemplate = templates.find(t => t.id === campaignData.templateId);
+                  varCount = selectedTemplate?.variables_count || 0;
+                } else {
+                  const selectedTemplate = metaTemplates.find(t => t.id === campaignData.templateId);
+                  const body = selectedTemplate?.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                  varCount = (body.match(/\{\{\d+\}\}/g) || []).length;
+                }
+
+                if (varCount === 0) return null;
                 
                 return (
                   <div className="p-6 bg-slate-900 rounded-[2rem] space-y-6 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">

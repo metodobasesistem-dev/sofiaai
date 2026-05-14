@@ -134,12 +134,18 @@ export const sendMessage = async (to: string, message: string, quotedMessageId?:
  * Send a WhatsApp Template message via the backend API.
  */
 export const sendTemplateMessage = async (to: string, templateName: string, variables: any[]) => {
-  const response = await standardFetch('/api/messages/send-template', {
+  // Convert variables to Meta-compatible components format if needed
+  const components = variables.length > 0 ? [{
+    type: 'body',
+    parameters: variables.map(v => ({ type: 'text', text: String(v) }))
+  }] : undefined;
+
+  const response = await standardFetch('/api/v2/whatsapp/meta/send-template', {
     method: 'POST',
     body: JSON.stringify({
       to,
-      templateName,
-      variables,
+      template_name: templateName,
+      components,
     }),
   });
 
@@ -148,6 +154,18 @@ export const sendTemplateMessage = async (to: string, templateName: string, vari
     throw new Error(errorData.error || 'Failed to send template message');
   }
 
+  return response.json();
+};
+
+/**
+ * Fetch approved message templates from Meta Cloud API.
+ */
+export const getMetaTemplates = async (): Promise<{ success: boolean; templates: any[] }> => {
+  const response = await standardFetch('/api/v2/whatsapp/meta/templates');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to fetch Meta templates');
+  }
   return response.json();
 };
 
