@@ -275,14 +275,12 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-          onClick={onClose}
         >
           <motion.div
             initial={{ scale: 0.95, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.95, y: 20 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-            onClick={e => e.stopPropagation()}
           >
             {/* Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
@@ -299,7 +297,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
                   </p>
                 </div>
               </div>
-              <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center">
+              <button type="button" onClick={onClose} className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center">
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
@@ -564,6 +562,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
               <div>
                 {step === 'preview' && (
                   <button
+                    type="button"
                     onClick={() => setStep('intent')}
                     className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
                   >
@@ -575,6 +574,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
               <div className="flex items-center gap-3">
                 {step !== 'done' && (
                   <button
+                    type="button"
                     onClick={onClose}
                     className="px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all"
                   >
@@ -584,6 +584,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
 
                 {step === 'intent' && (
                   <button
+                    type="button"
                     onClick={handleGenerate}
                     disabled={generating || !name.trim() || !description.trim()}
                     className="px-6 py-3 rounded-2xl bg-violet-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
@@ -596,6 +597,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
                 {step === 'preview' && (
                   <>
                     <button
+                      type="button"
                       onClick={handleGenerate}
                       disabled={generating}
                       className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 disabled:opacity-40 transition-all flex items-center gap-2"
@@ -604,6 +606,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
                       Regenerar
                     </button>
                     <button
+                      type="button"
                       onClick={handleSubmit}
                       disabled={!canSubmit}
                       className="px-6 py-3 rounded-2xl bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
@@ -617,12 +620,14 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
                 {step === 'done' && (
                   <>
                     <button
+                      type="button"
                       onClick={reset}
                       className="px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all flex items-center gap-2"
                     >
                       <FileText size={13} /> Criar Outro
                     </button>
                     <button
+                      type="button"
                       onClick={onClose}
                       className="px-6 py-3 rounded-2xl bg-primary-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all"
                     >
