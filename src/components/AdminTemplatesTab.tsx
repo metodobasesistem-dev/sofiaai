@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Loader2, Search, CheckCircle2, AlertTriangle, XCircle, Clock, BarChart3, TrendingUp, CloudDownload } from 'lucide-react';
+import { toast } from 'sonner';
 import { getAdminTemplatesOverview, syncAdminTemplates, type AdminTemplatesOverview } from '../services/supabaseService';
 import TemplateQualityBadge, { type QualityScore } from './TemplateQualityBadge';
 
@@ -65,10 +66,18 @@ export default function AdminTemplatesTab() {
     setSyncing(true);
     setError(null);
     try {
-      await syncAdminTemplates();
+      const result = await syncAdminTemplates();
+      if (result.synced === 0 && result.tenants === 0) {
+        toast.warning('Nenhum tenant com credenciais Meta encontrado no banco.');
+      } else if (result.synced === 0) {
+        toast.info(`${result.tenants} tenant(s) encontrado(s), mas nenhum template retornado pela Meta.`);
+      } else {
+        toast.success(`${result.synced} template(s) sincronizado(s) de ${result.tenants} tenant(s).`);
+      }
       await load();
     } catch (e: any) {
       setError(e.message);
+      toast.error(`Erro ao sincronizar: ${e.message}`);
     } finally {
       setSyncing(false);
     }

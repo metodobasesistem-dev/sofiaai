@@ -992,48 +992,76 @@ router.get('/templates', async (_req: AuthenticatedRequest, res: Response) => {
  */
 router.post('/templates/sync', async (_req: AuthenticatedRequest, res: Response) => {
   try {
+    // Busca qualquer tenant que tenha meta_waba_id E meta_access_token configurados,
+    // independente do campo whatsapp_provider (alguns admins podem ter valor diferente)
     const { data: tenants, error: tenantsErr } = await supabase
       .from('profiles')
-      .select('id, meta_waba_id')
-      .eq('whatsapp_provider', 'meta_official')
-      .not('meta_waba_id', 'is', null);
+      .select('id, meta_waba_id, whatsapp_provider')
+      .not('meta_waba_id', 'is', null)
+      .not('meta_access_token', 'is', null);
 
     if (tenantsErr) throw tenantsErr;
+
+    console.log(`[Templates/Sync] Found ${tenants?.length ?? 0} tenants with meta credentials`);
+
     if (!tenants || tenants.length === 0) {
-      return res.json({ success: true, synced: 0, tenants: 0 });
+      return res.json({ success: true, synced: 0, tenants: 0, message: 'Nenhum tenant com credenciais Meta encontrado' });
     }
 
     let totalSynced = 0;
+    const errors: string[] = [];
+
     for (const tenant of tenants) {
       try {
         const provider = new MetaProvider(tenant.id);
         const templates = await provider.listTemplates(tenant.id, { limit: 200 });
+        console.log(`[Templates/Sync] Tenant ${tenant.id} (${tenant.whatsapp_provider}): ${templates?.length ?? 0} templates`);
         if (!templates || templates.length === 0) continue;
 
-        const upserts = templates.map((t: any) => ({
-          user_id: tenant.id,
-          template_name: t.name,
-          language_code: t.language || 'pt_BR',
-          status: (t.status || 'UNKNOWN').toUpperCase(),
-          category: t.category || null,
-          quality_score: t.quality_score ? t.quality_score.toUpperCase() : null,
-          reason: t.rejected_reason || null,
-          last_event: 'SYNC',
-          last_event_at: new Date().toISOString(),
-        }));
+        const upserts = templates.map((t: any) => {
+          // quality_score pode vir como objeto { score: 'GREEN' } ou string
+          let qs: string | null = null;
+          if (t.quality_score) {
+            qs = typeof t.quality_score === 'object'
+              ? (t.quality_score.score || 'UNKNOWN').toUpperCase()
+              : String(t.quality_score).toUpperCase();
+          }
+          return {
+            user_id: tenant.id,
+            template_name: t.name,
+            language_code: t.language || 'pt_BR',
+            status: (t.status || 'UNKNOWN').toUpperCase(),
+            category: t.category || null,
+            quality_score: qs,
+            reason: t.rejected_reason || null,
+            last_event: 'SYNC',
+            last_event_at: new Date().toISOString(),
+          };
+        });
 
         const { error } = await supabase
           .from('template_status_cache')
           .upsert(upserts, { onConflict: 'user_id,template_name,language_code' });
 
-        if (!error) totalSynced += upserts.length;
-        else console.warn(`[Templates/Sync] Tenant ${tenant.id} upsert error:`, error.message);
+        if (!error) {
+          totalSynced += upserts.length;
+        } else {
+          console.warn(`[Templates/Sync] Tenant ${tenant.id} upsert error:`, error.message);
+          errors.push(`${tenant.id.slice(0, 8)}: ${error.message}`);
+        }
       } catch (err: any) {
-        console.warn(`[Templates/Sync] Tenant ${tenant.id} failed:`, err.message || err);
+        const msg = err.message || String(err);
+        console.warn(`[Templates/Sync] Tenant ${tenant.id} failed:`, msg);
+        errors.push(`${tenant.id.slice(0, 8)}: ${msg}`);
       }
     }
 
-    return res.json({ success: true, synced: totalSynced, tenants: tenants.length });
+    return res.json({
+      success: true,
+      synced: totalSynced,
+      tenants: tenants.length,
+      errors: errors.length ? errors : undefined,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
