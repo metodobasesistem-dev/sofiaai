@@ -64,6 +64,10 @@ export interface Agent {
   ecommerce_api_url?: string;
   ecommerce_api_type?: string;
   ecommerce_api_use_nlp?: boolean;
+  // Fase 2 — qualidade de resposta
+  tone_of_voice?: 'formal' | 'casual' | 'tecnico' | 'amigavel' | 'consultivo' | null;
+  forbidden_topics?: string;
+  conversation_examples?: string;
 }
 
 export interface AgentSecret {
@@ -376,7 +380,10 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
       whatsapp_provider_config: agentData.whatsapp_provider_config,
       ecommerce_api_url: agentData.ecommerce_api_url,
       ecommerce_api_type: agentData.ecommerce_api_type,
-      ecommerce_api_use_nlp: agentData.ecommerce_api_use_nlp
+      ecommerce_api_use_nlp: agentData.ecommerce_api_use_nlp,
+      tone_of_voice: agentData.tone_of_voice || null,
+      forbidden_topics: agentData.forbidden_topics || null,
+      conversation_examples: agentData.conversation_examples || null,
     };
 
     const res = await standardFetch('/api/v2/agents', {
@@ -430,7 +437,10 @@ export const updateAgent = async (agentId: string, agentData: Partial<Agent>) =>
       whatsapp_provider_config: agentData.whatsapp_provider_config,
       ecommerce_api_url: agentData.ecommerce_api_url,
       ecommerce_api_type: agentData.ecommerce_api_type,
-      ecommerce_api_use_nlp: agentData.ecommerce_api_use_nlp
+      ecommerce_api_use_nlp: agentData.ecommerce_api_use_nlp,
+      tone_of_voice: agentData.tone_of_voice || null,
+      forbidden_topics: agentData.forbidden_topics || null,
+      conversation_examples: agentData.conversation_examples || null,
     })
   });
 

@@ -296,7 +296,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
     whatsapp_provider: 'evolution',
     ecommerce_api_url: '',
     ecommerce_api_type: 'custom',
-    ecommerce_api_use_nlp: false
+    ecommerce_api_use_nlp: false,
+    tone_of_voice: null,
+    forbidden_topics: '',
+    conversation_examples: '',
   });
 
   const [previewMessages, setPreviewMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
@@ -772,7 +775,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       whatsapp_provider_config: agent.whatsapp_provider_config || {},
       ecommerce_api_url: agent.ecommerce_api_url || '',
       ecommerce_api_type: agent.ecommerce_api_type || 'custom',
-      ecommerce_api_use_nlp: agent.ecommerce_api_use_nlp || false
+      ecommerce_api_use_nlp: agent.ecommerce_api_use_nlp || false,
+      tone_of_voice: agent.tone_of_voice || null,
+      forbidden_topics: agent.forbidden_topics || '',
+      conversation_examples: agent.conversation_examples || '',
     });
 
     // Buscar segredo se for Meta
@@ -812,7 +818,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
       voice_id: 'alloy',
       training_mode: 'text',
       whatsapp_provider: 'evolution',
-      whatsapp_provider_config: {}
+      whatsapp_provider_config: {},
+      tone_of_voice: null,
+      forbidden_topics: '',
+      conversation_examples: '',
     });
     setMetaAccessToken('');
     setActiveTab('profile');
@@ -868,7 +877,10 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
           voice_id: formData.voice_id || 'alloy',
           training_mode: formData.training_mode || 'text',
           whatsapp_provider: formData.whatsapp_provider || 'evolution',
-          whatsapp_provider_config: formData.whatsapp_provider_config || {}
+          whatsapp_provider_config: formData.whatsapp_provider_config || {},
+          tone_of_voice: formData.tone_of_voice || null,
+          forbidden_topics: formData.forbidden_topics,
+          conversation_examples: formData.conversation_examples,
         });
 
         // Salva segredos para novo agente
@@ -1294,7 +1306,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
                     <div>
                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Instruções do Agente / Comportamento</label>
-                      <textarea 
+                      <textarea
                         rows={8}
                         value={formData.prompt_base}
                         onChange={e => setFormData({...formData, prompt_base: e.target.value})}
@@ -1304,6 +1316,61 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                       <p className="mt-2 text-[10px] text-gray-400 italic">
                         * Use este espaço para definir a personalidade e regras de atendimento.
                       </p>
+                    </div>
+
+                    {/* Fase 2 — Qualidade de Resposta */}
+                    <div className="border-t border-gray-100 pt-6 space-y-6">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Qualidade de Resposta</h3>
+                        <span className="text-[9px] font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full uppercase tracking-widest">Novo</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Tom de voz</label>
+                        <select
+                          value={formData.tone_of_voice || ''}
+                          onChange={e => setFormData({ ...formData, tone_of_voice: (e.target.value || null) as any })}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm bg-white"
+                        >
+                          <option value="">Neutro (padrão)</option>
+                          <option value="formal">Formal — direto e profissional</option>
+                          <option value="casual">Casual — próximo, como amigo</option>
+                          <option value="amigavel">Amigável — caloroso e empático</option>
+                          <option value="consultivo">Consultivo — pergunta antes de recomendar</option>
+                          <option value="tecnico">Técnico — preciso e objetivo</option>
+                        </select>
+                        <p className="mt-2 text-[10px] text-gray-400 italic">
+                          * Define como o agente fala. Cada tom tem regras específicas no prompt.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Assuntos proibidos</label>
+                        <textarea
+                          rows={3}
+                          value={formData.forbidden_topics || ''}
+                          onChange={e => setFormData({ ...formData, forbidden_topics: e.target.value })}
+                          placeholder={'Ex:\nDiagnóstico médico\nConselhos jurídicos\nPolítica'}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none font-mono"
+                        />
+                        <p className="mt-2 text-[10px] text-gray-400 italic">
+                          * Um assunto por linha. O agente vai recusar educadamente e oferecer ajuda no que sabe fazer.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Exemplos de diálogo (few-shot)</label>
+                        <textarea
+                          rows={6}
+                          value={formData.conversation_examples || ''}
+                          onChange={e => setFormData({ ...formData, conversation_examples: e.target.value })}
+                          placeholder={'Cliente: Oi, tudo bem?\nVocê: Oi! Tudo ótimo por aqui 😊 Como posso te ajudar hoje?\n\nCliente: Vocês atendem aos sábados?\nVocê: Atendemos sim! Sábado das 9h às 13h. Quer ver um horário?'}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none font-mono"
+                        />
+                        <p className="mt-2 text-[10px] text-gray-400 italic">
+                          * Exemplos de conversa que o agente vai usar como referência de tom e estilo. Deixe vazio pra usar os padrões do sistema.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
