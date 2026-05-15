@@ -495,6 +495,49 @@ Regras:
 }
 
 /**
+ * Comprime o histórico antigo de uma conversa em um resumo de 2-3 frases.
+ * Usa gpt-4o-mini para manter custo baixo — chamado apenas quando history > 20 msgs.
+ */
+export async function summarizeHistory(
+  messages: { role: string; content: string }[],
+  userId?: string
+): Promise<string | null> {
+  if (!messages.length) return null;
+
+  const settings = await getAISettings(userId);
+  const key = settings.openai_api_key || process.env.OPENAI_API_KEY;
+  if (!key) return null;
+
+  const conversationText = messages
+    .map(m => `${m.role === 'user' ? 'Cliente' : 'Assistente'}: ${m.content}`)
+    .join('\n');
+
+  try {
+    const client = new OpenAI({ apiKey: key });
+    const response = await withTimeout(
+      client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'Resuma a conversa abaixo em 2-3 frases em português. Inclua: o que o cliente quer, o que foi combinado e dados importantes (nome, produto, horário, valor). Seja direto e conciso.'
+          },
+          { role: 'user', content: conversationText }
+        ],
+        max_tokens: 250,
+        temperature: 0.2
+      }),
+      OPENAI_TIMEOUT_MS,
+      'OpenAI/summary'
+    );
+    return response.choices[0]?.message?.content || null;
+  } catch (err) {
+    console.warn('[AIService] summarizeHistory failed (non-critical):', (err as any)?.message || err);
+    return null;
+  }
+}
+
+/**
  * Generates an embedding for the given text using OpenAI.
  */
 export async function generateEmbedding(text: string, userId?: string): Promise<number[] | null> {

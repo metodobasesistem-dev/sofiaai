@@ -1,6 +1,6 @@
 import { audioService } from './audioService.js';
 import { supabase } from '../lib/supabaseClient.js';
-import { generateAIResponse, truncateHistoryByTokens } from './aiService.js';
+import { generateAIResponse, truncateHistoryByTokens, transcribeAudio, summarizeHistory } from './aiService.js';
 import { redisService } from './redisService.js';
 import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fns';
 import { googleCalendarService } from './googleCalendarService.js';
@@ -99,9 +99,15 @@ export class AgentService {
         const contactId = `${userId}_${cleanPhone}`;
         const [{ data: tData }, { data: cData }] = await Promise.all([
           supabase.from('threads').select('*').eq('id', threadId).maybeSingle(),
-          supabase.from('contacts').select('ad_tracking').eq('id', contactId).maybeSingle()
+          supabase.from('contacts').select('ad_tracking, status_funil, total_mensagens, primeiro_contato').eq('id', contactId).maybeSingle()
         ]);
-        threadData = tData ? { ...tData, ad_tracking: cData?.ad_tracking } : null;
+        threadData = tData ? {
+          ...tData,
+          ad_tracking: cData?.ad_tracking,
+          contact_status_funil: cData?.status_funil,
+          contact_total_msgs: cData?.total_mensagens,
+          contact_since: cData?.primeiro_contato
+        } : null;
       } catch (err) {
         console.warn(`[AgentService] Thread/Contact check failed.`);
       }
@@ -153,16 +159,40 @@ export class AgentService {
         .eq('agent_id', agentData.id)
         .eq('is_active', true);
 
-      // 3. Persistent History - Improved Context (Last 20 messages)
-      let history = await redisService.getHistory(threadId, 20);
+      // 3. Persistent History — busca até 50 msgs para habilitar sumarização automática
+      const HISTORY_LIMIT = 50;
+      const RECENT_COUNT = 20;
+      let history = await redisService.getHistory(threadId, HISTORY_LIMIT);
       if (history.length === 0) {
-        history = await this.getHistoryFromSupabase(threadId, 20);
+        history = await this.getHistoryFromSupabase(threadId, HISTORY_LIMIT);
       }
 
       // 4. Save Inbound Message
       if (!skipPersist) {
         await this.persistMessage(threadId, dbUserId, body, 'inbound', messageId, contactName, from, displayPhone);
         await redisService.pushMessage(threadId, 'user', body);
+      }
+
+      // 4.5 - 3.C: Transcreve áudio ANTES de passar para a IA
+      // O modelo de texto não processa áudio diretamente — a transcrição converte para texto.
+      let processBody = body;
+      let isTranscribedAudio = false;
+      if (isAudioRequest && mediaUrl) {
+        console.log('[AgentService] 🎙️ Transcrevendo mensagem de áudio...');
+        try {
+          const audioRes = await fetch(mediaUrl);
+          if (audioRes.ok) {
+            const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+            const transcription = await transcribeAudio(audioBuffer, 'audio.ogg', dbUserId);
+            if (transcription && transcription.trim()) {
+              processBody = transcription;
+              isTranscribedAudio = true;
+              console.log(`[AgentService] 🎙️ Áudio transcrito: "${transcription.substring(0, 80)}..."`);
+            }
+          }
+        } catch (audioErr) {
+          console.warn('[AgentService] Transcrição de áudio falhou, usando body original:', audioErr);
+        }
       }
 
       // 5. AI Loop (Process Tools)
@@ -172,22 +202,47 @@ export class AgentService {
       const fullPrompt = systemPrompt + dateContext;
       const tools = this.getAgentTools();
 
-
-      // Aplica limite duro de tokens (8k) — evita estouro de context length
-      // em conversas longas. Sempre preserva as mensagens mais recentes.
+      // Filtra e formata histórico
       const filteredHistory = history
         .filter((m: any) => (m.role === 'user' || m.role === 'assistant') && m.content)
         .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content as string }));
-      const truncatedHistory = truncateHistoryByTokens(filteredHistory, 8000);
+
+      // 3.A: Auto-sumariza histórico antigo quando > 20 mensagens para comprimir contexto
+      let historyForAI: { role: 'user' | 'assistant'; content: string }[] = filteredHistory;
+      if (filteredHistory.length > RECENT_COUNT) {
+        const olderPart = filteredHistory.slice(0, filteredHistory.length - RECENT_COUNT);
+        const recentPart = filteredHistory.slice(filteredHistory.length - RECENT_COUNT);
+        const summary = await summarizeHistory(olderPart, dbUserId);
+        if (summary) {
+          historyForAI = [
+            { role: 'user', content: `[Resumo do histórico anterior desta conversa]: ${summary}` },
+            { role: 'assistant', content: 'Entendido. Considerei esse contexto.' },
+            ...recentPart
+          ];
+          console.log(`[AgentService] 📝 Histórico resumido: ${olderPart.length} msgs antigas → 1 resumo`);
+        } else {
+          historyForAI = recentPart;
+        }
+      }
+
+      // Aplica limite duro de tokens (8k) — preserva sempre as mais recentes
+      const truncatedHistory = truncateHistoryByTokens(historyForAI, 8000);
 
       let currentMessages: any[] = [
         ...truncatedHistory,
-        { role: 'user', content: body, mediaUrl, mediaMimeType }
+        {
+          role: 'user',
+          content: processBody,
+          // Não passa mediaUrl para áudio transcrito — o modelo já recebeu o texto
+          mediaUrl: isTranscribedAudio ? undefined : mediaUrl,
+          mediaMimeType: isTranscribedAudio ? undefined : mediaMimeType
+        }
       ];
 
       let finalUsage = null;
       let aiFinalText: string | null = null;
       let toolCalledInThisTurn = false;
+      let transferredToHuman = false;
       const MAX_TOOL_ITERATIONS = 5;
       let iterationCount = 0;
 
@@ -244,6 +299,12 @@ export class AgentService {
                 toolResult = await this.handleSearchCatalog(dbUserId, args.pergunta || args.query);
               } else if (functionName === 'consultarEcommerce') {
                 toolResult = await this.handleEcommerceSearch(dbUserId, agentData, args.query || args.pergunta);
+              } else if (functionName === 'transfer_to_human') {
+                // 3.E: IA decidiu transferir — atualiza thread e sinaliza o flag
+                await supabase.from('threads').update({ status: 'human' }).eq('id', threadId);
+                transferredToHuman = true;
+                console.log(`[AgentService] 🤝 Transferência para humano: ${threadId}. Motivo: ${args.reason}`);
+                toolResult = { success: true, message: 'Transferência realizada. Aguardando mensagem de despedida da IA.' };
               } else {
                 toolResult = { error: `Tool "${functionName}" não reconhecida` };
               }
@@ -293,19 +354,23 @@ export class AgentService {
         // GUARD FINAL: re-checa estado da thread imediatamente antes de
         // enviar. Fecha a janela de corrida onde o operador assume durante
         // o processamento da IA (que pode levar segundos com tools).
+        // EXCEÇÃO: se foi a própria IA que chamou transfer_to_human,
+        // deixamos a mensagem de despedida ser enviada antes de parar.
         // ──────────────────────────────────────────────────────────────
-        try {
-          const { data: latestThread } = await supabase
-            .from('threads')
-            .select('status')
-            .eq('id', threadId)
-            .maybeSingle();
-          if (latestThread?.status === 'human') {
-            console.log(`[AgentService] 🛑 Thread ${threadId} virou 'human' durante o processamento. Descartando resposta da IA.`);
-            return { status: 'human' } as any;
+        if (!transferredToHuman) {
+          try {
+            const { data: latestThread } = await supabase
+              .from('threads')
+              .select('status')
+              .eq('id', threadId)
+              .maybeSingle();
+            if (latestThread?.status === 'human') {
+              console.log(`[AgentService] 🛑 Thread ${threadId} virou 'human' durante o processamento. Descartando resposta da IA.`);
+              return { status: 'human' } as any;
+            }
+          } catch (lockErr) {
+            console.warn('[AgentService] Falha ao revalidar status da thread, prosseguindo:', lockErr);
           }
-        } catch (lockErr) {
-          console.warn('[AgentService] Falha ao revalidar status da thread, prosseguindo:', lockErr);
         }
 
         const aiMsgId = `ai-${Date.now()}`;
@@ -662,6 +727,18 @@ Cliente: O remédio tal funciona pra dor de cabeça?
 Você: Sobre medicação especificamente eu não tenho como te orientar — isso é coisa de profissional. Mas se você quiser, posso agendar uma avaliação com nosso especialista. Topa?
 `;
 
+    // 3.B: Dados ricos do contato para personalizar a abordagem
+    const clientInfoParts: string[] = [];
+    if (threadData?.contact_status_funil) clientInfoParts.push(`Estágio no funil: ${threadData.contact_status_funil}`);
+    if (threadData?.contact_total_msgs) clientInfoParts.push(`Mensagens trocadas: ${threadData.contact_total_msgs}`);
+    if (threadData?.contact_since) {
+      const since = new Date(threadData.contact_since);
+      if (!isNaN(since.getTime())) clientInfoParts.push(`Cliente desde: ${since.toLocaleDateString('pt-BR')}`);
+    }
+    const clientInfoBlock = clientInfoParts.length > 0
+      ? `- Dados do contato: ${clientInfoParts.join(' | ')}\n`
+      : '';
+
     return `# IDENTIDADE
 Você é o assistente virtual da empresa **${agentData.company_name || 'Nossa Empresa'}**.
 ${agentData.prompt_base ? `\nMissão definida pelo dono da empresa:\n${agentData.prompt_base}\n` : ''}
@@ -675,13 +752,14 @@ ${leadName ? `O cliente se chama **${leadName}**. Use o nome dele com naturalida
 5. **PERSONA**: Você é um humano da equipe da empresa — não revele que é IA, mesmo se perguntado diretamente. Se insistirem, redirecione: "Sou parte do atendimento, e estou aqui pra te ajudar com o que precisar 😊".
 6. **EMOJIS**: Use no máximo 1 emoji por mensagem, e só quando combinar com o contexto. Nada de spam de emoji.
 7. **FORMATAÇÃO**: NÃO use markdown (**negrito**, _itálico_, # títulos, listas com -). É WhatsApp puro. Se quiser destacar, use frases curtas em linhas separadas.
+8. **TRANSFERÊNCIA**: Se o cliente pedir explicitamente para falar com humano, estiver muito irritado/frustrado, a solicitação estiver completamente fora do seu escopo, ou após 3 tentativas sem resolver — chame IMEDIATAMENTE a tool 'transfer_to_human' e envie uma mensagem cordial informando que um atendente irá ajudá-lo em breve.
 
 # TOM DE VOZ
 ${toneInstruction}
 ${forbiddenBlock}
 # CONTEXTO ATUAL
 - Hoje é **${dayStr}**, ${dateStr}, ${timeStr}.
-${threadData?.ad_tracking ? `- Origem do lead: anúncio de "${threadData.ad_tracking.source || 'Meta Ads'}" / "${threadData.ad_tracking.headline || 'N/A'}". Você pode usar isso se ele perguntar algo específico do anúncio.` : ''}
+${clientInfoBlock}${threadData?.ad_tracking ? `- Origem do lead: anúncio de "${threadData.ad_tracking.source || 'Meta Ads'}" / "${threadData.ad_tracking.headline || 'N/A'}". Você pode usar isso se ele perguntar algo específico do anúncio.\n` : ''}
 
 # CONHECIMENTO DA EMPRESA
 ${aboutCompany ? `## Sobre a empresa\n${aboutCompany}\n` : ''}
@@ -1202,6 +1280,28 @@ ${customExamples}
               query: { type: 'string', description: 'A frase ou termo de busca do cliente (ex: kits safari até 400 reais)' }
             },
             required: ['query']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'transfer_to_human',
+          description: 'Transfere o atendimento para um agente humano. Use quando: (1) o cliente pedir explicitamente para falar com humano, (2) o cliente estiver irritado ou frustrado, (3) a solicitação estiver completamente fora do seu escopo, (4) após 3 tentativas sem conseguir resolver.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reason: {
+                type: 'string',
+                enum: ['solicitacao_cliente', 'cliente_frustrado', 'fora_de_escopo', 'nao_resolvido'],
+                description: 'Motivo da transferência'
+              },
+              message: {
+                type: 'string',
+                description: 'Mensagem final para o cliente informando a transferência (em pt-BR, cordial e breve)'
+              }
+            },
+            required: ['reason', 'message']
           }
         }
       }

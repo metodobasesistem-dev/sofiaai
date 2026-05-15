@@ -5,18 +5,6 @@ import { normalizePhone } from '../lib/phoneHelper';
 
 export const sofiaService = {
   /**
-   * Get recent history for history view
-   */
-  async getHistory(tenantId: string) {
-    const { data: history } = await supabase.from('sofia_messages')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    return history || [];
-  },
-
-  /**
    * Main chat function for Sofia
    */
   async chat(userId: string, tenantId: string, message: string) {
@@ -38,14 +26,19 @@ export const sofiaService = {
     if (embedding) {
       const { data: memories } = await supabase.rpc('match_sofia_memory', {
         query_embedding: embedding,
-        match_threshold: 0.5,
+        match_threshold: 0.7,
         match_count: 5,
         p_tenant_id: tenantId
       });
 
-      if (memories && memories.length > 0) {
-        semanticContext = "MEMÓRIA SEMÂNTICA (Fatos memorizados anteriormente):\n" + 
-          memories.map((m: any) => `- ${m.content}`).join('\n');
+      // Valida conteúdo antes de usar — descarta entradas vazias ou muito curtas
+      const validMemories = (memories || []).filter(
+        (m: any) => m.content && typeof m.content === 'string' && m.content.trim().length > 10
+      );
+
+      if (validMemories.length > 0) {
+        semanticContext = "MEMÓRIA SEMÂNTICA (Fatos memorizados anteriormente):\n" +
+          validMemories.map((m: any) => `- ${m.content.trim()}`).join('\n');
       }
     }
 
