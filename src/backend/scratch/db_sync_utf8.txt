@@ -1,6 +1,0 @@
-﻿[dotenv@17.3.1] injecting env (12) from .env.local -- tip: ­ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
---- DB SYNC CHECK ---
-Threads (UUID): 0
-Threads (Legacy): 0
-Contacts (UUID): 1
-Contacts (Legacy): 0
