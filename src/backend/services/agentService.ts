@@ -65,6 +65,7 @@ export class AgentService {
   }): Promise<{ text: string; audioBuffer?: Buffer; voiceMode?: string; aiMsgId?: string } | string | null> {
     const { from, body, contactName, messageId, displayPhone, skipPersist = false, isAudioRequest = false, mediaUrl, mediaMimeType } = incomingData;
 
+    const startTime = Date.now();
     try {
       let dbUserId = userId;
 
@@ -243,6 +244,8 @@ export class AgentService {
       let aiFinalText: string | null = null;
       let toolCalledInThisTurn = false;
       let transferredToHuman = false;
+      let modelUsed: string | null = null;
+      const toolsUsed: string[] = [];
       const MAX_TOOL_ITERATIONS = 5;
       let iterationCount = 0;
 
@@ -261,6 +264,9 @@ export class AgentService {
         if (response.usage) {
           finalUsage = response.usage;
         }
+        if (response.providerUsed) {
+          modelUsed = response.providerUsed;
+        }
 
         if (response.toolCalls && response.toolCalls.length > 0) {
           toolCalledInThisTurn = true;
@@ -268,6 +274,7 @@ export class AgentService {
 
           for (const toolCall of response.toolCalls) {
             const functionName = toolCall.function.name;
+            if (!toolsUsed.includes(functionName)) toolsUsed.push(functionName);
             let args: any = {};
             try {
               args = JSON.parse(toolCall.function.arguments || '{}');
@@ -378,12 +385,42 @@ export class AgentService {
           await this.persistMessage(threadId, dbUserId, aiFinalText, 'outbound', aiMsgId, contactName, from, displayPhone, agentData?.nome, finalUsage);
           await redisService.pushMessage(threadId, 'assistant', aiFinalText);
         }
+
+        // 4.B: Log fire-and-forget — não bloqueia a resposta
+        const outcome = transferredToHuman ? 'transferred' : 'responded';
+        void supabase.from('ai_interaction_logs').insert({
+          user_id: dbUserId, thread_id: threadId, agent_id: agentData?.id || null,
+          duration_ms: Date.now() - startTime, model_used: modelUsed,
+          tokens_in: finalUsage?.prompt_tokens || 0, tokens_out: finalUsage?.completion_tokens || 0,
+          cost_brl: finalUsage?.cost_brl || 0,
+          tool_calls_count: toolsUsed.length, tool_names: toolsUsed, outcome
+        });
+
         return { text: aiFinalText, audioBuffer: voiceBuffer, voiceMode, aiMsgId };
       }
+
+      // Chegou aqui sem resposta (fallback de iteração ou sem toolCall)
+      void supabase.from('ai_interaction_logs').insert({
+        user_id: dbUserId, thread_id: threadId, agent_id: agentData?.id || null,
+        duration_ms: Date.now() - startTime, model_used: modelUsed,
+        tokens_in: finalUsage?.prompt_tokens || 0, tokens_out: finalUsage?.completion_tokens || 0,
+        cost_brl: finalUsage?.cost_brl || 0,
+        tool_calls_count: toolsUsed.length, tool_names: toolsUsed, outcome: 'fallback'
+      });
+
       return null;
     } catch (error) {
       console.error('[AgentService] Fatal error in processIncoming:', error);
-      
+
+      // Log de erro — também fire-and-forget
+      void supabase.from('ai_interaction_logs').insert({
+        user_id: userId, thread_id: `${userId}_unknown`,
+        duration_ms: Date.now() - startTime, model_used: null,
+        tokens_in: 0, tokens_out: 0, cost_brl: 0,
+        tool_calls_count: 0, tool_names: [], outcome: 'error',
+        error_message: String((error as any)?.message || error).substring(0, 500)
+      });
+
       // FALLBACK DE SEGURANÇA: Se tudo falhar, tenta enviar uma mensagem amigável para não deixar o cliente no vácuo
       const fallbackMsg = "Peço desculpas, tive uma pequena instabilidade técnica para processar sua solicitação agora. Poderia repetir por favor? Estarei aqui para te ajudar!";
       return { text: fallbackMsg };

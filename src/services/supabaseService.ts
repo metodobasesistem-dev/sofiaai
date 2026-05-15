@@ -2068,4 +2068,47 @@ export const getTenantSecret = async (tenantId: string, key: string) => {
   return data?.secret_value || '';
 };
 
+// ─── AI Performance Stats ─────────────────────────────────────────────────────
+export type AIStats = {
+  total_today: number;
+  cost_today: number;
+  resolution_rate: number;
+  avg_duration_ms: number;
+  top_tool: string | null;
+};
+
+export const getAIStats = async (userId: string): Promise<AIStats | null> => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('ai_interaction_logs')
+      .select('outcome, cost_brl, duration_ms, tool_names')
+      .eq('user_id', userId)
+      .gte('created_at', today.toISOString());
+
+    if (error || !data || data.length === 0) return null;
+
+    const total = data.length;
+    const cost  = data.reduce((s, r) => s + Number(r.cost_brl || 0), 0);
+    const resolved = data.filter(r => r.outcome === 'responded').length;
+    const avgDuration = Math.round(data.reduce((s, r) => s + (r.duration_ms || 0), 0) / total);
+
+    const toolCount: Record<string, number> = {};
+    data.forEach(r => (r.tool_names || []).forEach((t: string) => { toolCount[t] = (toolCount[t] || 0) + 1; }));
+    const topTool = Object.entries(toolCount).sort(([, a], [, b]) => b - a)[0]?.[0] || null;
+
+    return {
+      total_today: total,
+      cost_today: +cost.toFixed(3),
+      resolution_rate: Math.round((resolved / total) * 100),
+      avg_duration_ms: avgDuration,
+      top_tool: topTool
+    };
+  } catch {
+    return null;
+  }
+};
+
 // Force redeploy to clear asset cache - Zyreo Update

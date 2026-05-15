@@ -304,4 +304,82 @@ router.delete('/:id/knowledge/:knowledgeId', async (req: AuthenticatedRequest, r
   }
 });
 
+// ─── GET /api/v2/agents/ai-stats ─────────────────────────────────────────────
+// Retorna métricas agregadas de performance do agente de IA.
+// range: '24h' | '7d' (default) | '30d'
+router.get('/ai-stats', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  try {
+    const range = String(req.query.range || '7d');
+    const since = new Date();
+    if (range === '24h') since.setHours(since.getHours() - 24);
+    else if (range === '30d') since.setDate(since.getDate() - 30);
+    else since.setDate(since.getDate() - 7);
+
+    const { data, error } = await supabase
+      .from('ai_interaction_logs')
+      .select('outcome, cost_brl, duration_ms, tokens_in, tokens_out, tool_names, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    const logs = data || [];
+    const total = logs.length;
+
+    const costTotal = logs.reduce((s, r) => s + Number(r.cost_brl || 0), 0);
+    const tokensIn  = logs.reduce((s, r) => s + (r.tokens_in  || 0), 0);
+    const tokensOut = logs.reduce((s, r) => s + (r.tokens_out || 0), 0);
+    const avgDuration = total > 0
+      ? Math.round(logs.reduce((s, r) => s + (r.duration_ms || 0), 0) / total)
+      : 0;
+
+    const outcomeCount: Record<string, number> = {};
+    const toolCount: Record<string, number> = {};
+    logs.forEach(r => {
+      outcomeCount[r.outcome] = (outcomeCount[r.outcome] || 0) + 1;
+      (r.tool_names || []).forEach((t: string) => { toolCount[t] = (toolCount[t] || 0) + 1; });
+    });
+
+    const topTools = Object.entries(toolCount)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+
+    // Agrupamento diário para gráfico
+    const dailyMap: Record<string, { total: number; cost: number }> = {};
+    logs.forEach(r => {
+      const day = r.created_at.substring(0, 10);
+      if (!dailyMap[day]) dailyMap[day] = { total: 0, cost: 0 };
+      dailyMap[day].total++;
+      dailyMap[day].cost = +(dailyMap[day].cost + Number(r.cost_brl || 0)).toFixed(6);
+    });
+    const daily = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date, ...v }));
+
+    const resolutionRate = total > 0
+      ? Math.round(((outcomeCount['responded'] || 0) / total) * 100)
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        cost_total: +costTotal.toFixed(4),
+        tokens_in: tokensIn,
+        tokens_out: tokensOut,
+        avg_duration_ms: avgDuration,
+        resolution_rate: resolutionRate,
+        outcomes: outcomeCount,
+        top_tools: topTools,
+        daily
+      }
+    });
+  } catch (err: any) {
+    console.error('[AgentAPI] GET ai-stats error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

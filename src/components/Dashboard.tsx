@@ -33,15 +33,17 @@ import { getWhatsAppStatus, connectWhatsApp, listenToWhatsAppSession, WhatsAppSt
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { 
-  getDashboardStats, 
+import {
+  getDashboardStats,
   getGlobalDashboardStats,
-  getRecentActivities, 
+  getRecentActivities,
   getGlobalRecentActivities,
-  getUpcomingAppointments, 
+  getUpcomingAppointments,
   getDashboardGrowth,
-  getUserProfile, 
-  type UserProfile 
+  getUserProfile,
+  getAIStats,
+  type AIStats,
+  type UserProfile
 } from '../services/supabaseService';
 import { 
   AreaChart, 
@@ -118,6 +120,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState<any[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [aiStats, setAiStats] = useState<AIStats | null>(null);
   const [timeLeft, setTimeLeft] = useState({ days: 10, hours: 0, mins: 0, secs: 0 });
   const [isExpired, setIsExpired] = useState(false);
 
@@ -193,6 +196,9 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         getUserProfile(userId).then(p => {
           setProfile(p || null);
         });
+
+        // AI Performance stats (non-blocking)
+        getAIStats(userId).then(s => setAiStats(s)).catch(() => {});
 
         // 2. Real-time WhatsApp Status (Brokered API)
         // AÇÃO: Perguntar ao backend o estado real, ignorando dados possivelmente sujos do banco
@@ -701,6 +707,29 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           ))}
         </div>
       </div>
+
+      {/* IA Performance — card compacto, exibido só quando há dados */}
+      {aiStats && (
+        <div className="mt-1">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Bot size={12} /> IA — Performance de Hoje
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Interações', value: String(aiStats.total_today), sub: 'mensagens processadas' },
+              { label: 'Custo', value: `R$ ${aiStats.cost_today.toFixed(3)}`, sub: 'gasto em tokens hoje' },
+              { label: 'Resolução', value: `${aiStats.resolution_rate}%`, sub: 'respondido sem handover' },
+              { label: 'Tempo médio', value: aiStats.avg_duration_ms > 0 ? `${(aiStats.avg_duration_ms / 1000).toFixed(1)}s` : '---', sub: aiStats.top_tool ? `tool mais usada: ${aiStats.top_tool}` : 'tempo de resposta' },
+            ].map((item, i) => (
+              <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                <h4 className="text-xl font-black text-slate-900">{item.value}</h4>
+                <p className="text-[9px] text-slate-400 mt-0.5">{item.sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
         {/* Gráfico de Evolução Premium */}
         <div className="glass-card p-8 rounded-3xl mt-2 transform-gpu">
