@@ -196,6 +196,19 @@ export class AgentService {
         }
       }
 
+      // 5.A: Classifica complexidade e seleciona modelo (simples → mini, complexo → configurado)
+      const messageComplexity = this.classifyMessageComplexity(processBody);
+      const modelOverride = messageComplexity === 'simple' ? 'gpt-4o-mini' : undefined;
+      if (modelOverride) {
+        console.log(`[AgentService] 💡 Mensagem simples → usando ${modelOverride} (economia de custo)`);
+      }
+
+      // 5.B: Chave de cache FAQ — só para mensagens simples sem contexto de áudio
+      const normalizedBodyForCache = processBody.toLowerCase().replace(/\s+/g, ' ').trim().substring(0, 100);
+      const faqCacheKey = (messageComplexity === 'simple' && !isTranscribedAudio && agentData.id)
+        ? `ai_faq:${agentData.id}:${Buffer.from(normalizedBodyForCache).toString('base64url').substring(0, 48)}`
+        : null;
+
       // 5. AI Loop (Process Tools)
       const systemPrompt = this.buildSystemPrompt(agentData, threadData, activeProfessionals, knowledgeBlocks || []);
       const now = new Date();
@@ -249,10 +262,23 @@ export class AgentService {
       const MAX_TOOL_ITERATIONS = 5;
       let iterationCount = 0;
 
-      while (iterationCount < MAX_TOOL_ITERATIONS) {
+      // 5.B: Verifica cache de resposta FAQ antes de chamar o LLM
+      if (faqCacheKey) {
+        try {
+          const cached = await redisService.get(faqCacheKey);
+          if (cached && typeof cached === 'string' && cached.length > 3) {
+            aiFinalText = cached;
+            console.log(`[AgentService] ⚡ FAQ cache HIT para "${processBody.substring(0, 40)}" — LLM ignorado`);
+          }
+        } catch { /* cache miss não é crítico */ }
+      }
+
+      while (!aiFinalText && iterationCount < MAX_TOOL_ITERATIONS) {
         iterationCount++;
         console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId}, Iter: ${iterationCount}/${MAX_TOOL_ITERATIONS})`);
-        const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', dbUserId);
+        // Usa mini model para mensagens simples; após tool call, já não importa (toolCalledInThisTurn=true = iteração de resposta)
+        const modelForThisCall = toolCalledInThisTurn ? undefined : modelOverride;
+        const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', dbUserId, modelForThisCall);
         
         if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
           console.warn(`[AgentService] ⚠️ Resposta da IA vazia na thread: ${threadId}. Encerrando loop.`);
@@ -332,6 +358,13 @@ export class AgentService {
         } else {
           console.log(`[AgentService] ✨ AI RESPONSE GENERATED: "${response.text?.substring(0, 50)}..."`);
           aiFinalText = response.text;
+
+          // 5.B: Armazena no cache FAQ se a resposta foi simples (sem tool calls e sem transferência)
+          if (faqCacheKey && aiFinalText && !toolCalledInThisTurn && !transferredToHuman) {
+            void redisService.set(faqCacheKey, aiFinalText, 4 * 3600);
+            console.log(`[AgentService] 💾 FAQ cacheado para "${processBody.substring(0, 40)}" (TTL 4h)`);
+          }
+
           break;
         }
       }
@@ -1270,6 +1303,21 @@ ${customExamples}
       console.error('[AgentService] Ecommerce search error:', err);
       return { error: 'Falha na comunicação com o e-commerce.', details: err.message };
     }
+  }
+
+  /**
+   * Classifica a complexidade de uma mensagem para decidir qual modelo usar.
+   * Simples → gpt-4o-mini (10-20x mais barato).
+   * Complexo → modelo configurado pelo usuário (padrão gpt-4o).
+   */
+  private classifyMessageComplexity(body: string): 'simple' | 'complex' {
+    const text = body.trim();
+    if (text.length > 150) return 'complex';
+
+    const complexKeywords = /agendar|marcar|hor[aá]rio|consulta|dispon[ií]vel|quando (posso|tem|voc[eê])|pre[cç]o|valor|cust[ao]|quero|preciso|gostaria|pedido|comprar|servi[cç]o|produto|reservar|cancelar|endere[cç]o|como chego|como funciona|enviar|entreg/i;
+    if (complexKeywords.test(text)) return 'complex';
+
+    return 'simple';
   }
 
   private getAgentTools() {

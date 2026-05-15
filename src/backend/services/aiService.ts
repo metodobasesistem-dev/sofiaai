@@ -311,11 +311,13 @@ export async function generateAIResponse(
   messages: { role: 'user' | 'assistant' | 'system' | 'tool'; content: string; mediaUrl?: string; mediaMimeType?: string; [key: string]: any }[],
   tools?: any[],
   toolChoice: 'auto' | 'none' | 'required' = 'auto',
-  userId?: string
+  userId?: string,
+  modelOverride?: string
 ): Promise<GenerateAIResponseResult> {
   const settings = await getAISettings(userId);
   const provider = (settings.llm_provider || 'openai') as 'openai' | 'gemini';
-  const model = settings.default_ai_model || 'gpt-4o';
+  // modelOverride permite forçar um modelo mais barato para mensagens simples
+  const model = modelOverride || settings.default_ai_model || 'gpt-4o';
   const exchangeRate = settings.usd_brl_rate || 5.30;
 
   const openaiKey = (settings.openai_api_key && String(settings.openai_api_key).trim() !== '')
