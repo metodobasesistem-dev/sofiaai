@@ -99,9 +99,9 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // ─── PATCH /api/v2/admin/users/:id ────────────────────────────────────────
-// SEC-06: Whitelist de campos para evitar injeção de campos sensíveis (role, id, email)
+// SEC-06: Whitelist de campos para permitir alterações de plano e cargo por administradores
 const ADMIN_USER_PATCH_ALLOWED_FIELDS = [
-  'name', 'plan', 'trial_ends_at', 'is_active',
+  'name', 'plano', 'role', 'trial_ends_at', 'is_active',
   'feature_flags', 'sofia_active', 'whatsapp_status',
   'whatsapp_provider', // admin can switch a tenant between evolution/uazapi/meta_official
 ];
