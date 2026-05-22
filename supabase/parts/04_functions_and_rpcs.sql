@@ -173,7 +173,11 @@ BEGIN
     created_at
   )
   VALUES (
-    p_message->>'id',
+    CASE 
+      WHEN (p_message->>'id') ~ '^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32})$' 
+      THEN (p_message->>'id')::uuid 
+      ELSE gen_random_uuid() 
+    END,
     (p_message->>'user_id')::uuid,
     p_message->>'thread_id',
     COALESCE(p_message->>'text', ''),
