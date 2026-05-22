@@ -60,6 +60,8 @@ interface MenuItem {
     id: string;
     label: string;
     icon: React.ReactNode;
+    minPlan?: string;
+    flag?: string;
   }[];
 }
 
@@ -127,8 +129,13 @@ export default function Layout({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [agendasOpen, setAgendasOpen] = useState(true);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
+    admin_menu: false,
+    prospeccao_menu: false,
+    atendimento_menu: true,
+    ia_menu: false,
+    config_menu: false,
+  });
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const headerProfileRef = useRef<HTMLDivElement>(null);
   const { unreadTotal } = useNotification();
@@ -193,10 +200,19 @@ export default function Layout({
   // Auto-expandir os submenus se a aba correspondente estiver ativa
   useEffect(() => {
     if (['admin', 'sofia_config', 'overview', 'clients', 'meta_templates'].includes(activeTab)) {
-      setIsAdminOpen(true);
+      setOpenMenus(prev => ({ ...prev, admin_menu: true }));
     }
-    if (['schedule', 'availability'].includes(activeTab)) {
-      setAgendasOpen(true);
+    if (['lead_radar'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, prospeccao_menu: true }));
+    }
+    if (['dashboard', 'inbox', 'kanban', 'contacts'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, atendimento_menu: true }));
+    }
+    if (['agents', 'leo', 'campaigns', 'quick_replies'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, ia_menu: true }));
+    }
+    if (['schedule', 'availability', 'integrations', 'reports', 'professionals', 'finance', 'settings'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, config_menu: true }));
     }
   }, [activeTab]);
 
@@ -226,65 +242,84 @@ export default function Layout({
       title: 'Prospecção',
       role: 'admin' as const,
       items: [
-        { id: 'lead_radar', icon: <Search size={20} />, label: 'Radar de Leads' }
+        {
+          id: 'prospeccao_menu',
+          icon: <Search size={20} />,
+          label: 'Radar',
+          subItems: [
+            { id: 'lead_radar', icon: <Search size={16} />, label: 'Radar de Leads' }
+          ]
+        }
       ]
     },
     {
       title: 'Atendimento & CRM',
       items: [
-        { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-        { 
-          id: 'inbox', 
-          icon: (
-            <div className="relative">
-              <Inbox size={20} />
-              {unreadTotal > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
-                  {unreadTotal > 99 ? '99+' : unreadTotal}
-                </span>
-              )}
-            </div>
-          ), 
-          label: 'Caixa de Entrada' 
-        },
-        { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', minPlan: 'Pro' },
-        { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+        {
+          id: 'atendimento_menu',
+          icon: <MessageSquare size={20} />,
+          label: 'Atendimento',
+          subItems: [
+            { id: 'dashboard', icon: <LayoutDashboard size={16} />, label: 'Dashboard' },
+            { 
+              id: 'inbox', 
+              icon: (
+                <div className="relative">
+                  <Inbox size={16} />
+                  {unreadTotal > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
+                      {unreadTotal > 99 ? '99+' : unreadTotal}
+                    </span>
+                  )}
+                </div>
+              ), 
+              label: 'Caixa de Entrada' 
+            },
+            { id: 'kanban', icon: <Layers size={16} />, label: 'Kanban', minPlan: 'Pro' },
+            { id: 'contacts', icon: <Users size={16} />, label: 'Contatos' },
+          ]
+        }
       ]
     },
     {
       title: 'Inteligência & IA',
       items: [
-        { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
         {
-          id: 'leo', 
-          icon: <Zap size={20} className="text-amber-500" />, 
-          label: 'Leo',
-          flag: 'leo_ai',
-          minPlan: 'Starter'
-        },
-        { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
-        { id: 'quick_replies', icon: <MessageSquare size={20} />, label: 'Atalhos', minPlan: 'Starter' },
+          id: 'ia_menu',
+          icon: <Bot size={20} />,
+          label: 'Automações',
+          subItems: [
+            { id: 'agents', icon: <img src="/sofiamini.png" className="w-4 h-4 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
+            {
+              id: 'leo', 
+              icon: <Zap size={16} className="text-amber-500" />, 
+              label: 'Leo',
+              flag: 'leo_ai',
+              minPlan: 'Starter'
+            },
+            { id: 'campaigns', icon: <Send size={16} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
+            { id: 'quick_replies', icon: <MessageSquare size={16} />, label: 'Atalhos', minPlan: 'Starter' },
+          ]
+        }
       ]
     },
     {
       title: 'Configurações & Suporte',
       items: [
         {
-          id: 'agendas', 
-          icon: <Calendar size={20} />, 
-          label: 'Agendas',
-          flag: 'agendas',
-          minPlan: 'Pro',
+          id: 'config_menu',
+          icon: <Settings size={20} />,
+          label: 'Sistema',
           subItems: [
-            { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
-            { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
+            { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} />, flag: 'agendas', minPlan: 'Pro' },
+            { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} />, flag: 'agendas', minPlan: 'Pro' },
+            { id: 'integrations', icon: <Plug size={16} />, label: 'Integrações', flag: 'official_api' },
+            { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios', minPlan: 'Pro' },
+            { id: 'professionals', icon: <Users size={16} />, label: 'Equipe', flag: 'crm' },
+            { id: 'finance', icon: <Wallet size={16} />, label: 'Financeiro' },
+            { id: 'settings', icon: <Settings size={16} />, label: 'Configurações' },
           ]
-        },
-        { id: 'integrations', icon: <Plug size={20} />, label: 'Integrações', flag: 'official_api' },
-        { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', minPlan: 'Pro' },
-        { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
-        { id: 'finance', icon: <Wallet size={20} />, label: 'Financeiro' },
-        { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
+        }
       ]
     }
   ];
@@ -297,20 +332,41 @@ export default function Layout({
         return null;
       }
 
-      // 2. Filtrar os itens da seção
-      const filteredItems = section.items.filter(item => {
-        // Feature Flag Check
+      // 2. Filtrar os itens da seção e os subitens
+      const filteredItems = section.items.map(item => {
+        const clonedItem = { ...item };
+        if (clonedItem.subItems) {
+          clonedItem.subItems = clonedItem.subItems.filter(sub => {
+            if (sub.flag && flags[sub.flag] === false) return false;
+            if (role === 'admin') return true;
+            if (sub.minPlan) {
+              const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
+              const userPlanIdx = plans.indexOf(plano || 'Trial');
+              const minPlanIdx = plans.indexOf(sub.minPlan);
+              if (userPlanIdx < minPlanIdx) return false;
+            }
+            return true;
+          });
+        }
+        return clonedItem;
+      }).filter(item => {
+        // Feature Flag Check no item principal
         if (item.flag && flags[item.flag] === false) return false;
-
+        
         if (role === 'admin') return true;
         
-        // Plan Restriction Check
+        // Plan Restriction Check no item principal
         if (item.minPlan) {
           const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
           const userPlanIdx = plans.indexOf(plano || 'Trial');
           const minPlanIdx = plans.indexOf(item.minPlan);
           
           if (userPlanIdx < minPlanIdx) return false;
+        }
+
+        // Se o item tem subitens e após o filtro ficou vazio, oculte-o
+        if (item.subItems && item.subItems.length === 0) {
+          return false;
         }
 
         return true;
@@ -327,8 +383,7 @@ export default function Layout({
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
-      if (id === 'agendas') setAgendasOpen(!agendasOpen);
-      if (id === 'admin_menu') setIsAdminOpen(!isAdminOpen);
+      setOpenMenus(prev => ({ ...prev, [id]: !prev[id] }));
       return;
     }
     onTabChange(id);
@@ -390,13 +445,10 @@ export default function Layout({
                     collapsed={collapsed}
                     onClick={() => handleTabClick(item.id, !!item.subItems)}
                     hasSubmenu={!!item.subItems}
-                    isSubmenuOpen={item.id === 'agendas' ? agendasOpen : (item.id === 'admin_menu' ? isAdminOpen : false)}
+                    isSubmenuOpen={openMenus[item.id] || false}
                   />
                   
-                  {item.subItems && !collapsed && (
-                    (item.id === 'agendas' && agendasOpen) || 
-                    (item.id === 'admin_menu' && isAdminOpen)
-                  ) && (
+                  {item.subItems && !collapsed && openMenus[item.id] && (
                     <motion.div 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
@@ -492,12 +544,9 @@ export default function Layout({
                           collapsed={false}
                           onClick={() => handleTabClick(item.id, !!item.subItems)}
                           hasSubmenu={!!item.subItems}
-                          isSubmenuOpen={item.id === 'agendas' ? agendasOpen : (item.id === 'admin_menu' ? isAdminOpen : false)}
+                          isSubmenuOpen={openMenus[item.id] || false}
                         />
-                        {item.subItems && (
-                          (item.id === 'agendas' && agendasOpen) ||
-                          (item.id === 'admin_menu' && isAdminOpen)
-                        ) && (
+                        {item.subItems && openMenus[item.id] && (
                           <div className="ml-9 mt-1 space-y-1">
                             {item.subItems.map((sub) => (
                               <div
