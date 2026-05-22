@@ -1959,6 +1959,12 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               // 1. Deduplicação por ID (ID idêntico já está no estado)
               if (prev.some(m => m.id === newMsg.id)) return prev;
 
+              // Ignora pré-persists do backend (status=sending com whatsapp_id=sending-*)
+              // O frontend gerencia seu próprio estado otimista; o temp do backend causaria duplicação.
+              if (payload.new.status === 'sending' && String(payload.new.whatsapp_id || '').startsWith('sending-')) {
+                return prev;
+              }
+
               // Som de recebimento apenas para mensagens inbound (lead)
               if (newMsg.sender === 'lead') playSound('receive');
 
