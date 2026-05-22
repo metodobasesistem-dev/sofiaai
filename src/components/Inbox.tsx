@@ -2731,23 +2731,60 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
     try {
       const currentQuotedId = replyingTo?.whatsapp_id || replyingTo?.id;
+      const currentQuotedText = replyingTo?.text;
       setReplyingTo(null);
 
-      // Fase 4: apenas envia — o banco é atualizado pelo backend (Fase 2)
-      // e o Realtime listener reflete a mensagem assim que for inserida.
+      // Update otimista: exibe a mensagem imediatamente sem esperar o Realtime.
+      // O backend insere via Service Role Key, que não dispara eventos Realtime
+      // para clientes autenticados, então não podemos depender disso.
+      const optimisticId = `sending-${Date.now()}`;
+      setMessages(prev => [...prev, {
+        id: optimisticId,
+        text: finalMessageText,
+        sender: 'outbound',
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
+        status: 'sending',
+        message_type: 'text',
+        whatsapp_id: undefined,
+        quoted_id: currentQuotedId,
+        quoted_text: currentQuotedText,
+        is_starred: false,
+      } as any]);
+
       await sendMessage(activeThread.remoteJid, finalMessageText, currentQuotedId);
       playSound('send');
+
+      // Re-fetch para substituir o registro otimista pelo real do banco
+      const { data: latestMsgs } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('thread_id', selectedThreadId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (latestMsgs) {
+        setMessages(prev => {
+          const withoutTemps = prev.filter(m => !String(m.id).startsWith('sending-'));
+          const existingIds = new Set(withoutTemps.map(m => m.id));
+          const toAdd = [...latestMsgs].reverse().map(formatMsgRow).filter(m => !existingIds.has(m.id));
+          return [...withoutTemps, ...toAdd as any];
+        });
+      }
 
       // Atualiza status da thread para 'human'
       await supabase
         .from('threads')
-        .update({ 
+        .update({
           status: 'human',
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedThreadId);
-      
+
     } catch (error: any) {
+      // Remove a mensagem otimista se o envio falhou
+      setMessages(prev => prev.filter(m => !String(m.id).startsWith('sending-')));
+
       console.error('Error sending message:', error);
       // If the Meta 24h window is closed, restore the input and open the templates modal
       if (error instanceof SendMessageError && error.errorInfo?.is24hWindowClosed) {
