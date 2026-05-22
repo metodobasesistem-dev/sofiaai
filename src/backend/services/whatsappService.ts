@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import qrcode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
@@ -466,7 +467,8 @@ class WhatsAppService {
     }
 
     // ── FASE 2: Banco PRIMEIRO, API depois ─────────────────────────────
-    const tempId = `sending-${Date.now()}-${cleanTo}`;
+    const tempId = `sending-${Date.now()}-${cleanTo}`; // usado como whatsapp_id temporário
+    const tempUUID = randomUUID();                       // uuid real para messages.id
     const sendTimestamp = Date.now();
 
     try {
@@ -528,8 +530,8 @@ class WhatsAppService {
 
       // 2. Persiste com status='sending' ANTES de chamar a API (E AGUARDA)
       const { error: mErr } = await supabase.from('messages').insert({
-        id: tempId,
-        whatsapp_id: tempId,
+        id: tempUUID,       // uuid válido como PK
+        whatsapp_id: tempId, // formato sending-* apenas no campo text
         user_id: userId,
         thread_id: threadId,
         text: message,
@@ -580,8 +582,8 @@ class WhatsAppService {
       if (msgId !== tempId) {
         console.log(`[WhatsAppService] 💾 Attempting definitive persist for msg ${msgId}`);
         const { error } = await supabase.from('messages').insert({
-          id: msgId,
-          whatsapp_id: msgId,
+          id: randomUUID(),   // uuid válido como PK
+          whatsapp_id: msgId, // wamid/id real do WhatsApp no campo text
           user_id: userId,
           thread_id: threadId,
           text: message,
@@ -605,23 +607,23 @@ class WhatsAppService {
               .eq('user_id', userId);
             
             if (!upErr) {
-              await supabase.from('messages').delete().eq('id', tempId);
+              await supabase.from('messages').delete().eq('id', tempUUID);
             } else {
               console.error('[WhatsAppService] ❌ Failed to update existing message during conflict:', upErr);
             }
           } else {
             console.error('[WhatsAppService] ❌ Definitive persist failed:', error);
-            // Se falhou o definitivo mas temos o tempId, tentamos apenas atualizar o status do tempId
+            // Se falhou o definitivo mas temos o tempUUID, atualiza o status do temp
             // para o usuário não "perder" a mensagem visualmente.
-            await supabase.from('messages').update({ status: 'sent', whatsapp_id: msgId }).eq('id', tempId);
+            await supabase.from('messages').update({ status: 'sent', whatsapp_id: msgId }).eq('id', tempUUID);
           }
         } else {
           console.log(`[WhatsAppService] ✅ Definitive persist success for ${msgId}. Cleaning up temp ${tempId}.`);
-          await supabase.from('messages').delete().eq('id', tempId);
+          await supabase.from('messages').delete().eq('id', tempUUID);
         }
       } else {
         console.log(`[WhatsAppService] ℹ️ API returned same ID as temp. Just updating status for ${tempId}.`);
-        await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
+        await supabase.from('messages').update({ status: 'sent' }).eq('id', tempUUID);
       }
 
       console.log(`[WhatsAppService] ✅ Message sent and persisted: ${msgId}`);
@@ -676,7 +678,8 @@ class WhatsAppService {
 
     const cleanTo = normalizePhone(to);
     const threadId = `${userId}_${cleanTo}`;
-    const tempId = `tpl-sending-${Date.now()}-${cleanTo}`;
+    const tempId = `tpl-sending-${Date.now()}-${cleanTo}`; // whatsapp_id temporário
+    const tempUUID = randomUUID();                           // uuid real para messages.id
     const sendTimestamp = Date.now();
     const previewText = `[Template: ${templateName}]`;
 
@@ -719,8 +722,8 @@ class WhatsAppService {
       updated_at: new Date(sendTimestamp).toISOString(),
     });
     await supabase.from('messages').insert({
-      id: tempId,
-      whatsapp_id: tempId,
+      id: tempUUID,        // uuid válido como PK
+      whatsapp_id: tempId, // tpl-sending-* apenas no campo text
       user_id: userId,
       thread_id: threadId,
       text: previewText,
@@ -738,8 +741,8 @@ class WhatsAppService {
 
       if (msgId !== tempId) {
         const { error: insErr } = await supabase.from('messages').insert({
-          id: msgId,
-          whatsapp_id: msgId,
+          id: randomUUID(),   // uuid válido como PK
+          whatsapp_id: msgId, // wamid real no campo text
           user_id: userId,
           thread_id: threadId,
           text: previewText,
@@ -752,9 +755,9 @@ class WhatsAppService {
         if (insErr && insErr.code === '23505') {
           await supabase.from('messages').update({ status: 'sent' }).eq('whatsapp_id', msgId).eq('user_id', userId);
         }
-        await supabase.from('messages').delete().eq('id', tempId);
+        await supabase.from('messages').delete().eq('id', tempUUID);
       } else {
-        await supabase.from('messages').update({ status: 'sent' }).eq('id', tempId);
+        await supabase.from('messages').update({ status: 'sent' }).eq('id', tempUUID);
       }
 
       console.log(`[WhatsAppService] ✅ Template "${templateName}" sent to ${to}: ${msgId}${warnings.length ? ` (${warnings.length} warnings)` : ''}`);
