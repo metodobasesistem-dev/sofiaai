@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   Shield, 
@@ -34,7 +34,6 @@ import {
   Star,
   ToggleLeft,
   ChevronLeft,
-  ChevronLeft, 
   Calendar,
   Trash2,
   Send,
@@ -63,6 +62,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanLeadsFound, setScanLeadsFound] = useState(0);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isAutopilotRunning, setIsAutopilotRunning] = useState(false);
   const [isAutopilotModalOpen, setIsAutopilotModalOpen] = useState(false);
   const [autopilotTemplateName, setAutopilotTemplateName] = useState('prospeccao_fria');
@@ -196,24 +197,56 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const startScan = async () => {
     if (!radarNiche || !radarCity) return toast.error('Nicho e Cidade são obrigatórios');
+
+    const countBefore = radarLeads.length;
     setIsScanning(true);
+    setScanLeadsFound(0);
+
+    // Limpa polling anterior se existir
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
     try {
       const response = await standardFetch('/api/v2/admin/leads/scan', {
         method: 'POST',
         body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
-      }, 120000);
+      }, 15000);
       const res = await response.json();
-      if (res.success) {
-        toast.success(`Busca finalizada! ${res.count} novos leads encontrados.`);
-        fetchLeads();
-      } else {
-        toast.error(res.error || 'Erro na varredura');
+      if (!res.success) {
+        toast.error(res.error || 'Erro ao iniciar busca');
+        setIsScanning(false);
+        return;
       }
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsScanning(false);
+    } catch {
+      // Timeout ou erro de rede — backend ainda pode estar rodando, continua o polling
     }
+
+    // Polling: verifica a cada 8s se novos leads apareceram (máx 4 min)
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    pollIntervalRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await standardFetch('/api/v2/admin/leads');
+        const data = await r.json();
+        if (data.success) {
+          const newLeads: any[] = data.data || [];
+          setScanLeadsFound(Math.max(0, newLeads.length - countBefore));
+          setRadarLeads(newLeads);
+
+          if (newLeads.length > countBefore || attempts >= maxAttempts) {
+            clearInterval(pollIntervalRef.current!);
+            pollIntervalRef.current = null;
+            setIsScanning(false);
+            if (newLeads.length > countBefore) {
+              toast.success(`✅ ${newLeads.length - countBefore} novos leads encontrados!`);
+            } else {
+              toast(`Busca finalizada. Nenhum lead novo desta vez.`);
+            }
+          }
+        }
+      } catch { /* ignora erros de rede no polling */ }
+    }, 8000);
   };
 
   const confirmAutopilot = async () => {
@@ -1712,6 +1745,37 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   return (
     <div className="min-h-screen pb-12 animate-in fade-in duration-700 custom-scrollbar overflow-y-auto">
+
+      {/* Modal de Busca do Radar */}
+      {isScanning && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 flex flex-col items-center gap-6 max-w-sm w-full mx-4">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Search size={28} className="text-primary" />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-slate-900">Radar em Ação</h3>
+              <p className="text-sm text-slate-500">Buscando e analisando leads no Google Maps com IA...</p>
+              <p className="text-xs text-slate-400">Isso pode levar alguns minutos. Não feche a página.</p>
+            </div>
+            {scanLeadsFound > 0 && (
+              <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-3 text-center">
+                <p className="text-2xl font-black text-green-600">{scanLeadsFound}</p>
+                <p className="text-xs font-bold text-green-500 uppercase tracking-widest">Novos leads encontrados</p>
+              </div>
+            )}
+            <div className="flex gap-1">
+              {[0,1,2].map(i => (
+                <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 px-2 pt-4">
         <div className="flex items-center gap-4">

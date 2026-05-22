@@ -620,7 +620,79 @@ router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// POST /api/v2/admin/leads/scan - Iniciar varredura no Google Maps
+// Função interna de varredura — executada em background após resposta ao cliente
+async function runLeadScanBackground(params: {
+  niche: string; city: string; zip?: string; limit: number; context: string; apifyToken: string;
+}) {
+  const { niche, city, zip, limit, context, apifyToken } = params;
+  const query = `${niche} em ${city} ${zip || ''}`.trim();
+  console.log(`[LeadRadar][BG] Iniciando busca Apify: "${query}" com meta de ${limit} leads.`);
+
+  let rawPlaces: any[] = [];
+  try {
+    const apifyResponse = await axios.post(
+      `https://api.apify.com/v2/acts/nwua9Gu5YrADL7ZDj/run-sync-get-dataset-items?token=${apifyToken}`,
+      { searchStringsArray: [query], maxCrawledPlacesPerSearch: limit * 2, language: 'pt-BR', countryCode: 'br', scrapeContacts: true },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 300000 } // 5 min
+    );
+    rawPlaces = apifyResponse.data || [];
+  } catch (apifyErr: any) {
+    console.warn('[LeadRadar][BG] Erro Apify:', apifyErr.response?.data || apifyErr.message);
+    return;
+  }
+
+  console.log(`[LeadRadar][BG] ${rawPlaces.length} locais brutos recebidos.`);
+  const leadsProcessados = [];
+
+  for (const place of rawPlaces) {
+    if (leadsProcessados.length >= limit) break;
+    const rating = place.totalScore || 0;
+    const phone = place.phoneUnformatted || place.phone || '';
+    const ratingCount = place.reviewsCount || 0;
+    if (rating < 3 || !phone || ratingCount < 1) continue;
+    const digitsOnly = phone.replace(/\D/g, '');
+    const normalized = digitsOnly.startsWith('55') && digitsOnly.length > 11 ? digitsOnly.slice(2) : digitsOnly;
+    if (normalized.length !== 11 || normalized[2] !== '9') continue;
+
+    let pain_score = 0, opportunity_score = 0;
+    const website = place.website || '';
+    const instagram = place.instagrams?.[0] || null;
+    const email = place.emails?.[0] || null;
+    if (!website || website.includes('ifood') || website.includes('rappi')) pain_score += 2;
+    if (ratingCount < 50) pain_score += 1;
+    if (rating < 4.3 && ratingCount > 20) pain_score += 1;
+    if (!instagram) pain_score += 1;
+    if (rating > 4.5 && ratingCount < 150) opportunity_score += 2;
+    if (place.price && place.price.length > 2) opportunity_score += 1;
+
+    let reviewSummary = 'Sem resumo', personalizedMessage = '';
+    try {
+      const aiContextStr = context ? `\nContexto: ${context}` : '';
+      const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este negócio local e criar uma mensagem de abordagem para WhatsApp implacável.\n\nDados do Negócio:\nNome: ${place.title}\nEspecialidade: ${place.categoryName}\nAvaliação: ${rating} (${ratingCount} depoimentos)\nSite: ${website || 'Não possui'}\nInstagram: ${instagram || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"...","mensagem_personalizada":"..."}`;
+      const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: 'Gere a análise.' }]);
+      const aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
+      reviewSummary = aiJson.observacao_ia || reviewSummary;
+      personalizedMessage = aiJson.mensagem_personalizada || '';
+    } catch { /* IA falhou — segue sem mensagem */ }
+
+    const { data: savedLead, error: upsertErr } = await supabase
+      .from('leads_radar')
+      .upsert({
+        name: place.title || 'Sem nome', phone: normalized, address: place.address,
+        rating, user_rating_count: ratingCount, website, review_summary: reviewSummary,
+        personalized_message: personalizedMessage, instagram, email,
+        pain_score, opportunity_score,
+        place_id: place.placeId || place.id || Date.now().toString(),
+        niche, city, status: 'novo'
+      }, { onConflict: 'place_id' })
+      .select().single();
+
+    if (!upsertErr) leadsProcessados.push(savedLead);
+  }
+  console.log(`[LeadRadar][BG] ✅ ${leadsProcessados.length} leads salvos.`);
+}
+
+// POST /api/v2/admin/leads/scan - Iniciar varredura no Google Maps (responde imediatamente)
 router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { niche, city, zip, limit = 10, context = '' } = req.body;
@@ -632,151 +704,12 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
 
     if (!apifyToken) return res.status(400).json({ success: false, error: 'Apify API Token não configurado' });
 
-    // 2. Chamar Apify API (Google Maps Scraper - compass/crawler-google-places)
-    const query = `${niche} em ${city} ${zip || ''}`.trim();
-    console.log(`[LeadRadar] Iniciando busca Apify: "${query}" com meta de ${limit} leads.`);
+    // Responde imediatamente — o scraping roda em background para evitar timeout do proxy
+    res.json({ success: true, scanning: true, message: 'Busca iniciada. Acompanhe os leads aparecendo em breve.' });
 
-    let rawPlaces: any[] = [];
-    
-    try {
-      const apifyResponse = await axios.post(
-        `https://api.apify.com/v2/acts/nwua9Gu5YrADL7ZDj/run-sync-get-dataset-items?token=${apifyToken}`,
-        {
-          searchStringsArray: [query],
-          maxCrawledPlacesPerSearch: limit * 2, // Buscamos um pouco mais para compensar os descartes
-          language: "pt-BR",
-          countryCode: "br",
-          scrapeContacts: true
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 120000 // O scraper pode demorar um pouco (2 minutos)
-        }
-      );
-      
-      rawPlaces = apifyResponse.data || [];
-    } catch (apifyErr: any) {
-      console.warn('[LeadRadar] Erro na requisição Apify:', apifyErr.response?.data || apifyErr.message);
-      throw new Error(`Apify API: ${apifyErr.response?.data?.error?.message || apifyErr.message}`);
-    }
-
-    console.log(`[LeadRadar] Encontrados ${rawPlaces.length} locais brutos no Apify.`);
-
-    const leadsProcessados = [];
-
-    // 3. Processar, Filtrar e Pontuar Leads
-    for (const place of rawPlaces) {
-      if (leadsProcessados.length >= limit) break; // Para quando atingir o limite solicitado
-
-      const rating = place.totalScore || 0;
-      let phone = place.phoneUnformatted || place.phone || '';
-      const ratingCount = place.reviewsCount || 0;
-
-      // Filtros Básicos
-      if (rating < 3 || !phone || ratingCount < 1) continue;
-
-      // Normaliza telefone: remove DDI 55 se presente, valida celular BR
-      const digitsOnly = phone.replace(/\D/g, '');
-      const normalized = digitsOnly.startsWith('55') && digitsOnly.length > 11
-        ? digitsOnly.slice(2)
-        : digitsOnly;
-      // Celular BR: 11 dígitos (DDD 2 + dígito 9 + número 8)
-      const isMobile = normalized.length === 11 && normalized[2] === '9';
-
-      if (!isMobile) continue;
-
-      // Cálculo de Scoring Matemático
-      let pain_score = 0;
-      let opportunity_score = 0;
-
-      const website = place.website || '';
-      const instagram = (place.instagrams && place.instagrams.length > 0) ? place.instagrams[0] : null;
-      const email = (place.emails && place.emails.length > 0) ? place.emails[0] : null;
-
-      // Dor (Pain)
-      if (!website || website.includes('ifood') || website.includes('rappi')) pain_score += 2;
-      if (ratingCount < 50) pain_score += 1;
-      if (rating < 4.3 && ratingCount > 20) pain_score += 1;
-      if (!instagram) pain_score += 1;
-
-      // Oportunidade (Opportunity)
-      if (rating > 4.5 && ratingCount < 150) opportunity_score += 2;
-      if (place.price && place.price.length > 2) opportunity_score += 1; // Ticket Alto ($$$)
-      if (place.additionalInfo && place.additionalInfo['Opções de serviço'] && 
-          Array.isArray(place.additionalInfo['Opções de serviço']) && 
-          place.additionalInfo['Opções de serviço'].some((s: any) => s['Entrega'])) opportunity_score += 1;
-
-      // 4. Inteligência Estratégica (IA)
-      let reviewSummary = 'Sem resumo';
-      let personalizedMessage = '';
-
-      try {
-        const aiContextStr = context ? `\nContexto da Prospecção / Estratégia do Usuário: ${context}` : '';
-        const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este negócio local e criar uma mensagem de abordagem para WhatsApp implacável, baseada no Nível de Dor e Oportunidade.
-
-Dados do Negócio:
-Nome: ${place.title}
-Especialidade: ${place.categoryName}
-Avaliação: ${rating} (${ratingCount} depoimentos)
-Site: ${website || 'Não possui'}
-Instagram: ${instagram || 'Não possui'}
-Score de Dor (1 a 5): ${pain_score} (Quanto maior, mais o negócio está "sangrando" online)
-Score de Oportunidade (1 a 5): ${opportunity_score} (Quanto maior, mais premium e mal explorado é o negócio)${aiContextStr}
-
-Tarefas (Retorne estritamente um JSON, nada fora do formato):
-1. observacao_ia: Em UMA frase comercial, diga por que esse lead vale a pena focar.
-2. mensagem_personalizada: Uma mensagem CARTA e direta de WhatsApp, soando humano, se apresentando e tocando na "Dor" ou "Oportunidade" descoberta. Inclua um Call to Action simples no final.
-
-Formato esperado:
-{
-  "observacao_ia": "...",
-  "mensagem_personalizada": "..."
-}`;
-
-        const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: "Gere a análise conforme as instruções." }]);
-        
-        let aiJson;
-        try {
-           aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
-           reviewSummary = aiJson.observacao_ia || reviewSummary;
-           personalizedMessage = aiJson.mensagem_personalizada || '';
-        } catch (e) {
-           reviewSummary = aiRes.text || reviewSummary;
-        }
-      } catch (aiErr) {
-        console.error('[LeadRadar] Erro ao gerar resumo IA:', aiErr);
-      }
-
-      // 5. Salvar/Upsert no Banco
-      const leadData = {
-        name: place.title || 'Sem nome',
-        phone: normalized,
-        address: place.address,
-        rating: rating,
-        user_rating_count: ratingCount,
-        website: website,
-        review_summary: reviewSummary,
-        personalized_message: personalizedMessage,
-        instagram: instagram,
-        email: email,
-        pain_score: pain_score,
-        opportunity_score: opportunity_score,
-        place_id: place.placeId || place.id || Date.now().toString(),
-        niche: niche,
-        city: city,
-        status: 'novo'
-      };
-
-      const { data: savedLead, error: upsertErr } = await supabase
-        .from('leads_radar')
-        .upsert(leadData, { onConflict: 'place_id' })
-        .select()
-        .single();
-
-      if (!upsertErr) leadsProcessados.push(savedLead);
-    }
-
-    res.json({ success: true, count: leadsProcessados.length, data: leadsProcessados });
+    // Dispara o processamento sem bloquear a resposta
+    runLeadScanBackground({ niche, city, zip, limit, context, apifyToken })
+      .catch(err => console.error('[LeadRadar] Erro background scan:', err.message));
   } catch (err: any) {
     console.error('[LeadRadar] Erro geral:', err.response?.data || err.message);
     res.status(500).json({ success: false, error: err.message });
