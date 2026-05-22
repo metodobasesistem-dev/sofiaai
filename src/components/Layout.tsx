@@ -244,7 +244,6 @@ export default function Layout({
     },
     {
       id: 'sec_prospeccao',
-      role: 'admin' as const,
       items: [
         {
           id: 'prospeccao_menu',
