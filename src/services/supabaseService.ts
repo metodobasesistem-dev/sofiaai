@@ -384,6 +384,7 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'userId'>) => {
       tone_of_voice: agentData.tone_of_voice || null,
       forbidden_topics: agentData.forbidden_topics || null,
       conversation_examples: agentData.conversation_examples || null,
+      training_mode: agentData.training_mode || 'text',
     };
 
     const res = await standardFetch('/api/v2/agents', {
@@ -441,6 +442,7 @@ export const updateAgent = async (agentId: string, agentData: Partial<Agent>) =>
       tone_of_voice: agentData.tone_of_voice || null,
       forbidden_topics: agentData.forbidden_topics || null,
       conversation_examples: agentData.conversation_examples || null,
+      training_mode: agentData.training_mode || 'text',
     })
   });
 
