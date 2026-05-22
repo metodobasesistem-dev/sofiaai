@@ -66,7 +66,8 @@ interface MenuItem {
 }
 
 interface MenuSection {
-  title: string;
+  id: string;
+  title?: string;
   role?: 'admin';
   items: MenuItem[];
 }
@@ -205,13 +206,16 @@ export default function Layout({
     if (['lead_radar'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, prospeccao_menu: true }));
     }
-    if (['dashboard', 'inbox', 'kanban', 'contacts'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, atendimento_menu: true }));
+    if (['inbox', 'kanban', 'contacts'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, suporte_menu: true }));
+    }
+    if (['finance'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, financeiro_menu: true }));
     }
     if (['agents', 'leo', 'campaigns', 'quick_replies'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, ia_menu: true }));
     }
-    if (['schedule', 'availability', 'integrations', 'reports', 'professionals', 'finance', 'settings'].includes(activeTab)) {
+    if (['schedule', 'availability', 'integrations', 'reports', 'professionals', 'settings'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, config_menu: true }));
     }
   }, [activeTab]);
@@ -221,7 +225,7 @@ export default function Layout({
   // Estrutura de dados das seções e itens do menu lateral
   const menuSections: MenuSection[] = [
     {
-      title: 'Administração',
+      id: 'sec_admin',
       role: 'admin' as const,
       items: [
         {
@@ -239,13 +243,13 @@ export default function Layout({
       ]
     },
     {
-      title: 'Prospecção',
+      id: 'sec_prospeccao',
       role: 'admin' as const,
       items: [
         {
           id: 'prospeccao_menu',
           icon: <Search size={20} />,
-          label: 'Radar',
+          label: 'Prospecção Ativa',
           subItems: [
             { id: 'lead_radar', icon: <Search size={16} />, label: 'Radar de Leads' }
           ]
@@ -253,16 +257,25 @@ export default function Layout({
       ]
     },
     {
-      title: 'Atendimento & CRM',
+      id: 'sec_dashboard',
       items: [
         {
-          id: 'atendimento_menu',
+          id: 'dashboard',
+          icon: <LayoutDashboard size={20} />,
+          label: 'Dashboard',
+        }
+      ]
+    },
+    {
+      id: 'sec_suporte',
+      items: [
+        {
+          id: 'suporte_menu',
           icon: <MessageSquare size={20} />,
-          label: 'Atendimento',
+          label: 'Suporte',
           subItems: [
-            { id: 'dashboard', icon: <LayoutDashboard size={16} />, label: 'Dashboard' },
-            { 
-              id: 'inbox', 
+            {
+              id: 'inbox',
               icon: (
                 <div className="relative">
                   <Inbox size={16} />
@@ -272,27 +285,41 @@ export default function Layout({
                     </span>
                   )}
                 </div>
-              ), 
-              label: 'Caixa de Entrada' 
+              ),
+              label: 'Atendimento'
             },
-            { id: 'kanban', icon: <Layers size={16} />, label: 'Kanban', minPlan: 'Pro' },
+            { id: 'kanban', icon: <Layers size={16} />, label: 'Triagem', minPlan: 'Pro' },
             { id: 'contacts', icon: <Users size={16} />, label: 'Contatos' },
           ]
         }
       ]
     },
     {
-      title: 'Inteligência & IA',
+      id: 'sec_financeiro',
+      items: [
+        {
+          id: 'financeiro_menu',
+          icon: <Wallet size={20} />,
+          label: 'Financeiro',
+          subItems: [
+            { id: 'finance', icon: <Wallet size={16} />, label: 'Meu Plano' },
+            { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios', minPlan: 'Pro' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'sec_automacao',
       items: [
         {
           id: 'ia_menu',
           icon: <Bot size={20} />,
-          label: 'Automações',
+          label: 'Automação',
           subItems: [
             { id: 'agents', icon: <img src="/sofiamini.png" className="w-4 h-4 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
             {
-              id: 'leo', 
-              icon: <Zap size={16} className="text-amber-500" />, 
+              id: 'leo',
+              icon: <Zap size={16} className="text-amber-500" />,
               label: 'Leo',
               flag: 'leo_ai',
               minPlan: 'Starter'
@@ -304,7 +331,7 @@ export default function Layout({
       ]
     },
     {
-      title: 'Configurações & Suporte',
+      id: 'sec_sistema',
       items: [
         {
           id: 'config_menu',
@@ -314,9 +341,7 @@ export default function Layout({
             { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} />, flag: 'agendas', minPlan: 'Pro' },
             { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} />, flag: 'agendas', minPlan: 'Pro' },
             { id: 'integrations', icon: <Plug size={16} />, label: 'Integrações', flag: 'official_api' },
-            { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios', minPlan: 'Pro' },
             { id: 'professionals', icon: <Users size={16} />, label: 'Equipe', flag: 'crm' },
-            { id: 'finance', icon: <Wallet size={16} />, label: 'Financeiro' },
             { id: 'settings', icon: <Settings size={16} />, label: 'Configurações' },
           ]
         }
@@ -427,12 +452,7 @@ export default function Layout({
 
         <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto custom-scrollbar">
           {filteredSections.map((section) => (
-            <div key={section.title} className="space-y-1">
-              {!collapsed && (
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5 mt-3 first:mt-0 select-none">
-                  {section.title}
-                </div>
-              )}
+            <div key={section.id} className="space-y-1">
               {collapsed && (
                 <div className="h-px bg-slate-100 my-2 first:hidden" />
               )}
