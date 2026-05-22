@@ -50,6 +50,26 @@ interface SidebarItemProps {
   isSubmenuOpen?: boolean;
 }
 
+interface MenuItem {
+  id: string;
+  icon: React.ReactNode;
+  label: string;
+  minPlan?: string;
+  flag?: string;
+  subItems?: {
+    id: string;
+    label: string;
+    icon: React.ReactNode;
+  }[];
+}
+
+interface MenuSection {
+  title: string;
+  role?: 'admin';
+  items: MenuItem[];
+}
+
+
 const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSubmenuOpen }: SidebarItemProps) => {
   return (
     <div 
@@ -108,19 +128,12 @@ export default function Layout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [agendasOpen, setAgendasOpen] = useState(true);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isProspecOpen, setIsProspecOpen] = useState(true);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
   const headerProfileRef = useRef<HTMLDivElement>(null);
   const { unreadTotal } = useNotification();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
-      }
       if (headerProfileRef.current && !headerProfileRef.current.contains(event.target as Node)) {
         setIsHeaderProfileOpen(false);
       }
@@ -178,105 +191,125 @@ export default function Layout({
 
   const { flags } = useFeatureContext();
 
-  const menuItems = [
-    ...(role === 'admin' ? [
-      {
-        id: 'admin_group',
-        icon: <Shield size={20} />,
-        label: 'Administração',
-        subItems: [
-          { id: 'admin', icon: <Shield size={16} />, label: 'Painel Admin' },
-          { id: 'sofia_config', icon: <Bot size={16} />, label: 'Configurações Sofia' },
-          { id: 'overview', icon: <Activity size={16} />, label: 'Visão Geral' },
-          { id: 'clients', icon: <Star size={16} />, label: 'Carteira' },
-          { id: 'meta_templates', icon: <FileText size={16} className="text-violet-500" />, label: 'Templates' },
-        ]
-      },
-      {
-        id: 'prospecção_group',
-        icon: <Search size={20} />,
-        label: 'Prospecção Ativa',
-        subItems: [
-          { id: 'lead_radar', icon: <Search size={16} />, label: 'Radar de Leads' },
-        ]
-      }
-    ] : []),
-    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-    { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
+  // Estrutura de dados das seções e itens do menu lateral
+  const menuSections: MenuSection[] = [
     {
-      id: 'leo', 
-      icon: <Zap size={20} className="text-amber-500" />, 
-      label: 'Leo',
-      flag: 'leo_ai',
-      minPlan: 'Starter'
-    },
-    { 
-      id: 'inbox', 
-      icon: (
-        <div className="relative">
-          <Inbox size={20} />
-          {unreadTotal > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
-              {unreadTotal > 99 ? '99+' : unreadTotal}
-            </span>
-          )}
-        </div>
-      ), 
-      label: 'Caixa de Entrada' 
-    },
-    { 
-      id: 'finance', 
-      icon: <Wallet size={20} />, 
-      label: 'Financeiro' 
-    },
-    { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', minPlan: 'Pro' },
-    { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', minPlan: 'Pro' },
-    { id: 'quick_replies', icon: <MessageSquare size={20} />, label: 'Atalhos', minPlan: 'Starter' },
-    { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
-    { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
-
-
-    { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
-    { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
-    {
-      id: 'agendas', 
-      icon: <Calendar size={20} />, 
-      label: 'Agendas',
-      flag: 'agendas',
-      minPlan: 'Pro',
-      subItems: [
-        { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
-        { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
+      title: 'Administração',
+      role: 'admin' as const,
+      items: [
+        { id: 'admin', icon: <Shield size={20} />, label: 'Painel Admin' },
+        { id: 'sofia_config', icon: <Bot size={20} />, label: 'Configurações Sofia' },
+        { id: 'overview', icon: <Activity size={20} />, label: 'Visão Geral' },
+        { id: 'clients', icon: <Star size={20} />, label: 'Carteira' },
+        { id: 'meta_templates', icon: <FileText size={20} className="text-violet-500" />, label: 'Templates' },
       ]
     },
-    { id: 'integrations', icon: <Plug size={20} />, label: 'Integrações', flag: 'official_api' },
+    {
+      title: 'Prospecção',
+      role: 'admin' as const,
+      items: [
+        { id: 'lead_radar', icon: <Search size={20} />, label: 'Radar de Leads' }
+      ]
+    },
+    {
+      title: 'Atendimento & CRM',
+      items: [
+        { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+        { 
+          id: 'inbox', 
+          icon: (
+            <div className="relative">
+              <Inbox size={20} />
+              {unreadTotal > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
+                  {unreadTotal > 99 ? '99+' : unreadTotal}
+                </span>
+              )}
+            </div>
+          ), 
+          label: 'Caixa de Entrada' 
+        },
+        { id: 'kanban', icon: <Layers size={20} />, label: 'Kanban', minPlan: 'Pro' },
+        { id: 'contacts', icon: <Users size={20} />, label: 'Contatos' },
+      ]
+    },
+    {
+      title: 'Inteligência & IA',
+      items: [
+        { id: 'agents', icon: <img src="/sofiamini.png" className="w-5 h-5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
+        {
+          id: 'leo', 
+          icon: <Zap size={20} className="text-amber-500" />, 
+          label: 'Leo',
+          flag: 'leo_ai',
+          minPlan: 'Starter'
+        },
+        { id: 'campaigns', icon: <Send size={20} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
+        { id: 'quick_replies', icon: <MessageSquare size={20} />, label: 'Atalhos', minPlan: 'Starter' },
+      ]
+    },
+    {
+      title: 'Configurações & Suporte',
+      items: [
+        {
+          id: 'agendas', 
+          icon: <Calendar size={20} />, 
+          label: 'Agendas',
+          flag: 'agendas',
+          minPlan: 'Pro',
+          subItems: [
+            { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} /> },
+            { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} /> },
+          ]
+        },
+        { id: 'integrations', icon: <Plug size={20} />, label: 'Integrações', flag: 'official_api' },
+        { id: 'reports', icon: <BarChart3 size={20} />, label: 'Relatórios', minPlan: 'Pro' },
+        { id: 'professionals', icon: <Users size={20} />, label: 'Equipe', flag: 'crm' },
+        { id: 'finance', icon: <Wallet size={20} />, label: 'Financeiro' },
+        { id: 'settings', icon: <Settings size={20} />, label: 'Configurações' },
+      ]
+    }
   ];
 
-  // Filtra itens com base nas flags (Admin respeita flags desativadas, mas ignora restrição de plano)
-  const filteredMenuItems = menuItems.filter(item => {
-    // 1. Feature Flag Check (Soberania do Painel de Controle)
-    if (item.flag && flags[item.flag] === false) return false;
+  // Filtra as seções e os itens internos com base nas permissões e planos do usuário
+  const filteredSections = menuSections
+    .map(section => {
+      // 1. Filtrar se a seção inteira é restrita ao admin
+      if (section.role === 'admin' && role !== 'admin') {
+        return null;
+      }
 
-    if (role === 'admin') return true;
-    
-    // 2. Plan Restriction Check
-    if (item.minPlan) {
-      const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
-      const userPlanIdx = plans.indexOf(plano || 'Trial');
-      const minPlanIdx = plans.indexOf(item.minPlan);
-      
-      // If user plan is below required plan, hide it
-      if (userPlanIdx < minPlanIdx) return false;
-    }
+      // 2. Filtrar os itens da seção
+      const filteredItems = section.items.filter(item => {
+        // Feature Flag Check
+        if (item.flag && flags[item.flag] === false) return false;
 
-    return true;
-  });
+        if (role === 'admin') return true;
+        
+        // Plan Restriction Check
+        if (item.minPlan) {
+          const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
+          const userPlanIdx = plans.indexOf(plano || 'Trial');
+          const minPlanIdx = plans.indexOf(item.minPlan);
+          
+          if (userPlanIdx < minPlanIdx) return false;
+        }
+
+        return true;
+      });
+
+      if (filteredItems.length === 0) return null;
+
+      return {
+        ...section,
+        items: filteredItems
+      };
+    })
+    .filter((section): section is Exclude<typeof section, null> => section !== null);
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
       if (id === 'agendas') setAgendasOpen(!agendasOpen);
-      if (id === 'admin_group') setIsAdminOpen(!isAdminOpen);
-      if (id === 'prospecção_group') setIsProspecOpen(!isProspecOpen);
       return;
     }
     onTabChange(id);
@@ -318,49 +351,53 @@ export default function Layout({
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto custom-scrollbar">
-          {filteredMenuItems.map((item) => (
-            <div key={item.id}>
-              <SidebarItem 
-                icon={item.icon} 
-                label={item.label} 
-                active={isTabActive(item.id, item.subItems)} 
-                collapsed={collapsed}
-                onClick={() => handleTabClick(item.id, !!item.subItems)}
-                hasSubmenu={!!item.subItems}
-                isSubmenuOpen={
-                  item.id === 'agendas' ? agendasOpen : 
-                  item.id === 'admin_group' ? isAdminOpen : 
-                  item.id === 'prospecção_group' ? isProspecOpen : false
-                }
-              />
-              
-              {item.subItems && !collapsed && (
-                (item.id === 'agendas' ? agendasOpen : 
-                 item.id === 'admin_group' ? isAdminOpen : 
-                 item.id === 'prospecção_group' ? isProspecOpen : false)
-              ) && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="ml-9 mt-1 space-y-1"
-                >
-                  {item.subItems.map((sub) => (
-                    <div
-                      key={sub.id}
-                      onClick={() => handleTabClick(sub.id)}
-                      className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
-                        ${activeTab === sub.id 
-                          ? 'text-primary font-bold bg-primary-light/50' 
-                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
-                    >
-                      <span className="mr-2 opacity-70">{sub.icon}</span>
-                      {sub.label}
-                    </div>
-                  ))}
-                </motion.div>
+        <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto custom-scrollbar">
+          {filteredSections.map((section) => (
+            <div key={section.title} className="space-y-1">
+              {!collapsed && (
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5 mt-3 first:mt-0 select-none">
+                  {section.title}
+                </div>
               )}
+              {collapsed && (
+                <div className="h-px bg-slate-100 my-2 first:hidden" />
+              )}
+              {section.items.map((item) => (
+                <div key={item.id}>
+                  <SidebarItem 
+                    icon={item.icon} 
+                    label={item.label} 
+                    active={isTabActive(item.id, item.subItems)} 
+                    collapsed={collapsed}
+                    onClick={() => handleTabClick(item.id, !!item.subItems)}
+                    hasSubmenu={!!item.subItems}
+                    isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                  />
+                  
+                  {item.subItems && !collapsed && (item.id === 'agendas' && agendasOpen) && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="ml-9 mt-1 space-y-1"
+                    >
+                      {item.subItems.map((sub) => (
+                        <div
+                          key={sub.id}
+                          onClick={() => handleTabClick(sub.id)}
+                          className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
+                            ${activeTab === sub.id 
+                              ? 'text-primary font-bold bg-primary-light/50' 
+                              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                            }`}
+                        >
+                          <span className="mr-2 opacity-70">{sub.icon}</span>
+                          {sub.label}
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+              ))}
             </div>
           ))}
         </nav>
@@ -418,44 +455,43 @@ export default function Layout({
                   <X size={24} />
                 </button>
               </div>
-              <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
-                {filteredMenuItems.map((item) => (
-                  <div key={item.id}>
-                    <SidebarItem 
-                      icon={item.icon} 
-                      label={item.label} 
-                      active={isTabActive(item.id, item.subItems)} 
-                      collapsed={false}
-                      onClick={() => handleTabClick(item.id, !!item.subItems)}
-                      hasSubmenu={!!item.subItems}
-                      isSubmenuOpen={
-                        item.id === 'agendas' ? agendasOpen : 
-                        item.id === 'admin_group' ? isAdminOpen : 
-                        item.id === 'prospecção_group' ? isProspecOpen : false
-                      }
-                    />
-                    {item.subItems && (
-                      (item.id === 'agendas' ? agendasOpen : 
-                       item.id === 'admin_group' ? isAdminOpen : 
-                       item.id === 'prospecção_group' ? isProspecOpen : false)
-                    ) && (
-                      <div className="ml-9 mt-1 space-y-1">
-                        {item.subItems.map((sub) => (
-                          <div
-                            key={sub.id}
-                            onClick={() => handleTabClick(sub.id)}
-                            className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
-                              ${activeTab === sub.id 
-                                ? 'text-primary-600 font-semibold' 
-                                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                              }`}
-                          >
-                            <span className="mr-2 opacity-70">{sub.icon}</span>
-                            {sub.label}
+              <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto">
+                {filteredSections.map((section) => (
+                  <div key={section.title} className="space-y-1">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5 mt-3 first:mt-0 select-none">
+                      {section.title}
+                    </div>
+                    {section.items.map((item) => (
+                      <div key={item.id}>
+                        <SidebarItem 
+                          icon={item.icon} 
+                          label={item.label} 
+                          active={isTabActive(item.id, item.subItems)} 
+                          collapsed={false}
+                          onClick={() => handleTabClick(item.id, !!item.subItems)}
+                          hasSubmenu={!!item.subItems}
+                          isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                        />
+                        {item.subItems && (item.id === 'agendas' && agendasOpen) && (
+                          <div className="ml-9 mt-1 space-y-1">
+                            {item.subItems.map((sub) => (
+                              <div
+                                key={sub.id}
+                                onClick={() => handleTabClick(sub.id)}
+                                className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
+                                  ${activeTab === sub.id 
+                                    ? 'text-primary-600 font-semibold' 
+                                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                  }`}
+                              >
+                                <span className="mr-2 opacity-70">{sub.icon}</span>
+                                {sub.label}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 ))}
               </nav>
