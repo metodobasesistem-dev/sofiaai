@@ -511,14 +511,16 @@ async function handleMetaMessages(userId: string, phoneNumberId: string, value: 
   console.log(`[MetaWebhook] 📥 Processing inbound: ${messageId} | Type: ${type}`);
 
   // Media types are processed asynchronously (download + transcribe + upload)
-  if (type !== 'text' && type !== 'unknown') {
+  const MEDIA_TYPES = ['image', 'video', 'audio', 'document', 'sticker'];
+  if (MEDIA_TYPES.includes(type)) {
     handleMetaMediaMessage(userId, phoneNumberId, threadId, message, provider).catch(err => {
       console.error('[MetaWebhook] Error in media handler:', err);
     });
     return;
   }
 
-  // Text persistence + AI trigger
+  // Text, interactive replies (button/list), location, contacts, and other
+  // non-media types: persist and trigger AI response.
   try {
     await agentService.persistMessage(
       threadId, userId, body, 'inbound', messageId, contactName, from, cleanPhone,

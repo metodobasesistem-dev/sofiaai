@@ -8,7 +8,7 @@ import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.
 import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
 
 const router = Router();
-const META_BASE = 'https://graph.facebook.com/v19.0';
+const META_BASE = 'https://graph.facebook.com/v22.0';
 
 /**
  * Meta Cloud API admin/UX endpoints.

@@ -18,7 +18,7 @@ const CREDENTIALS_TTL_MS = 60 * 1000;
 
 export class MetaProvider implements IWhatsAppProvider {
   private messageHandler: ((message: WhatsAppMessage) => Promise<void>) | null = null;
-  private readonly baseUrl = 'https://graph.facebook.com/v19.0';
+  private readonly baseUrl = 'https://graph.facebook.com/v22.0';
   private readonly tenantUserId: string | undefined;
 
   constructor(userId?: string) {
