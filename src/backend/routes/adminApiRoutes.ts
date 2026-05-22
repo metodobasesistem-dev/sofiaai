@@ -675,10 +675,14 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
       // Filtros Básicos
       if (rating < 3 || !phone || ratingCount < 1) continue;
 
-      // Limpar Telefone e Verificar se é Celular/WhatsApp
+      // Normaliza telefone: remove DDI 55 se presente, valida celular BR
       const digitsOnly = phone.replace(/\D/g, '');
-      const isMobile = digitsOnly.length >= 10 && (digitsOnly.length === 11 ? digitsOnly.substring(2, 3) === '9' : true);
-      
+      const normalized = digitsOnly.startsWith('55') && digitsOnly.length > 11
+        ? digitsOnly.slice(2)
+        : digitsOnly;
+      // Celular BR: 11 dígitos (DDD 2 + dígito 9 + número 8)
+      const isMobile = normalized.length === 11 && normalized[2] === '9';
+
       if (!isMobile) continue;
 
       // Cálculo de Scoring Matemático
@@ -746,7 +750,7 @@ Formato esperado:
       // 5. Salvar/Upsert no Banco
       const leadData = {
         name: place.title || 'Sem nome',
-        phone: digitsOnly,
+        phone: normalized,
         address: place.address,
         rating: rating,
         user_rating_count: ratingCount,
@@ -838,7 +842,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
             await provider.sendTemplate(adminId, jid, templateName, 'pt_BR', components);
           } else {
             // Fallback para envio padrão de texto (caso seja Baileys ou Evolution)
-            await provider.sendMessage(jid, lead.personalized_message);
+            await provider.sendMessage(adminId, jid, lead.personalized_message);
           }
           
           // Atualiza status para 'contatado'
@@ -870,13 +874,17 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
   }
 });
 
-// PATCH /api/v2/admin/leads/:id - Atualizar status do lead
+// PATCH /api/v2/admin/leads/:id - Atualizar status e/ou notas do lead
 router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { status } = req.body;
+    const { status, notes } = req.body;
+    const updateFields: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (status !== undefined) updateFields.status = status;
+    if (notes !== undefined) updateFields.notes = notes;
+
     const { data, error } = await supabase
       .from('leads_radar')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updateFields)
       .eq('id', req.params.id)
       .select()
       .single();

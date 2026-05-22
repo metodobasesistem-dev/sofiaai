@@ -75,6 +75,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [radarContext, setRadarContext] = useState('');
   const [radarLimit, setRadarLimit] = useState(10);
   const [radarLeads, setRadarLeads] = useState<any[]>([]);
+  const [radarStatusFilter, setRadarStatusFilter] = useState<string>('todos');
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -274,6 +275,51 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
+  const updateLeadNotes = async (id: string, notes: string) => {
+    try {
+      const response = await standardFetch(`/api/v2/admin/leads/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ notes })
+      });
+      const res = await response.json();
+      if (res.success) {
+        setRadarLeads(prev => prev.map(l => l.id === id ? { ...l, notes } : l));
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const exportLeadsCSV = () => {
+    const headers = ['Nome', 'Telefone', 'Endereço', 'Nicho', 'Cidade', 'Categoria', 'Rating', 'Avaliações', 'Dor', 'Potencial', 'Website', 'Instagram', 'Email', 'Resumo IA', 'Status', 'Observações'];
+    const rows = radarLeads.map(l => [
+      `"${(l.name || '').replace(/"/g, '""')}"`,
+      l.phone || '',
+      `"${(l.address || '').replace(/"/g, '""')}"`,
+      l.niche || '',
+      l.city || '',
+      l.category || '',
+      l.rating || '',
+      l.user_rating_count || '',
+      l.pain_score || 0,
+      l.opportunity_score || 0,
+      l.website || '',
+      l.instagram || '',
+      l.email || '',
+      `"${(l.review_summary || '').replace(/"/g, '""')}"`,
+      l.status || '',
+      `"${(l.notes || '').replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leads_radar_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSaveSettings = async () => {
     try {
       setIsActionLoading(true);
@@ -455,9 +501,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                       <div className="space-y-4">
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nicho / Categoria</label>
-                            <input 
-                              type="text" 
-                              placeholder="Ex: Clínicas, Dentistas..." 
+                            <input
+                              type="text"
+                              autoComplete="off"
+                              placeholder="Ex: Clínicas, Dentistas..."
                               className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                               value={radarNiche}
                               onChange={(e) => setRadarNiche(e.target.value)}
@@ -465,9 +512,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          </div>
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cidade / Região</label>
-                            <input 
-                              type="text" 
-                              placeholder="Ex: Rio de Janeiro" 
+                            <input
+                              type="text"
+                              autoComplete="off"
+                              placeholder="Ex: Rio de Janeiro"
                               className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                               value={radarCity}
                               onChange={(e) => setRadarCity(e.target.value)}
@@ -476,7 +524,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Limite de Resultados</label>
-                            <select 
+                            <select
                               className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all appearance-none"
                               value={radarLimit}
                               onChange={(e) => setRadarLimit(Number(e.target.value))}
@@ -490,9 +538,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                          <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Apify API Token</label>
-                           <input 
-                             type="password" 
-                             placeholder="apify_api_..." 
+                           <input
+                             type="password"
+                             autoComplete="new-password"
+                             placeholder="apify_api_..."
                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                              value={globalSettings.apify_api_token || ''}
                              onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
@@ -502,8 +551,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Contexto da Abordagem (Opcional)</label>
-                            <textarea 
-                              placeholder="Ex: Focar na dor de quem atende muito convênio e quer atrair consultas particulares." 
+                            <textarea
+                              autoComplete="off"
+                              placeholder="Ex: Focar na dor de quem atende muito convênio e quer atrair consultas particulares."
                               className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all resize-none h-24"
                               value={radarContext}
                               onChange={(e) => setRadarContext(e.target.value)}
@@ -542,7 +592,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                 {/* Results Table */}
                 <div className="lg:col-span-3 space-y-6">
                    <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[600px]">
-                      <div className="p-8 border-b border-slate-50 flex items-center justify-between">
+                      {/* Header */}
+                      <div className="p-8 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4">
                          <div>
                             <h2 className="text-2xl font-black text-slate-900">Leads Capturados</h2>
                             <p className="text-sm text-slate-500">Controle a prospecção dos leads qualificados.</p>
@@ -551,83 +602,177 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                             <span className="px-3 py-1 bg-primary-50 text-primary-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
                                {radarLeads.length} Total
                             </span>
+                            {radarLeads.length > 0 && (
+                              <button
+                                onClick={exportLeadsCSV}
+                                className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center gap-1.5"
+                              >
+                                <FileText size={12} /> Exportar CSV
+                              </button>
+                            )}
                          </div>
+                      </div>
+
+                      {/* Filtros por status */}
+                      <div className="px-8 py-4 border-b border-slate-50 flex items-center gap-2 flex-wrap">
+                        {(['todos', 'novo', 'qualificado', 'contatado', 'descartado'] as const).map(s => {
+                          const counts: Record<string, number> = { todos: radarLeads.length, novo: 0, qualificado: 0, contatado: 0, descartado: 0 };
+                          radarLeads.forEach(l => { if (counts[l.status] !== undefined) counts[l.status]++; });
+                          const labels: Record<string, string> = { todos: 'Todos', novo: 'Novo', qualificado: 'Qualificado', contatado: 'Contatado', descartado: 'Descartado' };
+                          return (
+                            <button
+                              key={s}
+                              onClick={() => setRadarStatusFilter(s)}
+                              className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                                radarStatusFilter === s
+                                  ? 'bg-primary-600 text-white shadow-sm'
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              }`}
+                            >
+                              {labels[s]}
+                              <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${radarStatusFilter === s ? 'bg-white/20' : 'bg-slate-200 text-slate-400'}`}>
+                                {counts[s]}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
 
                       <div className="overflow-x-auto">
                          <table className="w-full text-left">
                             <thead>
                               <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                                  <th className="px-8 py-5">Estabelecimento</th>
-                                  <th className="px-8 py-5">Contato & Rating</th>
-                                  <th className="px-8 py-5 text-center">Scoring (Dor/Oport.)</th>
-                                  <th className="px-8 py-5">Abordagem IA</th>
-                                  <th className="px-8 py-5">Status</th>
-                                  <th className="px-8 py-5 text-right">Ações</th>
+                                  <th className="px-6 py-4">Estabelecimento</th>
+                                  <th className="px-6 py-4">Contato & Rating</th>
+                                  <th className="px-6 py-4 text-center">Score</th>
+                                  <th className="px-6 py-4">Abordagem IA</th>
+                                  <th className="px-6 py-4">Status</th>
+                                  <th className="px-6 py-4 text-right">Ações</th>
                                </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                               {radarLeads.map((lead) => (
+                               {(radarStatusFilter === 'todos' ? radarLeads : radarLeads.filter(l => l.status === radarStatusFilter)).map((lead) => {
+                                 const phoneDigits = (lead.phone || '').replace(/\D/g, '');
+                                 const waPhone = phoneDigits.startsWith('55') ? phoneDigits : `55${phoneDigits}`;
+                                 const painScore = lead.pain_score || 0;
+                                 const oppScore = lead.opportunity_score || 0;
+                                 const isHot = painScore >= 3 && oppScore >= 2;
+                                 return (
                                  <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
-                                   <td className="px-8 py-5">
-                                      <div className="flex flex-col">
-                                         <span className="text-sm font-black text-slate-900">{lead.name}</span>
-                                         <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">{lead.address}</span>
-                                         <div className="flex gap-2 mt-1">
-                                            {lead.instagram && <a href={lead.instagram} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-600"><span className="text-[10px] font-bold flex items-center gap-1"><ExternalLink size={10} /> Inst</span></a>}
-                                            {lead.email && <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Mail size={10} /> Email</span>}
+                                   {/* Estabelecimento */}
+                                   <td className="px-6 py-4">
+                                      <div className="flex flex-col gap-1 max-w-[220px]">
+                                         <div className="flex items-start gap-1.5">
+                                           <span className="text-sm font-black text-slate-900 leading-tight">{lead.name}</span>
+                                           {isHot && <span className="text-base leading-none mt-0.5" title="Hot Lead">🔥</span>}
+                                         </div>
+                                         {lead.niche && (
+                                           <span className="inline-flex w-fit px-2 py-0.5 bg-primary-50 text-primary-600 rounded-md text-[9px] font-black uppercase tracking-widest">{lead.niche}</span>
+                                         )}
+                                         <span className="text-[10px] text-slate-400 font-medium truncate">{lead.address}</span>
+                                         <div className="flex gap-2 mt-0.5">
+                                            {lead.instagram && (
+                                              <a href={lead.instagram.startsWith('http') ? lead.instagram : `https://instagram.com/${lead.instagram}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-600 text-[10px] font-bold flex items-center gap-0.5">
+                                                <ExternalLink size={9} /> Instagram
+                                              </a>
+                                            )}
+                                            {lead.email && (
+                                              <a href={`mailto:${lead.email}`} className="text-slate-400 hover:text-slate-600 text-[10px] font-bold flex items-center gap-0.5">
+                                                <Mail size={9} /> Email
+                                              </a>
+                                            )}
                                          </div>
                                       </div>
                                    </td>
-                                   <td className="px-8 py-5">
-                                      <div className="flex flex-col gap-1">
-                                         <span className="text-xs font-bold text-slate-700">{lead.phone || 'Sem Telefone'}</span>
-                                         <div className="flex items-center gap-1.5">
-                                            <Star size={10} className="text-amber-500 fill-amber-500" />
-                                            <span className="text-[10px] font-black text-slate-400">{lead.rating} ({lead.user_rating_count})</span>
+
+                                   {/* Contato & Rating */}
+                                   <td className="px-6 py-4">
+                                      <div className="flex flex-col gap-1.5">
+                                         <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-slate-700 hover:text-[#25D366] transition-colors flex items-center gap-1">
+                                           <Smartphone size={10} /> {lead.phone || 'Sem Telefone'}
+                                         </a>
+                                         <div className="flex items-center gap-1">
+                                            {[1,2,3,4,5].map(i => (
+                                              <Star key={i} size={9} className={i <= Math.round(lead.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 fill-slate-200'} />
+                                            ))}
+                                            <span className="text-[10px] font-black text-slate-500 ml-1">{lead.rating}</span>
                                          </div>
-                                      </div>
-                                   </td>
-                                   <td className="px-8 py-5">
-                                      <div className="flex flex-col items-center gap-1.5">
-                                         <div className="flex gap-2">
-                                            <div className="flex items-center gap-1 bg-red-50 text-red-600 px-2 py-0.5 rounded-md border border-red-100">
-                                               <span className="text-[9px] font-black uppercase tracking-widest">Dor</span>
-                                               <span className="text-[11px] font-black">{lead.pain_score || 0}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md border border-emerald-100">
-                                               <span className="text-[9px] font-black uppercase tracking-widest">Potencial</span>
-                                               <span className="text-[11px] font-black">{lead.opportunity_score || 0}</span>
-                                            </div>
-                                         </div>
-                                         {lead.pain_score >= 3 && lead.opportunity_score >= 2 && (
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-orange-500 flex items-center gap-1">🔥 Hot Lead</span>
+                                         <span className="text-[10px] text-slate-400">{lead.user_rating_count} avaliações</span>
+                                         {lead.website && (
+                                           <a href={lead.website} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:text-primary-600 flex items-center gap-0.5 truncate max-w-[140px]">
+                                             <Globe size={9} /> Site
+                                           </a>
                                          )}
                                       </div>
                                    </td>
-                                   <td className="px-8 py-5">
-                                      <div className="max-w-[250px] flex flex-col gap-2">
+
+                                   {/* Score visual */}
+                                   <td className="px-6 py-4">
+                                      <div className="flex flex-col gap-2 items-center min-w-[90px]">
+                                         <div className="w-full">
+                                           <div className="flex justify-between mb-1">
+                                             <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">Dor</span>
+                                             <span className="text-[9px] font-black text-red-500">{painScore}/5</span>
+                                           </div>
+                                           <div className="flex gap-0.5">
+                                             {[1,2,3,4,5].map(i => (
+                                               <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= painScore ? 'bg-red-400' : 'bg-slate-100'}`} />
+                                             ))}
+                                           </div>
+                                         </div>
+                                         <div className="w-full">
+                                           <div className="flex justify-between mb-1">
+                                             <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Potencial</span>
+                                             <span className="text-[9px] font-black text-emerald-500">{oppScore}/3</span>
+                                           </div>
+                                           <div className="flex gap-0.5">
+                                             {[1,2,3].map(i => (
+                                               <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= oppScore ? 'bg-emerald-400' : 'bg-slate-100'}`} />
+                                             ))}
+                                           </div>
+                                         </div>
+                                      </div>
+                                   </td>
+
+                                   {/* Abordagem IA */}
+                                   <td className="px-6 py-4">
+                                      <div className="max-w-[240px] flex flex-col gap-2">
                                          <p className="text-[10px] text-slate-500 font-medium italic line-clamp-2">
                                             {lead.review_summary || 'Resumo indisponível'}
                                          </p>
                                          {lead.personalized_message && lead.phone && (
-                                            <a 
-                                              href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(lead.personalized_message)}`} 
-                                              target="_blank" 
+                                            <a
+                                              href={`https://wa.me/${waPhone}?text=${encodeURIComponent(lead.personalized_message)}`}
+                                              target="_blank"
                                               rel="noreferrer"
                                               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#128C7E] transition-all shadow-sm"
                                             >
                                                <MessageSquare size={10} /> Enviar Abordagem
                                             </a>
                                          )}
+                                         {/* Notas manuais */}
+                                         <textarea
+                                           autoComplete="off"
+                                           placeholder="Observações..."
+                                           rows={2}
+                                           className="w-full px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] text-slate-600 outline-none focus:border-primary-300 resize-none transition-all"
+                                           defaultValue={lead.notes || ''}
+                                           onBlur={(e) => {
+                                             if (e.target.value !== (lead.notes || '')) {
+                                               updateLeadNotes(lead.id, e.target.value);
+                                             }
+                                           }}
+                                         />
                                       </div>
                                    </td>
-                                   <td className="px-8 py-5">
 
-                                      <select 
-                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border outline-none ${
+                                   {/* Status */}
+                                   <td className="px-6 py-4">
+                                      <select
+                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border outline-none cursor-pointer ${
                                           lead.status === 'qualificado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                          lead.status === 'contatado' ? 'bg-primary-50 text-primary-600 border-primary-100' :
+                                          lead.status === 'contatado'   ? 'bg-primary-50 text-primary-600 border-primary-100' :
+                                          lead.status === 'descartado'  ? 'bg-red-50 text-red-500 border-red-100' :
                                           'bg-slate-100 text-slate-500 border-slate-200'
                                         }`}
                                         value={lead.status}
@@ -639,24 +784,36 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                          <option value="descartado">Descartado</option>
                                       </select>
                                    </td>
-                                   <td className="px-8 py-5 text-right">
-                                      <div className="flex items-center justify-end gap-2">
-                                         <button 
-                                            onClick={() => deleteLead(lead.id)}
-                                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                         >
-                                            <Trash2 size={16} />
-                                         </button>
-                                      </div>
+
+                                   {/* Ações */}
+                                   <td className="px-6 py-4 text-right">
+                                      <button
+                                         onClick={() => deleteLead(lead.id)}
+                                         className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                         title="Remover lead"
+                                      >
+                                         <Trash2 size={16} />
+                                      </button>
                                    </td>
                                  </tr>
-                               ))}
+                                 );
+                               })}
                                {radarLeads.length === 0 && (
                                  <tr>
-                                    <td colSpan={5} className="px-8 py-20 text-center">
+                                    <td colSpan={6} className="px-8 py-20 text-center">
                                        <div className="flex flex-col items-center gap-4 opacity-30">
                                           <Search size={48} />
                                           <p className="text-sm font-bold uppercase tracking-widest">Nenhum lead no radar. Inicie uma busca!</p>
+                                       </div>
+                                    </td>
+                                 </tr>
+                               )}
+                               {radarLeads.length > 0 && (radarStatusFilter === 'todos' ? radarLeads : radarLeads.filter(l => l.status === radarStatusFilter)).length === 0 && (
+                                 <tr>
+                                    <td colSpan={6} className="px-8 py-16 text-center">
+                                       <div className="flex flex-col items-center gap-3 opacity-40">
+                                          <Search size={32} />
+                                          <p className="text-sm font-bold uppercase tracking-widest">Nenhum lead com status "{radarStatusFilter}"</p>
                                        </div>
                                     </td>
                                  </tr>
