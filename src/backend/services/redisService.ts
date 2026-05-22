@@ -17,6 +17,7 @@ const redisUsername = process.env.REDIS_USERNAME || 'default';
 console.log(`[RedisService] Init with ${redisHost}:${redisPort}...`);
 
 let redis: any = null;
+let connectionFailed = false;
 
 // Initialize Redis with a safety wrapper
 async function getRedisClient() {
@@ -30,14 +31,22 @@ async function getRedisClient() {
       username: redisUsername,
       lazyConnect: true,
       maxRetriesPerRequest: null,
+      enableOfflineQueue: false,
       retryStrategy: (times) => Math.min(times * 50, 2000)
     });
     
+    redis.on('connect', () => {
+      connectionFailed = false;
+      console.log('[RedisService] ✅ Connected');
+    });
+
     // Suprimir erros de conexão para não travar o processo principal
     redis.on('error', (err: any) => {
-      // Apenas logamos no console do servidor, sem disparar alertas externos aqui
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[Redis] Error:', err.message);
+      if (!connectionFailed) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[RedisService] Error:', err.message);
+        }
+        connectionFailed = true;
       }
     });
 
@@ -54,67 +63,94 @@ export const redisService = {
   },
 
   async set(key: string, value: any, ttlSeconds?: number) {
-    const client = await getRedisClient();
-    if (!client) return;
-    const val = typeof value === 'string' ? value : JSON.stringify(value);
-    if (ttlSeconds) {
-      await client.set(key, val, 'EX', ttlSeconds);
-    } else {
-      await client.set(key, val);
-    }
+    if (connectionFailed) return;
+    try {
+      const client = await getRedisClient();
+      if (!client) return;
+      const val = typeof value === 'string' ? value : JSON.stringify(value);
+      if (ttlSeconds) {
+        await client.set(key, val, 'EX', ttlSeconds);
+      } else {
+        await client.set(key, val);
+      }
+    } catch (e) {}
   },
 
   async get(key: string) {
-    const client = await getRedisClient();
-    if (!client) return null;
-    const data = await client.get(key);
+    if (connectionFailed) return null;
     try {
-      return data ? JSON.parse(data) : null;
-    } catch {
-      return data;
+      const client = await getRedisClient();
+      if (!client) return null;
+      const data = await client.get(key);
+      try {
+        return data ? JSON.parse(data) : null;
+      } catch {
+        return data;
+      }
+    } catch (e) {
+      return null;
     }
   },
 
   async del(key: string) {
-    const client = await getRedisClient();
-    if (!client) return;
-    await client.del(key);
+    if (connectionFailed) return;
+    try {
+      const client = await getRedisClient();
+      if (!client) return;
+      await client.del(key);
+    } catch (e) {}
   },
 
   /**
    * Idempotência: Verifica se uma mensagem já foi processada recentemente
    */
   async markAsProcessed(messageId: string, ttl = 3600): Promise<boolean> {
-    const client = await getRedisClient();
-    if (!client) return true; // Se o Redis falhar, processamos para não perder a msg
-    const key = `processed:${messageId}`;
-    const result = await client.set(key, '1', 'NX', 'EX', ttl);
-    return result === 'OK';
+    if (connectionFailed) return true;
+    try {
+      const client = await getRedisClient();
+      if (!client) return true; // Se o Redis falhar, processamos para não perder a msg
+      const key = `processed:${messageId}`;
+      const result = await client.set(key, '1', 'NX', 'EX', ttl);
+      return result === 'OK';
+    } catch (e) {
+      return true;
+    }
   },
 
   /**
    * Fila de Agendamento (Delayed Queue)
    */
   async addToQueue(queueName: string, id: string, delaySeconds: number) {
-    const client = await getRedisClient();
-    if (!client) return;
-    const processAt = Date.now() + (delaySeconds * 1000);
-    await client.zadd(queueName, processAt, id);
+    if (connectionFailed) return;
+    try {
+      const client = await getRedisClient();
+      if (!client) return;
+      const processAt = Date.now() + (delaySeconds * 1000);
+      await client.zadd(queueName, processAt, id);
+    } catch (e) {}
   },
 
   async getDueJobs(queueName: string): Promise<string[]> {
-    const client = await getRedisClient();
-    if (!client) return [];
-    const now = Date.now();
-    // Pega IDs cujo tempo de processamento já passou
-    const jobs = await client.zrangebyscore(queueName, 0, now);
-    return jobs;
+    if (connectionFailed) return [];
+    try {
+      const client = await getRedisClient();
+      if (!client) return [];
+      const now = Date.now();
+      // Pega IDs cujo tempo de processamento já passou
+      const jobs = await client.zrangebyscore(queueName, 0, now);
+      return jobs;
+    } catch (e) {
+      return [];
+    }
   },
 
   async removeFromQueue(queueName: string, id: string) {
-    const client = await getRedisClient();
-    if (!client) return;
-    await client.zrem(queueName, id);
+    if (connectionFailed) return;
+    try {
+      const client = await getRedisClient();
+      if (!client) return;
+      await client.zrem(queueName, id);
+    } catch (e) {}
   },
 
   async pushMessage(threadId: string, role: 'user' | 'assistant', content: string) {

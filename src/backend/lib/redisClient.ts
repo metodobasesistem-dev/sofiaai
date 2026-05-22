@@ -15,13 +15,14 @@ let connectionFailed = false;
 
 function createClient(): Redis {
   const opts = REDIS_URL
-    ? { lazyConnect: true }
+    ? { lazyConnect: true, enableOfflineQueue: false }
     : {
         host: REDIS_HOST,
         port: REDIS_PORT,
         password: REDIS_PASSWORD || undefined,
         lazyConnect: true,
         maxRetriesPerRequest: null,
+        enableOfflineQueue: false,
       };
 
   const r = REDIS_URL
@@ -54,6 +55,7 @@ export function getRedis(): Redis {
 
 /** Safe set with optional TTL */
 export async function rSet(key: string, value: string, ttlSeconds?: number): Promise<void> {
+  if (connectionFailed) return;
   try {
     const r = getRedis();
     if (ttlSeconds) {
@@ -68,6 +70,7 @@ export async function rSet(key: string, value: string, ttlSeconds?: number): Pro
 
 /** Safe get */
 export async function rGet(key: string): Promise<string | null> {
+  if (connectionFailed) return null;
   try {
     return await getRedis().get(key);
   } catch (err: any) {
@@ -78,6 +81,7 @@ export async function rGet(key: string): Promise<string | null> {
 
 /** Safe delete */
 export async function rDel(...keys: string[]): Promise<void> {
+  if (connectionFailed) return;
   try {
     if (keys.length > 0) await getRedis().del(...keys);
   } catch (err: any) {
