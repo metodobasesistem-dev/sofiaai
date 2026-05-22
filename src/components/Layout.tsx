@@ -128,6 +128,7 @@ export default function Layout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [agendasOpen, setAgendasOpen] = useState(true);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const headerProfileRef = useRef<HTMLDivElement>(null);
   const { unreadTotal } = useNotification();
@@ -189,6 +190,16 @@ export default function Layout({
     }
   }, [user, role]);
 
+  // Auto-expandir os submenus se a aba correspondente estiver ativa
+  useEffect(() => {
+    if (['admin', 'sofia_config', 'overview', 'clients', 'meta_templates'].includes(activeTab)) {
+      setIsAdminOpen(true);
+    }
+    if (['schedule', 'availability'].includes(activeTab)) {
+      setAgendasOpen(true);
+    }
+  }, [activeTab]);
+
   const { flags } = useFeatureContext();
 
   // Estrutura de dados das seções e itens do menu lateral
@@ -197,11 +208,18 @@ export default function Layout({
       title: 'Administração',
       role: 'admin' as const,
       items: [
-        { id: 'admin', icon: <Shield size={20} />, label: 'Painel Admin' },
-        { id: 'sofia_config', icon: <Bot size={20} />, label: 'Configurações Sofia' },
-        { id: 'overview', icon: <Activity size={20} />, label: 'Visão Geral' },
-        { id: 'clients', icon: <Star size={20} />, label: 'Carteira' },
-        { id: 'meta_templates', icon: <FileText size={20} className="text-violet-500" />, label: 'Templates' },
+        {
+          id: 'admin_menu',
+          icon: <Shield size={20} />,
+          label: 'Administração',
+          subItems: [
+            { id: 'admin', label: 'Painel Admin', icon: <Shield size={16} /> },
+            { id: 'sofia_config', label: 'Configurações Sofia', icon: <Bot size={16} /> },
+            { id: 'overview', label: 'Visão Geral', icon: <Activity size={16} /> },
+            { id: 'clients', label: 'Carteira', icon: <Star size={16} /> },
+            { id: 'meta_templates', label: 'Templates', icon: <FileText size={16} className="text-violet-500" /> },
+          ]
+        }
       ]
     },
     {
@@ -310,6 +328,7 @@ export default function Layout({
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
       if (id === 'agendas') setAgendasOpen(!agendasOpen);
+      if (id === 'admin_menu') setIsAdminOpen(!isAdminOpen);
       return;
     }
     onTabChange(id);
@@ -371,10 +390,13 @@ export default function Layout({
                     collapsed={collapsed}
                     onClick={() => handleTabClick(item.id, !!item.subItems)}
                     hasSubmenu={!!item.subItems}
-                    isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                    isSubmenuOpen={item.id === 'agendas' ? agendasOpen : (item.id === 'admin_menu' ? isAdminOpen : false)}
                   />
                   
-                  {item.subItems && !collapsed && (item.id === 'agendas' && agendasOpen) && (
+                  {item.subItems && !collapsed && (
+                    (item.id === 'agendas' && agendasOpen) || 
+                    (item.id === 'admin_menu' && isAdminOpen)
+                  ) && (
                     <motion.div 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
@@ -470,9 +492,12 @@ export default function Layout({
                           collapsed={false}
                           onClick={() => handleTabClick(item.id, !!item.subItems)}
                           hasSubmenu={!!item.subItems}
-                          isSubmenuOpen={item.id === 'agendas' ? agendasOpen : false}
+                          isSubmenuOpen={item.id === 'agendas' ? agendasOpen : (item.id === 'admin_menu' ? isAdminOpen : false)}
                         />
-                        {item.subItems && (item.id === 'agendas' && agendasOpen) && (
+                        {item.subItems && (
+                          (item.id === 'agendas' && agendasOpen) ||
+                          (item.id === 'admin_menu' && isAdminOpen)
+                        ) && (
                           <div className="ml-9 mt-1 space-y-1">
                             {item.subItems.map((sub) => (
                               <div
