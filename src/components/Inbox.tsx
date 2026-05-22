@@ -2755,22 +2755,38 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       await sendMessage(activeThread.remoteJid, finalMessageText, currentQuotedId);
       playSound('send');
 
-      // Re-fetch para substituir o registro otimista pelo real do banco
-      const { data: latestMsgs } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('thread_id', selectedThreadId)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // O backend insere a mensagem via BullMQ (assíncrono), então o registro
+      // ainda não existe no banco imediatamente após o sendMessage retornar.
+      // Buscamos com delay para substituir o otimista pelo real quando disponível.
+      // Só remove o otimista se o registro real for encontrado.
+      const threadIdAtSend = selectedThreadId;
+      const replaceOptimistic = async (attempt = 1) => {
+        const { data: latestMsgs } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('thread_id', threadIdAtSend)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      if (latestMsgs) {
-        setMessages(prev => {
-          const withoutTemps = prev.filter(m => !String(m.id).startsWith('sending-'));
-          const existingIds = new Set(withoutTemps.map(m => m.id));
-          const toAdd = [...latestMsgs].reverse().map(formatMsgRow).filter(m => !existingIds.has(m.id));
-          return [...withoutTemps, ...toAdd as any];
-        });
-      }
+        if (latestMsgs) {
+          setMessages(prev => {
+            const withoutTemps = prev.filter(m => !String(m.id).startsWith('sending-'));
+            const existingIds = new Set(withoutTemps.map(m => m.id));
+            const toAdd = [...latestMsgs].reverse().map(formatMsgRow).filter(m => !existingIds.has(m.id));
+            if (toAdd.length === 0) return prev; // Real ainda não chegou, mantém otimista
+            return [...withoutTemps, ...toAdd as any];
+          });
+          // Verifica se o otimista ainda está presente (real não encontrado) e tenta de novo
+          setMessages(prev => {
+            const stillHasTemp = prev.some(m => String(m.id).startsWith('sending-'));
+            if (stillHasTemp && attempt < 3) {
+              setTimeout(() => replaceOptimistic(attempt + 1), 2000);
+            }
+            return prev;
+          });
+        }
+      };
+      setTimeout(() => replaceOptimistic(), 1500);
 
       // Atualiza status da thread para 'human'
       await supabase
