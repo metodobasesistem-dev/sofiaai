@@ -72,8 +72,8 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
 // ─── POST /api/v2/admin/sync-instances ───────────────────────────────────
 router.post('/sync-instances', async (_req: AuthenticatedRequest, res: Response) => {
   try {
-    const { whatsAppService } = await import('../services/whatsappService.js');
-    await whatsAppService.runMaintenanceSync();
+    const { whatsappService } = await import('../services/whatsappService.js');
+    await whatsappService.runMaintenanceSync();
     res.json({ success: true, message: 'Sincronização concluída.' });
   } catch (err: any) {
     console.error('[AdminAPI] Sync error:', err.message);
