@@ -72,26 +72,53 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
 // ─── GET /api/v2/admin/users ──────────────────────────────────────────────
 router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { data, error } = await supabase
+    // 1. Todos os auth.users via Admin API (service role)
+    const { data: authData, error: authError } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    if (authError) throw authError;
+    const authUsers = authData?.users || [];
+
+    // 2. Todos os profiles existentes
+    const { data: profileRows, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('*');
+    if (profileError) throw profileError;
+    const profileMap = new Map((profileRows || []).map((p: any) => [p.id, p]));
 
-    if (error) throw error;
+    // 3. Para cada auth.user sem profile, cria um profile mínimo automaticamente
+    const missingIds = authUsers.filter(u => !profileMap.has(u.id)).map(u => u.id);
+    if (missingIds.length > 0) {
+      const inserts = authUsers
+        .filter(u => missingIds.includes(u.id))
+        .map(u => ({
+          id: u.id,
+          email: u.email,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Sem nome',
+          plano: 'Trial',
+          role: 'user',
+          whatsapp_status: 'disconnected',
+        }));
+      const { data: created } = await supabase.from('profiles').insert(inserts).select();
+      (created || []).forEach((p: any) => profileMap.set(p.id, p));
+      console.log(`[AdminAPI] Criados ${inserts.length} perfis ausentes.`);
+    }
 
-    // Redact sensitive credentials before sending to the admin UI. We expose
-    // only boolean "configured" flags so the panel can render state without
-    // ever holding secret material in browser memory.
-    const redacted = (data || []).map((row: any) => {
-      const { meta_access_token, meta_app_secret, whatsapp_qr, ...safe } = row;
+    // 4. Monta resposta cruzando auth.users + profiles
+    const merged = authUsers.map(u => {
+      const profile = profileMap.get(u.id) || {};
+      const { meta_access_token, meta_app_secret, whatsapp_qr, ...safe } = profile as any;
       return {
         ...safe,
+        id: u.id,
+        email: u.email || (profile as any).email,
+        name: (profile as any).name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'Sem nome',
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at,
         meta_access_token_set: !!meta_access_token,
         meta_app_secret_set: !!meta_app_secret,
       };
-    });
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    res.json({ success: true, data: redacted });
+    res.json({ success: true, data: merged });
   } catch (err: any) {
     console.error('[AdminAPI] Users Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
