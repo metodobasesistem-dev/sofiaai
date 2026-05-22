@@ -1100,20 +1100,36 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[500px]">
-                <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
                    <div>
                       <h2 className="text-2xl font-black text-slate-900">Inquilinos</h2>
                       <p className="text-sm text-slate-500">Gerencie todos os clientes e suas instâncias.</p>
                    </div>
-                   <div className="relative w-full md:w-80">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
-                        type="text" 
-                        placeholder="Pesquisar por nome ou email..." 
-                        className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all shadow-inner"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
+                   <div className="flex items-center gap-3 w-full md:w-auto">
+                      <div className="relative flex-1 md:w-80">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input
+                          type="text"
+                          placeholder="Pesquisar por nome ou email..."
+                          className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all shadow-inner"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const r = await standardFetch('/api/v2/admin/sync-instances', { method: 'POST' }, 60000);
+                            const d = await r.json();
+                            if (d.success) { toast.success('WhatsApp sincronizado!'); fetchData(); }
+                            else toast.error(d.error);
+                          } catch { toast.error('Erro ao sincronizar'); }
+                        }}
+                        className="flex items-center gap-2 px-4 py-3.5 bg-emerald-500 text-white rounded-2xl text-sm font-bold hover:bg-emerald-600 transition-all whitespace-nowrap shadow-sm"
+                      >
+                        <RefreshCw size={16} />
+                        Sincronizar WPP
+                      </button>
                    </div>
                 </div>
 

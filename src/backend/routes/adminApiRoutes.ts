@@ -69,6 +69,18 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── POST /api/v2/admin/sync-instances ───────────────────────────────────
+router.post('/sync-instances', async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { whatsAppService } = await import('../services/whatsappService.js');
+    await whatsAppService.runMaintenanceSync();
+    res.json({ success: true, message: 'Sincronização concluída.' });
+  } catch (err: any) {
+    console.error('[AdminAPI] Sync error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── GET /api/v2/admin/users ──────────────────────────────────────────────
 router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   try {

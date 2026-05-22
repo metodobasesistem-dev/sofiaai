@@ -1428,17 +1428,38 @@ class WhatsAppService {
         } catch (err) {}
       }
 
-      // --- PARTE B: Limpeza de Órfãos ---
+      // --- PARTE B: Reconexão de instâncias órfãs ---
       const allEvolutionInstances = await EvolutionApiService.fetchInstances();
       if (allEvolutionInstances && Array.isArray(allEvolutionInstances)) {
         for (const instance of allEvolutionInstances) {
           const name = instance.instanceName;
-          if (name && name.startsWith('wppai_')) {
-            const isLinked = profiles.some(p => p.whatsapp_instance_id === name);
-            if (!isLinked) {
-              console.log(`[Maintenance] 🧹 Deleting orphaned instance: ${name}`);
-              await EvolutionApiService.deleteInstance(name).catch(() => {});
-            }
+          if (!name || !name.startsWith('wppai_')) continue;
+
+          const isLinked = profiles.some(p => p.whatsapp_instance_id === name);
+          if (isLinked) continue;
+
+          // Tenta reconectar pelo prefixo do userId no nome da instância
+          const userIdPrefix = name.replace('wppai_', '');
+          const { data: matchProfile } = await supabase
+            .from('profiles')
+            .select('id, whatsapp_status')
+            .ilike('id', `${userIdPrefix}%`)
+            .maybeSingle();
+
+          if (matchProfile) {
+            try {
+              const realStatus = await EvolutionApiService.getInstanceStatus(name);
+              const mappedStatus = realStatus.state === 'open' ? 'connected'
+                : realStatus.state === 'connecting' ? 'connecting' : 'disconnected';
+              await supabase.from('profiles').update({
+                whatsapp_instance_id: name,
+                whatsapp_status: mappedStatus,
+              }).eq('id', matchProfile.id);
+              console.log(`[Maintenance] 🔗 Instância ${name} reconectada ao perfil ${matchProfile.id} (${mappedStatus})`);
+            } catch { /* instância inacessível — não deleta, só ignora */ }
+          } else {
+            console.log(`[Maintenance] 🧹 Deletando instância órfã sem perfil: ${name}`);
+            await EvolutionApiService.deleteInstance(name).catch(() => {});
           }
         }
       }
