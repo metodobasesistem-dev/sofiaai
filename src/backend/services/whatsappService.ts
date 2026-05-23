@@ -96,13 +96,19 @@ class WhatsAppService {
     });
 
     // Inspeciona estado da fila + envia healthcheck para confirmar que o worker
-    // consome jobs delayed. Roda 5s depois do boot, uma vez.
+    // consome jobs delayed. Tambem limpa jobs failed antigos (>1h) que poderiam
+    // bloquear novos enqueues por deduplicacao de jobId.
     setTimeout(async () => {
       try {
         const counts = await this.messageQueue.getJobCounts(
           'waiting', 'active', 'delayed', 'failed', 'completed'
         );
         console.log(`[BullMQ] 📊 Queue 'whatsapp-messages' state on boot:`, counts);
+
+        if ((counts as any).failed > 0) {
+          const cleaned = await this.messageQueue.clean(0, 1000, 'failed');
+          console.log(`[BullMQ] 🧹 Cleaned ${cleaned.length} failed jobs from queue`);
+        }
 
         await this.messageQueue.add(
           'healthcheck',
@@ -1061,41 +1067,59 @@ class WhatsAppService {
 
     console.log(`[WhatsAppService] ⏳ Scheduling AI response for ${from} in ${delaySeconds}s (BullMQ)`);
 
-    // Debounce: Se já existir um job agendado para este contato, o BullMQ vai ignorar o novo se usarmos o mesmo jobId
-    // Ou podemos remover o antigo para "resetar" o timer (melhor para debounce real)
+    // 🛑 Cancela follow-ups pendentes pois o cliente acabou de mandar uma mensagem
     try {
-      // 🛑 Cancela follow-ups pendentes pois o cliente acabou de mandar uma mensagem
       await this.cancelFollowUp(userId, from);
+    } catch (e: any) {
+      console.warn(`[WhatsAppService] cancelFollowUp failed: ${e?.message || e}`);
+    }
 
-      // [FIX] Adiciona ao buffer para agrupamento (Debounce)
+    // Buffer para agrupamento (mensagens em sequência são concatenadas)
+    try {
       await redisService.pushToBuffer(userId, from, body);
+    } catch (e: any) {
+      console.warn(`[WhatsAppService] pushToBuffer failed: ${e?.message || e}`);
+    }
 
-      const job = await this.messageQueue.getJob(jobId);
-      if (job) {
-        await job.remove();
-        console.log(`[WhatsAppService] 🔄 Debounce: Removed previous job for ${from}`);
+    // Remove qualquer job anterior com o mesmo jobId — em QUALQUER estado.
+    // BullMQ deduplica por jobId: se restou um job em 'failed' ou 'completed'
+    // sem ser removido, o add() abaixo é ignorado silenciosamente.
+    try {
+      const existing = await this.messageQueue.getJob(jobId);
+      if (existing) {
+        const state = await existing.getState().catch(() => 'unknown');
+        await existing.remove();
+        console.log(`[WhatsAppService] 🔄 Removed stale job ${jobId} (state was: ${state})`);
       }
-    } catch (e) {}
+    } catch (e: any) {
+      console.warn(`[WhatsAppService] Failed to remove stale job ${jobId}: ${e?.message || e}`);
+    }
 
-    await this.messageQueue.add('process-message', {
-      profileId: userId,
-      userId, // para compatibilidade
-      from,
-      body,
-      contactName,
-      displayPhone: cleanPhone,
-      messageId,
-      isAudio,
-      mediaUrl,
-      mediaMimeType,
-      agentId: agentId ?? null
-    }, {
-      jobId,
-      delay: delaySeconds * 1000,
-      removeOnComplete: true,
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 2000 }
-    });
+    try {
+      const added = await this.messageQueue.add('process-message', {
+        profileId: userId,
+        userId,
+        from,
+        body,
+        contactName,
+        displayPhone: cleanPhone,
+        messageId,
+        isAudio,
+        mediaUrl,
+        mediaMimeType,
+        agentId: agentId ?? null
+      }, {
+        jobId,
+        delay: delaySeconds * 1000,
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 50 },
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 }
+      });
+      console.log(`[WhatsAppService] 📥 Job ${added.id} enqueued for ${from} (delay ${delaySeconds}s)`);
+    } catch (e: any) {
+      console.error(`[WhatsAppService] ❌ Failed to enqueue AI job for ${from}: ${e?.message || e}`);
+    }
   }
 
   // Método interno que processa a lógica de IA (chamado pelo Worker do BullMQ)
