@@ -1063,8 +1063,10 @@ class WhatsAppService {
     try {
       console.log(`[WhatsAppService] 🚀 Processing AI response for ${from} (BullMQ Worker)`);
 
-      // 🛑 Idempotência: Verifica se já houve uma resposta outbound recente para esta thread (últimos 30s)
-      // para evitar duplicatas por retentativa de webhook/job
+      // 🛑 Idempotência: Verifica se já houve uma resposta da IA outbound recente para esta thread (últimos 30s)
+      // para evitar duplicatas por retentativa de webhook/job.
+      // IMPORTANTE: Filtra apenas is_ai=true para não bloquear o agente quando o usuário
+      // responde pouco após receber uma mensagem manual/template (disparo de teste, piloto automático etc.)
       const thirtySecondsAgo = Date.now() - 30000;
       const cleanPhone = normalizePhone(from);
       const threadId = `${userId}_${cleanPhone}`;
@@ -1074,12 +1076,13 @@ class WhatsAppService {
         .select('id')
         .eq('thread_id', threadId)
         .eq('direction', 'outbound')
+        .eq('is_ai', true)
         .gte('timestamp', thirtySecondsAgo)
         .limit(1)
         .maybeSingle();
 
       if (recentReply) {
-        console.log(`[WhatsAppService] 🛡️ Idempotency: Response already sent recently for ${from}. Skipping.`);
+        console.log(`[WhatsAppService] 🛡️ Idempotency: AI response already sent recently for ${from}. Skipping.`);
         return;
       }
 

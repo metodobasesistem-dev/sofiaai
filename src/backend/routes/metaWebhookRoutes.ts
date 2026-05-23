@@ -528,7 +528,9 @@ async function handleMetaMessages(userId: string, phoneNumberId: string, value: 
       false, quotedId, quotedText, undefined
     );
 
-    await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+    // Busca o agent_id salvo na thread (igual ao Evolution webhook)
+    const { data: threadRow } = await supabase.from('threads').select('agent_id').eq('id', threadId).maybeSingle();
+    await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false, undefined, undefined, threadRow?.agent_id ?? null);
 
     await whatsappService.enqueueProfilePictureSync({ userId, threadId, remoteJid: from }).catch(() => {});
   } catch (err: any) {
