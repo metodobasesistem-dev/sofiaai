@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { generateAIResponse } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+import { whatsappService } from '../services/whatsappService.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -295,9 +296,11 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
                 ]
               }
             ];
-            await provider.sendTemplate(userId, jid, templateName, 'pt_BR', components);
+            const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, 'pt_BR', components);
+            if (!result.success) throw new Error(result.error);
           } else {
-            await provider.sendMessage(userId, jid, lead.personalized_message);
+            const result = await whatsappService.sendMessage(userId, lead.phone, lead.personalized_message);
+            if (!result.success) throw new Error(result.error);
           }
           await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
           job.sent++;
@@ -362,8 +365,12 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
           ]
         }
       ];
-      await provider.sendTemplate(userId, jid, templateName, templateLanguage, components);
-      res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
+      const result = await whatsappService.sendTemplate(userId, digits, templateName, templateLanguage, components);
+      if (result.success) {
+        res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
+      } else {
+        res.status(400).json({ success: false, error: result.error || 'Erro ao enviar template de teste.' });
+      }
     } else {
       res.status(400).json({ success: false, error: 'Seu provedor de WhatsApp não suporta envio de templates.' });
     }
@@ -449,11 +456,13 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
           ]
         }
       ];
-      await provider.sendTemplate(userId, jid, templateName, templateLanguage, components);
+      const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, templateLanguage, components);
+      if (!result.success) throw new Error(result.error);
     } else {
       const msg = customMessage || lead.personalized_message;
       if (!msg) return res.status(400).json({ success: false, error: 'Sem mensagem para enviar' });
-      await provider.sendMessage(userId, jid, msg);
+      const result = await whatsappService.sendMessage(userId, lead.phone, msg);
+      if (!result.success) throw new Error(result.error);
     }
 
     await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
