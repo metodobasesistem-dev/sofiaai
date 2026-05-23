@@ -104,6 +104,9 @@ interface Thread {
     type: 'ai' | 'manual';
   };
   ad_tracking?: any;
+  assignedTo?: string | null;
+  agentId?: string | null;
+  labels?: string[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -1188,6 +1191,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [filterStatus, setFilterStatus] = useState<'Abertos' | 'Resolvidos' | 'Todos' | 'Lead' | 'Qualificado' | 'Cliente' | 'Não Lidos'>('Abertos');
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [agents, setAgents] = useState<{ id: string; nome: string; company_name?: string }[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
   const [contacts, setContacts] = useState<any[]>([]);
   const contactsRef = useRef<any[]>([]);
@@ -1689,7 +1693,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               profilePictureUrl: d.profile_picture_url,
               profilePictureUpdatedAt: d.profile_picture_updated_at,
               labels: d.labels || [],
-              pending_followup: d.pending_followup
+              pending_followup: d.pending_followup,
+              assignedTo: d.assigned_to || null,
+              agentId: d.agent_id || null
             };
           });
           setThreads(formatted);
@@ -1895,6 +1901,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       }
     };
     fetchTeam();
+
+    // Fetch Agents
+    const fetchAgents = async () => {
+      const uid = user?.id;
+      if (!uid) return;
+      const { data } = await supabase
+        .from('agents')
+        .select('id, nome, company_name')
+        .eq('user_id', uid)
+        .eq('status_ativo', true)
+        .order('created_at', { ascending: true });
+      setAgents(data || []);
+    };
+    fetchAgents();
 
     return () => {
       if (channel) supabase.removeChannel(channel);
@@ -2293,6 +2313,27 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   ))}
                 </select>
               </div>
+              {agents.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase">Agente IA</label>
+                  <select
+                    value={activeThread.agentId || ''}
+                    onChange={async (e) => {
+                      const val = e.target.value || null;
+                      await supabase.from('threads').update({ agent_id: val }).eq('id', activeThread.id);
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, agentId: val } : t));
+                      const agent = agents.find(a => a.id === val);
+                      toast.success(val ? `Agente "${agent?.nome || agent?.company_name}" selecionado!` : 'Usando agente padrão.');
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
+                  >
+                    <option value="">🤖 Agente padrão</option>
+                    {agents.map(a => (
+                      <option key={a.id} value={a.id}>{a.nome || a.company_name || 'Agente sem nome'}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Etiqueta Especial</label>
                 <button
