@@ -47,17 +47,26 @@ router.use(requireAuth as any);
 router.use(requireAdmin as any);
 
 // ─── GET /api/v2/admin/stats ──────────────────────────────────────────────
-router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/stats', async (_req: AuthenticatedRequest, res: Response) => {
   try {
-    const [profilesRes, agentsRes, messagesRes] = await Promise.all([
-      supabase.from('profiles').select('id, whatsapp_status', { count: 'exact' }),
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [authData, agentsRes, messagesRes, activeRes] = await Promise.all([
+      // Fonte de verdade para total de usuários (mesmo que a aba Inquilinos)
+      supabase.auth.admin.listUsers({ perPage: 1000 }),
       supabase.from('agents').select('id', { count: 'exact', head: true }),
-      supabase.from('messages').select('id', { count: 'exact', head: true })
+      // Mensagens apenas dos últimos 30 dias
+      supabase.from('messages').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo),
+      // Sessões ativas: clientes (não-admin) com WhatsApp conectado
+      supabase.from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .neq('role', 'admin')
+        .eq('whatsapp_status', 'connected'),
     ]);
 
     const stats = {
-      totalUsers: profilesRes.count || 0,
-      activeSessions: profilesRes.data?.filter(p => p.whatsapp_status === 'connected').length || 0,
+      totalUsers: authData.data?.users?.length ?? 0,
+      activeSessions: activeRes.count || 0,
       totalMessages: messagesRes.count || 0,
       totalAgents: agentsRes.count || 0
     };
