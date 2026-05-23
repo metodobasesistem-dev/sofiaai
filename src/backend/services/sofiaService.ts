@@ -56,19 +56,48 @@ export const sofiaService = {
     // Aplica limite duro de tokens (8k) — evita estouro de context length
     const truncatedHistory = truncateHistoryByTokens(formattedHistory, 8000);
 
-    // 5. Sofia's Persona
-    const { data: profile } = await supabase.from('profiles')
-      .select('sofia_prompt, nome_empresa, nicho')
-      .eq('id', userId)
-      .single();
+    // 5. Sofia's Persona + Contexto da empresa do tenant
+    const [profileRes, agentRes, knowledgeRes] = await Promise.all([
+      supabase.from('profiles').select('sofia_prompt, nome_empresa, nicho').eq('id', userId).single(),
+      supabase.from('agents')
+        .select('company_name, company_description, company_products, company_faq, company_address, company_links, tone_of_voice, forbidden_topics, nome')
+        .eq('user_id', userId)
+        .eq('status_ativo', true)
+        .limit(1)
+        .maybeSingle(),
+      supabase.from('agent_knowledge')
+        .select('title, content, type')
+        .eq('user_id', userId)
+        .limit(20)
+    ]);
+
+    const profile = profileRes.data;
+    const agent = agentRes.data;
+    const knowledgeBlocks = knowledgeRes.data || [];
+
+    const companySection = agent ? `
+CONTEXTO DA EMPRESA (dados do agente ativo: ${agent.nome || 'Agente Principal'}):
+- Nome: ${agent.company_name || profile?.nome_empresa || 'Não informado'}
+- Descrição: ${agent.company_description || 'Não informado'}
+- Produtos/Serviços: ${agent.company_products || 'Não informado'}
+- Endereço: ${agent.company_address || 'Não informado'}
+- Links importantes: ${agent.company_links || 'Nenhum'}
+- FAQ: ${agent.company_faq || 'Nenhuma FAQ cadastrada'}
+${agent.forbidden_topics ? `- TÓPICOS PROIBIDOS (não discuta): ${agent.forbidden_topics}` : ''}` : '';
+
+    const knowledgeSection = knowledgeBlocks.length > 0 ? `
+BASE DE CONHECIMENTO DO AGENTE:
+${knowledgeBlocks.map(k => `[${k.title || k.type}]: ${k.content}`).join('\n')}` : '';
 
     const now = new Date();
     const systemPrompt = `Você é a Sofia, a inteligência central e parceira estratégica deste ecossistema.
-Você tem ACESSO TOTAL ao sistema para ajudar o usuário a gerir o negócio.
+Você tem ACESSO TOTAL ao sistema para ajudar o usuário a gerir o negócio e o atendimento via WhatsApp.
 
 TONALIDADE:
 - Estratégica, inteligente e proativa.
 - Você não é apenas uma atendente, você é uma CO-PILOTO do empresário.
+${companySection}
+${knowledgeSection}
 
 DADOS EM TEMPO REAL DO SISTEMA (DASHBOARD):
 ${systemStats}
