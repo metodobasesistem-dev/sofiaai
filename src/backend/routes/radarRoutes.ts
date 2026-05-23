@@ -73,9 +73,31 @@ router.delete('/campaigns/:id', async (req: AuthenticatedRequest, res: Response)
 router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaign_id } = req.query as any;
-    let query = supabase.from('leads_radar').select('*').order('created_at', { ascending: false });
-    if (campaign_id) query = query.eq('campaign_id', campaign_id);
-    const { data, error } = await query;
+    
+    // Obter IDs de campanhas pertencentes a este usuário para filtrar/validar
+    const { data: userCampaigns, error: campErr } = await supabase
+      .from('lead_campaigns')
+      .select('id')
+      .eq('user_id', req.userId);
+      
+    if (campErr) throw campErr;
+    const campaignIds = (userCampaigns || []).map(c => c.id);
+
+    if (campaignIds.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    let query = supabase.from('leads_radar').select('*');
+    if (campaign_id) {
+      if (!campaignIds.includes(campaign_id)) {
+        return res.status(403).json({ success: false, error: 'Acesso negado' });
+      }
+      query = query.eq('campaign_id', campaign_id);
+    } else {
+      query = query.in('campaign_id', campaignIds);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ success: true, data });
   } catch (err: any) {
@@ -210,10 +232,24 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ success: false, error: 'O WhatsApp não está conectado.' });
     }
 
+    // Obter IDs de campanhas pertencentes a este usuário para filtrar disparos automáticos
+    const { data: userCampaigns, error: campErr } = await supabase
+      .from('lead_campaigns')
+      .select('id')
+      .eq('user_id', userId);
+      
+    if (campErr) throw campErr;
+    const campaignIds = (userCampaigns || []).map(c => c.id);
+
+    if (campaignIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Nenhuma campanha ativa encontrada.' });
+    }
+
     const { data: leads, error } = await supabase
       .from('leads_radar')
       .select('*')
       .eq('status', 'novo')
+      .in('campaign_id', campaignIds)
       .not('personalized_message', 'is', null)
       .not('phone', 'is', null)
       .limit(limit);
@@ -277,6 +313,20 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
 router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { status, notes } = req.body;
+
+    // Validar propriedade do lead
+    const { data: lead } = await supabase.from('leads_radar').select('campaign_id').eq('id', req.params.id).maybeSingle();
+    if (!lead) return res.status(404).json({ success: false, error: 'Lead não encontrado' });
+    
+    if (lead.campaign_id) {
+      const { data: campaign } = await supabase.from('lead_campaigns').select('user_id').eq('id', lead.campaign_id).maybeSingle();
+      if (!campaign || campaign.user_id !== req.userId) {
+        return res.status(403).json({ success: false, error: 'Acesso negado' });
+      }
+    } else {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
+
     const updateFields: Record<string, any> = { updated_at: new Date().toISOString() };
     if (status !== undefined) updateFields.status = status;
     if (notes !== undefined) updateFields.notes = notes;
@@ -296,6 +346,16 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
     const { data: lead, error: leadErr } = await supabase.from('leads_radar').select('*').eq('id', req.params.id).single();
     if (leadErr || !lead) return res.status(404).json({ success: false, error: 'Lead não encontrado' });
     if (!lead.phone) return res.status(400).json({ success: false, error: 'Lead sem telefone' });
+
+    // Validar propriedade do lead
+    if (lead.campaign_id) {
+      const { data: campaign } = await supabase.from('lead_campaigns').select('user_id').eq('id', lead.campaign_id).maybeSingle();
+      if (!campaign || campaign.user_id !== userId) {
+        return res.status(403).json({ success: false, error: 'Acesso negado' });
+      }
+    } else {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
 
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão WhatsApp ativa' });
@@ -325,6 +385,19 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
 
 router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    // Validar propriedade do lead
+    const { data: lead } = await supabase.from('leads_radar').select('campaign_id').eq('id', req.params.id).maybeSingle();
+    if (!lead) return res.status(404).json({ success: false, error: 'Lead não encontrado' });
+    
+    if (lead.campaign_id) {
+      const { data: campaign } = await supabase.from('lead_campaigns').select('user_id').eq('id', lead.campaign_id).maybeSingle();
+      if (!campaign || campaign.user_id !== req.userId) {
+        return res.status(403).json({ success: false, error: 'Acesso negado' });
+      }
+    } else {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
+
     const { error } = await supabase.from('leads_radar').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
@@ -339,6 +412,17 @@ router.post('/leads/bulk-status', async (req: AuthenticatedRequest, res: Respons
     if (!ids?.length || !status) return res.status(400).json({ success: false, error: 'ids e status são obrigatórios' });
     const validStatuses = ['novo', 'qualificado', 'contatado', 'descartado'];
     if (!validStatuses.includes(status)) return res.status(400).json({ success: false, error: 'Status inválido' });
+
+    // Validar propriedade de todos os leads
+    const { data: userCampaigns } = await supabase.from('lead_campaigns').select('id').eq('user_id', req.userId);
+    const campaignIds = (userCampaigns || []).map(c => c.id);
+
+    const { data: leads } = await supabase.from('leads_radar').select('id, campaign_id').in('id', ids);
+    const hasUnauthorizedLead = (leads || []).some(lead => !lead.campaign_id || !campaignIds.includes(lead.campaign_id));
+    if (hasUnauthorizedLead) {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
+
     const { error } = await supabase.from('leads_radar').update({ status, updated_at: new Date().toISOString() }).in('id', ids);
     if (error) throw error;
     res.json({ success: true, updated: ids.length });
@@ -351,6 +435,17 @@ router.delete('/leads/bulk-delete', async (req: AuthenticatedRequest, res: Respo
   try {
     const { ids } = req.body as { ids: string[] };
     if (!ids?.length) return res.status(400).json({ success: false, error: 'ids é obrigatório' });
+
+    // Validar propriedade de todos os leads
+    const { data: userCampaigns } = await supabase.from('lead_campaigns').select('id').eq('user_id', req.userId);
+    const campaignIds = (userCampaigns || []).map(c => c.id);
+
+    const { data: leads } = await supabase.from('leads_radar').select('id, campaign_id').in('id', ids);
+    const hasUnauthorizedLead = (leads || []).some(lead => !lead.campaign_id || !campaignIds.includes(lead.campaign_id));
+    if (hasUnauthorizedLead) {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
+
     const { error } = await supabase.from('leads_radar').delete().in('id', ids);
     if (error) throw error;
     res.json({ success: true, deleted: ids.length });
