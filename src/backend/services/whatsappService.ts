@@ -10,10 +10,33 @@ import { parseProviderError, recordMetaError } from '../providers/providerErrors
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { validateTemplateVariables, maskVariableValue, hashVariables, extractBodyParameters, type Violation } from '../lib/templateValidator.js';
 import { Queue, Worker, Job } from 'bullmq';
+import Redis from 'ioredis';
 import { PushNotificationService } from './pushNotificationService.js';
 import { whatsappService as selfRef } from './whatsappService.js'; // Para evitar circular dependency se necessário
 import { redisService } from './redisService.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
+
+// Cria conexao ioredis dedicada para BullMQ com listeners de socket detalhados.
+// O BullMQ recomenda conexoes separadas para Queue e Worker (Worker faz BRPOPLPUSH
+// bloqueante e nao pode dividir o socket com comandos normais).
+function createBullMQConnection(label: string): Redis {
+  const conn = new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    username: process.env.REDIS_USERNAME || 'default',
+    password: process.env.REDIS_PASSWORD,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    retryStrategy: (times) => Math.min(times * 200, 5000)
+  });
+  conn.on('connect',      () => console.log(`[BullMQ:${label}] socket connect`));
+  conn.on('ready',        () => console.log(`[BullMQ:${label}] socket ready`));
+  conn.on('error',        (err) => console.error(`[BullMQ:${label}] socket error: ${err.message}`));
+  conn.on('close',        () => console.warn(`[BullMQ:${label}] socket close`));
+  conn.on('reconnecting', (delay: any) => console.warn(`[BullMQ:${label}] socket reconnecting (delay=${delay}ms)`));
+  conn.on('end',          () => console.warn(`[BullMQ:${label}] socket end`));
+  return conn;
+}
 
 
 
@@ -47,29 +70,23 @@ class WhatsAppService {
 
   constructor() {
     console.log('[WhatsAppService] Initializing with BullMQ...');
-    
-    // Configuração do Redis para BullMQ.
-    // - username é obrigatório com Redis 6+ ACL.
-    // - maxRetriesPerRequest: null é exigido pelo BullMQ no Worker; sem isso,
-    //   o ioredis desconecta após poucas falhas e o worker para de consumir.
-    // - enableReadyCheck: false evita falsos negativos com Redis hospedado
-    //   (ex.: Coolify/Upstash) que respondem PING antes do INFO ficar pronto.
-    const connection = {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      username: process.env.REDIS_USERNAME || 'default',
-      password: process.env.REDIS_PASSWORD,
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false
-    };
 
-    this.messageQueue  = new Queue('whatsapp-messages',      { connection });
-    this.followUpQueue = new Queue('whatsapp-followups',     { connection });
-    this.photoSyncQueue = new Queue('profile-picture-sync', { connection });
+    // Conexoes ioredis explicitas e dedicadas. BullMQ recomenda conexoes
+    // separadas para Queue e Worker.
+    const queueConn       = createBullMQConnection('messageQueue');
+    const workerConn      = createBullMQConnection('messageWorker');
+    const followUpQConn   = createBullMQConnection('followUpQueue');
+    const followUpWConn   = createBullMQConnection('followUpWorker');
+    const photoSyncQConn  = createBullMQConnection('photoSyncQueue');
+    const photoSyncWConn  = createBullMQConnection('photoSyncWorker');
 
-    this.setupWorker(connection);
-    this.setupFollowUpWorker(connection);
-    this.setupPhotoSyncWorker(connection);
+    this.messageQueue   = new Queue('whatsapp-messages',     { connection: queueConn });
+    this.followUpQueue  = new Queue('whatsapp-followups',    { connection: followUpQConn });
+    this.photoSyncQueue = new Queue('profile-picture-sync',  { connection: photoSyncQConn });
+
+    this.setupWorker(workerConn);
+    this.setupFollowUpWorker(followUpWConn);
+    this.setupPhotoSyncWorker(photoSyncWConn);
   }
 
   private setupWorker(connection: any) {
