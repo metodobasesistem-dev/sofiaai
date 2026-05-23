@@ -71,13 +71,13 @@ import { useFeature } from '../contexts/FeatureFlagContext';
 
 interface AgentCardProps {
   agent: Agent;
-  onToggle: () => void;
+  isDefault: boolean;
+  onSetDefault: () => void;
   onEdit: () => void;
   onDelete: () => Promise<void>;
 }
 
-const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete }) => {
-  const status = agent.status_ativo ? 'active' : 'inactive';
+const AgentCard: React.FC<AgentCardProps> = ({ agent, isDefault, onSetDefault, onEdit, onDelete }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -86,11 +86,23 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-6 flex flex-col relative"
+      className={`bg-white rounded-xl border-2 shadow-sm hover:shadow-md transition-all p-6 flex flex-col relative ${
+        isDefault ? 'border-primary-300 shadow-primary-100' : 'border-gray-100'
+      }`}
     >
-      <div className="flex items-start justify-between mb-4">
+      {/* Badge de Padrão */}
+      {isDefault && (
+        <div className="absolute top-3 left-3 flex items-center gap-1 bg-primary-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full shadow-md">
+          <Sparkles size={9} />
+          Agente Padrão
+        </div>
+      )}
+
+      <div className="flex items-start justify-between mb-4" style={{ marginTop: isDefault ? '16px' : '0' }}>
         <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${status === 'active' ? 'bg-primary-50 text-primary-600' : 'bg-gray-50 text-gray-400'}`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+            isDefault ? 'bg-primary-100 text-primary-600' : 'bg-gray-50 text-gray-400'
+          }`}>
             <Bot size={24} />
           </div>
           <div>
@@ -119,6 +131,14 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
                     >
                       <Settings2 size={15} /> Configurar
                     </button>
+                    {!isDefault && (
+                      <button
+                        onClick={() => { setMenuOpen(false); onSetDefault(); }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-primary-600 hover:bg-primary-50 transition-colors border-t border-gray-100"
+                      >
+                        <Sparkles size={15} /> Definir como padrão
+                      </button>
+                    )}
                     <button
                       onClick={() => setConfirmDelete(true)}
                       className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
@@ -158,19 +178,20 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
         </div>
       </div>
 
+      {/* Status badge */}
       <div className="flex items-center gap-2 mb-6">
-        {status === 'active' ? (
-          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded-full">
+        {isDefault ? (
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-primary-700 bg-primary-50 px-2 py-1 rounded-full border border-primary-100">
             <CheckCircle2 size={12} /> Ativo no WhatsApp
           </span>
         ) : (
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 px-2 py-1 rounded-full">
-            <AlertCircle size={12} /> Desativado
+            <AlertCircle size={12} /> Em espera
           </span>
         )}
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-4">
+      <div className="mt-auto flex items-center gap-3">
         <button 
           onClick={onEdit}
           className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
@@ -178,16 +199,24 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onToggle, onEdit, onDelete
           <Settings2 size={16} />
           Configurar
         </button>
-        
-        {/* Toggle Switch */}
-        <button 
-          onClick={onToggle}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${status === 'active' ? 'bg-primary-600' : 'bg-gray-200'}`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${status === 'active' ? 'translate-x-6' : 'translate-x-1'}`}
-          />
-        </button>
+
+        {!isDefault && (
+          <button
+            onClick={onSetDefault}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-bold hover:bg-primary-700 transition-all shadow-md shadow-primary-200 active:scale-95"
+            title="Definir como agente padrão"
+          >
+            <Sparkles size={14} />
+            Definir Padrão
+          </button>
+        )}
+
+        {isDefault && (
+          <span className="flex items-center gap-1.5 px-4 py-2 bg-primary-50 text-primary-600 rounded-lg text-sm font-bold border border-primary-100">
+            <Check size={14} />
+            Padrão Ativo
+          </span>
+        )}
       </div>
     </motion.div>
   );
@@ -1020,7 +1049,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                 <AgentCard 
                   key={agent.id}
                   agent={agent}
-                  onToggle={() => handleToggle(agent.id!, agent.status_ativo)}
+                  isDefault={!!agent.status_ativo}
+                  onSetDefault={() => handleToggle(agent.id!, agent.status_ativo)}
                   onEdit={() => handleEdit(agent)}
                   onDelete={() => handleDelete(agent.id!)}
                 />
