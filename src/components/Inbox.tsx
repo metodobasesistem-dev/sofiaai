@@ -107,7 +107,166 @@ interface Thread {
   assignedTo?: string | null;
   agentId?: string | null;
   labels?: string[];
+  lastInboundAt?: number;
 }
+
+// ── Meta 24h Window ────────────────────────────────────────────────────────────
+// Apos 24h sem mensagem do cliente, o Meta rejeita mensagens livres (131047) e
+// so templates aprovados podem ser enviados. Calcula estado e tempo restante.
+type WindowState = 'never' | 'open' | 'safe' | 'warning' | 'urgent' | 'closed';
+
+interface WindowInfo {
+  state: WindowState;
+  msLeft: number;
+  hoursLeft: number;
+  minutesLeft: number;
+  label: string;       // formato "Xh Ym" ou "Xm"
+}
+
+function computeWindow(lastInboundMs: number | undefined, nowMs: number = Date.now()): WindowInfo {
+  if (!lastInboundMs) {
+    return { state: 'never', msLeft: 0, hoursLeft: 0, minutesLeft: 0, label: '—' };
+  }
+  const WINDOW_MS = 24 * 60 * 60 * 1000;
+  const elapsed = nowMs - lastInboundMs;
+  const msLeft = Math.max(0, WINDOW_MS - elapsed);
+  const hoursLeft = msLeft / (1000 * 60 * 60);
+  const minutesLeft = Math.floor(msLeft / 60000);
+
+  let state: WindowState;
+  if (msLeft === 0)              state = 'closed';
+  else if (hoursLeft < 1)        state = 'urgent';
+  else if (hoursLeft < 3)        state = 'warning';
+  else if (hoursLeft < 6)        state = 'safe';
+  else                            state = 'open';
+
+  // Formato compacto
+  let label: string;
+  if (msLeft === 0)              label = 'fechada';
+  else if (hoursLeft >= 1)       label = `${Math.floor(hoursLeft)}h ${minutesLeft % 60}m`;
+  else                           label = `${minutesLeft}m`;
+
+  return { state, msLeft, hoursLeft, minutesLeft, label };
+}
+
+// Componente leve que recalcula a janela a cada 30s — suficiente para countdown
+// de 24h sem virar fogo de palha no event loop.
+const WindowCountdown: React.FC<{
+  lastInboundAt?: number;
+  variant: 'badge' | 'panel' | 'banner';
+  onTemplatesClick?: () => void;
+}> = ({ lastInboundAt, variant, onTemplatesClick }) => {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(i);
+  }, []);
+  const info = useMemo(() => computeWindow(lastInboundAt, now), [lastInboundAt, now]);
+
+  // Badge: aparece somente em estados criticos para nao poluir a lista
+  if (variant === 'badge') {
+    if (info.state === 'open' || info.state === 'safe' || info.state === 'never') return null;
+    const colors: Record<WindowState, string> = {
+      never:   '',
+      open:    '',
+      safe:    '',
+      warning: 'bg-amber-100 text-amber-700 border-amber-200',
+      urgent:  'bg-orange-100 text-orange-700 border-orange-200 animate-pulse',
+      closed:  'bg-red-100 text-red-700 border-red-200',
+    };
+    return (
+      <span
+        title={info.state === 'closed' ? 'Janela 24h fechada — precisa template' : `Janela 24h: ${info.label} restantes`}
+        className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${colors[info.state]}`}
+      >
+        {info.state === 'closed' ? '24h ⚠' : info.label}
+      </span>
+    );
+  }
+
+  // Panel: bloco no painel direito do lead — sempre visivel quando inbound existe
+  if (variant === 'panel') {
+    if (info.state === 'never') {
+      return (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] text-slate-600">
+          <p className="font-black uppercase tracking-widest text-[10px] text-slate-400 mb-1">Janela WhatsApp</p>
+          <p>Cliente ainda não enviou mensagem.</p>
+        </div>
+      );
+    }
+    const tone: Record<WindowState, string> = {
+      never:   '',
+      open:    'bg-emerald-50 border-emerald-200 text-emerald-800',
+      safe:    'bg-sky-50 border-sky-200 text-sky-800',
+      warning: 'bg-amber-50 border-amber-200 text-amber-800',
+      urgent:  'bg-orange-50 border-orange-200 text-orange-800',
+      closed:  'bg-red-50 border-red-200 text-red-800',
+    };
+    const headline: Record<WindowState, string> = {
+      never:   '',
+      open:    'Janela aberta',
+      safe:    'Janela aberta',
+      warning: 'Atenção: pouco tempo',
+      urgent:  'Urgente: <1h restante',
+      closed:  'Janela fechada',
+    };
+    return (
+      <div className={`rounded-xl border px-4 py-3 ${tone[info.state]}`}>
+        <p className="font-black uppercase tracking-widest text-[10px] mb-1 opacity-70">Janela WhatsApp 24h</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[11px] font-semibold">{headline[info.state]}</span>
+          <span className="text-base font-black tabular-nums">{info.label}</span>
+        </div>
+        {info.state === 'closed' && onTemplatesClick && (
+          <button
+            onClick={onTemplatesClick}
+            className="mt-2 w-full px-3 py-1.5 bg-white border border-red-300 text-red-700 rounded-lg font-black uppercase tracking-widest text-[10px] hover:bg-red-100"
+          >
+            Enviar template
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Banner: aparece acima do input apenas em warning / urgent / closed
+  if (info.state === 'open' || info.state === 'safe') return null;
+  const banner: Record<WindowState, string> = {
+    never:   'bg-red-50 border-red-200 text-red-800',
+    open:    '',
+    safe:    '',
+    warning: 'bg-amber-50 border-amber-200 text-amber-800',
+    urgent:  'bg-orange-50 border-orange-200 text-orange-800',
+    closed:  'bg-red-50 border-red-200 text-red-800',
+  };
+  const isCriticalOrNever = info.state === 'closed' || info.state === 'never';
+  return (
+    <div className={`mx-2 mb-2 px-3 py-2.5 rounded-xl border text-xs flex items-start gap-2 ${banner[info.state]}`}>
+      <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+      <div className="flex-1">
+        <p className="font-black uppercase tracking-widest text-[10px] mb-0.5">
+          {info.state === 'closed' ? 'Janela de 24h fechada'
+            : info.state === 'never' ? 'Cliente nunca enviou mensagem'
+            : info.state === 'urgent' ? `Janela fechando em ${info.label}`
+            : `Janela fechando em ${info.label}`}
+        </p>
+        <p className="text-[11px] leading-snug">
+          {isCriticalOrNever
+            ? 'Mensagens livres serão rejeitadas pela Meta. Use um template aprovado.'
+            : `Após esse tempo só templates aprovados pelo Meta poderão ser enviados.`}
+        </p>
+      </div>
+      {isCriticalOrNever && onTemplatesClick && (
+        <button
+          onClick={onTemplatesClick}
+          className="px-3 py-1.5 bg-white border border-red-300 text-red-700 rounded-lg font-black uppercase tracking-widest text-[10px] hover:bg-red-100 transition-all"
+        >
+          Templates
+        </button>
+      )}
+    </div>
+  );
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const formatDateHeader = (dateStr: string) => {
@@ -423,7 +582,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
   );
 };
 
-const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, onClick, onDelete }) => (
+const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, onClick, onDelete }) => (
   <div 
     onClick={onClick}
     className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
@@ -438,12 +597,13 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, onClick: () => vo
 
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-1">
-        <h4 className={`text-[15px] truncate flex items-center gap-2 
+        <h4 className={`text-[15px] truncate flex items-center gap-2
           ${(thread.unreadCount ?? 0) > 0 ? "font-black text-slate-900" : "font-medium text-slate-600"}`}>
           {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
           {thread.is_client && <Star size={12} className="fill-amber-500 text-amber-500 shrink-0" />}
           {thread.priority === 'urgent' && <span className="text-xs" title="Urgente">🔥</span>}
           {thread.priority === 'high' && <span className="text-xs" title="Alta">🔴</span>}
+          {showWindow && <WindowCountdown lastInboundAt={thread.lastInboundAt} variant="badge" />}
         </h4>
         <div className="flex items-center gap-2">
           <button 
@@ -1697,7 +1857,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               labels: d.labels || [],
               pending_followup: d.pending_followup,
               assignedTo: d.assigned_to || null,
-              agentId: d.agent_id || null
+              agentId: d.agent_id || null,
+              lastInboundAt: d.last_inbound_at ? new Date(d.last_inbound_at).getTime() : 0
             };
           });
           setThreads(formatted);
@@ -1770,7 +1931,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   ticketStatus: payload.new.ticket_status || 'open',
                   funilStatus: resolved.funilStatus,
                   profilePictureUrl: payload.new.profile_picture_url,
-                  pending_followup: payload.new.pending_followup
+                  pending_followup: payload.new.pending_followup,
+                  lastInboundAt: payload.new.last_inbound_at ? new Date(payload.new.last_inbound_at).getTime() : 0
                 };
 
                 const filtered = prev.filter(t => t.id !== payload.new.id);
@@ -1822,7 +1984,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   profilePictureUrl: payload.new.profile_picture_url !== undefined
                     ? payload.new.profile_picture_url
                     : baseThread?.profilePictureUrl,
-                  pending_followup: payload.new.pending_followup ?? baseThread?.pending_followup
+                  pending_followup: payload.new.pending_followup ?? baseThread?.pending_followup,
+                  lastInboundAt: payload.new.last_inbound_at
+                    ? new Date(payload.new.last_inbound_at).getTime()
+                    : (baseThread?.lastInboundAt || 0)
                 };
 
                 // Só move para o topo se a última mensagem mudou
@@ -2112,22 +2277,20 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
   const activeThread = threads.find(t => t.id === selectedThreadId);
 
-  // Meta 24h window check — surfaces a warning above the input when a tenant
-  // on the official Meta provider has no inbound message in >23h. After 24h,
-  // free-form messages are rejected by Meta (code 131047) and only approved
-  // templates can be sent.
-  const meta24hWindowState = useMemo(() => {
-    if (currentProvider !== 'meta_official' || !activeThread) return null;
-    const lastInbound = messages
+  // Mostra os indicadores de janela 24h apenas para tenants no Meta oficial.
+  // O calculo e a renderizacao em si vivem no componente WindowCountdown (top).
+  // lastInbound vem da coluna last_inbound_at em threads (populada no persistMessage)
+  // com fallback para o maximo timestamp das mensagens em memoria.
+  const showMeta24hWindow = currentProvider === 'meta_official';
+  const activeThreadLastInbound = useMemo(() => {
+    if (!activeThread) return undefined;
+    if (activeThread.lastInboundAt && activeThread.lastInboundAt > 0) return activeThread.lastInboundAt;
+    // Fallback: scan messages se a coluna ainda nao foi backfilled
+    return messages
       .filter(m => m.sender === 'lead')
       .map(m => new Date(m.timestamp).getTime() || 0)
-      .reduce((max, t) => Math.max(max, t), 0);
-    if (lastInbound === 0) return { state: 'never' as const, hoursLeft: 0 };
-    const hoursSince = (Date.now() - lastInbound) / (1000 * 60 * 60);
-    if (hoursSince >= 24) return { state: 'closed' as const, hoursLeft: 0 };
-    if (hoursSince >= 23) return { state: 'warning' as const, hoursLeft: Math.max(0, 24 - hoursSince) };
-    return null;
-  }, [currentProvider, activeThread, messages]);
+      .reduce((max, t) => Math.max(max, t), 0) || undefined;
+  }, [activeThread, messages]);
 
   // Dedupe O(N) via Set — antes era O(N²) com findIndex a cada render
   const dedupedMessages = useMemo(() => {
@@ -2278,6 +2441,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
               <Bookmark size={14} className="text-primary-500" /> Contexto do Ticket
             </h4>
+            {showMeta24hWindow && (
+              <div className="mb-3">
+                <WindowCountdown
+                  lastInboundAt={activeThreadLastInbound}
+                  variant="panel"
+                  onTemplatesClick={() => {
+                    setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
+                    setTemplatesModalOpen(true);
+                  }}
+                />
+              </div>
+            )}
             <div className="space-y-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
@@ -3415,6 +3590,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                 key={thread.id}
                 thread={thread}
                 active={selectedThreadId === thread.id}
+                showWindow={currentProvider === 'meta_official'}
                 onClick={() => setSelectedThreadId(thread.id)}
                 onDelete={() => handleDeleteThread(thread)}
               />
@@ -3860,41 +4036,15 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             {/* Input Area */}
             {!isSelectionMode && (
             <div className="p-1 md:p-2 border-t border-slate-200 bg-[#f0f2f5] shrink-0 relative">
-              {meta24hWindowState && (
-                <div
-                  className={`mx-2 mb-2 px-3 py-2.5 rounded-xl border text-xs flex items-start gap-2 ${
-                    meta24hWindowState.state === 'closed' || meta24hWindowState.state === 'never'
-                      ? 'bg-red-50 border-red-200 text-red-800'
-                      : 'bg-amber-50 border-amber-200 text-amber-800'
-                  }`}
-                >
-                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-black uppercase tracking-widest text-[10px] mb-0.5">
-                      {meta24hWindowState.state === 'closed'
-                        ? 'Janela de 24h fechada'
-                        : meta24hWindowState.state === 'never'
-                        ? 'Cliente nunca enviou mensagem'
-                        : 'Janela fechando em breve'}
-                    </p>
-                    <p className="text-[11px] leading-snug">
-                      {meta24hWindowState.state === 'warning'
-                        ? `Restam ~${meta24hWindowState.hoursLeft.toFixed(1)}h para enviar mensagens livres. Depois disso só templates aprovados.`
-                        : 'Mensagens livres serão rejeitadas pela Meta. Use um template aprovado.'}
-                    </p>
-                  </div>
-                  {(meta24hWindowState.state === 'closed' || meta24hWindowState.state === 'never') && (
-                    <button
-                      onClick={() => {
-                        setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
-                        setTemplatesModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-white border border-red-300 text-red-700 rounded-lg font-black uppercase tracking-widest text-[10px] hover:bg-red-100 transition-all"
-                    >
-                      Templates
-                    </button>
-                  )}
-                </div>
+              {showMeta24hWindow && (
+                <WindowCountdown
+                  lastInboundAt={activeThreadLastInbound}
+                  variant="banner"
+                  onTemplatesClick={() => {
+                    setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
+                    setTemplatesModalOpen(true);
+                  }}
+                />
               )}
               {replyingTo && (
                 <div className="mx-2 mb-2 bg-white rounded-xl border-l-4 border-primary-500 p-3 shadow-sm flex items-start justify-between animate-in slide-in-from-bottom-2 duration-200">

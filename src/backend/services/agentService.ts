@@ -680,6 +680,15 @@ export class AgentService {
       });
 
       console.log(`[AgentService] ✅ Escrita atômica concluída: ${messageId}`);
+
+      // Atualiza last_inbound_at para o UI calcular janela de 24h do Meta.
+      // Fire-and-forget — cosmetico, nao bloqueia o fluxo principal.
+      if (direction === 'inbound') {
+        void supabase
+          .from('threads')
+          .update({ last_inbound_at: new Date(timestamp).toISOString() })
+          .eq('id', threadId);
+      }
     } catch (err: any) {
       console.error(
         `[AgentService] ❌ FALHA NA ESCRITA ATÔMICA — msgId: ${messageId} | thread: ${threadId} | err:`,
