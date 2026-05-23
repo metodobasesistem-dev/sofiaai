@@ -199,10 +199,11 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
     // 1. PRIMEIRO PERSISTE (Bug 1: Garante ordem e sucesso)
     await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe, quotedId, quotedText, contactJid);
-    
+
     // 2. SÓ DISPARA SE PERSISTIU (ou se for outbound do telefone, não dispara IA)
     if (!fromMe) {
-      await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false);
+      const { data: threadRow } = await supabase.from('threads').select('agent_id').eq('id', threadId).maybeSingle();
+      await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false, undefined, undefined, threadRow?.agent_id ?? null);
     }
 
     // 3. [FOTO] Enfileira sync de foto de perfil via BullMQ (deduplica por threadId, TTL controlado no worker)
@@ -258,13 +259,14 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
 
     // Trigger AI only if inbound
     if (direction === 'inbound') {
+      const { data: threadRow } = await supabase.from('threads').select('agent_id').eq('id', threadId).maybeSingle();
+      const threadAgentId = threadRow?.agent_id ?? null;
       if (type === 'audio' && transcription) {
-        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true);
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, transcription, contactName, cleanPhone, messageId, true, undefined, undefined, threadAgentId);
       } else if (type === 'image' || type === 'video') {
-        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption || (type === 'image' ? '[Imagem]' : '[Vídeo]'), contactName, cleanPhone, messageId, false, mediaUrl, mimeType);
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, caption || (type === 'image' ? '[Imagem]' : '[Vídeo]'), contactName, cleanPhone, messageId, false, mediaUrl, mimeType, threadAgentId);
       } else if (type === 'document') {
-        // BUG FIX: Documents were silently dropped. Now AI is informed.
-        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, `[Documento recebido: ${fileName || 'arquivo'}]`, contactName, cleanPhone, messageId, false);
+        await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, `[Documento recebido: ${fileName || 'arquivo'}]`, contactName, cleanPhone, messageId, false, undefined, undefined, threadAgentId);
       }
     }
   } catch (err) {

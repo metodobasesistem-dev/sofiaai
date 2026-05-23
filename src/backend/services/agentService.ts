@@ -52,18 +52,19 @@ export async function logToDB(userId: string, level: string, module: string, mes
  * AgentService - Unifies the AI Intelligence and Automation logic.
  */
 export class AgentService {
-  async processIncoming(userId: string, incomingData: { 
-    from: string, 
-    body: string, 
-    contactName: string, 
+  async processIncoming(userId: string, incomingData: {
+    from: string,
+    body: string,
+    contactName: string,
     messageId: string,
     displayPhone?: string,
     skipPersist?: boolean,
     isAudioRequest?: boolean,
     mediaUrl?: string,
-    mediaMimeType?: string
+    mediaMimeType?: string,
+    agentId?: string | null
   }): Promise<{ text: string; audioBuffer?: Buffer; voiceMode?: string; aiMsgId?: string } | string | null> {
-    const { from, body, contactName, messageId, displayPhone, skipPersist = false, isAudioRequest = false, mediaUrl, mediaMimeType } = incomingData;
+    const { from, body, contactName, messageId, displayPhone, skipPersist = false, isAudioRequest = false, mediaUrl, mediaMimeType, agentId } = incomingData;
 
     const startTime = Date.now();
     try {
@@ -127,8 +128,12 @@ export class AgentService {
       let agentData: any = null;
       let activeProfessionals: any[] = [];
 
+      const agentQuery = agentId
+        ? supabase.from('agents').select('*').eq('id', agentId).eq('user_id', dbUserId).maybeSingle()
+        : supabase.from('agents').select('*').eq('user_id', dbUserId).eq('status_ativo', true).limit(1).maybeSingle();
+
       const [{ data: agentRes, error: agentError }, { data: profsRes }] = await Promise.all([
-        supabase.from('agents').select('*').eq('user_id', dbUserId).eq('status_ativo', true).limit(1).maybeSingle(),
+        agentQuery,
         supabase.from('professionals').select('*').eq('user_id', dbUserId).eq('is_active', true)
       ]);
       
