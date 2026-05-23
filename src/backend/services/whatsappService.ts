@@ -74,6 +74,11 @@ class WhatsAppService {
 
   private setupWorker(connection: any) {
     this.messageWorker = new Worker('whatsapp-messages', async (job: Job) => {
+      if (job.data?.__healthcheck) {
+        const elapsed = Date.now() - (job.data.ts || 0);
+        console.log(`[BullMQ] 🏥 HEALTHCHECK OK — worker processed job in ${elapsed}ms`);
+        return;
+      }
       console.log(`[BullMQ] Processing message job ${job.id} for ${job.data.from}`);
       await this.processAIResponse(job.data);
     }, {
@@ -89,6 +94,26 @@ class WhatsAppService {
     this.messageWorker.on('failed', (job, err) => {
       console.error(`[BullMQ] Message job ${job?.id} failed:`, err);
     });
+
+    // Inspeciona estado da fila + envia healthcheck para confirmar que o worker
+    // consome jobs delayed. Roda 5s depois do boot, uma vez.
+    setTimeout(async () => {
+      try {
+        const counts = await this.messageQueue.getJobCounts(
+          'waiting', 'active', 'delayed', 'failed', 'completed'
+        );
+        console.log(`[BullMQ] 📊 Queue 'whatsapp-messages' state on boot:`, counts);
+
+        await this.messageQueue.add(
+          'healthcheck',
+          { __healthcheck: true, ts: Date.now() },
+          { delay: 2000, removeOnComplete: true, removeOnFail: true }
+        );
+        console.log('[BullMQ] 🏥 Healthcheck job enqueued (expect HEALTHCHECK OK in ~2s)');
+      } catch (err: any) {
+        console.error('[BullMQ] ❌ Healthcheck enqueue failed:', err?.message || err);
+      }
+    }, 5000);
   }
 
   private setupFollowUpWorker(connection: any) {
