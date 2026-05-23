@@ -203,11 +203,11 @@ export default function App() {
       case 'dashboard':
         return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} plano={plano} />;
       case 'admin_hub':
-        return <AdminPanel key={activeTab} initialView="hub" onTabChange={handleTabChange} />;
+        return <AdminPanel key={activeTab} initialView="hub" onTabChange={handleTabChange} role={role} user={user} />;
       case 'admin':
-        return <AdminPanel key={activeTab} onTabChange={handleTabChange} />;
+        return <AdminPanel key={activeTab} onTabChange={handleTabChange} role={role} user={user} />;
       case 'lead_radar':
-        return <AdminPanel key={activeTab} initialTab="lead_radar" onTabChange={handleTabChange} />;
+        return <AdminPanel key={activeTab} initialTab="lead_radar" onTabChange={handleTabChange} role={role} user={user} />;
       case 'sofia_config':
         return <SofiaConfig />;
       case 'reports':

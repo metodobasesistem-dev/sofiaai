@@ -40,7 +40,8 @@ import {
   Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch, listMetaTemplates, type MetaTemplate } from '../services/supabaseService';
+import { User } from '@supabase/supabase-js';
+import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch, listMetaTemplates, type MetaTemplate, getMetaStatus } from '../services/supabaseService';
 import MetaSetupHelpModal from './MetaSetupHelpModal';
 import WhatsAppDiagnosticModal from './WhatsAppDiagnosticModal';
 import AdminTemplatesTab from './AdminTemplatesTab';
@@ -67,9 +68,11 @@ interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
   initialTab?: AdminTab;
   onTabChange?: (tab: string) => void;
+  role?: string | null;
+  user?: User | null;
 }
 
-export default function AdminPanel({ initialView = 'standard', initialTab, onTabChange }: AdminPanelProps) {
+export default function AdminPanel({ initialView = 'standard', initialTab, onTabChange, role, user }: AdminPanelProps) {
   const [currentView, setCurrentView] = useState<'hub' | 'standard'>(initialView);
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'overview');
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -195,25 +198,39 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [statsData, usersData, settingsData, financeData, activityData] = await Promise.all([
-        getAdminStats(),
-        listAdminUsers(),
-        getGlobalSettings(),
-        getAdminFinanceStats(),
-        getAdminActivity()
-      ]);
+      if (role === 'admin') {
+        const [statsData, usersData, settingsData, financeData, activityData] = await Promise.all([
+          getAdminStats(),
+          listAdminUsers(),
+          getGlobalSettings(),
+          getAdminFinanceStats(),
+          getAdminActivity()
+        ]);
 
-      setStats(statsData);
-      setProfiles(usersData);
-      if (settingsData) setGlobalSettings(settingsData);
-      if (financeData) setFinanceStats(financeData);
-      if (activityData) setActivityData(activityData);
-      await fetchFeatureFlags();
+        setStats(statsData);
+        setProfiles(usersData);
+        if (settingsData) setGlobalSettings(settingsData);
+        if (financeData) setFinanceStats(financeData);
+        if (activityData) setActivityData(activityData);
+        await fetchFeatureFlags();
+      } else {
+        try {
+          const status = await getMetaStatus();
+          if (status && status.success) {
+            setGlobalSettings(prev => ({
+              ...prev,
+              whatsapp_provider: status.provider
+            }));
+          }
+        } catch (err) {
+          console.error('Error fetching meta status:', err);
+        }
+      }
       await fetchCampaigns();
       await fetchLeads();
     } catch (error: any) {
-      console.error('Admin Fetch Error:', error);
-      toast.error('Erro ao carregar dados administrativos.');
+      console.error('Fetch Error:', error);
+      toast.error('Erro ao carregar dados.');
     } finally {
       setIsLoading(false);
     }
@@ -814,19 +831,21 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                <option value={50}>Máximo de 50 leads</option>
                             </select>
                          </div>
+                          {role === 'admin' && (
+  <div className="space-y-2">
+                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Apify API Token</label>
+                             <input
+                               type="password"
+                               autoComplete="new-password"
+                               placeholder="apify_api_..."
+                               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                               value={globalSettings.apify_api_token || ''}
+                               onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
+                               onBlur={handleSaveSettings}
+                             />
+                           </div>
+                          )}
 
-                         <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Apify API Token</label>
-                           <input
-                             type="password"
-                             autoComplete="new-password"
-                             placeholder="apify_api_..."
-                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
-                             value={globalSettings.apify_api_token || ''}
-                             onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
-                             onBlur={handleSaveSettings}
-                           />
-                         </div>
 
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Contexto da Abordagem</label>
@@ -2199,9 +2218,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
              </button>
           )}
           <div>
-             <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest mb-4 border border-slate-200">
-               Restrito: Administrador
-             </div>
+             {activeTab !== 'lead_radar' && (
+               <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest mb-4 border border-slate-200">
+                 Restrito: Administrador
+               </div>
+             )}
              <h1 className="text-4xl font-black text-slate-900 tracking-tight">
                {activeTab === 'lead_radar' ? 'Radar de Leads' : <>Painel do <span className="text-primary-600">Ecossistema</span>.</>}
              </h1>
