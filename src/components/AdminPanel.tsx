@@ -1139,7 +1139,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
                             <th className="px-8 py-5">Perfil</th>
                             <th className="px-8 py-5">WhatsApp</th>
-                            <th className="px-8 py-5">Plano Atual</th>
+                            <th className="px-8 py-5">Plano</th>
+                            <th className="px-8 py-5">Cargo</th>
                             <th className="px-8 py-5 text-center">Consumo</th>
                             <th className="px-8 py-5 text-right">Ações</th>
                          </tr>
@@ -1168,10 +1169,29 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                              </td>
                              <td className="px-8 py-5">
                                 <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                                  user.plano === 'Pro' ? 'bg-primary-50 text-primary-600 border-primary-100' : 'bg-slate-50 text-slate-500 border-slate-100'
+                                  user.plano === 'Elite' ? 'bg-primary-50 text-primary-600 border-primary-100' :
+                                  user.plano === 'Pro' ? 'bg-violet-50 text-violet-600 border-violet-100' :
+                                  'bg-slate-50 text-slate-500 border-slate-100'
                                 }`}>
                                    {user.plano || 'Starter'}
                                 </span>
+                             </td>
+                             <td className="px-8 py-5">
+                                <button
+                                  onClick={() => {
+                                    const normalized = { ...user, role: ((user as any).role === 'admin' ? 'admin' : 'client') as any };
+                                    setSelectedUser(normalized);
+                                    setIsEditModalOpen(true);
+                                  }}
+                                  title="Clique para alterar o cargo"
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all hover:opacity-80 ${
+                                    (user as any).role === 'admin'
+                                      ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                      : 'bg-slate-50 text-slate-500 border-slate-100'
+                                  }`}
+                                >
+                                  {(user as any).role === 'admin' ? 'Admin' : 'Cliente'}
+                                </button>
                              </td>
                              <td className="px-8 py-5 text-center">
                                 <p className="text-sm font-black text-emerald-600">R$ {(financeStats.userCosts[user.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -1193,7 +1213,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                       <RefreshCw size={18} />
                                    </button>
                                    <button 
-                                      onClick={() => { setSelectedUser(user); setIsEditModalOpen(true); }}
+                                      onClick={() => {
+                                        const normalized = { ...user, role: ((user as any).role === 'admin' ? 'admin' : 'client') as any };
+                                        setSelectedUser(normalized);
+                                        setIsEditModalOpen(true);
+                                      }}
                                       className="p-2.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all"
                                       title="Editar"
                                    >

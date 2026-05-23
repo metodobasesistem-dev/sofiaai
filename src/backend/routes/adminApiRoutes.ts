@@ -106,7 +106,7 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
           email: u.email,
           name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Sem nome',
           plano: 'Trial',
-          role: 'user',
+          role: 'client',
           whatsapp_status: 'disconnected',
         }));
       const { data: created } = await supabase.from('profiles').insert(inserts).select();
@@ -758,7 +758,7 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
 // POST /api/v2/admin/leads/autopilot - Iniciar disparos automáticos
 router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const adminId = req.user.id;
+    const adminId = req.userId;
     const { limit = 40, minDelay = 60, maxDelay = 180, templateName, injectVariable } = req.body;
 
     // Verificar se o admin tem provedor conectado
@@ -766,8 +766,8 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
     if (!provider) {
       return res.status(400).json({ success: false, error: 'Nenhuma conexão de WhatsApp ativa encontrada para a Sofia.' });
     }
-    
-    const statusInfo = await provider.getStatus();
+    const instanceName = `wppai_${adminId.substring(0, 8)}`;
+    const statusInfo = await provider.getStatus(instanceName);
     if (statusInfo.status !== 'connected') {
       return res.status(400).json({ success: false, error: 'O WhatsApp da Sofia não está conectado.' });
     }
