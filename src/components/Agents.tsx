@@ -73,11 +73,12 @@ interface AgentCardProps {
   agent: Agent;
   isDefault: boolean;
   onSetDefault: () => void;
+  onDeactivate: () => void;
   onEdit: () => void;
   onDelete: () => Promise<void>;
 }
 
-const AgentCard: React.FC<AgentCardProps> = ({ agent, isDefault, onSetDefault, onEdit, onDelete }) => {
+const AgentCard: React.FC<AgentCardProps> = ({ agent, isDefault, onSetDefault, onDeactivate, onEdit, onDelete }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -137,6 +138,14 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isDefault, onSetDefault, o
                         className="w-full flex items-center gap-2 px-4 py-3 text-sm text-primary-600 hover:bg-primary-50 transition-colors border-t border-gray-100"
                       >
                         <Sparkles size={15} /> Definir como padrão
+                      </button>
+                    )}
+                    {isDefault && (
+                      <button
+                        onClick={() => { setMenuOpen(false); onDeactivate(); }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-amber-600 hover:bg-amber-50 transition-colors border-t border-gray-100"
+                      >
+                        <AlertCircle size={15} /> Desativar agente
                       </button>
                     )}
                     <button
@@ -212,10 +221,16 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isDefault, onSetDefault, o
         )}
 
         {isDefault && (
-          <span className="flex items-center gap-1.5 px-4 py-2 bg-primary-50 text-primary-600 rounded-lg text-sm font-bold border border-primary-100">
-            <Check size={14} />
-            Padrão Ativo
-          </span>
+          <button
+            onClick={onDeactivate}
+            title="Clique para desativar este agente"
+            className="group flex items-center gap-1.5 px-4 py-2 bg-primary-50 text-primary-600 rounded-lg text-sm font-bold border border-primary-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all"
+          >
+            <Check size={14} className="group-hover:hidden" />
+            <AlertCircle size={14} className="hidden group-hover:block" />
+            <span className="group-hover:hidden">Padrão Ativo</span>
+            <span className="hidden group-hover:block">Desativar</span>
+          </button>
         )}
       </div>
     </motion.div>
@@ -749,18 +764,26 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
 
   const handleToggle = async (agentId: string, currentStatus: boolean) => {
     try {
-      // Otimista: atualiza UI na hora
-      setAgents(prev => prev.map(a => 
-        a.id === agentId 
-          ? { ...a, status_ativo: !currentStatus } 
-          : currentStatus ? a : { ...a, status_ativo: false }
-      ));
-      await toggleAgentStatus(agentId, currentStatus);
+      if (!currentStatus) {
+        // Ativando: desativa todos os outros otimisticamente
+        setAgents(prev => prev.map(a => ({
+          ...a,
+          status_ativo: a.id === agentId
+        })));
+        await toggleAgentStatus(agentId, false);
+        toast.success('✨ Agente padrão definido com sucesso!');
+      } else {
+        // Desativando: apenas desativa este
+        setAgents(prev => prev.map(a =>
+          a.id === agentId ? { ...a, status_ativo: false } : a
+        ));
+        await toggleAgentStatus(agentId, true);
+        toast.success('Agente desativado. Nenhum agente ativo no momento.');
+      }
     } catch (error: any) {
       console.error('Failed to toggle status:', error);
       toast.error('Erro ao alterar status: ' + (error.message || ''));
-      // Reverter em caso de erro
-      fetchAgents();
+      fetchAgents(); // Reverter
     }
   };
 
@@ -1050,7 +1073,8 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                   key={agent.id}
                   agent={agent}
                   isDefault={!!agent.status_ativo}
-                  onSetDefault={() => handleToggle(agent.id!, agent.status_ativo)}
+                  onSetDefault={() => handleToggle(agent.id!, false)}
+                  onDeactivate={() => handleToggle(agent.id!, true)}
                   onEdit={() => handleEdit(agent)}
                   onDelete={() => handleDelete(agent.id!)}
                 />
