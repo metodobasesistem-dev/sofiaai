@@ -26,7 +26,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
           .from('contacts')
           .select('*')
           .eq('user_id', userId)
-          .order('updated_at', { ascending: false });
+          .order('ultima_interacao', { ascending: false, nullsFirst: false });
 
         if (error) throw error;
         return data || [];
