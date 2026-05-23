@@ -653,14 +653,55 @@ router.get('/dashboard/growth', async (req: AuthenticatedRequest, res: Response)
 
 // ─── LEAD RADAR (CAPTAÇÃO) ──────────────────────────────────────────────────
 
-// GET /api/v2/admin/leads - Listar leads capturados
-router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
+// GET /api/v2/admin/campaigns - Listar campanhas do radar
+router.get('/campaigns', async (_req: AuthenticatedRequest, res: Response) => {
   try {
     const { data, error } = await supabase
-      .from('leads_radar')
+      .from('lead_campaigns')
       .select('*')
       .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
+// PATCH /api/v2/admin/campaigns/:id - Renomear / arquivar campanha
+router.patch('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { name, status } = req.body;
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (name !== undefined) payload.name = name;
+    if (status !== undefined) payload.status = status;
+    const { error } = await supabase.from('lead_campaigns').update(payload).eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/v2/admin/campaigns/:id - Deletar campanha e seus leads
+router.delete('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Deleta leads da campanha primeiro
+    await supabase.from('leads_radar').delete().eq('campaign_id', req.params.id);
+    const { error } = await supabase.from('lead_campaigns').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/v2/admin/leads - Listar leads capturados (opcionalmente por campanha)
+router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaign_id } = req.query as any;
+    let query = supabase.from('leads_radar').select('*').order('created_at', { ascending: false });
+    if (campaign_id) query = query.eq('campaign_id', campaign_id);
+    const { data, error } = await query;
     if (error) throw error;
     res.json({ success: true, data });
   } catch (err: any) {
@@ -670,9 +711,9 @@ router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
 
 // Função interna de varredura — executada em background após resposta ao cliente
 async function runLeadScanBackground(params: {
-  niche: string; city: string; zip?: string; limit: number; context: string; apifyToken: string;
+  niche: string; city: string; zip?: string; limit: number; context: string; apifyToken: string; campaignId: string;
 }) {
-  const { niche, city, zip, limit, context, apifyToken } = params;
+  const { niche, city, zip, limit, context, apifyToken, campaignId } = params;
   const query = `${niche} em ${city} ${zip || ''}`.trim();
   console.log(`[LeadRadar][BG] Iniciando busca Apify: "${query}" com meta de ${limit} leads.`);
 
@@ -731,7 +772,8 @@ async function runLeadScanBackground(params: {
         personalized_message: personalizedMessage, instagram, email,
         pain_score, opportunity_score,
         place_id: place.placeId || place.id || Date.now().toString(),
-        niche, city, status: 'novo'
+        niche, city, status: 'novo',
+        campaign_id: campaignId || null
       }, { onConflict: 'place_id' })
       .select().single();
 
@@ -749,14 +791,23 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
     // 1. Obter Apify API Token das configurações
     const { data: settings } = await supabase.from('global_settings').select('apify_api_token').single();
     const apifyToken = settings?.apify_api_token;
-
     if (!apifyToken) return res.status(400).json({ success: false, error: 'Apify API Token não configurado' });
 
-    // Responde imediatamente — o scraping roda em background para evitar timeout do proxy
-    res.json({ success: true, scanning: true, message: 'Busca iniciada. Acompanhe os leads aparecendo em breve.' });
+    // 2. Cria campanha antes de responder para retornar o campaign_id ao cliente
+    const now = new Date();
+    const campaignName = `${niche} • ${city} • ${now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
+    const { data: campaign, error: campErr } = await supabase
+      .from('lead_campaigns')
+      .insert({ name: campaignName, niche, city, context, user_id: req.userId })
+      .select()
+      .single();
+    if (campErr) throw campErr;
+
+    // Responde imediatamente com o campaign_id para o frontend já selecionar a campanha
+    res.json({ success: true, scanning: true, campaign_id: campaign.id, campaign_name: campaign.name, message: 'Busca iniciada.' });
 
     // Dispara o processamento sem bloquear a resposta
-    runLeadScanBackground({ niche, city, zip, limit, context, apifyToken })
+    runLeadScanBackground({ niche, city, zip, limit, context, apifyToken, campaignId: campaign.id })
       .catch(err => console.error('[LeadRadar] Erro background scan:', err.message));
   } catch (err: any) {
     console.error('[LeadRadar] Erro geral:', err.response?.data || err.message);

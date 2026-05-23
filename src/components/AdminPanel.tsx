@@ -77,6 +77,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [radarLimit, setRadarLimit] = useState(10);
   const [radarLeads, setRadarLeads] = useState<any[]>([]);
   const [radarStatusFilter, setRadarStatusFilter] = useState<string>('todos');
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [campaignEditingId, setCampaignEditingId] = useState<string | null>(null);
+  const [campaignEditingName, setCampaignEditingName] = useState('');
+  const [radarSearchOpen, setRadarSearchOpen] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -176,6 +181,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       if (financeData) setFinanceStats(financeData);
       if (activityData) setActivityData(activityData);
       await fetchFeatureFlags();
+      await fetchCampaigns();
       await fetchLeads();
     } catch (error: any) {
       console.error('Admin Fetch Error:', error);
@@ -185,25 +191,62 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
-  const fetchLeads = async () => {
+  const fetchCampaigns = async () => {
     try {
-      const response = await standardFetch('/api/v2/admin/leads');
+      const r = await standardFetch('/api/v2/admin/campaigns');
+      const res = await r.json();
+      if (res.success) setCampaigns(res.data || []);
+    } catch (err) { console.error('Error fetching campaigns:', err); }
+  };
+
+  const fetchLeads = async (campaignId?: string | null) => {
+    try {
+      const cid = campaignId !== undefined ? campaignId : selectedCampaignId;
+      const url = cid ? `/api/v2/admin/leads?campaign_id=${cid}` : '/api/v2/admin/leads';
+      const response = await standardFetch(url);
       const res = await response.json();
       if (res.success) setRadarLeads(res.data);
-    } catch (err) {
-      console.error('Error fetching leads:', err);
-    }
+    } catch (err) { console.error('Error fetching leads:', err); }
+  };
+
+  const selectCampaign = async (id: string | null) => {
+    setSelectedCampaignId(id);
+    setRadarStatusFilter('todos');
+    await fetchLeads(id);
+  };
+
+  const deleteCampaign = async (id: string) => {
+    if (!window.confirm('Deletar campanha e todos os seus leads? Esta ação não pode ser desfeita.')) return;
+    try {
+      const r = await standardFetch(`/api/v2/admin/campaigns/${id}`, { method: 'DELETE' });
+      const res = await r.json();
+      if (res.success) {
+        toast.success('Campanha deletada');
+        if (selectedCampaignId === id) { setSelectedCampaignId(null); setRadarLeads([]); }
+        fetchCampaigns();
+      }
+    } catch { toast.error('Erro ao deletar campanha'); }
+  };
+
+  const saveCampaignName = async (id: string) => {
+    if (!campaignEditingName.trim()) return;
+    try {
+      const r = await standardFetch(`/api/v2/admin/campaigns/${id}`, {
+        method: 'PATCH', body: JSON.stringify({ name: campaignEditingName.trim() })
+      });
+      const res = await r.json();
+      if (res.success) { fetchCampaigns(); setCampaignEditingId(null); }
+    } catch { toast.error('Erro ao renomear'); }
   };
 
   const startScan = async () => {
     if (!radarNiche || !radarCity) return toast.error('Nicho e Cidade são obrigatórios');
 
-    const countBefore = radarLeads.length;
     setIsScanning(true);
     setScanLeadsFound(0);
-
-    // Limpa polling anterior se existir
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    let newCampaignId: string | null = null;
 
     try {
       const response = await standardFetch('/api/v2/admin/leads/scan', {
@@ -211,38 +254,38 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
       }, 15000);
       const res = await response.json();
-      if (!res.success) {
-        toast.error(res.error || 'Erro ao iniciar busca');
-        setIsScanning(false);
-        return;
+      if (!res.success) { toast.error(res.error || 'Erro ao iniciar busca'); setIsScanning(false); return; }
+      // Backend agora retorna o campaign_id criado — auto-seleciona
+      if (res.campaign_id) {
+        newCampaignId = res.campaign_id;
+        setSelectedCampaignId(res.campaign_id);
+        setRadarStatusFilter('todos');
+        setRadarLeads([]);
+        fetchCampaigns();
+        toast(`📁 Campanha "${res.campaign_name}" criada. Buscando leads...`);
       }
-    } catch {
-      // Timeout ou erro de rede — backend ainda pode estar rodando, continua o polling
-    }
+    } catch { /* Timeout ou rede — backend pode estar rodando */ }
 
-    // Polling: verifica a cada 8s se novos leads apareceram (máx 4 min)
+    // Polling: verifica a cada 8s se novos leads da campanha apareceram (máx 4 min)
     let attempts = 0;
-    const maxAttempts = 30;
-
     pollIntervalRef.current = setInterval(async () => {
       attempts++;
       try {
-        const r = await standardFetch('/api/v2/admin/leads');
+        const cid = newCampaignId || selectedCampaignId;
+        const url = cid ? `/api/v2/admin/leads?campaign_id=${cid}` : '/api/v2/admin/leads';
+        const r = await standardFetch(url);
         const data = await r.json();
         if (data.success) {
           const newLeads: any[] = data.data || [];
-          setScanLeadsFound(Math.max(0, newLeads.length - countBefore));
+          setScanLeadsFound(newLeads.length);
           setRadarLeads(newLeads);
-
-          if (newLeads.length > countBefore || attempts >= maxAttempts) {
+          if (newLeads.length > 0 || attempts >= 30) {
             clearInterval(pollIntervalRef.current!);
             pollIntervalRef.current = null;
             setIsScanning(false);
-            if (newLeads.length > countBefore) {
-              toast.success(`✅ ${newLeads.length - countBefore} novos leads encontrados!`);
-            } else {
-              toast(`Busca finalizada. Nenhum lead novo desta vez.`);
-            }
+            fetchCampaigns();
+            if (newLeads.length > 0) toast.success(`✅ ${newLeads.length} leads encontrados!`);
+            else toast('Busca finalizada. Nenhum lead novo desta vez.');
           }
         }
       } catch { /* ignora erros de rede no polling */ }
@@ -519,26 +562,82 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         );
       case 'lead_radar':
         return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                {/* Search Sidebar */}
-                <div className="lg:col-span-1 space-y-6">
-                   <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
-                      <div className="flex items-center gap-3 mb-6">
-                         <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
-                            <Search size={20} />
-                         </div>
-                         <h3 className="text-lg font-black text-slate-900">Nova Busca</h3>
-                      </div>
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-                      <div className="space-y-4">
+                {/* ── COLUNA ESQUERDA: Campanhas + Nova Busca ── */}
+                <div className="lg:col-span-1 space-y-4">
+
+                  {/* Lista de Campanhas */}
+                  <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between">
+                      <h3 className="text-sm font-black text-slate-900">Campanhas</h3>
+                      <span className="px-2 py-0.5 bg-primary-50 text-primary-600 rounded-lg text-[9px] font-black">{campaigns.length}</span>
+                    </div>
+                    <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
+                      {campaigns.length === 0 && (
+                        <p className="px-6 py-8 text-center text-[11px] text-slate-400 font-medium">Nenhuma campanha ainda.<br/>Inicie uma busca abaixo.</p>
+                      )}
+                      {campaigns.map(c => (
+                        <div
+                          key={c.id}
+                          onClick={() => selectCampaign(c.id)}
+                          className={`px-5 py-3.5 cursor-pointer transition-all flex items-center justify-between gap-2 group ${selectedCampaignId === c.id ? 'bg-primary-50' : 'hover:bg-slate-50'}`}
+                        >
+                          {campaignEditingId === c.id ? (
+                            <input
+                              autoFocus
+                              className="flex-1 text-xs font-bold bg-white border border-primary-300 rounded-lg px-2 py-1 outline-none"
+                              value={campaignEditingName}
+                              onChange={e => setCampaignEditingName(e.target.value)}
+                              onBlur={() => saveCampaignName(c.id)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveCampaignName(c.id); if (e.key === 'Escape') setCampaignEditingId(null); }}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          ) : (
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-[11px] font-black truncate ${selectedCampaignId === c.id ? 'text-primary-700' : 'text-slate-700'}`}>{c.name}</p>
+                              <p className="text-[9px] text-slate-400 font-medium">{c.leads_count} leads</p>
+                            </div>
+                          )}
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => { setCampaignEditingId(c.id); setCampaignEditingName(c.name); }}
+                              className="p-1 text-slate-300 hover:text-primary-500 rounded-md"
+                              title="Renomear"
+                            ><Settings size={11} /></button>
+                            <button
+                              onClick={() => deleteCampaign(c.id)}
+                              className="p-1 text-slate-300 hover:text-red-500 rounded-md"
+                              title="Deletar"
+                            ><Trash2 size={11} /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Nova Busca (colapsável) */}
+                  <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => setRadarSearchOpen(v => !v)}
+                      className="w-full px-6 py-5 flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center"><Search size={15} /></div>
+                        <h3 className="text-sm font-black text-slate-900">Nova Busca</h3>
+                      </div>
+                      <ChevronRight size={16} className={`text-slate-400 transition-transform ${radarSearchOpen ? 'rotate-90' : ''}`} />
+                    </button>
+
+                    {radarSearchOpen && <div className="px-6 pb-6 space-y-4 border-t border-slate-50 pt-4">
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nicho / Categoria</label>
                             <input
                               type="text"
                               autoComplete="off"
                               placeholder="Ex: Clínicas, Dentistas..."
-                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                               value={radarNiche}
                               onChange={(e) => setRadarNiche(e.target.value)}
                             />
@@ -549,7 +648,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                               type="text"
                               autoComplete="off"
                               placeholder="Ex: Rio de Janeiro"
-                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                               value={radarCity}
                               onChange={(e) => setRadarCity(e.target.value)}
                             />
@@ -558,7 +657,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Limite de Resultados</label>
                             <select
-                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all appearance-none"
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all appearance-none"
                               value={radarLimit}
                               onChange={(e) => setRadarLimit(Number(e.target.value))}
                             >
@@ -575,7 +674,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                              type="password"
                              autoComplete="new-password"
                              placeholder="apify_api_..."
-                             className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                              value={globalSettings.apify_api_token || ''}
                              onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
                              onBlur={handleSaveSettings}
@@ -583,53 +682,50 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          </div>
 
                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Contexto da Abordagem (Opcional)</label>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Contexto da Abordagem</label>
                             <textarea
                               autoComplete="off"
-                              placeholder="Ex: Focar na dor de quem atende muito convênio e quer atrair consultas particulares."
-                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all resize-none h-24"
+                              placeholder="Ex: Focar na dor de quem atende muito convênio..."
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all resize-none h-20"
                               value={radarContext}
                               onChange={(e) => setRadarContext(e.target.value)}
                             />
                          </div>
-                         
-                         <div className="space-y-3">
-                           <button 
+
+                         <div className="space-y-2">
+                           <button
                              onClick={startScan}
                              disabled={isScanning || isAutopilotRunning}
-                             className="w-full py-4 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
+                             className="w-full py-3.5 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
                            >
-                              {isScanning ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />}
+                              {isScanning ? <RefreshCw size={15} className="animate-spin" /> : <Zap size={15} />}
                               {isScanning ? 'Varrendo...' : 'Iniciar Radar'}
                            </button>
 
-                           <button 
+                           <button
                              onClick={() => setIsAutopilotModalOpen(true)}
                              disabled={isScanning || isAutopilotRunning}
-                             className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2"
+                             className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                            >
-                              {isAutopilotRunning ? <RefreshCw size={16} className="animate-spin text-green-400" /> : <Rocket size={16} className="text-green-400" />}
-                              {isAutopilotRunning ? 'Iniciando Piloto...' : 'Disparar Piloto Automático'}
+                              {isAutopilotRunning ? <RefreshCw size={15} className="animate-spin text-green-400" /> : <Rocket size={15} className="text-green-400" />}
+                              {isAutopilotRunning ? 'Iniciando...' : 'Piloto Automático'}
                            </button>
                          </div>
-                      </div>
-                      
-                      <div className="mt-8 pt-8 border-t border-slate-50">
-                         <p className="text-[10px] text-slate-400 font-bold leading-relaxed">
-                            O Radar usa IA para filtrar estabelecimentos com WhatsApp válido e resumir o feedback dos clientes.
-                         </p>
-                      </div>
-                   </div>
+                    </div>}
+                  </div>
                 </div>
 
-                {/* Results Table */}
-                <div className="lg:col-span-3 space-y-6">
-                   <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[600px]">
+                {/* ── COLUNA DIREITA: Leads da Campanha Selecionada ── */}
+                <div className="lg:col-span-3 space-y-4">
+                   <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[600px]">
                       {/* Header */}
-                      <div className="p-8 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4">
+                      <div className="p-6 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4">
                          <div>
-                            <h2 className="text-2xl font-black text-slate-900">Leads Capturados</h2>
-                            <p className="text-sm text-slate-500">Controle a prospecção dos leads qualificados.</p>
+                            {selectedCampaignId
+                              ? <h2 className="text-xl font-black text-slate-900">{campaigns.find(c => c.id === selectedCampaignId)?.name || 'Campanha'}</h2>
+                              : <h2 className="text-xl font-black text-slate-900">Todos os Leads</h2>
+                            }
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">{selectedCampaignId ? 'Leads desta campanha' : 'Selecione uma campanha ou inicie uma busca'}</p>
                          </div>
                          <div className="flex items-center gap-2">
                             <span className="px-3 py-1 bg-primary-50 text-primary-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
@@ -836,7 +932,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                     <td colSpan={6} className="px-8 py-20 text-center">
                                        <div className="flex flex-col items-center gap-4 opacity-30">
                                           <Search size={48} />
-                                          <p className="text-sm font-bold uppercase tracking-widest">Nenhum lead no radar. Inicie uma busca!</p>
+                                          <p className="text-sm font-bold uppercase tracking-widest">
+                                            {selectedCampaignId ? 'Nenhum lead nessa campanha ainda.' : 'Selecione uma campanha ou inicie uma nova busca.'}
+                                          </p>
                                        </div>
                                     </td>
                                  </tr>
