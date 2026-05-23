@@ -82,6 +82,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [campaignEditingId, setCampaignEditingId] = useState<string | null>(null);
   const [campaignEditingName, setCampaignEditingName] = useState('');
   const [radarSearchOpen, setRadarSearchOpen] = useState(true);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [isBulkActing, setIsBulkActing] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -212,7 +214,60 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const selectCampaign = async (id: string | null) => {
     setSelectedCampaignId(id);
     setRadarStatusFilter('todos');
+    setSelectedLeadIds(new Set());
     await fetchLeads(id);
+  };
+
+  const toggleLeadSelection = (id: string) => {
+    setSelectedLeadIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (visibleIds: string[]) => {
+    setSelectedLeadIds(prev =>
+      prev.size === visibleIds.length ? new Set() : new Set(visibleIds)
+    );
+  };
+
+  const bulkUpdateStatus = async (status: string) => {
+    const ids = [...selectedLeadIds];
+    if (!ids.length) return;
+    setIsBulkActing(true);
+    try {
+      const r = await standardFetch('/api/v2/admin/leads/bulk-status', {
+        method: 'POST', body: JSON.stringify({ ids, status })
+      });
+      const res = await r.json();
+      if (res.success) {
+        toast.success(`${res.updated} leads marcados como "${status}"`);
+        setSelectedLeadIds(new Set());
+        await fetchLeads();
+      } else toast.error(res.error);
+    } catch { toast.error('Erro ao atualizar status'); }
+    finally { setIsBulkActing(false); }
+  };
+
+  const bulkDeleteLeads = async () => {
+    const ids = [...selectedLeadIds];
+    if (!ids.length) return;
+    if (!window.confirm(`Deletar ${ids.length} leads selecionados?`)) return;
+    setIsBulkActing(true);
+    try {
+      const r = await standardFetch('/api/v2/admin/leads/bulk-delete', {
+        method: 'DELETE', body: JSON.stringify({ ids })
+      });
+      const res = await r.json();
+      if (res.success) {
+        toast.success(`${res.deleted} leads removidos`);
+        setSelectedLeadIds(new Set());
+        fetchCampaigns();
+        await fetchLeads();
+      } else toast.error(res.error);
+    } catch { toast.error('Erro ao deletar leads'); }
+    finally { setIsBulkActing(false); }
   };
 
   const deleteCampaign = async (id: string) => {
@@ -767,17 +822,69 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                         })}
                       </div>
 
+                      {/* ── Barra de Ações em Massa ── */}
+                      {selectedLeadIds.size > 0 && (
+                        <div className="px-6 py-3 bg-primary-50 border-b border-primary-100 flex items-center gap-3 flex-wrap">
+                          <span className="text-xs font-black text-primary-700">{selectedLeadIds.size} selecionado{selectedLeadIds.size > 1 ? 's' : ''}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {['qualificado', 'contatado', 'descartado', 'novo'].map(s => (
+                              <button
+                                key={s}
+                                onClick={() => bulkUpdateStatus(s)}
+                                disabled={isBulkActing}
+                                className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all disabled:opacity-50 ${
+                                  s === 'qualificado' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' :
+                                  s === 'contatado'   ? 'bg-primary-50 text-primary-600 border-primary-200 hover:bg-primary-100' :
+                                  s === 'descartado'  ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100' :
+                                  'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                → {s}
+                              </button>
+                            ))}
+                            <div className="w-px h-4 bg-primary-200" />
+                            <button
+                              onClick={bulkDeleteLeads}
+                              disabled={isBulkActing}
+                              className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-all disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <Trash2 size={11} /> Deletar
+                            </button>
+                            <button
+                              onClick={() => setSelectedLeadIds(new Set())}
+                              className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="overflow-x-auto">
                          <table className="w-full text-left">
                             <thead>
-                              <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                                  <th className="px-6 py-4">Estabelecimento</th>
-                                  <th className="px-6 py-4">Contato & Rating</th>
-                                  <th className="px-6 py-4 text-center">Score</th>
-                                  <th className="px-6 py-4">Abordagem IA</th>
-                                  <th className="px-6 py-4">Status</th>
-                                  <th className="px-6 py-4 text-right">Ações</th>
-                               </tr>
+                              {(() => {
+                                const visibleLeads = radarStatusFilter === 'todos' ? radarLeads : radarLeads.filter(l => l.status === radarStatusFilter);
+                                const allSelected = visibleLeads.length > 0 && selectedLeadIds.size === visibleLeads.length;
+                                return (
+                                <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                                  <th className="px-4 py-4 w-10">
+                                    <input
+                                      type="checkbox"
+                                      checked={allSelected}
+                                      onChange={() => toggleSelectAll(visibleLeads.map(l => l.id))}
+                                      className="w-4 h-4 rounded accent-primary-600 cursor-pointer"
+                                    />
+                                  </th>
+                                  <th className="px-4 py-4">Estabelecimento</th>
+                                  <th className="px-4 py-4">Contato & Rating</th>
+                                  <th className="px-4 py-4 text-center">Score</th>
+                                  <th className="px-4 py-4">Abordagem IA</th>
+                                  <th className="px-4 py-4">Status</th>
+                                  <th className="px-4 py-4 text-right">Ações</th>
+                                </tr>
+                                );
+                              })()}
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                {(radarStatusFilter === 'todos' ? radarLeads : radarLeads.filter(l => l.status === radarStatusFilter)).map((lead) => {
@@ -786,11 +893,21 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                  const painScore = lead.pain_score || 0;
                                  const oppScore = lead.opportunity_score || 0;
                                  const isHot = painScore >= 3 && oppScore >= 2;
+                                 const isSelected = selectedLeadIds.has(lead.id);
                                  return (
-                                 <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
+                                 <tr key={lead.id} className={`hover:bg-slate-50/50 transition-colors group ${isSelected ? 'bg-primary-50/40' : ''}`}>
+                                   {/* Checkbox */}
+                                   <td className="px-4 py-4 w-10" onClick={e => e.stopPropagation()}>
+                                     <input
+                                       type="checkbox"
+                                       checked={isSelected}
+                                       onChange={() => toggleLeadSelection(lead.id)}
+                                       className="w-4 h-4 rounded accent-primary-600 cursor-pointer"
+                                     />
+                                   </td>
                                    {/* Estabelecimento */}
-                                   <td className="px-6 py-4">
-                                      <div className="flex flex-col gap-1 max-w-[220px]">
+                                   <td className="px-4 py-4">
+                                      <div className="flex flex-col gap-1 max-w-[200px]">
                                          <div className="flex items-start gap-1.5">
                                            <span className="text-sm font-black text-slate-900 leading-tight">{lead.name}</span>
                                            {isHot && <span className="text-base leading-none mt-0.5" title="Hot Lead">🔥</span>}
@@ -815,7 +932,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                    </td>
 
                                    {/* Contato & Rating */}
-                                   <td className="px-6 py-4">
+                                   <td className="px-4 py-4">
                                       <div className="flex flex-col gap-1.5">
                                          <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-slate-700 hover:text-[#25D366] transition-colors flex items-center gap-1">
                                            <Smartphone size={10} /> {lead.phone || 'Sem Telefone'}
@@ -836,7 +953,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                    </td>
 
                                    {/* Score visual */}
-                                   <td className="px-6 py-4">
+                                   <td className="px-4 py-4">
                                       <div className="flex flex-col gap-2 items-center min-w-[90px]">
                                          <div className="w-full">
                                            <div className="flex justify-between mb-1">
@@ -864,7 +981,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                    </td>
 
                                    {/* Abordagem IA */}
-                                   <td className="px-6 py-4">
+                                   <td className="px-4 py-4">
                                       <div className="max-w-[240px] flex flex-col gap-2">
                                          <p className="text-[10px] text-slate-500 font-medium italic line-clamp-2">
                                             {lead.review_summary || 'Resumo indisponível'}
@@ -896,7 +1013,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                    </td>
 
                                    {/* Status */}
-                                   <td className="px-6 py-4">
+                                   <td className="px-4 py-4">
                                       <select
                                         className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border outline-none cursor-pointer ${
                                           lead.status === 'qualificado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
@@ -915,7 +1032,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                    </td>
 
                                    {/* Ações */}
-                                   <td className="px-6 py-4 text-right">
+                                   <td className="px-4 py-4 text-right">
                                       <button
                                          onClick={() => deleteLead(lead.id)}
                                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
@@ -929,7 +1046,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                })}
                                {radarLeads.length === 0 && (
                                  <tr>
-                                    <td colSpan={6} className="px-8 py-20 text-center">
+                                    <td colSpan={7} className="px-8 py-20 text-center">
                                        <div className="flex flex-col items-center gap-4 opacity-30">
                                           <Search size={48} />
                                           <p className="text-sm font-bold uppercase tracking-widest">
@@ -941,7 +1058,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                )}
                                {radarLeads.length > 0 && (radarStatusFilter === 'todos' ? radarLeads : radarLeads.filter(l => l.status === radarStatusFilter)).length === 0 && (
                                  <tr>
-                                    <td colSpan={6} className="px-8 py-16 text-center">
+                                    <td colSpan={7} className="px-8 py-16 text-center">
                                        <div className="flex flex-col items-center gap-3 opacity-40">
                                           <Search size={32} />
                                           <p className="text-sm font-bold uppercase tracking-widest">Nenhum lead com status "{radarStatusFilter}"</p>

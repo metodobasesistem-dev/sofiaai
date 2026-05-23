@@ -928,16 +928,40 @@ router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// DELETE /api/v2/admin/leads/:id - Remover lead
+// DELETE /api/v2/admin/leads/:id - Remover lead individual
 router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { error } = await supabase
-      .from('leads_radar')
-      .delete()
-      .eq('id', req.params.id);
-
+    const { error } = await supabase.from('leads_radar').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v2/admin/leads/bulk-status - Atualizar status de múltiplos leads
+router.post('/leads/bulk-status', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { ids, status } = req.body as { ids: string[]; status: string };
+    if (!ids?.length || !status) return res.status(400).json({ success: false, error: 'ids e status são obrigatórios' });
+    const validStatuses = ['novo', 'qualificado', 'contatado', 'descartado'];
+    if (!validStatuses.includes(status)) return res.status(400).json({ success: false, error: 'Status inválido' });
+    const { error } = await supabase.from('leads_radar').update({ status, updated_at: new Date().toISOString() }).in('id', ids);
+    if (error) throw error;
+    res.json({ success: true, updated: ids.length });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/v2/admin/leads/bulk-delete - Remover múltiplos leads
+router.delete('/leads/bulk-delete', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!ids?.length) return res.status(400).json({ success: false, error: 'ids é obrigatório' });
+    const { error } = await supabase.from('leads_radar').delete().in('id', ids);
+    if (error) throw error;
+    res.json({ success: true, deleted: ids.length });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
