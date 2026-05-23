@@ -273,10 +273,35 @@ async function handleMetaStatuses(userId: string, statuses: any[]): Promise<void
     deleted: 'deleted',
   };
 
+  // Hierarquia de progressao normal. Eventos do Meta chegam assincronos e
+  // podem vir fora de ordem (ex: 'delivered' depois de 'read'). Sem essa
+  // protecao o status regrediria no banco e o tick azul sumiria do UI.
+  const RANK: Record<string, number> = { sent: 1, delivered: 2, read: 3 };
+
   for (const s of statuses) {
     const msgId = s.id;
     const mapped = statusMap[s.status];
     if (!msgId || !mapped) continue;
+
+    // failed e deleted sao terminais — sempre aplicam
+    const isTerminal = mapped === 'failed' || mapped === 'deleted';
+
+    if (!isTerminal) {
+      const { data: current } = await supabase
+        .from('messages')
+        .select('status')
+        .eq('whatsapp_id', msgId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const currentRank = RANK[current?.status as string] || 0;
+      const newRank = RANK[mapped] || 0;
+
+      if (newRank <= currentRank) {
+        console.log(`[MetaWebhook] ⏭️ Ignored regressive status: ${msgId} ${current?.status} → ${mapped}`);
+        continue;
+      }
+    }
 
     console.log(`[MetaWebhook] 📬 Status: ${msgId} → ${mapped}`);
 

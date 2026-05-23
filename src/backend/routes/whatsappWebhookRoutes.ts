@@ -314,6 +314,24 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       const mappedStatus = statusMap[rawStatus];
       if (!mappedStatus) continue;
 
+      // Hierarquia de progressao — eventos podem chegar fora de ordem.
+      // pending=0, sent=1, delivered=2, read=3. Nunca regredir.
+      const RANK: Record<string, number> = { pending: 0, sent: 1, delivered: 2, read: 3 };
+      const { data: current } = await supabase
+        .from('messages')
+        .select('status')
+        .eq('whatsapp_id', msgId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const currentRank = RANK[current?.status as string] ?? -1;
+      const newRank = RANK[mappedStatus] ?? -1;
+
+      if (newRank <= currentRank) {
+        console.log(`[Webhook] ⏭️ Ignored regressive status: ${msgId} ${current?.status} → ${mappedStatus}`);
+        continue;
+      }
+
       console.log(`[Webhook] 📬 Status update: ${msgId} → ${mappedStatus}`);
 
       await supabase
