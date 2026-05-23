@@ -112,9 +112,11 @@ class WhatsAppService {
       console.error(`[BullMQ] Message job ${job?.id} failed:`, err);
     });
 
-    // Inspeciona estado da fila + envia healthcheck para confirmar que o worker
-    // consome jobs delayed. Tambem limpa jobs failed antigos (>1h) que poderiam
-    // bloquear novos enqueues por deduplicacao de jobId.
+    // Inspeciona estado + envia 2 healthchecks para distinguir o ponto de falha:
+    //   A) immediate (sem delay) → testa o consumo basico do worker
+    //   B) delayed 2s            → testa o scheduler interno (delayed -> waiting)
+    // Se A funciona e B nao, o bug esta no scheduler do BullMQ e a solucao
+    // eh mover o delay para setTimeout no Node em vez de usar delay do BullMQ.
     setTimeout(async () => {
       try {
         const counts = await this.messageQueue.getJobCounts(
@@ -128,15 +130,32 @@ class WhatsAppService {
         }
 
         await this.messageQueue.add(
-          'healthcheck',
-          { __healthcheck: true, ts: Date.now() },
+          'healthcheck-immediate',
+          { __healthcheck: true, kind: 'immediate', ts: Date.now() },
+          { removeOnComplete: true, removeOnFail: true }
+        );
+        console.log('[BullMQ] 🏥 Healthcheck IMMEDIATE enqueued (expect OK <500ms)');
+
+        await this.messageQueue.add(
+          'healthcheck-delayed',
+          { __healthcheck: true, kind: 'delayed', ts: Date.now() },
           { delay: 2000, removeOnComplete: true, removeOnFail: true }
         );
-        console.log('[BullMQ] 🏥 Healthcheck job enqueued (expect HEALTHCHECK OK in ~2s)');
+        console.log('[BullMQ] 🏥 Healthcheck DELAYED(2s) enqueued (expect OK ~2s)');
       } catch (err: any) {
         console.error('[BullMQ] ❌ Healthcheck enqueue failed:', err?.message || err);
       }
     }, 5000);
+
+    // Snapshot periodico da fila — ajuda ver se jobs ficam empacotados em delayed
+    setInterval(async () => {
+      try {
+        const c = await this.messageQueue.getJobCounts('waiting', 'active', 'delayed', 'failed');
+        if ((c as any).waiting + (c as any).active + (c as any).delayed + (c as any).failed > 0) {
+          console.log(`[BullMQ] 📊 periodic: waiting=${(c as any).waiting} active=${(c as any).active} delayed=${(c as any).delayed} failed=${(c as any).failed}`);
+        }
+      } catch {}
+    }, 15000);
   }
 
   private setupFollowUpWorker(connection: any) {
