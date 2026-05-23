@@ -326,6 +326,53 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
   }
 });
 
+router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { phone, templateName, templateLanguage = 'pt_BR' } = req.body;
+    if (!phone) return res.status(400).json({ success: false, error: 'Telefone é obrigatório' });
+    if (!templateName) return res.status(400).json({ success: false, error: 'Template é obrigatório' });
+
+    const provider = await WhatsAppProviderFactory.getProvider(userId);
+    if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão de WhatsApp ativa encontrada.' });
+
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const statusInfo = await provider.getStatus(instanceName);
+    if (statusInfo.status !== 'connected') {
+      return res.status(400).json({ success: false, error: 'O WhatsApp não está conectado.' });
+    }
+
+    const digits = phone.replace(/\D/g, '');
+    const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name, nome_completo')
+      .eq('id', userId)
+      .maybeSingle();
+    const senderName = profile?.nome_completo || profile?.name || 'Consultor';
+
+    if (provider.sendTemplate) {
+      const components = [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: 'Clínica de Teste' },
+            { type: 'text', text: senderName }
+          ]
+        }
+      ];
+      await provider.sendTemplate(userId, jid, templateName, templateLanguage, components);
+      res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
+    } else {
+      res.status(400).json({ success: false, error: 'Seu provedor de WhatsApp não suporta envio de templates.' });
+    }
+  } catch (err: any) {
+    console.error('[LeadRadar] Erro ao enviar mensagem de teste:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { status, notes } = req.body;

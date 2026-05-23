@@ -84,6 +84,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [isAutopilotModalOpen, setIsAutopilotModalOpen] = useState(false);
   const [autopilotTemplateName, setAutopilotTemplateName] = useState('prospeccao_fria');
   const [autopilotInjectVar, setAutopilotInjectVar] = useState(true);
+  const [isTestInputVisible, setIsTestInputVisible] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [isTestSending, setIsTestSending] = useState(false);
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -485,6 +488,49 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     } catch { /* ignore */ }
   };
 
+  const fetchMyProfilePhone = async () => {
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!error && data?.phone) {
+        setTestPhone(data.phone.replace(/\D/g, ''));
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar telefone do perfil:', e);
+    }
+  };
+
+  const sendTestMessage = async () => {
+    if (!testPhone) return toast.error('O número de telefone é obrigatório para o teste.');
+    if (!autopilotTemplateName) return toast.error('Selecione um template para testar.');
+    
+    setIsTestSending(true);
+    try {
+      const response = await standardFetch('/api/v2/radar/leads/test-send', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone: testPhone,
+          templateName: autopilotTemplateName
+        })
+      });
+      const res = await response.json();
+      if (res.success) {
+        toast.success(res.message || 'Mensagem de teste enviada!');
+        setIsTestInputVisible(false);
+      } else {
+        toast.error(res.error || 'Erro ao enviar mensagem de teste.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro de rede ao enviar teste.');
+    } finally {
+      setIsTestSending(false);
+    }
+  };
+
   const updateLeadStatus = async (id: string, status: string) => {
     try {
       const response = await standardFetch(`/api/v2/radar/leads/${id}`, {
@@ -595,8 +641,14 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         .then(t => setMetaTemplates(t))
         .catch(e => console.error('Erro ao buscar templates:', e))
         .finally(() => setLoadingTemplates(false));
+      setIsTestInputVisible(false);
+      setIsTestSending(false);
+      setTestPhone('');
     } else {
       setMetaTemplates([]);
+      setIsTestInputVisible(false);
+      setIsTestSending(false);
+      setTestPhone('');
     }
   }, [isAutopilotModalOpen]);
 
@@ -2723,19 +2775,55 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                  )}
               </div>
 
-              <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex gap-4">
-                 <button 
-                  onClick={() => setIsAutopilotModalOpen(false)}
-                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
-                 >
-                   Cancelar
-                 </button>
-                 <button 
-                  onClick={confirmAutopilot}
-                  className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
-                 >
-                   Iniciar Disparos
-                 </button>
+              <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex flex-col gap-4">
+                 {isTestInputVisible ? (
+                   <div className="flex gap-2 items-center w-full animate-in slide-in-from-bottom-2 duration-200">
+                     <input
+                       type="text"
+                       placeholder="Telefone de teste (com DDI e DDD)"
+                       value={testPhone}
+                       onChange={e => setTestPhone(e.target.value)}
+                       className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-bold"
+                     />
+                     <button
+                       onClick={sendTestMessage}
+                       disabled={isTestSending || !testPhone}
+                       className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all disabled:opacity-50 disabled:grayscale"
+                     >
+                       {isTestSending ? 'Enviando...' : 'Enviar'}
+                     </button>
+                     <button
+                       onClick={() => setIsTestInputVisible(false)}
+                       className="px-3 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all"
+                     >
+                       Voltar
+                     </button>
+                   </div>
+                 ) : (
+                   <div className="flex gap-3 w-full">
+                     <button 
+                      onClick={() => setIsAutopilotModalOpen(false)}
+                      className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
+                     >
+                       Cancelar
+                     </button>
+                     <button 
+                      onClick={() => {
+                        fetchMyProfilePhone();
+                        setIsTestInputVisible(true);
+                      }}
+                      className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all"
+                     >
+                       Enviar Teste
+                     </button>
+                     <button 
+                      onClick={confirmAutopilot}
+                      className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                     >
+                       Iniciar Disparos
+                     </button>
+                   </div>
+                 )}
               </div>
             </motion.div>
           </div>
