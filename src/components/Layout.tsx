@@ -75,16 +75,16 @@ interface MenuSection {
 
 const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSubmenuOpen }: SidebarItemProps) => {
   return (
-    <div 
+    <div
       onClick={onClick}
-      className={`flex items-center p-2.5 rounded-xl cursor-pointer transition-all duration-300 group relative
-        ${active 
-          ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+      className={`flex items-center p-2 rounded-xl cursor-pointer transition-all duration-300 group relative
+        ${active
+          ? 'bg-primary text-white shadow-lg shadow-primary/20'
           : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group-active:scale-95'
         }`}
     >
       {active && (
-        <motion.div 
+        <motion.div
           layoutId="activeTab"
           className="absolute inset-y-2 -left-1 w-1 bg-white rounded-r-full"
         />
@@ -93,18 +93,18 @@ const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSu
         {icon}
       </div>
       {!collapsed && (
-        <div className="ml-3 flex-1 flex items-center justify-between overflow-hidden">
-          <motion.span 
+        <div className="ml-2.5 flex-1 flex items-center justify-between overflow-hidden">
+          <motion.span
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            className="font-medium whitespace-nowrap"
+            className="text-xs font-medium whitespace-nowrap"
           >
             {label}
           </motion.span>
           {hasSubmenu && (
-            <ChevronDown 
-              size={16} 
-              className={`transition-transform duration-200 ${isSubmenuOpen ? 'rotate-180' : ''}`} 
+            <ChevronDown
+              size={13}
+              className={`transition-transform duration-200 ${isSubmenuOpen ? 'rotate-180' : ''}`}
             />
           )}
         </div>
@@ -230,14 +230,14 @@ export default function Layout({
       items: [
         {
           id: 'admin_menu',
-          icon: <Shield size={20} />,
+          icon: <Shield size={16} />,
           label: 'Administração',
           subItems: [
-            { id: 'admin', label: 'Painel Admin', icon: <Shield size={16} /> },
-            { id: 'sofia_config', label: 'Configurações Sofia', icon: <Bot size={16} /> },
-            { id: 'overview', label: 'Visão Geral', icon: <Activity size={16} /> },
-            { id: 'clients', label: 'Carteira', icon: <Star size={16} /> },
-            { id: 'meta_templates', label: 'Templates', icon: <FileText size={16} className="text-violet-500" /> },
+            { id: 'admin', label: 'Painel Admin', icon: <Shield size={13} /> },
+            { id: 'sofia_config', label: 'Configurações Sofia', icon: <Bot size={13} /> },
+            { id: 'overview', label: 'Visão Geral', icon: <Activity size={13} /> },
+            { id: 'clients', label: 'Carteira', icon: <Star size={13} /> },
+            { id: 'meta_templates', label: 'Templates', icon: <FileText size={13} className="text-violet-500" /> },
           ]
         }
       ]
@@ -247,10 +247,10 @@ export default function Layout({
       items: [
         {
           id: 'prospeccao_menu',
-          icon: <Search size={20} />,
+          icon: <Search size={16} />,
           label: 'Prospecção Ativa',
           subItems: [
-            { id: 'lead_radar', icon: <Search size={16} />, label: 'Radar de Leads' }
+            { id: 'lead_radar', icon: <Search size={13} />, label: 'Radar de Leads' }
           ]
         }
       ]
@@ -260,7 +260,7 @@ export default function Layout({
       items: [
         {
           id: 'dashboard',
-          icon: <LayoutDashboard size={20} />,
+          icon: <LayoutDashboard size={16} />,
           label: 'Dashboard',
         }
       ]
@@ -270,14 +270,14 @@ export default function Layout({
       items: [
         {
           id: 'suporte_menu',
-          icon: <MessageSquare size={20} />,
+          icon: <MessageSquare size={16} />,
           label: 'Suporte',
           subItems: [
             {
               id: 'inbox',
               icon: (
                 <div className="relative">
-                  <Inbox size={16} />
+                  <Inbox size={13} />
                   {unreadTotal > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
                       {unreadTotal > 99 ? '99+' : unreadTotal}
@@ -287,8 +287,8 @@ export default function Layout({
               ),
               label: 'Atendimento'
             },
-            { id: 'kanban', icon: <Layers size={16} />, label: 'Triagem', minPlan: 'Pro' },
-            { id: 'contacts', icon: <Users size={16} />, label: 'Contatos' },
+            { id: 'kanban', icon: <Layers size={13} />, label: 'Triagem', minPlan: 'Pro' },
+            { id: 'contacts', icon: <Users size={13} />, label: 'Contatos' },
           ]
         }
       ]
@@ -298,11 +298,11 @@ export default function Layout({
       items: [
         {
           id: 'financeiro_menu',
-          icon: <Wallet size={20} />,
+          icon: <Wallet size={16} />,
           label: 'Financeiro',
           subItems: [
-            { id: 'finance', icon: <Wallet size={16} />, label: 'Meu Plano' },
-            { id: 'reports', icon: <BarChart3 size={16} />, label: 'Relatórios', minPlan: 'Pro' },
+            { id: 'finance', icon: <Wallet size={13} />, label: 'Meu Plano' },
+            { id: 'reports', icon: <BarChart3 size={13} />, label: 'Relatórios', minPlan: 'Pro' },
           ]
         }
       ]
@@ -312,19 +312,19 @@ export default function Layout({
       items: [
         {
           id: 'ia_menu',
-          icon: <Bot size={20} />,
+          icon: <Bot size={16} />,
           label: 'Automação',
           subItems: [
-            { id: 'agents', icon: <img src="/sofiamini.png" className="w-4 h-4 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
+            { id: 'agents', icon: <img src="/sofiamini.png" className="w-3.5 h-3.5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
             {
               id: 'leo',
-              icon: <Zap size={16} className="text-amber-500" />,
+              icon: <Zap size={13} className="text-amber-500" />,
               label: 'Leo',
               flag: 'leo_ai',
               minPlan: 'Starter'
             },
-            { id: 'campaigns', icon: <Send size={16} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
-            { id: 'quick_replies', icon: <MessageSquare size={16} />, label: 'Atalhos', minPlan: 'Starter' },
+            { id: 'campaigns', icon: <Send size={13} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
+            { id: 'quick_replies', icon: <MessageSquare size={13} />, label: 'Atalhos', minPlan: 'Starter' },
           ]
         }
       ]
@@ -334,14 +334,14 @@ export default function Layout({
       items: [
         {
           id: 'config_menu',
-          icon: <Settings size={20} />,
+          icon: <Settings size={16} />,
           label: 'Sistema',
           subItems: [
-            { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={16} />, flag: 'agendas', minPlan: 'Pro' },
-            { id: 'availability', label: 'Disponibilidade', icon: <Clock size={16} />, flag: 'agendas', minPlan: 'Pro' },
-            { id: 'integrations', icon: <Plug size={16} />, label: 'Integrações', flag: 'official_api' },
-            { id: 'professionals', icon: <Users size={16} />, label: 'Equipe', flag: 'crm' },
-            { id: 'settings', icon: <Settings size={16} />, label: 'Configurações' },
+            { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={13} />, flag: 'agendas', minPlan: 'Pro' },
+            { id: 'availability', label: 'Disponibilidade', icon: <Clock size={13} />, flag: 'agendas', minPlan: 'Pro' },
+            { id: 'integrations', icon: <Plug size={13} />, label: 'Integrações', flag: 'official_api' },
+            { id: 'professionals', icon: <Users size={13} />, label: 'Equipe', flag: 'crm' },
+            { id: 'settings', icon: <Settings size={13} />, label: 'Configurações' },
           ]
         }
       ]
@@ -477,10 +477,10 @@ export default function Layout({
                         <div
                           key={sub.id}
                           onClick={() => handleTabClick(sub.id)}
-                          className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
-                            ${activeTab === sub.id 
-                              ? 'text-primary font-bold bg-primary-light/50' 
-                              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                          className={`flex items-center p-1.5 rounded-lg cursor-pointer text-xs transition-all
+                            ${activeTab === sub.id
+                              ? 'text-primary font-semibold bg-primary-light/50'
+                              : 'text-slate-400 hover:text-slate-800 hover:bg-slate-50'
                             }`}
                         >
                           <span className="mr-2 opacity-70">{sub.icon}</span>
@@ -512,7 +512,7 @@ export default function Layout({
             ) : (
               <div className="flex items-center gap-2 w-full px-2">
                 <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> 
-                <span className="text-sm font-bold">Recolher menu</span>
+                <span className="text-xs font-medium text-slate-500">Recolher menu</span>
               </div>
             )}
           </button>
