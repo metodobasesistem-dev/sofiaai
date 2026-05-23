@@ -49,13 +49,18 @@ class WhatsAppService {
     console.log('[WhatsAppService] Initializing with BullMQ...');
     
     // Configuração do Redis para BullMQ.
-    // username é obrigatório quando o servidor Redis (6+) usa ACL — sem ele a
-    // conexão falha silenciosamente e nenhum worker processa jobs.
+    // - username é obrigatório com Redis 6+ ACL.
+    // - maxRetriesPerRequest: null é exigido pelo BullMQ no Worker; sem isso,
+    //   o ioredis desconecta após poucas falhas e o worker para de consumir.
+    // - enableReadyCheck: false evita falsos negativos com Redis hospedado
+    //   (ex.: Coolify/Upstash) que respondem PING antes do INFO ficar pronto.
     const connection = {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       username: process.env.REDIS_USERNAME || 'default',
-      password: process.env.REDIS_PASSWORD
+      password: process.env.REDIS_PASSWORD,
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false
     };
 
     this.messageQueue  = new Queue('whatsapp-messages',      { connection });
@@ -71,12 +76,16 @@ class WhatsAppService {
     this.messageWorker = new Worker('whatsapp-messages', async (job: Job) => {
       console.log(`[BullMQ] Processing message job ${job.id} for ${job.data.from}`);
       await this.processAIResponse(job.data);
-    }, { 
+    }, {
       connection,
       concurrency: 5,
       limiter: { max: 10, duration: 1000 }
     });
 
+    this.messageWorker.on('ready', () => console.log('[BullMQ] ✅ Message worker connected and listening'));
+    this.messageWorker.on('error', (err) => console.error('[BullMQ] ❌ Message worker error:', err.message));
+    this.messageWorker.on('stalled', (jobId) => console.warn(`[BullMQ] ⚠️ Message job ${jobId} stalled`));
+    this.messageWorker.on('completed', (job) => console.log(`[BullMQ] ✅ Message job ${job.id} completed`));
     this.messageWorker.on('failed', (job, err) => {
       console.error(`[BullMQ] Message job ${job?.id} failed:`, err);
     });
@@ -88,6 +97,8 @@ class WhatsAppService {
       await this.processFollowUp(job.data);
     }, { connection, concurrency: 2 });
 
+    this.followUpWorker.on('ready', () => console.log('[BullMQ] ✅ FollowUp worker connected'));
+    this.followUpWorker.on('error', (err) => console.error('[BullMQ] ❌ FollowUp worker error:', err.message));
     this.followUpWorker.on('failed', (job, err) => {
       console.error(`[FollowUp] Job ${job?.id} failed:`, err);
     });
@@ -100,6 +111,8 @@ class WhatsAppService {
       await agentService.syncProfilePicture(userId, threadId, remoteJid, force ?? false);
     }, { connection, concurrency: 3, limiter: { max: 5, duration: 1000 } });
 
+    this.photoSyncWorker.on('ready', () => console.log('[BullMQ] ✅ PhotoSync worker connected'));
+    this.photoSyncWorker.on('error', (err) => console.error('[BullMQ] ❌ PhotoSync worker error:', err.message));
     this.photoSyncWorker.on('completed', (job) => {
       console.log(`[PhotoSync] ✅ Job ${job.id} completed for thread ${job.data.threadId}`);
     });
