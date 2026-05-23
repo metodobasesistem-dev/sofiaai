@@ -2708,23 +2708,16 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          const body = t.components.find((c: any) => c.type === 'BODY')?.text || '';
                          if (!body) return <span className="text-slate-400 italic">Template sem corpo de texto.</span>;
                          
-                         if (body.includes('{{1}}')) {
-                           const parts = body.split('{{1}}');
-                           return (
-                             <>
-                               {parts[0]}
-                               <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold mx-1 border border-blue-200 text-xs">
-                                 [Mensagem gerada pela IA]
-                               </span>
-                               {parts.slice(1).join('{{1}}')}
-                             </>
-                           );
+                         if (body.includes('{{1}}') || body.includes('{{2}}')) {
+                           return body
+                             .replace(/\{\{1\}\}/g, '[Nome do Estabelecimento]')
+                             .replace(/\{\{2\}\}/g, '[Seu Nome]');
                          }
                          return body;
                        })()}
                      </div>
                      <p className="text-[10px] text-slate-400 font-medium px-1">
-                       A abordagem personalizada gerada pela IA será injetada automaticamente na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{1}}'}</code> do template.
+                       O nome do estabelecimento será injetado na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{1}}'}</code> e o seu nome de perfil na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{2}}'}</code>.
                      </p>
                    </div>
                  )}

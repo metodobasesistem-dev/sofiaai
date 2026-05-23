@@ -267,6 +267,14 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
     autopilotJobs.set(userId, job);
 
     const runAutopilot = async () => {
+      // Obter dados do perfil do remetente uma única vez antes de iniciar o loop de disparos
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, nome_completo')
+        .eq('id', userId)
+        .maybeSingle();
+      const senderName = profile?.nome_completo || profile?.name || 'Consultor';
+
       for (let i = 0; i < leads.length; i++) {
         if (job.cancelRequested) { job.jobStatus = 'cancelled'; return; }
         const lead = leads[i];
@@ -276,9 +284,17 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
           if (!jid.startsWith('55')) jid = `55${jid}`;
           jid = `${jid}@s.whatsapp.net`;
           if (templateName && provider.sendTemplate) {
-            const components = injectVariable && lead.personalized_message
-              ? [{ type: 'body', parameters: [{ type: 'text', text: lead.personalized_message }] }]
-              : [];
+            // Em vez de injetar a mensagem gerada pela IA (que causa bloqueios), enviamos o texto exato do template
+            // mapeando: {{1}} = nome do estabelecimento, {{2}} = nome do remetente
+            const components = [
+              {
+                type: 'body',
+                parameters: [
+                  { type: 'text', text: lead.name || 'Cliente' },
+                  { type: 'text', text: senderName }
+                ]
+              }
+            ];
             await provider.sendTemplate(userId, jid, templateName, 'pt_BR', components);
           } else {
             await provider.sendMessage(userId, jid, lead.personalized_message);
@@ -368,7 +384,24 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
     const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
 
     if (templateName && provider.sendTemplate) {
-      const components = lead.personalized_message ? [{ type: 'body', parameters: [{ type: 'text', text: lead.personalized_message }] }] : [];
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, nome_completo')
+        .eq('id', userId)
+        .maybeSingle();
+      const senderName = profile?.nome_completo || profile?.name || 'Consultor';
+
+      // Em vez de injetar a mensagem gerada pela IA, enviamos o texto exato do template
+      // mapeando: {{1}} = nome do estabelecimento, {{2}} = nome do remetente
+      const components = [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: lead.name || 'Cliente' },
+            { type: 'text', text: senderName }
+          ]
+        }
+      ];
       await provider.sendTemplate(userId, jid, templateName, templateLanguage, components);
     } else {
       const msg = customMessage || lead.personalized_message;
