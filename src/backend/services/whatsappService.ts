@@ -48,10 +48,13 @@ class WhatsAppService {
   constructor() {
     console.log('[WhatsAppService] Initializing with BullMQ...');
     
-    // Configuração do Redis para BullMQ
+    // Configuração do Redis para BullMQ.
+    // username é obrigatório quando o servidor Redis (6+) usa ACL — sem ele a
+    // conexão falha silenciosamente e nenhum worker processa jobs.
     const connection = {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
+      username: process.env.REDIS_USERNAME || 'default',
       password: process.env.REDIS_PASSWORD
     };
 
