@@ -1001,16 +1001,18 @@ class WhatsAppService {
     
     try {
       // 1. Sempre buscar do banco para garantir tempo real (ou cache curto)
-      const { data: agent } = await supabase
+      const { data: agent, error: agentErr } = await supabase
         .from('agents')
-        .select('response_delay, config')
+        .select('response_delay')
         .eq('user_id', userId)
         .eq('status_ativo', true)
+        .limit(1)
         .maybeSingle();
-      
-      if (agent) {
-        // Tenta pegar do campo direto ou de dentro do JSON config
-        delaySeconds = agent.response_delay || agent.config?.response_delay || 15;
+
+      if (agentErr) {
+        console.warn(`[WhatsAppService] ⚠️ Agent config query failed for ${userId}: ${agentErr.message}. Using default 15s delay.`);
+      } else if (agent) {
+        delaySeconds = agent.response_delay || 15;
         console.log(`[WhatsAppService] ⚙️ Config found for ${userId}: delay=${delaySeconds}s`);
       } else {
         console.warn(`[WhatsAppService] ⚠️ No active agent found for ${userId}, using default 15s delay.`);
