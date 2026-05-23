@@ -1,0 +1,362 @@
+/**
+ * Radar de Leads Routes — disponível para todos os usuários autenticados.
+ * Separado do adminApiRoutes para não exigir role 'admin'.
+ */
+import { Router, Response } from 'express';
+import axios from 'axios';
+import { supabase } from '../lib/supabaseClient.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
+import { generateAIResponse } from '../services/aiService.js';
+import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+
+const router = Router();
+router.use(requireAuth as any);
+
+// ─── In-memory autopilot job tracker (per userId) ─────────────────────────
+interface AutopilotJob {
+  total: number;
+  sent: number;
+  errors: number;
+  currentLead: string | null;
+  log: Array<{ name: string; phone: string; status: 'sent' | 'error'; time: string }>;
+  jobStatus: 'running' | 'done' | 'cancelled';
+  cancelRequested: boolean;
+  nextSendAt: number | null;
+}
+const autopilotJobs = new Map<string, AutopilotJob>();
+
+// ─── Campaigns ─────────────────────────────────────────────────────────────
+
+router.get('/campaigns', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('lead_campaigns')
+      .select('*')
+      .eq('user_id', req.userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.patch('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { name, status } = req.body;
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (name !== undefined) payload.name = name;
+    if (status !== undefined) payload.status = status;
+    const { error } = await supabase.from('lead_campaigns').update(payload)
+      .eq('id', req.params.id).eq('user_id', req.userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await supabase.from('leads_radar').delete().eq('campaign_id', req.params.id);
+    const { error } = await supabase.from('lead_campaigns').delete()
+      .eq('id', req.params.id).eq('user_id', req.userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Leads ─────────────────────────────────────────────────────────────────
+
+router.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaign_id } = req.query as any;
+    let query = supabase.from('leads_radar').select('*').order('created_at', { ascending: false });
+    if (campaign_id) query = query.eq('campaign_id', campaign_id);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+async function runLeadScanBackground(params: {
+  niche: string; city: string; zip?: string; limit: number; context: string; apifyToken: string; campaignId: string;
+}) {
+  const { niche, city, zip, limit, context, apifyToken, campaignId } = params;
+  const query = `${niche} em ${city} ${zip || ''}`.trim();
+  console.log(`[LeadRadar][BG] Iniciando busca Apify: "${query}" com meta de ${limit} leads.`);
+
+  let rawPlaces: any[] = [];
+  try {
+    const apifyResponse = await axios.post(
+      `https://api.apify.com/v2/acts/nwua9Gu5YrADL7ZDj/run-sync-get-dataset-items?token=${apifyToken}`,
+      { searchStringsArray: [query], maxCrawledPlacesPerSearch: limit * 2, language: 'pt-BR', countryCode: 'br', scrapeContacts: true },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 300000 }
+    );
+    rawPlaces = apifyResponse.data || [];
+  } catch (apifyErr: any) {
+    console.warn('[LeadRadar][BG] Erro Apify:', apifyErr.response?.data || apifyErr.message);
+    return;
+  }
+
+  console.log(`[LeadRadar][BG] ${rawPlaces.length} locais brutos recebidos.`);
+  const leadsProcessados = [];
+
+  for (const place of rawPlaces) {
+    if (leadsProcessados.length >= limit) break;
+    const rating = place.totalScore || 0;
+    const phone = place.phoneUnformatted || place.phone || '';
+    const ratingCount = place.reviewsCount || 0;
+    if (rating < 3 || !phone || ratingCount < 1) continue;
+    const digitsOnly = phone.replace(/\D/g, '');
+    const normalized = digitsOnly.startsWith('55') && digitsOnly.length > 11 ? digitsOnly.slice(2) : digitsOnly;
+    if (normalized.length !== 11 || normalized[2] !== '9') continue;
+
+    let pain_score = 0, opportunity_score = 0;
+    const website = place.website || '';
+    const instagram = place.instagrams?.[0] || null;
+    const email = place.emails?.[0] || null;
+    if (!website || website.includes('ifood') || website.includes('rappi')) pain_score += 2;
+    if (ratingCount < 50) pain_score += 1;
+    if (rating < 4.3 && ratingCount > 20) pain_score += 1;
+    if (!instagram) pain_score += 1;
+    if (rating > 4.5 && ratingCount < 150) opportunity_score += 2;
+    if (place.price && place.price.length > 2) opportunity_score += 1;
+
+    let reviewSummary = 'Sem resumo', personalizedMessage = '';
+    try {
+      const aiContextStr = context ? `\nContexto: ${context}` : '';
+      const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este negócio local e criar uma mensagem de abordagem para WhatsApp implacável.\n\nDados do Negócio:\nNome: ${place.title}\nEspecialidade: ${place.categoryName}\nAvaliação: ${rating} (${ratingCount} depoimentos)\nSite: ${website || 'Não possui'}\nInstagram: ${instagram || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"...","mensagem_personalizada":"..."}`;
+      const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: 'Gere a análise.' }]);
+      const aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
+      reviewSummary = aiJson.observacao_ia || reviewSummary;
+      personalizedMessage = aiJson.mensagem_personalizada || '';
+    } catch { /* IA falhou — segue sem mensagem */ }
+
+    const { data: savedLead, error: upsertErr } = await supabase
+      .from('leads_radar')
+      .upsert({
+        name: place.title || 'Sem nome', phone: normalized, address: place.address,
+        rating, user_rating_count: ratingCount, website, review_summary: reviewSummary,
+        personalized_message: personalizedMessage, instagram, email,
+        pain_score, opportunity_score,
+        place_id: place.placeId || place.id || Date.now().toString(),
+        niche, city, status: 'novo',
+        campaign_id: campaignId || null
+      }, { onConflict: 'place_id' })
+      .select().single();
+
+    if (!upsertErr) leadsProcessados.push(savedLead);
+  }
+  console.log(`[LeadRadar][BG] ✅ ${leadsProcessados.length} leads salvos.`);
+}
+
+router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { niche, city, zip, limit = 10, context = '' } = req.body;
+    if (!niche || !city) return res.status(400).json({ success: false, error: 'Nicho e Cidade são obrigatórios' });
+
+    const { data: settings } = await supabase.from('global_settings').select('apify_api_token').single();
+    const apifyToken = settings?.apify_api_token;
+    if (!apifyToken) return res.status(400).json({ success: false, error: 'Apify API Token não configurado' });
+
+    const now = new Date();
+    const campaignName = `${niche} • ${city} • ${now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
+    const { data: campaign, error: campErr } = await supabase
+      .from('lead_campaigns')
+      .insert({ name: campaignName, niche, city, context, user_id: req.userId })
+      .select()
+      .single();
+    if (campErr) throw campErr;
+
+    res.json({ success: true, scanning: true, campaign_id: campaign.id, campaign_name: campaign.name, message: 'Busca iniciada.' });
+
+    runLeadScanBackground({ niche, city, zip, limit, context, apifyToken, campaignId: campaign.id })
+      .catch(err => console.error('[LeadRadar] Erro background scan:', err.message));
+  } catch (err: any) {
+    console.error('[LeadRadar] Erro geral:', err.response?.data || err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/leads/autopilot/progress', (req: AuthenticatedRequest, res: Response) => {
+  const job = autopilotJobs.get(req.userId!);
+  if (!job) return res.json({ active: false });
+  res.json({ active: true, ...job });
+});
+
+router.delete('/leads/autopilot', (req: AuthenticatedRequest, res: Response) => {
+  const job = autopilotJobs.get(req.userId!);
+  if (!job || job.jobStatus !== 'running') return res.json({ success: false, message: 'Nenhum job ativo.' });
+  job.cancelRequested = true;
+  res.json({ success: true, message: 'Cancelamento solicitado.' });
+});
+
+router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { limit = 40, minDelay = 60, maxDelay = 180, templateName, injectVariable } = req.body;
+
+    const provider = await WhatsAppProviderFactory.getProvider(userId);
+    if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão de WhatsApp ativa encontrada.' });
+
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const statusInfo = await provider.getStatus(instanceName);
+    if (statusInfo.status !== 'connected') {
+      return res.status(400).json({ success: false, error: 'O WhatsApp não está conectado.' });
+    }
+
+    const { data: leads, error } = await supabase
+      .from('leads_radar')
+      .select('*')
+      .eq('status', 'novo')
+      .not('personalized_message', 'is', null)
+      .not('phone', 'is', null)
+      .limit(limit);
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.status(400).json({ success: false, error: 'Nenhum lead com status "novo" e mensagem gerada foi encontrado.' });
+    }
+
+    const job: AutopilotJob = {
+      total: leads.length, sent: 0, errors: 0,
+      currentLead: null, log: [],
+      jobStatus: 'running', cancelRequested: false, nextSendAt: null,
+    };
+    autopilotJobs.set(userId, job);
+
+    const runAutopilot = async () => {
+      for (let i = 0; i < leads.length; i++) {
+        if (job.cancelRequested) { job.jobStatus = 'cancelled'; return; }
+        const lead = leads[i];
+        job.currentLead = lead.name || lead.phone;
+        try {
+          let jid = lead.phone.replace(/\D/g, '');
+          if (!jid.startsWith('55')) jid = `55${jid}`;
+          jid = `${jid}@s.whatsapp.net`;
+          if (templateName && provider.sendTemplate) {
+            const components = injectVariable && lead.personalized_message
+              ? [{ type: 'body', parameters: [{ type: 'text', text: lead.personalized_message }] }]
+              : [];
+            await provider.sendTemplate(userId, jid, templateName, 'pt_BR', components);
+          } else {
+            await provider.sendMessage(userId, jid, lead.personalized_message);
+          }
+          await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
+          job.sent++;
+          job.log.unshift({ name: lead.name || '—', phone: lead.phone, status: 'sent', time: new Date().toLocaleTimeString('pt-BR') });
+        } catch (sendErr: any) {
+          await supabase.from('leads_radar').update({ status: 'erro', updated_at: new Date().toISOString() }).eq('id', lead.id);
+          job.errors++;
+          job.log.unshift({ name: lead.name || '—', phone: lead.phone, status: 'error', time: new Date().toLocaleTimeString('pt-BR') });
+        }
+        if (i < leads.length - 1 && !job.cancelRequested) {
+          const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+          job.nextSendAt = Date.now() + delaySeconds * 1000;
+          await new Promise(r => setTimeout(r, delaySeconds * 1000));
+          job.nextSendAt = null;
+        }
+      }
+      job.jobStatus = 'done';
+      job.currentLead = null;
+      setTimeout(() => autopilotJobs.delete(userId), 60_000);
+    };
+
+    runAutopilot().catch(err => { job.jobStatus = 'done'; console.error('[LeadRadar] Erro fatal:', err); });
+    res.json({ success: true, count: leads.length, message: `Piloto Automático iniciado para ${leads.length} leads.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status, notes } = req.body;
+    const updateFields: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (status !== undefined) updateFields.status = status;
+    if (notes !== undefined) updateFields.notes = notes;
+    const { data, error } = await supabase.from('leads_radar').update(updateFields).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { templateName, templateLanguage = 'pt_BR', customMessage } = req.body;
+
+    const { data: lead, error: leadErr } = await supabase.from('leads_radar').select('*').eq('id', req.params.id).single();
+    if (leadErr || !lead) return res.status(404).json({ success: false, error: 'Lead não encontrado' });
+    if (!lead.phone) return res.status(400).json({ success: false, error: 'Lead sem telefone' });
+
+    const provider = await WhatsAppProviderFactory.getProvider(userId);
+    if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão WhatsApp ativa' });
+
+    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const statusInfo = await provider.getStatus(instanceName);
+    if (statusInfo.status !== 'connected') return res.status(400).json({ success: false, error: 'WhatsApp não está conectado' });
+
+    const digits = lead.phone.replace(/\D/g, '');
+    const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
+
+    if (templateName && provider.sendTemplate) {
+      const components = lead.personalized_message ? [{ type: 'body', parameters: [{ type: 'text', text: lead.personalized_message }] }] : [];
+      await provider.sendTemplate(userId, jid, templateName, templateLanguage, components);
+    } else {
+      const msg = customMessage || lead.personalized_message;
+      if (!msg) return res.status(400).json({ success: false, error: 'Sem mensagem para enviar' });
+      await provider.sendMessage(userId, jid, msg);
+    }
+
+    await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
+    res.json({ success: true, message: `Mensagem enviada para ${lead.phone}` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { error } = await supabase.from('leads_radar').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/leads/bulk-status', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { ids, status } = req.body as { ids: string[]; status: string };
+    if (!ids?.length || !status) return res.status(400).json({ success: false, error: 'ids e status são obrigatórios' });
+    const validStatuses = ['novo', 'qualificado', 'contatado', 'descartado'];
+    if (!validStatuses.includes(status)) return res.status(400).json({ success: false, error: 'Status inválido' });
+    const { error } = await supabase.from('leads_radar').update({ status, updated_at: new Date().toISOString() }).in('id', ids);
+    if (error) throw error;
+    res.json({ success: true, updated: ids.length });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/leads/bulk-delete', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!ids?.length) return res.status(400).json({ success: false, error: 'ids é obrigatório' });
+    const { error } = await supabase.from('leads_radar').delete().in('id', ids);
+    if (error) throw error;
+    res.json({ success: true, deleted: ids.length });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+export default router;

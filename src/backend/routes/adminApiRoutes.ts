@@ -664,9 +664,8 @@ router.get('/dashboard/growth', async (req: AuthenticatedRequest, res: Response)
   }
 });
 
-// ─── LEAD RADAR (CAPTAÇÃO) ──────────────────────────────────────────────────
+// ─── LEAD RADAR (admin-only copy — ver radarRoutes.ts para versão sem requireAdmin) ─
 
-// GET /api/v2/admin/campaigns - Listar campanhas do radar
 router.get('/campaigns', async (_req: AuthenticatedRequest, res: Response) => {
   try {
     const { data, error } = await supabase

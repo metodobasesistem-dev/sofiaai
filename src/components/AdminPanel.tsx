@@ -221,7 +221,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const fetchCampaigns = async () => {
     try {
-      const r = await standardFetch('/api/v2/admin/campaigns');
+      const r = await standardFetch('/api/v2/radar/campaigns');
       const res = await r.json();
       if (res.success) setCampaigns(res.data || []);
     } catch (err) { console.error('Error fetching campaigns:', err); }
@@ -230,7 +230,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const fetchLeads = async (campaignId?: string | null) => {
     try {
       const cid = campaignId !== undefined ? campaignId : selectedCampaignId;
-      const url = cid ? `/api/v2/admin/leads?campaign_id=${cid}` : '/api/v2/admin/leads';
+      const url = cid ? `/api/v2/radar/leads?campaign_id=${cid}` : '/api/v2/radar/leads';
       const response = await standardFetch(url);
       const res = await response.json();
       if (res.success) setRadarLeads(res.data);
@@ -263,7 +263,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     if (!ids.length) return;
     setIsBulkActing(true);
     try {
-      const r = await standardFetch('/api/v2/admin/leads/bulk-status', {
+      const r = await standardFetch('/api/v2/radar/leads/bulk-status', {
         method: 'POST', body: JSON.stringify({ ids, status })
       });
       const res = await r.json();
@@ -282,7 +282,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     if (!window.confirm(`Deletar ${ids.length} leads selecionados?`)) return;
     setIsBulkActing(true);
     try {
-      const r = await standardFetch('/api/v2/admin/leads/bulk-delete', {
+      const r = await standardFetch('/api/v2/radar/leads/bulk-delete', {
         method: 'DELETE', body: JSON.stringify({ ids })
       });
       const res = await r.json();
@@ -299,7 +299,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const deleteCampaign = async (id: string) => {
     if (!window.confirm('Deletar campanha e todos os seus leads? Esta ação não pode ser desfeita.')) return;
     try {
-      const r = await standardFetch(`/api/v2/admin/campaigns/${id}`, { method: 'DELETE' });
+      const r = await standardFetch(`/api/v2/radar/campaigns/${id}`, { method: 'DELETE' });
       const res = await r.json();
       if (res.success) {
         toast.success('Campanha deletada');
@@ -312,7 +312,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const saveCampaignName = async (id: string) => {
     if (!campaignEditingName.trim()) return;
     try {
-      const r = await standardFetch(`/api/v2/admin/campaigns/${id}`, {
+      const r = await standardFetch(`/api/v2/radar/campaigns/${id}`, {
         method: 'PATCH', body: JSON.stringify({ name: campaignEditingName.trim() })
       });
       const res = await r.json();
@@ -342,7 +342,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         body.templateName = sendModalTemplate;
         body.templateLanguage = 'pt_BR';
       }
-      const r = await standardFetch(`/api/v2/admin/leads/${sendModalLead.id}/send`, {
+      const r = await standardFetch(`/api/v2/radar/leads/${sendModalLead.id}/send`, {
         method: 'POST', body: JSON.stringify(body)
       }, 30000);
       const res = await r.json();
@@ -368,7 +368,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     let newCampaignId: string | null = null;
 
     try {
-      const response = await standardFetch('/api/v2/admin/leads/scan', {
+      const response = await standardFetch('/api/v2/radar/leads/scan', {
         method: 'POST',
         body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
       }, 15000);
@@ -391,7 +391,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       attempts++;
       try {
         const cid = newCampaignId || selectedCampaignId;
-        const url = cid ? `/api/v2/admin/leads?campaign_id=${cid}` : '/api/v2/admin/leads';
+        const url = cid ? `/api/v2/radar/leads?campaign_id=${cid}` : '/api/v2/radar/leads';
         const r = await standardFetch(url);
         const data = await r.json();
         if (data.success) {
@@ -415,7 +415,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     if (autopilotPollRef.current) clearInterval(autopilotPollRef.current);
     autopilotPollRef.current = setInterval(async () => {
       try {
-        const r = await standardFetch('/api/v2/admin/leads/autopilot/progress', { method: 'GET' });
+        const r = await standardFetch('/api/v2/radar/leads/autopilot/progress', { method: 'GET' });
         const data = await r.json();
         setAutopilotProgress(data);
         if (!data.active || (data.jobStatus !== 'running')) {
@@ -440,7 +440,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     setIsAutopilotRunning(true);
     setAutopilotProgress(null);
     try {
-      const response = await standardFetch('/api/v2/admin/leads/autopilot', {
+      const response = await standardFetch('/api/v2/radar/leads/autopilot', {
         method: 'POST',
         body: JSON.stringify({
           limit: 40, minDelay: 60, maxDelay: 180,
@@ -464,13 +464,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const cancelAutopilot = async () => {
     try {
-      await standardFetch('/api/v2/admin/leads/autopilot', { method: 'DELETE' });
+      await standardFetch('/api/v2/radar/leads/autopilot', { method: 'DELETE' });
     } catch { /* ignore */ }
   };
 
   const updateLeadStatus = async (id: string, status: string) => {
     try {
-      const response = await standardFetch(`/api/v2/admin/leads/${id}`, {
+      const response = await standardFetch(`/api/v2/radar/leads/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
@@ -487,7 +487,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const deleteLead = async (id: string) => {
     if (!confirm('Tem certeza?')) return;
     try {
-      const response = await standardFetch(`/api/v2/admin/leads/${id}`, { method: 'DELETE' });
+      const response = await standardFetch(`/api/v2/radar/leads/${id}`, { method: 'DELETE' });
       const res = await response.json();
       if (res.success) {
         setRadarLeads(prev => prev.filter(l => l.id !== id));
@@ -500,7 +500,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const updateLeadNotes = async (id: string, notes: string) => {
     try {
-      const response = await standardFetch(`/api/v2/admin/leads/${id}`, {
+      const response = await standardFetch(`/api/v2/radar/leads/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ notes })
       });
