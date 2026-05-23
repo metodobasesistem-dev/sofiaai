@@ -127,15 +127,51 @@ export class AgentService {
       // 2. Load Agent Config 
       let agentData: any = null;
       let activeProfessionals: any[] = [];
+      let agentRes: any = null;
+      let agentError: any = null;
 
-      const agentQuery = agentId
-        ? supabase.from('agents').select('*').eq('id', agentId).eq('user_id', dbUserId).maybeSingle()
-        : supabase.from('agents').select('*').eq('user_id', dbUserId).eq('status_ativo', true).limit(1).maybeSingle();
+      if (agentId) {
+        // Busca o agente específico da thread
+        const { data: specificAgent, error: specificErr } = await supabase
+          .from('agents')
+          .select('*')
+          .eq('id', agentId)
+          .eq('user_id', dbUserId)
+          .maybeSingle();
+          
+        if (specificErr) agentError = specificErr;
 
-      const [{ data: agentRes, error: agentError }, { data: profsRes }] = await Promise.all([
-        agentQuery,
-        supabase.from('professionals').select('*').eq('user_id', dbUserId).eq('is_active', true)
-      ]);
+        if (specificAgent && specificAgent.status_ativo) {
+          agentRes = specificAgent;
+        } else if (specificAgent && !specificAgent.status_ativo) {
+          console.log(`[AgentService] 🔄 Agent in thread (${agentId}) is INACTIVE. Falling back to active default agent...`);
+        }
+      }
+
+      // Se não havia agentId, ou se o agentId era de um agente inativo, busca o ativo padrão
+      if (!agentRes) {
+        const { data: activeAgent, error: activeErr } = await supabase
+          .from('agents')
+          .select('*')
+          .eq('user_id', dbUserId)
+          .eq('status_ativo', true)
+          .limit(1)
+          .maybeSingle();
+          
+        if (activeErr) agentError = activeErr;
+        
+        if (activeAgent) {
+          agentRes = activeAgent;
+          
+          // Atualiza a thread para refletir o novo agente ativo, caso a thread já tivesse um ID
+          if (agentId && agentId !== agentRes.id) {
+            console.log(`[AgentService] 📝 Updating thread ${threadId} to new active agent ${agentRes.id}`);
+            await supabase.from('threads').update({ agent_id: agentRes.id }).eq('id', threadId);
+          }
+        }
+      }
+
+      const { data: profsRes } = await supabase.from('professionals').select('*').eq('user_id', dbUserId).eq('is_active', true);
       
       if (agentError) {
         console.error('[AgentService] ❌ Error fetching agent from Supabase:', agentError);
