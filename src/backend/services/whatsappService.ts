@@ -1145,16 +1145,14 @@ class WhatsAppService {
 
     // Workaround do scheduler do BullMQ: aguardamos o delay no Node e so depois
     // enfileiramos (sem delay). O worker pega imediatamente do estado 'waiting'.
+    // IMPORTANTE: NAO usar jobId fixo no add — BullMQ deduplica por jobId em
+    // QUALQUER estado (incluindo completed), o que faria o add() retornar o job
+    // antigo silenciosamente sem enfileirar nada. Debounce ja eh garantido pelo
+    // setTimeout/Map acima, entao o jobId pode ser unico.
     const timer = setTimeout(async () => {
       this.pendingAITimers.delete(jobId);
       try {
-        // Remove possivel job anterior com mesmo jobId (deduplicacao do BullMQ)
-        const stale = await this.messageQueue.getJob(jobId);
-        if (stale) {
-          await stale.remove().catch(() => {});
-        }
         const added = await this.messageQueue.add('process-message', jobData, {
-          jobId,
           removeOnComplete: { count: 50 },
           removeOnFail: { count: 50 },
           attempts: 3,
