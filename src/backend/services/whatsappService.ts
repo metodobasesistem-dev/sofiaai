@@ -103,16 +103,21 @@ class WhatsAppService {
       await this.processAIResponse(job.data);
     }, {
       connection,
-      concurrency: 5,
-      limiter: { max: 10, duration: 1000 }
+      // Limiter e concurrency removidos: havia bug do BullMQ 5.76 onde o worker
+      // processava 1 job e travava — provavelmente pool de conexoes em estado
+      // ruim com Redis ACL. concurrency: 1 simplifica e ja eh suficiente.
+      concurrency: 1
     });
 
-    this.messageWorker.on('ready', () => console.log('[BullMQ] ✅ Message worker connected and listening'));
-    this.messageWorker.on('error', (err) => console.error('[BullMQ] ❌ Message worker error:', err.message));
-    this.messageWorker.on('stalled', (jobId) => console.warn(`[BullMQ] ⚠️ Message job ${jobId} stalled`));
+    this.messageWorker.on('ready',     () => console.log('[BullMQ] ✅ Message worker connected and listening'));
+    this.messageWorker.on('active',    (job) => console.log(`[BullMQ] ▶️ Message job ${job.id} ACTIVE (worker picked it up)`));
+    this.messageWorker.on('error',     (err) => console.error('[BullMQ] ❌ Message worker error:', err.message));
+    this.messageWorker.on('stalled',   (jobId) => console.warn(`[BullMQ] ⚠️ Message job ${jobId} stalled`));
+    this.messageWorker.on('drained',   () => console.log('[BullMQ] 💧 Message queue drained'));
     this.messageWorker.on('completed', (job) => console.log(`[BullMQ] ✅ Message job ${job.id} completed`));
     this.messageWorker.on('failed', (job, err) => {
-      console.error(`[BullMQ] Message job ${job?.id} failed:`, err);
+      console.error(`[BullMQ] ❌ Message job ${job?.id} failed:`, err?.message || err);
+      if (err?.stack) console.error(err.stack);
     });
 
     // Inspeciona estado + envia 2 healthchecks para distinguir o ponto de falha:
@@ -150,14 +155,17 @@ class WhatsAppService {
       }
     }, 5000);
 
-    // Snapshot periodico da fila — ajuda ver se jobs ficam empacotados em delayed
+    // Snapshot periodico da fila — SEMPRE loga (mesmo zerado) para detectar
+    // worker travado em estado interno (BRPOPLPUSH preso, pool morto, etc.)
     setInterval(async () => {
       try {
-        const c = await this.messageQueue.getJobCounts('waiting', 'active', 'delayed', 'failed');
-        if ((c as any).waiting + (c as any).active + (c as any).delayed + (c as any).failed > 0) {
-          console.log(`[BullMQ] 📊 periodic: waiting=${(c as any).waiting} active=${(c as any).active} delayed=${(c as any).delayed} failed=${(c as any).failed}`);
-        }
-      } catch {}
+        const c: any = await this.messageQueue.getJobCounts(
+          'waiting', 'active', 'delayed', 'failed', 'completed', 'paused', 'prioritized', 'waiting-children'
+        );
+        console.log(`[BullMQ] 📊 periodic: waiting=${c.waiting} active=${c.active} delayed=${c.delayed} failed=${c.failed} completed=${c.completed} paused=${c.paused} prio=${c.prioritized}`);
+      } catch (e: any) {
+        console.warn(`[BullMQ] 📊 periodic failed: ${e?.message || e}`);
+      }
     }, 15000);
   }
 
