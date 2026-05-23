@@ -2320,10 +2320,18 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     value={activeThread.agentId || ''}
                     onChange={async (e) => {
                       const val = e.target.value || null;
-                      await supabase.from('threads').update({ agent_id: val }).eq('id', activeThread.id);
-                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, agentId: val } : t));
-                      const agent = agents.find(a => a.id === val);
-                      toast.success(val ? `Agente "${agent?.nome || agent?.company_name}" selecionado!` : 'Usando agente padrão.');
+                      try {
+                        const r = await fetch(`/api/messages/threads/${activeThread.id}/agent`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` },
+                          body: JSON.stringify({ agent_id: val })
+                        });
+                        const res = await r.json();
+                        if (!res.success) { toast.error(res.error || 'Erro ao atualizar agente.'); return; }
+                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, agentId: val } : t));
+                        const agent = agents.find(a => a.id === val);
+                        toast.success(val ? `Agente "${agent?.nome || agent?.company_name}" selecionado!` : 'Usando agente padrão.');
+                      } catch { toast.error('Erro de conexão.'); }
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
                   >
