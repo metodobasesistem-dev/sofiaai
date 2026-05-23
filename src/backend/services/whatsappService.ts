@@ -1151,24 +1151,19 @@ class WhatsAppService {
       agentId: agentId ?? null
     };
 
-    // Workaround do scheduler do BullMQ: aguardamos o delay no Node e so depois
-    // enfileiramos (sem delay). O worker pega imediatamente do estado 'waiting'.
-    // IMPORTANTE: NAO usar jobId fixo no add — BullMQ deduplica por jobId em
-    // QUALQUER estado (incluindo completed), o que faria o add() retornar o job
-    // antigo silenciosamente sem enfileirar nada. Debounce ja eh garantido pelo
-    // setTimeout/Map acima, entao o jobId pode ser unico.
+    // Processa diretamente quando o timer dispara — sem BullMQ no caminho.
+    // O BullMQ Worker neste ambiente (Coolify/Redis com proxy) fica preso no
+    // BRPOPLPUSH apos esvaziar a fila e nao recebe notificacao de novos jobs.
+    // Chamando processAIResponse diretamente eliminamos o problema.
     const timer = setTimeout(async () => {
       this.pendingAITimers.delete(jobId);
+      console.log(`[WhatsAppService] ▶️ Triggering AI response for ${from} (direct, after ${delaySeconds}s wait)`);
       try {
-        const added = await this.messageQueue.add('process-message', jobData, {
-          removeOnComplete: { count: 50 },
-          removeOnFail: { count: 50 },
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 2000 }
-        });
-        console.log(`[WhatsAppService] 📥 Job ${added.id} enqueued for ${from} (after ${delaySeconds}s wait)`);
+        await this.processAIResponse(jobData);
+        console.log(`[WhatsAppService] ✅ AI response cycle completed for ${from}`);
       } catch (e: any) {
-        console.error(`[WhatsAppService] ❌ Failed to enqueue AI job for ${from}: ${e?.message || e}`);
+        console.error(`[WhatsAppService] ❌ AI response failed for ${from}: ${e?.message || e}`);
+        if (e?.stack) console.error(e.stack);
       }
     }, delaySeconds * 1000);
 
