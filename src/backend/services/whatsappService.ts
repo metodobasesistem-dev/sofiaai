@@ -67,6 +67,9 @@ class WhatsAppService {
   private messageWorker: Worker | null = null;
   private followUpWorker: Worker | null = null;
   private photoSyncWorker: Worker | null = null;
+  // Timers de delay gerenciados pelo Node — workaround para bug do scheduler
+  // interno do BullMQ que nao move jobs delayed -> waiting neste ambiente Redis.
+  private pendingAITimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
     console.log('[WhatsAppService] Initializing with BullMQ...');
@@ -1101,7 +1104,7 @@ class WhatsAppService {
       console.warn(`[WhatsAppService] DB error for agent config:`, e);
     }
 
-    console.log(`[WhatsAppService] ⏳ Scheduling AI response for ${from} in ${delaySeconds}s (BullMQ)`);
+    console.log(`[WhatsAppService] ⏳ Scheduling AI response for ${from} in ${delaySeconds}s (Node timer)`);
 
     // 🛑 Cancela follow-ups pendentes pois o cliente acabou de mandar uma mensagem
     try {
@@ -1117,45 +1120,55 @@ class WhatsAppService {
       console.warn(`[WhatsAppService] pushToBuffer failed: ${e?.message || e}`);
     }
 
-    // Remove qualquer job anterior com o mesmo jobId — em QUALQUER estado.
-    // BullMQ deduplica por jobId: se restou um job em 'failed' ou 'completed'
-    // sem ser removido, o add() abaixo é ignorado silenciosamente.
-    try {
-      const existing = await this.messageQueue.getJob(jobId);
-      if (existing) {
-        const state = await existing.getState().catch(() => 'unknown');
-        await existing.remove();
-        console.log(`[WhatsAppService] 🔄 Removed stale job ${jobId} (state was: ${state})`);
-      }
-    } catch (e: any) {
-      console.warn(`[WhatsAppService] Failed to remove stale job ${jobId}: ${e?.message || e}`);
+    // Debounce em memoria: cancela qualquer timer anterior para este (userId, from).
+    // Garante que apenas o ULTIMO timer dispara — mensagens em sequencia que chegam
+    // antes do delay sao agrupadas via buffer (acima).
+    const existingTimer = this.pendingAITimers.get(jobId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      console.log(`[WhatsAppService] 🔄 Reset timer for ${from} (debounce)`);
     }
 
-    try {
-      const added = await this.messageQueue.add('process-message', {
-        profileId: userId,
-        userId,
-        from,
-        body,
-        contactName,
-        displayPhone: cleanPhone,
-        messageId,
-        isAudio,
-        mediaUrl,
-        mediaMimeType,
-        agentId: agentId ?? null
-      }, {
-        jobId,
-        delay: delaySeconds * 1000,
-        removeOnComplete: { count: 50 },
-        removeOnFail: { count: 50 },
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 }
-      });
-      console.log(`[WhatsAppService] 📥 Job ${added.id} enqueued for ${from} (delay ${delaySeconds}s)`);
-    } catch (e: any) {
-      console.error(`[WhatsAppService] ❌ Failed to enqueue AI job for ${from}: ${e?.message || e}`);
-    }
+    const jobData = {
+      profileId: userId,
+      userId,
+      from,
+      body,
+      contactName,
+      displayPhone: cleanPhone,
+      messageId,
+      isAudio,
+      mediaUrl,
+      mediaMimeType,
+      agentId: agentId ?? null
+    };
+
+    // Workaround do scheduler do BullMQ: aguardamos o delay no Node e so depois
+    // enfileiramos (sem delay). O worker pega imediatamente do estado 'waiting'.
+    const timer = setTimeout(async () => {
+      this.pendingAITimers.delete(jobId);
+      try {
+        // Remove possivel job anterior com mesmo jobId (deduplicacao do BullMQ)
+        const stale = await this.messageQueue.getJob(jobId);
+        if (stale) {
+          await stale.remove().catch(() => {});
+        }
+        const added = await this.messageQueue.add('process-message', jobData, {
+          jobId,
+          removeOnComplete: { count: 50 },
+          removeOnFail: { count: 50 },
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 }
+        });
+        console.log(`[WhatsAppService] 📥 Job ${added.id} enqueued for ${from} (after ${delaySeconds}s wait)`);
+      } catch (e: any) {
+        console.error(`[WhatsAppService] ❌ Failed to enqueue AI job for ${from}: ${e?.message || e}`);
+      }
+    }, delaySeconds * 1000);
+
+    // Importante: Node nao mantem o processo vivo apenas por causa do timer
+    timer.unref();
+    this.pendingAITimers.set(jobId, timer);
   }
 
   // Método interno que processa a lógica de IA (chamado pelo Worker do BullMQ)
