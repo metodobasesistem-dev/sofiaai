@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS lead_campaigns (
 
 ALTER TABLE lead_campaigns ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "lead_campaigns_admin" ON lead_campaigns
+DROP POLICY IF EXISTS "lead_campaigns_admin" ON lead_campaigns;
+CREATE POLICY "lead_campaigns_admin" ON lead_campaigns
   USING (
     EXISTS (
       SELECT 1 FROM profiles
