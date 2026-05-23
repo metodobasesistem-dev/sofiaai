@@ -1188,7 +1188,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'Abertos' | 'Resolvidos' | 'Todos' | 'Lead' | 'Qualificado' | 'Cliente' | 'Não Lidos'>('Abertos');
+  const [filterStatus, setFilterStatus] = useState<'Ativos' | 'Não Lidos' | 'Encerrados' | 'Todos'>('Ativos');
+  const [filterSub, setFilterSub] = useState<'Todos' | 'Lead' | 'Em Suporte' | 'Clientes'>('Todos');
+  const [filterBadge, setFilterBadge] = useState<'sem_resposta' | 'follow_up' | null>(null);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [agents, setAgents] = useState<{ id: string; nome: string; company_name?: string }[]>([]);
@@ -3083,19 +3085,39 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     (window as any).handleDeleteThread = handleDeleteThread;
   }, [threads, selectedThreadId]);
 
+  // Contadores para badges
+  const semRespostaCount = useMemo(() => threads.filter(t =>
+    t.ticketStatus !== 'resolved' && t.status === 'human' && (t.unreadCount || 0) > 0
+  ).length, [threads]);
+
+  const followUpCount = useMemo(() => threads.filter(t => !!t.pending_followup).length, [threads]);
+
   const filteredThreads = useMemo(() => {
     const lowerSearch = searchTerm.toLowerCase();
     return threads.filter(t => {
       const matchesSearch = !lowerSearch || t.name.toLowerCase().includes(lowerSearch) || t.remoteJid.includes(searchTerm);
-      let matchesFilter = true;
-      if (filterStatus === 'Abertos') matchesFilter = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
-      else if (filterStatus === 'Resolvidos') matchesFilter = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
-      else if (filterStatus === 'Cliente') matchesFilter = !!t.is_client;
-      else if (filterStatus === 'Não Lidos') matchesFilter = (t.unreadCount || 0) > 0;
-      else if (filterStatus !== 'Todos') matchesFilter = t.funilStatus === filterStatus;
-      return matchesSearch && matchesFilter;
+
+      // Filtro principal (linha 1)
+      let matchesMain = true;
+      if (filterStatus === 'Ativos') matchesMain = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
+      else if (filterStatus === 'Encerrados') matchesMain = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
+      else if (filterStatus === 'Não Lidos') matchesMain = (t.unreadCount || 0) > 0;
+      // 'Todos' → matchesMain permanece true
+
+      // Sub-filtro (linha 2)
+      let matchesSub = true;
+      if (filterSub === 'Lead') matchesSub = !t.is_client && t.status !== 'human';
+      else if (filterSub === 'Em Suporte') matchesSub = t.status === 'human';
+      else if (filterSub === 'Clientes') matchesSub = !!t.is_client;
+
+      // Badge de alerta (linha 3)
+      let matchesBadge = true;
+      if (filterBadge === 'sem_resposta') matchesBadge = t.ticketStatus !== 'resolved' && t.status === 'human' && (t.unreadCount || 0) > 0;
+      else if (filterBadge === 'follow_up') matchesBadge = !!t.pending_followup;
+
+      return matchesSearch && matchesMain && matchesSub && matchesBadge;
     });
-  }, [threads, searchTerm, filterStatus]);
+  }, [threads, searchTerm, filterStatus, filterSub, filterBadge]);
 
   return (
     <div className={isFullscreen 
@@ -3266,19 +3288,77 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
-            {(['Abertos', 'Não Lidos', 'Resolvidos', 'Todos', 'Lead', 'Qualificado', 'Cliente'] as const).map(f => (
+          {/* LINHA 1 — Filtros principais */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {(['Ativos', 'Não Lidos', 'Encerrados', 'Todos'] as const).map(f => (
               <button
                 key={f}
-                onClick={() => setFilterStatus(f)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0
-                  ${filterStatus === f 
-                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-200 border border-primary-500' 
-                    : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'}`}
+                onClick={() => { setFilterStatus(f); setFilterBadge(null); }}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0
+                  ${filterStatus === f && filterBadge === null
+                    ? 'bg-primary-600 text-white shadow-md shadow-primary-200' 
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
               >
                 {f}
               </button>
             ))}
+          </div>
+
+          {/* LINHA 2 — Sub-filtros de perfil */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {(['Todos', 'Lead', 'Em Suporte', 'Clientes'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setFilterSub(s)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 border
+                  ${filterSub === s
+                    ? s === 'Em Suporte'
+                      ? 'bg-amber-100 text-amber-700 border-amber-200'
+                      : s === 'Clientes'
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      : 'bg-primary-100 text-primary-700 border-primary-200'
+                    : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}
+              >
+                {s === 'Todos' ? 'Geral' : s}
+              </button>
+            ))}
+          </div>
+
+          {/* LINHA 3 — Badges de alerta */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setFilterBadge(prev => prev === 'sem_resposta' ? null : 'sem_resposta')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border
+                ${filterBadge === 'sem_resposta'
+                  ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200'
+                  : 'bg-red-50 text-red-500 border-red-100 hover:bg-red-100'}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              Sem resposta
+              {semRespostaCount > 0 && (
+                <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black
+                  ${filterBadge === 'sem_resposta' ? 'bg-white/30 text-white' : 'bg-red-500 text-white'}`}>
+                  {semRespostaCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setFilterBadge(prev => prev === 'follow_up' ? null : 'follow_up')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border
+                ${filterBadge === 'follow_up'
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200'
+                  : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+              Em follow-up
+              {followUpCount > 0 && (
+                <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black
+                  ${filterBadge === 'follow_up' ? 'bg-white/30 text-white' : 'bg-amber-500 text-white'}`}>
+                  {followUpCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
         
