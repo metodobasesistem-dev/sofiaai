@@ -50,6 +50,19 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 type AdminTab = 'overview' | 'users' | 'config' | 'billing' | 'flags' | 'meta_activator' | 'lead_radar';
 
+function AutopilotCountdown({ nextSendAt }: { nextSendAt: number }) {
+  const [secs, setSecs] = useState(() => Math.max(0, Math.ceil((nextSendAt - Date.now()) / 1000)));
+  useEffect(() => {
+    const iv = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((nextSendAt - Date.now()) / 1000));
+      setSecs(remaining);
+      if (remaining === 0) clearInterval(iv);
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [nextSendAt]);
+  return <span>Próximo envio em <span className="text-white font-bold">{secs}s</span></span>;
+}
+
 interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
   initialTab?: AdminTab;
@@ -84,6 +97,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [radarSearchOpen, setRadarSearchOpen] = useState(true);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [isBulkActing, setIsBulkActing] = useState(false);
+  // Piloto automático - progresso em tempo real
+  const [autopilotProgress, setAutopilotProgress] = useState<{
+    active: boolean; total: number; sent: number; errors: number;
+    currentLead: string | null; jobStatus: string; nextSendAt: number | null;
+    log: Array<{ name: string; phone: string; status: string; time: string }>;
+  } | null>(null);
+  const autopilotPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Modal de envio individual
   const [sendModalLead, setSendModalLead] = useState<any | null>(null);
   const [sendingLeadId, setSendingLeadId] = useState<string | null>(null);
@@ -391,33 +411,61 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }, 8000);
   };
 
+  const startAutopilotPolling = () => {
+    if (autopilotPollRef.current) clearInterval(autopilotPollRef.current);
+    autopilotPollRef.current = setInterval(async () => {
+      try {
+        const r = await standardFetch('/api/v2/admin/leads/autopilot/progress', { method: 'GET' });
+        const data = await r.json();
+        setAutopilotProgress(data);
+        if (!data.active || (data.jobStatus !== 'running')) {
+          clearInterval(autopilotPollRef.current!);
+          autopilotPollRef.current = null;
+          setIsAutopilotRunning(false);
+          if (data.jobStatus === 'done') {
+            toast.success(`Piloto concluído! ${data.sent} enviados, ${data.errors} erros.`);
+            fetchLeads(selectedCampaignId);
+          } else if (data.jobStatus === 'cancelled') {
+            toast(`Piloto cancelado. ${data.sent} mensagens já enviadas.`);
+            fetchLeads(selectedCampaignId);
+          }
+        }
+      } catch { /* silently ignore poll errors */ }
+    }, 2000);
+  };
+
   const confirmAutopilot = async () => {
     if (!autopilotTemplateName) return toast.error('Nome do template é obrigatório');
-    
     setIsAutopilotModalOpen(false);
     setIsAutopilotRunning(true);
+    setAutopilotProgress(null);
     try {
       const response = await standardFetch('/api/v2/admin/leads/autopilot', {
         method: 'POST',
-        body: JSON.stringify({ 
-          limit: 40, 
-          minDelay: 60, 
-          maxDelay: 180,
+        body: JSON.stringify({
+          limit: 40, minDelay: 60, maxDelay: 180,
           templateName: autopilotTemplateName,
-          injectVariable: autopilotInjectVar 
+          injectVariable: autopilotInjectVar
         })
       });
       const res = await response.json();
       if (res.success) {
-        toast.success(res.message);
+        toast.success(`Piloto iniciado para ${res.count} leads!`);
+        startAutopilotPolling();
       } else {
         toast.error(res.error || 'Erro ao iniciar Piloto Automático');
+        setIsAutopilotRunning(false);
       }
     } catch (err: any) {
       toast.error(err.message);
-    } finally {
       setIsAutopilotRunning(false);
     }
+  };
+
+  const cancelAutopilot = async () => {
+    try {
+      await standardFetch('/api/v2/admin/leads/autopilot', { method: 'DELETE' });
+    } catch { /* ignore */ }
   };
 
   const updateLeadStatus = async (id: string, status: string) => {
@@ -807,9 +855,74 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                              className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                            >
                               {isAutopilotRunning ? <RefreshCw size={15} className="animate-spin text-green-400" /> : <Rocket size={15} className="text-green-400" />}
-                              {isAutopilotRunning ? 'Iniciando...' : 'Piloto Automático'}
+                              {isAutopilotRunning ? `Enviando... ${autopilotProgress?.sent ?? 0}/${autopilotProgress?.total ?? '?'}` : 'Piloto Automático'}
                            </button>
                          </div>
+
+                         {/* Painel de progresso do Piloto Automático */}
+                         {autopilotProgress && autopilotProgress.active && (
+                           <div className="bg-slate-900 rounded-2xl p-4 flex flex-col gap-3">
+                             <div className="flex items-center justify-between">
+                               <span className="text-[9px] font-black text-green-400 uppercase tracking-widest flex items-center gap-1.5">
+                                 <Rocket size={10} /> Piloto Automático
+                               </span>
+                               {autopilotProgress.jobStatus === 'running' && (
+                                 <button onClick={cancelAutopilot} className="text-[9px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest">
+                                   Cancelar
+                                 </button>
+                               )}
+                             </div>
+
+                             {/* Barra de progresso */}
+                             <div>
+                               <div className="flex justify-between mb-1">
+                                 <span className="text-[9px] text-slate-400">{autopilotProgress.sent} enviados</span>
+                                 <span className="text-[9px] text-slate-400">{autopilotProgress.total} total</span>
+                               </div>
+                               <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                 <div
+                                   className="h-full bg-green-400 rounded-full transition-all duration-500"
+                                   style={{ width: `${autopilotProgress.total > 0 ? Math.round((autopilotProgress.sent + autopilotProgress.errors) / autopilotProgress.total * 100) : 0}%` }}
+                                 />
+                               </div>
+                             </div>
+
+                             {/* Lead atual / countdown */}
+                             {autopilotProgress.jobStatus === 'running' && (
+                               <div className="text-[9px] text-slate-400">
+                                 {autopilotProgress.nextSendAt ? (
+                                   <AutopilotCountdown nextSendAt={autopilotProgress.nextSendAt} />
+                                 ) : autopilotProgress.currentLead ? (
+                                   <span>Enviando para <span className="text-white font-bold">{autopilotProgress.currentLead}</span>...</span>
+                                 ) : null}
+                               </div>
+                             )}
+                             {autopilotProgress.jobStatus === 'done' && (
+                               <span className="text-[9px] font-black text-green-400">Concluído!</span>
+                             )}
+                             {autopilotProgress.jobStatus === 'cancelled' && (
+                               <span className="text-[9px] font-black text-amber-400">Cancelado</span>
+                             )}
+
+                             {/* Erros */}
+                             {autopilotProgress.errors > 0 && (
+                               <span className="text-[9px] text-red-400">{autopilotProgress.errors} erro(s)</span>
+                             )}
+
+                             {/* Log dos últimos envios */}
+                             {autopilotProgress.log.length > 0 && (
+                               <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
+                                 {autopilotProgress.log.slice(0, 8).map((entry, idx) => (
+                                   <div key={idx} className="flex items-center gap-1.5">
+                                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.status === 'sent' ? 'bg-green-400' : 'bg-red-400'}`} />
+                                     <span className="text-[9px] text-slate-300 truncate flex-1">{entry.name}</span>
+                                     <span className="text-[9px] text-slate-500 flex-shrink-0">{entry.time}</span>
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
+                           </div>
+                         )}
                     </div>}
                   </div>
                 </div>

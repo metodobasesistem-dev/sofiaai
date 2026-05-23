@@ -16,6 +16,19 @@ import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js
 
 const router = Router();
 
+// ─── In-memory autopilot job tracker (per adminId) ───────────────────────
+interface AutopilotJob {
+  total: number;
+  sent: number;
+  errors: number;
+  currentLead: string | null;
+  log: Array<{ name: string; phone: string; status: 'sent' | 'error'; time: string }>;
+  jobStatus: 'running' | 'done' | 'cancelled';
+  cancelRequested: boolean;
+  nextSendAt: number | null; // timestamp ms when next send fires
+}
+const autopilotJobs = new Map<string, AutopilotJob>();
+
 // ─── GET /api/v2/admin/settings/public ───────────────────────────────────
 // Public endpoint for signup rules and maintenance status
 router.get('/settings/public', async (req: AuthenticatedRequest, res: Response) => {
@@ -815,6 +828,21 @@ router.post('/leads/scan', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// GET /api/v2/admin/leads/autopilot/progress - Estado atual do piloto automático
+router.get('/leads/autopilot/progress', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  const job = autopilotJobs.get(req.userId!);
+  if (!job) return res.json({ active: false });
+  res.json({ active: true, ...job });
+});
+
+// DELETE /api/v2/admin/leads/autopilot - Cancelar piloto em andamento
+router.delete('/leads/autopilot', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  const job = autopilotJobs.get(req.userId!);
+  if (!job || job.jobStatus !== 'running') return res.json({ success: false, message: 'Nenhum job ativo.' });
+  job.cancelRequested = true;
+  res.json({ success: true, message: 'Cancelamento solicitado.' });
+});
+
 // POST /api/v2/admin/leads/autopilot - Iniciar disparos automáticos
 router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -846,58 +874,77 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ success: false, error: 'Nenhum lead com status "novo" e mensagem gerada foi encontrado.' });
     }
 
+    // Inicializa o job no tracker em memória
+    const job: AutopilotJob = {
+      total: leads.length,
+      sent: 0,
+      errors: 0,
+      currentLead: null,
+      log: [],
+      jobStatus: 'running',
+      cancelRequested: false,
+      nextSendAt: null,
+    };
+    autopilotJobs.set(adminId, job);
+
     // Função assíncrona de background (fire-and-forget)
     const runAutopilot = async () => {
       console.log(`[LeadRadar] Piloto Automático iniciado para ${leads.length} leads.`);
       for (let i = 0; i < leads.length; i++) {
+        if (job.cancelRequested) {
+          job.jobStatus = 'cancelled';
+          console.log(`[LeadRadar] Piloto Automático cancelado pelo usuário após ${i} envios.`);
+          return;
+        }
+
         const lead = leads[i];
-        
+        job.currentLead = lead.name || lead.phone;
+
         try {
-          // Verifica se o telefone está formatado corretamente para o provedor
-          let jid = lead.phone;
-          if (!jid.includes('@')) jid = `${jid}@s.whatsapp.net`;
+          let jid = lead.phone.replace(/\D/g, '');
           if (!jid.startsWith('55')) jid = `55${jid}`;
-          
+          jid = `${jid}@s.whatsapp.net`;
+
           if (templateName && provider.sendTemplate) {
-            // Usa envio de template (padrão oficial da Meta para abrir conversas)
             let components: any[] = [];
             if (injectVariable && lead.personalized_message) {
-              components = [
-                {
-                  type: 'body',
-                  parameters: [
-                    { type: 'text', text: lead.personalized_message }
-                  ]
-                }
-              ];
+              components = [{ type: 'body', parameters: [{ type: 'text', text: lead.personalized_message }] }];
             }
             await provider.sendTemplate(adminId, jid, templateName, 'pt_BR', components);
           } else {
-            // Fallback para envio padrão de texto (caso seja Baileys ou Evolution)
             await provider.sendMessage(adminId, jid, lead.personalized_message);
           }
-          
-          // Atualiza status para 'contatado'
+
           await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
-          console.log(`[LeadRadar] Piloto Automático: Mensagem enviada para ${lead.phone} (${i+1}/${leads.length})`);
+          job.sent++;
+          job.log.unshift({ name: lead.name || '—', phone: lead.phone, status: 'sent', time: new Date().toLocaleTimeString('pt-BR') });
+          console.log(`[LeadRadar] Enviado para ${lead.phone} (${i+1}/${leads.length})`);
         } catch (sendErr: any) {
-          console.error(`[LeadRadar] Piloto Automático: Erro ao enviar para ${lead.phone}:`, sendErr.message);
-          // Atualiza status para 'erro'
+          console.error(`[LeadRadar] Erro ao enviar para ${lead.phone}:`, sendErr.message);
           await supabase.from('leads_radar').update({ status: 'erro', updated_at: new Date().toISOString() }).eq('id', lead.id);
+          job.errors++;
+          job.log.unshift({ name: lead.name || '—', phone: lead.phone, status: 'error', time: new Date().toLocaleTimeString('pt-BR') });
         }
 
-        // Se não for o último lead, aguarda o delay aleatório para evitar banimento
-        if (i < leads.length - 1) {
+        if (i < leads.length - 1 && !job.cancelRequested) {
           const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
-          console.log(`[LeadRadar] Piloto Automático: Aguardando ${delaySeconds}s antes do próximo envio...`);
+          job.nextSendAt = Date.now() + delaySeconds * 1000;
+          console.log(`[LeadRadar] Aguardando ${delaySeconds}s antes do próximo envio...`);
           await new Promise(r => setTimeout(r, delaySeconds * 1000));
+          job.nextSendAt = null;
         }
       }
-      console.log(`[LeadRadar] Piloto Automático finalizado com sucesso.`);
+      job.jobStatus = 'done';
+      job.currentLead = null;
+      console.log(`[LeadRadar] Piloto Automático finalizado. Enviados: ${job.sent}, Erros: ${job.errors}`);
+      // Remove o job após 60s para não acumular memória
+      setTimeout(() => autopilotJobs.delete(adminId), 60_000);
     };
 
-    // Inicia a função sem travar a resposta da API (O usuário recebe o feedback na hora)
-    runAutopilot().catch(err => console.error('[LeadRadar] Erro fatal no Piloto Automático:', err));
+    runAutopilot().catch(err => {
+      console.error('[LeadRadar] Erro fatal no Piloto Automático:', err);
+      job.jobStatus = 'done';
+    });
 
     res.json({ success: true, count: leads.length, message: `Piloto Automático iniciado em background para ${leads.length} leads.` });
   } catch (err: any) {
