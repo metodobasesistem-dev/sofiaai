@@ -173,16 +173,25 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
         type: 'function',
         function: {
           name: 'upsert_agent',
-          description: 'Cria ou atualiza as configurações de um agente de IA do usuário.',
+          description: 'Cria ou atualiza um agente de IA completo, incluindo dados da empresa, produtos, FAQ, tom de voz e follow-ups.',
           parameters: {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Nome do agente' },
               niche: { type: 'string', description: 'Nicho ou área de atuação' },
-              prompt: { type: 'string', description: 'Instruções/Prompt de sistema do agente' },
+              prompt: { type: 'string', description: 'Prompt/instruções de sistema do agente' },
               active: { type: 'boolean', description: 'Se o agente deve estar ativo' },
-              followUps: { 
-                type: 'array', 
+              company_name: { type: 'string', description: 'Nome da empresa' },
+              company_description: { type: 'string', description: 'Descrição da empresa e seus objetivos' },
+              company_products: { type: 'string', description: 'Produtos e serviços oferecidos' },
+              company_faq: { type: 'string', description: 'Perguntas frequentes e respostas (FAQ)' },
+              company_address: { type: 'string', description: 'Endereço físico da empresa' },
+              company_links: { type: 'string', description: 'Links importantes (site, cardápio, catálogo, etc.)' },
+              tone_of_voice: { type: 'string', enum: ['formal', 'semi-formal', 'casual', 'friendly'], description: 'Tom de voz do agente' },
+              forbidden_topics: { type: 'string', description: 'Tópicos que o agente NÃO deve abordar' },
+              professional_name: { type: 'string', description: 'Nome do profissional ou responsável' },
+              followUps: {
+                type: 'array',
                 description: 'Sequência de follow-ups automáticos',
                 items: {
                   type: 'object',
@@ -375,11 +384,15 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
 
   async upsertAgent(userId: string, args: any) {
     try {
-      const { name, niche, prompt, active, followUps } = args;
-      
-      // Busca se já existe um agente com esse nome para o usuário
+      const {
+        name, niche, prompt, active, followUps,
+        company_name, company_description, company_products, company_faq,
+        company_address, company_links, tone_of_voice, forbidden_topics,
+        professional_name
+      } = args;
+
       const { data: existing } = await supabase.from('agents')
-        .select('id, follow_ups')
+        .select('id')
         .eq('user_id', userId)
         .eq('nome', name)
         .maybeSingle();
@@ -387,28 +400,29 @@ ${profile?.sofia_prompt || 'Aja como uma consultora de alta performance estraté
       const payload: any = {
         user_id: userId,
         nome: name,
-        nicho: niche,
-        prompt_base: prompt,
         status_ativo: active !== undefined ? active : true,
         updated_at: new Date().toISOString()
       };
 
-      if (followUps) {
-        payload.follow_ups = followUps;
-      }
+      if (niche !== undefined)               payload.nicho = niche;
+      if (prompt !== undefined)              payload.prompt_base = prompt;
+      if (company_name !== undefined)        payload.company_name = company_name;
+      if (company_description !== undefined) payload.company_description = company_description;
+      if (company_products !== undefined)    payload.company_products = company_products;
+      if (company_faq !== undefined)         payload.company_faq = company_faq;
+      if (company_address !== undefined)     payload.company_address = company_address;
+      if (company_links !== undefined)       payload.company_links = company_links;
+      if (tone_of_voice !== undefined)       payload.tone_of_voice = tone_of_voice;
+      if (forbidden_topics !== undefined)    payload.forbidden_topics = forbidden_topics;
+      if (professional_name !== undefined)   payload.professional_name = professional_name;
+      if (followUps !== undefined)           payload.follow_ups = followUps;
 
       if (existing) {
-        const { error } = await supabase.from('agents')
-          .update(payload)
-          .eq('id', existing.id);
+        const { error } = await supabase.from('agents').update(payload).eq('id', existing.id);
         if (error) throw error;
         return { success: true, action: 'updated', name };
       } else {
-        const { error } = await supabase.from('agents')
-          .insert({
-            ...payload,
-            created_at: new Date().toISOString()
-          });
+        const { error } = await supabase.from('agents').insert({ ...payload, created_at: new Date().toISOString() });
         if (error) throw error;
         return { success: true, action: 'created', name };
       }
