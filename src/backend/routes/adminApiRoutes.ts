@@ -928,6 +928,57 @@ router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// POST /api/v2/admin/leads/:id/send - Enviar mensagem para um lead via API
+router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const adminId = req.userId;
+    const { templateName, templateLanguage = 'pt_BR', customMessage } = req.body;
+
+    // 1. Busca o lead
+    const { data: lead, error: leadErr } = await supabase
+      .from('leads_radar').select('*').eq('id', req.params.id).single();
+    if (leadErr || !lead) return res.status(404).json({ success: false, error: 'Lead não encontrado' });
+    if (!lead.phone) return res.status(400).json({ success: false, error: 'Lead sem telefone' });
+
+    // 2. Busca o provedor do admin
+    const provider = await WhatsAppProviderFactory.getProvider(adminId);
+    if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão WhatsApp ativa' });
+
+    const instanceName = `wppai_${adminId.substring(0, 8)}`;
+    const statusInfo = await provider.getStatus(instanceName);
+    if (statusInfo.status !== 'connected') {
+      return res.status(400).json({ success: false, error: 'WhatsApp não está conectado' });
+    }
+
+    // 3. Formata JID
+    const digits = lead.phone.replace(/\D/g, '');
+    const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
+
+    // 4. Envia via template (Meta) ou texto (Evolution/UazAPI)
+    if (templateName && provider.sendTemplate) {
+      const components = lead.personalized_message ? [{
+        type: 'body',
+        parameters: [{ type: 'text', text: lead.personalized_message }]
+      }] : [];
+      await provider.sendTemplate(adminId, jid, templateName, templateLanguage, components);
+    } else {
+      const msg = customMessage || lead.personalized_message;
+      if (!msg) return res.status(400).json({ success: false, error: 'Sem mensagem para enviar' });
+      await provider.sendMessage(adminId, jid, msg);
+    }
+
+    // 5. Atualiza status para 'contatado'
+    await supabase.from('leads_radar')
+      .update({ status: 'contatado', updated_at: new Date().toISOString() })
+      .eq('id', lead.id);
+
+    res.json({ success: true, message: `Mensagem enviada para ${lead.phone}` });
+  } catch (err: any) {
+    console.error('[LeadRadar] Erro ao enviar mensagem:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // DELETE /api/v2/admin/leads/:id - Remover lead individual
 router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {

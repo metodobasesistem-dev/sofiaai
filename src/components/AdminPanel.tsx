@@ -84,6 +84,12 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [radarSearchOpen, setRadarSearchOpen] = useState(true);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [isBulkActing, setIsBulkActing] = useState(false);
+  // Modal de envio individual
+  const [sendModalLead, setSendModalLead] = useState<any | null>(null);
+  const [sendingLeadId, setSendingLeadId] = useState<string | null>(null);
+  const [sendModalTemplate, setSendModalTemplate] = useState('');
+  const [sendModalTemplates, setSendModalTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingSendTemplates, setLoadingSendTemplates] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -292,6 +298,44 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       const res = await r.json();
       if (res.success) { fetchCampaigns(); setCampaignEditingId(null); }
     } catch { toast.error('Erro ao renomear'); }
+  };
+
+  const openSendModal = async (lead: any) => {
+    setSendModalLead(lead);
+    setSendModalTemplate('');
+    if (globalSettings.whatsapp_provider === 'meta_official') {
+      setLoadingSendTemplates(true);
+      try {
+        const templates = await listMetaTemplates('APPROVED');
+        setSendModalTemplates(templates);
+      } catch { setSendModalTemplates([]); }
+      finally { setLoadingSendTemplates(false); }
+    }
+  };
+
+  const sendToLead = async () => {
+    if (!sendModalLead) return;
+    setSendingLeadId(sendModalLead.id);
+    try {
+      const body: any = {};
+      if (globalSettings.whatsapp_provider === 'meta_official' && sendModalTemplate) {
+        body.templateName = sendModalTemplate;
+        body.templateLanguage = 'pt_BR';
+      }
+      const r = await standardFetch(`/api/v2/admin/leads/${sendModalLead.id}/send`, {
+        method: 'POST', body: JSON.stringify(body)
+      }, 30000);
+      const res = await r.json();
+      if (res.success) {
+        toast.success(`Mensagem enviada para ${sendModalLead.name}!`);
+        setSendModalLead(null);
+        // Atualiza o lead na lista local
+        setRadarLeads(prev => prev.map(l => l.id === sendModalLead.id ? { ...l, status: 'contatado' } : l));
+      } else {
+        toast.error(res.error || 'Erro ao enviar');
+      }
+    } catch { toast.error('Erro de conexão ao enviar'); }
+    finally { setSendingLeadId(null); }
   };
 
   const startScan = async () => {
@@ -987,14 +1031,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                             {lead.review_summary || 'Resumo indisponível'}
                                          </p>
                                          {lead.personalized_message && lead.phone && (
-                                            <a
-                                              href={`https://wa.me/${waPhone}?text=${encodeURIComponent(lead.personalized_message)}`}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#128C7E] transition-all shadow-sm"
+                                            <button
+                                              onClick={() => openSendModal(lead)}
+                                              disabled={sendingLeadId === lead.id}
+                                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#128C7E] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                               <MessageSquare size={10} /> Enviar Abordagem
-                                            </a>
+                                               <MessageSquare size={10} /> {sendingLeadId === lead.id ? 'Enviando...' : 'Enviar Abordagem'}
+                                            </button>
                                          )}
                                          {/* Notas manuais */}
                                          <textarea
@@ -2583,6 +2626,94 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         targetUserId={selectedUser?.id || null}
         targetUserEmail={selectedUser?.email}
       />
+
+      {/* Send Modal - envio individual de lead */}
+      <AnimatePresence>
+        {sendModalLead && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSendModalLead(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-2xl bg-[#25D366]/10 flex items-center justify-center">
+                    <MessageSquare size={18} className="text-[#25D366]" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-800">Enviar Abordagem</h3>
+                    <p className="text-xs text-slate-400">{sendModalLead.name}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 flex flex-col gap-5">
+                {globalSettings.whatsapp_provider === 'meta_official' ? (
+                  <div className="flex flex-col gap-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Template Aprovado pela Meta</label>
+                    {loadingSendTemplates ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <div className="w-4 h-4 border-2 border-primary-300 border-t-transparent rounded-full animate-spin" />
+                        Carregando templates...
+                      </div>
+                    ) : sendModalTemplates.length === 0 ? (
+                      <p className="text-xs text-red-400">Nenhum template aprovado encontrado.</p>
+                    ) : (
+                      <select
+                        value={sendModalTemplate}
+                        onChange={e => setSendModalTemplate(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:border-primary-300"
+                      >
+                        <option value="">Selecione um template...</option>
+                        {sendModalTemplates.map(t => (
+                          <option key={t.name} value={t.name}>{t.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Mensagem personalizada (variável)</p>
+                      <p className="text-xs text-slate-600 italic line-clamp-4">{sendModalLead.personalized_message}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Mensagem a enviar</label>
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 max-h-48 overflow-y-auto">
+                      <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{sendModalLead.personalized_message}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-8 pb-8 flex gap-3">
+                <button
+                  onClick={() => setSendModalLead(null)}
+                  className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={sendToLead}
+                  disabled={sendingLeadId === sendModalLead.id || (globalSettings.whatsapp_provider === 'meta_official' && !sendModalTemplate)}
+                  className="flex-1 py-3.5 bg-[#25D366] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[#128C7E] shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {sendingLeadId === sendModalLead.id ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <><MessageSquare size={12} /> Confirmar Envio</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
