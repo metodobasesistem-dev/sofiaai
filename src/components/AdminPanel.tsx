@@ -122,6 +122,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     totalMessages: 0,
     totalAgents: 0
   });
+  const [customMessage, setCustomMessage] = useState('');
 
   // Modal & Action states
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -343,6 +344,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const openSendModal = async (lead: any) => {
     setSendModalLead(lead);
     setSendModalTemplate('');
+    setCustomMessage('');
     if (globalSettings.whatsapp_provider === 'meta_official') {
       setLoadingSendTemplates(true);
       try {
@@ -358,9 +360,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     setSendingLeadId(sendModalLead.id);
     try {
       const body: any = {};
-      if (globalSettings.whatsapp_provider === 'meta_official' && sendModalTemplate) {
-        body.templateName = sendModalTemplate;
-        body.templateLanguage = 'pt_BR';
+      if (globalSettings.whatsapp_provider === 'meta_official') {
+        if (sendModalTemplate) {
+          body.templateName = sendModalTemplate;
+          body.templateLanguage = 'pt_BR';
+        }
+      } else {
+        body.customMessage = customMessage;
       }
       const r = await standardFetch(`/api/v2/radar/leads/${sendModalLead.id}/send`, {
         method: 'POST', body: JSON.stringify(body)
@@ -456,6 +462,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const confirmAutopilot = async () => {
     if (!autopilotTemplateName) return toast.error('Nome do template é obrigatório');
+    if (selectedLeadIds.size === 0) {
+      return toast.error('Selecione pelo menos um lead para iniciar o Piloto Automático');
+    }
     setIsAutopilotModalOpen(false);
     setIsAutopilotRunning(true);
     setAutopilotProgress(null);
@@ -463,6 +472,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       const response = await standardFetch('/api/v2/radar/leads/autopilot', {
         method: 'POST',
         body: JSON.stringify({
+          leadIds: Array.from(selectedLeadIds),
           limit: 40, minDelay: 60, maxDelay: 180,
           templateName: autopilotTemplateName,
           injectVariable: autopilotInjectVar
@@ -921,7 +931,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                            </button>
 
                            <button
-                             onClick={() => setIsAutopilotModalOpen(true)}
+                             onClick={() => {
+                               if (selectedLeadIds.size === 0) {
+                                 toast.error('Por favor, selecione pelo menos um lead para o Piloto Automático.');
+                                 return;
+                               }
+                               setIsAutopilotModalOpen(true);
+                             }}
                              disabled={isScanning || isAutopilotRunning}
                              className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                            >
@@ -1214,7 +1230,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                          <p className="text-[10px] text-slate-500 font-medium italic line-clamp-2">
                                             {lead.review_summary || 'Resumo indisponível'}
                                          </p>
-                                         {lead.personalized_message && lead.phone && (
+                                         {lead.phone && (
                                             <button
                                               onClick={() => openSendModal(lead)}
                                               disabled={sendingLeadId === lead.id}
@@ -2888,17 +2904,16 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                         ))}
                       </select>
                     )}
-                    <div className="bg-slate-50 rounded-xl p-3">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Mensagem personalizada (variável)</p>
-                      <p className="text-xs text-slate-600 italic line-clamp-4">{sendModalLead.personalized_message}</p>
-                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Mensagem a enviar</label>
-                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 max-h-48 overflow-y-auto">
-                      <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{sendModalLead.personalized_message}</p>
-                    </div>
+                    <textarea
+                      value={customMessage}
+                      onChange={e => setCustomMessage(e.target.value)}
+                      placeholder="Escreva a mensagem personalizada aqui..."
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 outline-none focus:border-primary-500 transition-all resize-none h-32"
+                    />
                   </div>
                 )}
               </div>
@@ -2912,7 +2927,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                 </button>
                 <button
                   onClick={sendToLead}
-                  disabled={sendingLeadId === sendModalLead.id || (globalSettings.whatsapp_provider === 'meta_official' && !sendModalTemplate)}
+                  disabled={sendingLeadId === sendModalLead.id || (globalSettings.whatsapp_provider === 'meta_official' && !sendModalTemplate) || (globalSettings.whatsapp_provider !== 'meta_official' && !customMessage.trim())}
                   className="flex-1 py-3.5 bg-[#25D366] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[#128C7E] shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {sendingLeadId === sendModalLead.id ? (

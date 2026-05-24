@@ -150,14 +150,13 @@ async function runLeadScanBackground(params: {
     if (rating > 4.5 && ratingCount < 150) opportunity_score += 2;
     if (place.price && place.price.length > 2) opportunity_score += 1;
 
-    let reviewSummary = 'Sem resumo', personalizedMessage = '';
+    let reviewSummary = 'Sem resumo', personalizedMessage = null;
     try {
       const aiContextStr = context ? `\nContexto: ${context}` : '';
-      const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este negócio local e criar uma mensagem de abordagem para WhatsApp implacável.\n\nDados do Negócio:\nNome: ${place.title}\nEspecialidade: ${place.categoryName}\nAvaliação: ${rating} (${ratingCount} depoimentos)\nSite: ${website || 'Não possui'}\nInstagram: ${instagram || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"...","mensagem_personalizada":"..."}`;
+      const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este negócio local e identificar possíveis pontos de dor ou oportunidades de melhoria.\n\nDados do Negócio:\nNome: ${place.title}\nEspecialidade: ${place.categoryName}\nAvaliação: ${rating} (${ratingCount} depoimentos)\nSite: ${website || 'Não possui'}\nInstagram: ${instagram || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"..."}`;
       const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: 'Gere a análise.' }]);
       const aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
       reviewSummary = aiJson.observacao_ia || reviewSummary;
-      personalizedMessage = aiJson.mensagem_personalizada || '';
     } catch { /* IA falhou — segue sem mensagem */ }
 
     const { data: savedLead, error: upsertErr } = await supabase
@@ -222,7 +221,10 @@ router.delete('/leads/autopilot', (req: AuthenticatedRequest, res: Response) => 
 router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const { limit = 40, minDelay = 60, maxDelay = 180, templateName, injectVariable } = req.body;
+    const { leadIds, limit = 40, minDelay = 60, maxDelay = 180, templateName, injectVariable } = req.body;
+    if (!leadIds || leadIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Nenhum lead selecionado.' });
+    }
 
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão de WhatsApp ativa encontrada.' });
@@ -249,15 +251,13 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
     const { data: leads, error } = await supabase
       .from('leads_radar')
       .select('*')
-      .eq('status', 'novo')
+      .in('id', leadIds)
       .in('campaign_id', campaignIds)
-      .not('personalized_message', 'is', null)
-      .not('phone', 'is', null)
-      .limit(limit);
+      .not('phone', 'is', null);
 
     if (error) throw error;
     if (!leads || leads.length === 0) {
-      return res.status(400).json({ success: false, error: 'Nenhum lead com status "novo" e mensagem gerada foi encontrado.' });
+      return res.status(400).json({ success: false, error: 'Nenhum dos leads selecionados possui telefone válido para envio.' });
     }
 
     const job: AutopilotJob = {
@@ -299,6 +299,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
             const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, 'pt_BR', components);
             if (!result.success) throw new Error(result.error);
           } else {
+            if (!lead.personalized_message) throw new Error('Sem mensagem personalizada para enviar');
             const result = await whatsappService.sendMessage(userId, lead.phone, lead.personalized_message);
             if (!result.success) throw new Error(result.error);
           }
