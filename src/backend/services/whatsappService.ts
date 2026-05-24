@@ -260,7 +260,9 @@ class WhatsAppService {
         jobId,
         delay: delayMs,
         removeOnComplete: true,
-        attempts: 2
+        // attempts: 1 (sem retry). Retry em job de envio causa mensagem duplicada
+        // — o envio em si nao eh idempotente (cria 2 registros, 2 wamids no Meta).
+        attempts: 1
       });
 
       console.log(`[FollowUp] ✅ Auto level ${level + 1} scheduled for ${from} in ${delayMinutes}m`);
@@ -301,7 +303,7 @@ class WhatsAppService {
         jobId,
         delay: delayMs,
         removeOnComplete: true,
-        attempts: 2
+        attempts: 1
       });
 
       console.log(`[FollowUp] ⏲️ Manual follow-up scheduled for ${from} in ${delayMinutes}m (AI: ${isAi})`);
@@ -1368,6 +1370,16 @@ class WhatsAppService {
     console.log(`[FollowUp] 🚀 Starting processFollowUp for ${from} (Manual: ${isManual}, Level: ${level || 0})`);
 
     try {
+      // Idempotencia: BullMQ deste ambiente as vezes marca jobs como 'stalled'
+      // e reexecuta, causando follow-up duplicado no banco e (as vezes) no lead.
+      // Chave Redis com TTL de 1h impede dupla execucao para o mesmo (thread, level).
+      const idemKey = `followup_done:${threadId}:${isManual ? 'manual' : `auto-${level || 0}`}`;
+      const isFirst = await redisService.markAsProcessed(idemKey, 3600);
+      if (!isFirst) {
+        console.log(`[FollowUp] 🛡️ Idempotency: follow-up already sent for ${threadId} (key=${idemKey}). Skipping duplicate.`);
+        return;
+      }
+
       // 1. Verificar status da thread
       const { data: thread } = await supabase
         .from('threads')
