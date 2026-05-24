@@ -183,14 +183,29 @@ export class NotificationService {
         if (!messageToSend) continue;
 
         // 7. Send & Update
+        // IMPORTANTE: passa 'IA (FOLLOW-UP)' como senderName para que o
+        // sendMessage NAO agende outro follow-up no BullMQ (linha 728).
+        // Sem isso terıamos duplo agendamento: este cron + BullMQ.
         console.log(`[NotificationService] 📤 Sending Follow-up Lvl ${currentLevelIdx + 1} to ${cleanPhone}`);
-        await whatsappService.sendMessage(userId, cleanPhone, messageToSend);
+        await whatsappService.sendMessage(userId, cleanPhone, messageToSend, 'IA (FOLLOW-UP)', 'IA');
 
-        await supabase.from('threads').update({ 
-          follow_up_level: currentLevelIdx + 1,
-          last_message: messageToSend,
-          updated_at: new Date().toISOString() // We update this so the next level timer starts from now
+        // Marca o updated_at PRIMEIRO (UPDATE simples, sem risco de coluna ausente)
+        // para que mesmo se o UPDATE seguinte falhar o cron nao reenvie em 15min.
+        await supabase.from('threads').update({
+          updated_at: new Date().toISOString(),
+          last_message: messageToSend
         }).eq('id', thread.id);
+
+        // Tracking de nivel — depende das colunas follow_up_level / last_follow_up_at
+        // (migration 20260524100000). Separado do UPDATE acima para nao perder o
+        // refresh do updated_at se essas colunas ainda nao tiverem sido criadas.
+        const { error: trackErr } = await supabase.from('threads').update({
+          follow_up_level: currentLevelIdx + 1,
+          last_follow_up_at: new Date().toISOString()
+        }).eq('id', thread.id);
+        if (trackErr) {
+          console.warn(`[NotificationService] ⚠️ follow_up_level update failed (ok if migration nao foi aplicada): ${trackErr.message}`);
+        }
 
         // Also persist as an outbound message
         const { agentService } = await import('./agentService.js');
