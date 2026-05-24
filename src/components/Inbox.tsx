@@ -297,6 +297,75 @@ const formatDateHeader = (dateStr: string) => {
   return date.toLocaleDateString('pt-BR');
 };
 
+function renderFormattedText(text: string, query?: string) {
+  if (!text) return '';
+
+  let parts: { type: 'text' | 'bold' | 'italic' | 'strike' | 'code'; text: string }[] = [{ type: 'text', text }];
+
+  const rules = [
+    { type: 'code' as const, regex: /```([\s\S]*?)```/g },
+    { type: 'bold' as const, regex: /\*([^\*]+?)\*/g },
+    { type: 'italic' as const, regex: /_([^_]+?)_/g },
+    { type: 'strike' as const, regex: /~([^~]+?)~/g }
+  ];
+
+  for (const rule of rules) {
+    const newParts: typeof parts = [];
+    for (const part of parts) {
+      if (part.type !== 'text') {
+        newParts.push(part);
+        continue;
+      }
+
+      let lastIndex = 0;
+      let match;
+      rule.regex.lastIndex = 0;
+
+      while ((match = rule.regex.exec(part.text)) !== null) {
+        if (match.index > lastIndex) {
+          newParts.push({ type: 'text', text: part.text.substring(lastIndex, match.index) });
+        }
+        newParts.push({ type: rule.type, text: match[1] });
+        lastIndex = rule.regex.lastIndex;
+      }
+
+      if (lastIndex < part.text.length) {
+        newParts.push({ type: 'text', text: part.text.substring(lastIndex) });
+      }
+    }
+    parts = newParts;
+  }
+
+  const renderTextWithHighlight = (txt: string, q?: string) => {
+    if (!q || !q.trim()) return txt;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    const segments = txt.split(regex);
+    return segments.map((seg, i) =>
+      seg.toLowerCase() === q.toLowerCase()
+        ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{seg}</mark>
+        : seg
+    );
+  };
+
+  return parts.map((part, index) => {
+    const content = renderTextWithHighlight(part.text, query);
+    switch (part.type) {
+      case 'bold':
+        return <strong key={index} className="font-bold">{content}</strong>;
+      case 'italic':
+        return <em key={index} className="italic">{content}</em>;
+      case 'strike':
+        return <del key={index} className="line-through">{content}</del>;
+      case 'code':
+        return <code key={index} className="font-mono bg-black/5 px-1 rounded text-xs">{content}</code>;
+      default:
+        return <span key={index}>{content}</span>;
+    }
+  });
+}
+
+
 const PAGE_SIZE = 50;
 
 const formatMsgRow = (d: any): Message => ({
@@ -853,11 +922,11 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
 
       default:
         return (
-          <p className="whitespace-pre-wrap break-all">
-            {highlightQuery
-              ? <HighlightedText text={message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : '')} query={highlightQuery} />
-              : (message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''))
-            }
+          <p className="whitespace-pre-wrap break-all leading-relaxed">
+            {renderFormattedText(
+              message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''),
+              highlightQuery
+            )}
           </p>
         );
     }
@@ -968,6 +1037,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
             }
           }
         }}
+        onDoubleClick={() => onReply(message)}
         whileDrag={{ scale: 1.02 }}
         className={`max-w-[85%] px-3 py-2 rounded-2xl text-[14.5px] leading-relaxed shadow-sm relative break-words z-10 cursor-grab active:cursor-grabbing
         ${isRevoked
@@ -2310,7 +2380,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     return dedupedMessages.filter(m => m.text?.toLowerCase().includes(q));
   }, [dedupedMessages, messageSearchDebounced]);
 
-  const visibleMessages = messageSearchDebounced ? searchHits : dedupedMessages;
+  const visibleMessages = dedupedMessages;
   const currentSearchHitId = searchHits[searchResultIdx]?.id;
 
   // Refs estáveis para handlers passados ao ChatBubble — preservam memoização
@@ -2842,10 +2912,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedThreadId || !activeThread) return;
-    
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const uploadFileDirectly = async (file: File) => {
+    if (!selectedThreadId || !activeThread) return;
     const userId = user?.id;
     if (!userId) return;
 
@@ -2865,8 +2935,6 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       
       toast.success('Arquivo enviado com sucesso!');
       
-      if (fileInputRef.current) fileInputRef.current.value = '';
-
       await supabase
         .from('threads')
         .update({ status: 'human', updated_at: new Date().toISOString() })
@@ -2876,6 +2944,44 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       console.error('Error sending file:', err);
       toast.error('Erro ao enviar arquivo');
     }
+  };
+
+  const handleDropFile = (file: File) => {
+    if (!selectedThreadId || !activeThread) return;
+    if (file.type.startsWith('image/')) {
+      setPastedFile(file);
+      const url = URL.createObjectURL(file);
+      setPastedImageUrl(url);
+      setShowPasteModal(true);
+      setPasteCaption('');
+    } else {
+      uploadFileDirectly(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleDropFile(file);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    handleDropFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleOpenContactChat = (jid: string) => {
@@ -3854,6 +3960,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
+              onDragOver={handleDragOver}
               className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative no-scrollbar"
               style={{
                 backgroundColor: '#e5ddd5',
@@ -3863,6 +3970,21 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               }}>
               {/* Overlay suave para integrar melhor com o tema claro */}
               <div className="absolute inset-0 bg-white/40 pointer-events-none" />
+
+              {isDraggingOver && (
+                <div 
+                  className="absolute inset-0 bg-primary-500/20 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-dashed border-primary-500 transition-all m-2 rounded-2xl"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <div className="bg-white p-6 rounded-3xl shadow-xl flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200 pointer-events-none">
+                    <Paperclip size={40} className="text-primary-500 animate-bounce" />
+                    <p className="font-black text-slate-800 text-sm">Arraste seu arquivo aqui</p>
+                    <p className="text-xs text-slate-400">Solte para anexar à conversa</p>
+                  </div>
+                </div>
+              )}
 
               <div className="relative z-10 space-y-4">
               {loadingMessages ? (
