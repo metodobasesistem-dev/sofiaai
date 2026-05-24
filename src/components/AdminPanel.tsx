@@ -411,8 +411,12 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       }
     } catch { /* Timeout ou rede — backend pode estar rodando */ }
 
-    // Polling: verifica a cada 8s se novos leads da campanha apareceram (máx 4 min)
+    // Polling: verifica a cada 5s se novos leads da campanha apareceram (atualização live)
     let attempts = 0;
+    let lastLeadsCount = 0;
+    let unchangedCount = 0;
+    let foundAny = false;
+
     pollIntervalRef.current = setInterval(async () => {
       attempts++;
       try {
@@ -422,19 +426,45 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         const data = await r.json();
         if (data.success) {
           const newLeads: any[] = data.data || [];
-          setScanLeadsFound(newLeads.length);
+          const currentCount = newLeads.length;
+          setScanLeadsFound(currentCount);
           setRadarLeads(newLeads);
-          if (newLeads.length > 0 || attempts >= 30) {
+
+          if (currentCount > 0) {
+            foundAny = true;
+          }
+
+          if (currentCount === lastLeadsCount) {
+            if (foundAny) {
+              unchangedCount++;
+            }
+          } else {
+            unchangedCount = 0;
+            lastLeadsCount = currentCount;
+          }
+
+          // Condições de parada da varredura:
+          // 1. Chegou no limite máximo solicitado de resultados
+          // 2. Os resultados pararam de mudar por 4 verificações seguidas (~20 segundos) e já achamos pelo menos um
+          // 3. Timeout geral de 40 tentativas (~3.3 minutos)
+          if (
+            (radarLimit && currentCount >= radarLimit) ||
+            (unchangedCount >= 4) ||
+            (attempts >= 40)
+          ) {
             clearInterval(pollIntervalRef.current!);
             pollIntervalRef.current = null;
             setIsScanning(false);
             fetchCampaigns();
-            if (newLeads.length > 0) toast.success(`✅ ${newLeads.length} leads encontrados!`);
-            else toast('Busca finalizada. Nenhum lead novo desta vez.');
+            if (currentCount > 0) {
+              toast.success(`✅ Varredura finalizada! ${currentCount} leads encontrados.`);
+            } else {
+              toast('Busca finalizada. Nenhum lead novo encontrado.');
+            }
           }
         }
       } catch { /* ignora erros de rede no polling */ }
-    }, 8000);
+    }, 5000);
   };
 
   const startAutopilotPolling = () => {
@@ -1020,11 +1050,24 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                       {/* Header */}
                       <div className="p-6 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4">
                          <div>
-                            {selectedCampaignId
-                              ? <h2 className="text-xl font-black text-slate-900">{campaigns.find(c => c.id === selectedCampaignId)?.name || 'Campanha'}</h2>
-                              : <h2 className="text-xl font-black text-slate-900">Todos os Leads</h2>
-                            }
-                            <p className="text-xs text-slate-400 font-medium mt-0.5">{selectedCampaignId ? 'Leads desta campanha' : 'Selecione uma campanha ou inicie uma busca'}</p>
+                            <div className="flex items-center gap-3">
+                              {selectedCampaignId
+                                ? <h2 className="text-xl font-black text-slate-900">{campaigns.find(c => c.id === selectedCampaignId)?.name || 'Campanha'}</h2>
+                                : <h2 className="text-xl font-black text-slate-900">Todos os Leads</h2>
+                              }
+                              {isScanning && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                  Varrendo Google Maps
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">
+                              {isScanning 
+                                ? 'Os leads estão sendo adicionados ao vivo. Aguarde a finalização da busca.' 
+                                : selectedCampaignId ? 'Leads desta campanha' : 'Selecione uma campanha ou inicie uma busca'
+                              }
+                            </p>
                          </div>
                          <div className="flex items-center gap-2">
                             <span className="px-3 py-1 bg-primary-50 text-primary-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
@@ -1290,12 +1333,27 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                {radarLeads.length === 0 && (
                                  <tr>
                                     <td colSpan={7} className="px-8 py-20 text-center">
-                                       <div className="flex flex-col items-center gap-4 opacity-30">
-                                          <Search size={48} />
-                                          <p className="text-sm font-bold uppercase tracking-widest">
-                                            {selectedCampaignId ? 'Nenhum lead nessa campanha ainda.' : 'Selecione uma campanha ou inicie uma nova busca.'}
-                                          </p>
-                                       </div>
+                                       {isScanning ? (
+                                         <div className="flex flex-col items-center gap-4">
+                                            <div className="relative">
+                                              <div className="w-16 h-16 rounded-full border-4 border-primary-100 border-t-primary-600 animate-spin" />
+                                              <div className="absolute inset-0 flex items-center justify-center">
+                                                <Search size={22} className="text-primary-600 animate-pulse" />
+                                              </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                              <p className="text-sm font-black text-slate-800 uppercase tracking-widest animate-pulse">Varrendo o Google Maps...</p>
+                                              <p className="text-xs text-slate-400 font-medium">Buscando e analisando estabelecimentos locais. Pode levar de 1 a 2 minutos.</p>
+                                            </div>
+                                         </div>
+                                       ) : (
+                                         <div className="flex flex-col items-center gap-4 opacity-30">
+                                            <Search size={48} />
+                                            <p className="text-sm font-bold uppercase tracking-widest">
+                                              {selectedCampaignId ? 'Nenhum lead nessa campanha ainda.' : 'Selecione uma campanha ou inicie uma nova busca.'}
+                                            </p>
+                                         </div>
+                                       )}
                                     </td>
                                  </tr>
                                )}
@@ -2244,35 +2302,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   return (
     <div className="min-h-screen pb-12 animate-in fade-in duration-700 custom-scrollbar overflow-y-auto">
 
-      {/* Modal de Busca do Radar */}
-      {isScanning && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl p-10 flex flex-col items-center gap-6 max-w-sm w-full mx-4">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Search size={28} className="text-primary" />
-              </div>
-            </div>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-black text-slate-900">Radar em Ação</h3>
-              <p className="text-sm text-slate-500">Buscando e analisando leads no Google Maps com IA...</p>
-              <p className="text-xs text-slate-400">Isso pode levar alguns minutos. Não feche a página.</p>
-            </div>
-            {scanLeadsFound > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-2xl px-6 py-3 text-center">
-                <p className="text-2xl font-black text-green-600">{scanLeadsFound}</p>
-                <p className="text-xs font-bold text-green-500 uppercase tracking-widest">Novos leads encontrados</p>
-              </div>
-            )}
-            <div className="flex gap-1">
-              {[0,1,2].map(i => (
-                <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* O progresso da Varredura agora é exibido de forma não-bloqueante no topo da tabela de leads e na tabela vazia */}
 
       {/* Page Header */}
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 px-2 pt-4">
