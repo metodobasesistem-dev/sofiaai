@@ -693,10 +693,18 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
         </div>
       </div>
       
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-[10px] text-slate-400 font-mono">
+      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+        <span className="text-[10px] text-slate-400 font-mono truncate">
           {thread.remoteJid.split('@')[0]}
         </span>
+        {thread.labels && thread.labels.slice(0, 2).map((lbl, i) => (
+          <span key={i} className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 border border-primary-100 shrink-0 leading-none">
+            {lbl}
+          </span>
+        ))}
+        {thread.labels && thread.labels.length > 2 && (
+          <span className="text-[9px] font-bold text-slate-400 shrink-0">+{thread.labels.length - 2}</span>
+        )}
       </div>
 
       <div className="flex items-center justify-between">
