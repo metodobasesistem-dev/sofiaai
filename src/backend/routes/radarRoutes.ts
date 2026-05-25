@@ -281,12 +281,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
         const lead = leads[i];
         job.currentLead = lead.name || lead.phone;
         try {
-          let jid = lead.phone.replace(/\D/g, '');
-          if (!jid.startsWith('55')) jid = `55${jid}`;
-          jid = `${jid}@s.whatsapp.net`;
           if (templateName && provider.sendTemplate) {
-            // Em vez de injetar a mensagem gerada pela IA (que causa bloqueios), enviamos o texto exato do template
-            // mapeando: {{1}} = nome do estabelecimento, {{2}} = nome do remetente
             const components = [
               {
                 type: 'body',
