@@ -449,14 +449,19 @@ router.post('/templates/submit', requireAuth as any, async (req: AuthenticatedRe
     components.push({ type: 'BUTTONS', buttons });
   }
 
+  const metaPayload = { name: template_name, language: language || 'pt_BR', category, components };
+  console.log('[TemplateSubmit] Payload →', JSON.stringify(metaPayload, null, 2));
+
   try {
     const { data } = await axios.post(
       `${META_BASE}/${profile.meta_waba_id}/message_templates`,
-      { name: template_name, language: language || 'pt_BR', category, components },
+      metaPayload,
       { headers: { Authorization: `Bearer ${profile.meta_access_token}` }, timeout: 20000 }
     );
     return res.json({ success: true, meta_id: data.id, status: data.status || 'PENDING' });
   } catch (err: any) {
+    const rawMeta = err?.response?.data;
+    console.error('[TemplateSubmit] Meta error →', JSON.stringify(rawMeta, null, 2));
     const { parseProviderError: _parseErr } = await import('../providers/providerErrors.js');
     const info = parseProviderError(err);
     return res.status(400).json({ success: false, error: info.message, errorInfo: info });

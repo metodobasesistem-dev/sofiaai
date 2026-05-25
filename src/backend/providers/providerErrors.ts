@@ -62,7 +62,7 @@ export function parseProviderError(err: any): ProviderErrorInfo {
       provider: 'meta',
       code,
       subcode: metaError.error_subcode,
-      message: `[Meta ${code}${metaError.error_subcode ? `/${metaError.error_subcode}` : ''}] ${metaError.message || 'Unknown error'}`,
+      message: `[Meta ${code}${metaError.error_subcode ? `/${metaError.error_subcode}` : ''}] ${metaError.message || 'Unknown error'}${metaError.error_data?.details ? ` — ${metaError.error_data.details}` : ''}`,
       is24hWindowClosed: code === META_CODE_24H_WINDOW,
       isAuthError: code === META_CODE_AUTH,
       isRecipientInvalid: code === META_CODE_RECIPIENT_INVALID,

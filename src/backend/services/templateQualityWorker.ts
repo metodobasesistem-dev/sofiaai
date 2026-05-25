@@ -55,7 +55,7 @@ async function snapshotTenant(userId: string): Promise<void> {
   const inserts: Array<{ user_id: string; template_name: string; language_code: string; quality_score: string; status: string }> = [];
 
   for (const t of templates) {
-    const score = (t.quality_score || 'UNKNOWN').toUpperCase();
+    const score = (typeof t.quality_score === 'string' ? t.quality_score : 'UNKNOWN').toUpperCase();
     const key = `${t.name}__${t.language}`;
     const last = latestMap.get(key);
     if (last === score) continue; // unchanged — skip
@@ -75,7 +75,7 @@ async function snapshotTenant(userId: string): Promise<void> {
     language_code: t.language || 'pt_BR',
     status: (t.status || 'UNKNOWN').toUpperCase(),
     category: t.category || null,
-    quality_score: t.quality_score ? (t.quality_score as string).toUpperCase() : null,
+    quality_score: typeof t.quality_score === 'string' ? t.quality_score.toUpperCase() : null,
     reason: t.rejected_reason || null,
     last_event: 'WORKER_SYNC',
     last_event_at: new Date().toISOString(),
