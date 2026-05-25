@@ -2464,10 +2464,19 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             )}
             <div className="mt-4 flex items-center justify-center gap-2">
               <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
-                ${activeThread.funilStatus === 'Lead' ? 'bg-primary-50 text-primary-600 border-primary-100' : 
-                  activeThread.funilStatus === 'Qualificado' ? 'bg-primary-50 text-primary-600 border-primary-100' : 
-                  'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                {activeThread.funilStatus || 'Lead'}
+                ${{
+                  novo_lead:      'bg-slate-50 text-slate-600 border-slate-200',
+                  primeiro_atend: 'bg-blue-50 text-blue-600 border-blue-100',
+                  sem_resposta:   'bg-amber-50 text-amber-600 border-amber-100',
+                  qualificado:    'bg-violet-50 text-violet-600 border-violet-100',
+                  agendamento:    'bg-indigo-50 text-indigo-600 border-indigo-100',
+                  cliente:        'bg-emerald-50 text-emerald-600 border-emerald-100',
+                }[activeThread.funilStatus as string] || 'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                {{
+                  novo_lead: 'Novo Lead', primeiro_atend: 'Primeiro Atend.',
+                  sem_resposta: 'Sem Resposta', qualificado: 'Qualificado',
+                  agendamento: 'Agendamento', cliente: 'Cliente',
+                }[activeThread.funilStatus as string] || activeThread.funilStatus || 'Novo Lead'}
               </span>
               {activeThread.is_client && (
                 <span className="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
@@ -2524,6 +2533,27 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               </div>
             )}
             <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Etapa no Kanban</label>
+                <select
+                  value={activeThread.funilStatus || 'novo_lead'}
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                    await supabase.from('contacts').update({ status_funil: val }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, funilStatus: val } : t));
+                    toast.success(`Etapa alterada`);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
+                >
+                  <option value="novo_lead">Novo Lead</option>
+                  <option value="primeiro_atend">Primeiro Atend.</option>
+                  <option value="sem_resposta">Sem Resposta</option>
+                  <option value="qualificado">Qualificado</option>
+                  <option value="agendamento">Agendamento</option>
+                  <option value="cliente">Cliente</option>
+                </select>
+              </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
                 <select 
@@ -2773,10 +2803,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               <CreditCard size={14} className="text-primary-500" /> Gestão de Funil
             </h4>
             <div className="flex flex-col gap-2">
-              {(['Lead', 'Qualificado', 'Resolvido'] as const).map((status) => {
+              {([
+                { id: 'novo_lead',      label: 'Novo Lead',        dot: 'bg-slate-400' },
+                { id: 'primeiro_atend', label: 'Primeiro Atend.',  dot: 'bg-blue-400' },
+                { id: 'sem_resposta',   label: 'Sem Resposta',     dot: 'bg-amber-400' },
+                { id: 'qualificado',    label: 'Qualificado',      dot: 'bg-violet-500' },
+                { id: 'agendamento',    label: 'Agendamento',      dot: 'bg-indigo-400' },
+                { id: 'cliente',        label: 'Cliente',          dot: 'bg-emerald-500' },
+              ] as const).map(({ id: status, label, dot }) => {
                 const isActive = activeThread.funilStatus === status;
                 return (
-                  <button 
+                  <button
                     key={status}
                     onClick={async () => {
                       const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
@@ -2784,11 +2821,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                         .from('contacts')
                         .update({ status_funil: status })
                         .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                      
                       if (!error) {
-                        toast.success(`Status alterado para ${status}`);
-                        // Atualização local imediata para feedback instantâneo
-                        setThreads(prev => prev.map(t => 
+                        toast.success(`Etapa alterada para ${label}`);
+                        setThreads(prev => prev.map(t =>
                           t.id === selectedThreadId ? { ...t, funilStatus: status } : t
                         ));
                       } else {
@@ -2796,16 +2831,13 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                       }
                     }}
                     className={`group w-full flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all
-                      ${isActive 
-                        ? 'bg-primary-50 border-primary-500 shadow-xl shadow-primary-500/10 scale-[1.02]' 
+                      ${isActive
+                        ? 'bg-primary-50 border-primary-500 shadow-xl shadow-primary-500/10 scale-[1.02]'
                         : 'bg-white border-slate-100 hover:border-primary-200'}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full shadow-sm
-                        ${status === 'Lead' ? 'bg-primary-500' : 
-                          status === 'Qualificado' ? 'bg-primary-500' : 'bg-emerald-500'}`} 
-                      />
-                      <span className={`text-[14px] font-bold ${isActive ? 'text-primary-700' : 'text-slate-600'}`}>{status}</span>
+                      <div className={`w-3 h-3 rounded-full shadow-sm ${dot}`} />
+                      <span className={`text-[14px] font-bold ${isActive ? 'text-primary-700' : 'text-slate-600'}`}>{label}</span>
                     </div>
                     {isActive && <Check size={18} className="text-primary-600" strokeWidth={3} />}
                   </button>
@@ -3380,8 +3412,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
       // Filtro principal (linha 1)
       let matchesMain = true;
-      if (filterStatus === 'Ativos') matchesMain = t.ticketStatus !== 'resolved' && t.funilStatus !== 'Resolvido';
-      else if (filterStatus === 'Encerrados') matchesMain = t.ticketStatus === 'resolved' || t.funilStatus === 'Resolvido';
+      if (filterStatus === 'Ativos') matchesMain = t.ticketStatus !== 'resolved' && t.funilStatus !== 'cliente';
+      else if (filterStatus === 'Encerrados') matchesMain = t.ticketStatus === 'resolved' || t.funilStatus === 'cliente';
       else if (filterStatus === 'Não Lidos') matchesMain = (t.unreadCount || 0) > 0;
       // 'Todos' → matchesMain permanece true
 
@@ -3728,10 +3760,19 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
                     {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm
-                      ${activeThread.funilStatus === 'Resolvido' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                        activeThread.funilStatus === 'Qualificado' ? 'bg-primary-50 text-primary-600 border-primary-100' : 
-                        'bg-slate-50 text-slate-500 border-slate-100'}`}>
-                      {activeThread.funilStatus}
+                      ${{
+                        novo_lead:      'bg-slate-50 text-slate-600 border-slate-200',
+                        primeiro_atend: 'bg-blue-50 text-blue-600 border-blue-100',
+                        sem_resposta:   'bg-amber-50 text-amber-600 border-amber-100',
+                        qualificado:    'bg-violet-50 text-violet-600 border-violet-100',
+                        agendamento:    'bg-indigo-50 text-indigo-600 border-indigo-100',
+                        cliente:        'bg-emerald-50 text-emerald-600 border-emerald-100',
+                      }[activeThread.funilStatus as string] || 'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                      {{
+                        novo_lead: 'Novo Lead', primeiro_atend: 'Primeiro Atend.',
+                        sem_resposta: 'Sem Resposta', qualificado: 'Qualificado',
+                        agendamento: 'Agendamento', cliente: 'Cliente',
+                      }[activeThread.funilStatus as string] || activeThread.funilStatus || 'Novo Lead'}
                     </span>
                   </h3>
                   <div className="flex items-center gap-1.5">
@@ -3800,7 +3841,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                             onClick={async () => {
                               setShowMoreMenu(false);
                               const newStatus = activeThread.ticketStatus === 'resolved' ? 'open' : 'resolved';
-                              const newFunil = newStatus === 'resolved' ? 'Resolvido' : 'Lead';
+                              const newFunil = newStatus === 'resolved' ? 'cliente' : 'novo_lead';
                               const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
                               await supabase.from('threads').update({ ticket_status: newStatus }).eq('id', activeThread.id);
                               await supabase.from('contacts').update({ status_funil: newFunil }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
