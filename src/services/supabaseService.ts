@@ -1967,7 +1967,9 @@ export const submitMetaTemplate = async (params: {
   body_text: string;
   example_values: string[];
   header_text?: string;
+  header_image_url?: string;
   footer_text?: string;
+  buttons?: { type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url?: string; phone_number?: string }[];
 }): Promise<{ success: boolean; meta_id?: string; status?: string; error?: string }> => {
   const res = await fetch('/api/v2/whatsapp/meta/templates/submit', {
     method: 'POST',

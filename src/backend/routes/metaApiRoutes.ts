@@ -402,7 +402,7 @@ Regras obrigatórias que você DEVE seguir:
  */
 router.post('/templates/submit', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId!;
-  const { template_name, category, language, body_text, example_values, header_text, footer_text } = req.body || {};
+  const { template_name, category, language, body_text, example_values, header_text, header_image_url, footer_text, buttons } = req.body || {};
 
   if (!template_name || !category || !body_text) {
     return res.status(400).json({ success: false, error: 'template_name, category e body_text são obrigatórios' });
@@ -423,7 +423,14 @@ router.post('/templates/submit', requireAuth as any, async (req: AuthenticatedRe
 
   // Build components
   const components: any[] = [];
-  if (header_text?.trim()) {
+
+  if (header_image_url?.trim()) {
+    components.push({
+      type: 'HEADER',
+      format: 'IMAGE',
+      example: { header_url: [header_image_url.trim()] },
+    });
+  } else if (header_text?.trim()) {
     components.push({ type: 'HEADER', format: 'TEXT', text: header_text.trim() });
   }
 
@@ -436,6 +443,10 @@ router.post('/templates/submit', requireAuth as any, async (req: AuthenticatedRe
 
   if (footer_text?.trim()) {
     components.push({ type: 'FOOTER', text: footer_text.trim() });
+  }
+
+  if (Array.isArray(buttons) && buttons.length > 0) {
+    components.push({ type: 'BUTTONS', buttons });
   }
 
   try {

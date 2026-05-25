@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   X, Sparkles, Send, Loader2, ChevronLeft,
   CheckCircle2, AlertTriangle, RefreshCw, FileText, Library,
+  Image, Plus, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateMetaTemplate, submitMetaTemplate } from '../services/supabaseService';
@@ -98,6 +99,7 @@ const LANGUAGES = [
 ];
 
 type Step = 'intent' | 'preview' | 'done';
+type ButtonItem = { id: number; type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url: string; phone: string };
 
 function toSnakeCase(s: string) {
   return s.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
@@ -136,6 +138,12 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
   const [footerText, setFooterText] = useState('');
   const [aiNotes, setAiNotes] = useState('');
   const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+
+  // Header media & buttons
+  const [headerType, setHeaderType] = useState<'none' | 'text' | 'image'>('none');
+  const [headerImageUrl, setHeaderImageUrl] = useState('');
+  const [buttons, setButtons] = useState<ButtonItem[]>([]);
+  const [nextBtnId, setNextBtnId] = useState(0);
 
   // State
   const [step, setStep] = useState<Step>('intent');
@@ -179,11 +187,16 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
       const upper = letters.replace(/[^A-ZÀ-Ú]/g, '');
       return upper.length / letters.length <= 0.7;
     })(),
-  }), [slug, charCount, varCount, exampleValues, bodyText]);
+    btnOk: buttons.every(b =>
+      b.text.trim().length > 0 &&
+      (b.type !== 'URL' || b.url.trim().length > 0) &&
+      (b.type !== 'PHONE_NUMBER' || b.phone.trim().length > 0)
+    ),
+  }), [slug, charCount, varCount, exampleValues, bodyText, buttons]);
 
   const canSubmit =
     checks.nameOk && checks.charOk && checks.examplesOk &&
-    checks.noShortUrl && checks.noSpam && checks.noCaps && !submitting;
+    checks.noShortUrl && checks.noSpam && checks.noCaps && checks.btnOk && !submitting;
 
   function reset() {
     setStep('intent');
@@ -191,6 +204,7 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
     setName(''); setCategory('UTILITY'); setLanguage('pt_BR'); setDescription('');
     setBodyText(''); setExampleValues([]); setHeaderText(''); setFooterText('');
     setAiNotes(''); setAiWarnings([]); setMetaId(null);
+    setHeaderType('none'); setHeaderImageUrl(''); setButtons([]); setNextBtnId(0);
   }
 
   function applyLibraryItem(item: typeof LIBRARY[number]) {
@@ -238,8 +252,15 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
         language,
         body_text: bodyText,
         example_values: exampleValues.slice(0, varCount),
-        header_text: headerText || undefined,
+        header_text: headerType === 'text' ? (headerText || undefined) : undefined,
+        header_image_url: headerType === 'image' ? (headerImageUrl.trim() || undefined) : undefined,
         footer_text: footerText || undefined,
+        buttons: buttons.length > 0 ? buttons.map(b => ({
+          type: b.type,
+          text: b.text,
+          ...(b.type === 'URL' && { url: b.url }),
+          ...(b.type === 'PHONE_NUMBER' && { phone_number: b.phone }),
+        })) : undefined,
       });
       if (!res.success) {
         toast.error(res.error || 'Falha ao enviar para a Meta');
@@ -253,6 +274,18 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function addButton() {
+    if (buttons.length >= 3) return;
+    setButtons(prev => [...prev, { id: nextBtnId, type: 'QUICK_REPLY', text: '', url: '', phone: '' }]);
+    setNextBtnId(n => n + 1);
+  }
+  function updateButton(id: number, patch: Partial<ButtonItem>) {
+    setButtons(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b));
+  }
+  function removeButton(id: number) {
+    setButtons(prev => prev.filter(b => b.id !== id));
   }
 
   // Sync example values array length when body text changes
@@ -456,29 +489,129 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
                     <p className="text-[10px] text-slate-400">Use {'{{1}}'}, {'{{2}}'}, … para variáveis dinâmicas.</p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
+                  {/* Cabeçalho */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cabeçalho <span className="font-normal normal-case">(opcional)</span></label>
+                      <div className="flex gap-1">
+                        {(['none', 'text', 'image'] as const).map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setHeaderType(t)}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                              headerType === t
+                                ? 'bg-violet-600 text-white border-violet-600'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {t === 'image' && <Image size={10} />}
+                            {t === 'none' ? 'Nenhum' : t === 'text' ? 'Texto' : 'Imagem'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {headerType === 'text' && (
                       <input
                         type="text"
                         value={headerText}
                         onChange={e => setHeaderText(e.target.value)}
                         maxLength={60}
-                        placeholder="Título curto (max 60)"
+                        placeholder="Título curto (máx 60 chars)"
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
                       />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rodapé <span className="font-normal normal-case">(opcional)</span></label>
+                    )}
+                    {headerType === 'image' && (
                       <input
-                        type="text"
-                        value={footerText}
-                        onChange={e => setFooterText(e.target.value)}
-                        maxLength={60}
-                        placeholder="Texto pequeno ao fim"
+                        type="url"
+                        value={headerImageUrl}
+                        onChange={e => setHeaderImageUrl(e.target.value)}
+                        placeholder="URL da imagem de exemplo (https://...)"
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
                       />
+                    )}
+                  </div>
+
+                  {/* Rodapé */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rodapé <span className="font-normal normal-case">(opcional)</span></label>
+                    <input
+                      type="text"
+                      value={footerText}
+                      onChange={e => setFooterText(e.target.value)}
+                      maxLength={60}
+                      placeholder="Texto pequeno ao fim"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                    />
+                  </div>
+
+                  {/* Botões */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        Botões <span className="font-normal normal-case">(opcional, máx 3)</span>
+                      </label>
+                      {buttons.length < 3 && (
+                        <button
+                          type="button"
+                          onClick={addButton}
+                          className="flex items-center gap-1 text-[10px] font-black text-violet-600 hover:text-violet-800 transition-colors"
+                        >
+                          <Plus size={11} /> Adicionar
+                        </button>
+                      )}
                     </div>
+                    {buttons.length === 0 && (
+                      <p className="text-[10px] text-slate-400">Nenhum botão adicionado. Botões permitem respostas rápidas ou links de ação.</p>
+                    )}
+                    {buttons.map(btn => (
+                      <div key={btn.id} className="p-3 rounded-xl border border-slate-200 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={btn.type}
+                            onChange={e => updateButton(btn.id, { type: e.target.value as ButtonItem['type'] })}
+                            className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-700 bg-white outline-none"
+                          >
+                            <option value="QUICK_REPLY">Resposta Rápida</option>
+                            <option value="URL">Link (URL)</option>
+                            <option value="PHONE_NUMBER">Telefone</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={btn.text}
+                            onChange={e => updateButton(btn.id, { text: e.target.value })}
+                            maxLength={25}
+                            placeholder="Texto do botão (máx 25)"
+                            className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeButton(btn.id)}
+                            className="text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        {btn.type === 'URL' && (
+                          <input
+                            type="url"
+                            value={btn.url}
+                            onChange={e => updateButton(btn.id, { url: e.target.value })}
+                            placeholder="https://..."
+                            className="w-full px-3 py-1.5 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                          />
+                        )}
+                        {btn.type === 'PHONE_NUMBER' && (
+                          <input
+                            type="tel"
+                            value={btn.phone}
+                            onChange={e => updateButton(btn.id, { phone: e.target.value })}
+                            placeholder="+55 11 99999-9999"
+                            className="w-full px-3 py-1.5 rounded-xl border border-slate-200 focus:border-violet-400 outline-none text-sm"
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
 
                   {varCount > 0 && (
@@ -516,17 +649,46 @@ export default function TemplateBuilderModal({ isOpen, onClose, onSubmitted, ini
                     <Check ok={checks.noShortUrl} label="Sem URLs encurtadas" />
                     <Check ok={checks.noSpam} warn={!checks.noSpam} label="Sem linguagem financeira/spam" />
                     <Check ok={checks.noCaps} warn={!checks.noCaps} label="Sem excesso de MAIÚSCULAS" />
+                    {buttons.length > 0 && <Check ok={checks.btnOk} label={`Botões válidos (${buttons.length})`} />}
                   </div>
 
                   {/* Live preview */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pré-visualização final</label>
-                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-sm text-slate-800 whitespace-pre-wrap">
-                      {(() => {
-                        let t = bodyText;
-                        exampleValues.forEach((v, i) => { t = t.replace(`{{${i+1}}}`, v || `{{${i+1}}}`); });
-                        return t || <span className="text-slate-400 italic">Escreva o corpo acima…</span>;
-                      })()}
+                    <div className="rounded-2xl bg-emerald-50 border border-emerald-100 overflow-hidden">
+                      {headerType === 'image' && headerImageUrl && (
+                        <img
+                          src={headerImageUrl}
+                          alt="Header"
+                          className="w-full h-32 object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div className="p-4 space-y-2 text-sm text-slate-800">
+                        {headerType === 'text' && headerText && (
+                          <p className="font-black text-slate-900">{headerText}</p>
+                        )}
+                        <div className="whitespace-pre-wrap">
+                          {(() => {
+                            let t = bodyText;
+                            exampleValues.forEach((v, i) => { t = t.replace(`{{${i+1}}}`, v || `{{${i+1}}}`); });
+                            return t || <span className="text-slate-400 italic">Escreva o corpo acima…</span>;
+                          })()}
+                        </div>
+                        {footerText && <p className="text-[11px] text-slate-400">{footerText}</p>}
+                        {buttons.length > 0 && (
+                          <div className="border-t border-emerald-200 pt-2 flex flex-wrap gap-1.5">
+                            {buttons.map(btn => (
+                              <span
+                                key={btn.id}
+                                className="px-3 py-1 rounded-full bg-white border border-emerald-200 text-[11px] font-bold text-emerald-700"
+                              >
+                                {btn.text || '(sem texto)'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </>
