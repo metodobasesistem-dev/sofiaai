@@ -32,16 +32,19 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Estrutura das colunas baseadas no modo de visualização
-  const columns = viewMode === 'funil' 
+  const columns = viewMode === 'funil'
     ? [
-        { id: 'Lead', title: 'Leads', color: 'bg-slate-100', borderColor: 'border-slate-200', titleColor: 'text-slate-600' },
-        { id: 'Qualificado', title: 'Qualificados', color: 'bg-primary-50', borderColor: 'border-primary-100', titleColor: 'text-primary-600' },
-        { id: 'Resolvido', title: 'Resolvidos', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
+        { id: 'novo_lead',      title: 'Novo Lead',       desc: 'Primeiro contato recebido',              dot: 'bg-slate-400',   color: 'bg-slate-50',    borderColor: 'border-slate-200',   titleColor: 'text-slate-600' },
+        { id: 'primeiro_atend', title: 'Primeiro Atend.', desc: 'Em conversa ativa com a equipe',         dot: 'bg-blue-400',    color: 'bg-blue-50',     borderColor: 'border-blue-100',    titleColor: 'text-blue-600' },
+        { id: 'sem_resposta',   title: 'Sem Resposta',    desc: 'Aguardando retorno do lead',             dot: 'bg-amber-400',   color: 'bg-amber-50',    borderColor: 'border-amber-100',   titleColor: 'text-amber-600' },
+        { id: 'qualificado',    title: 'Qualificado',     desc: 'Interesse confirmado, pronto para agendar', dot: 'bg-violet-400', color: 'bg-violet-50',  borderColor: 'border-violet-100',  titleColor: 'text-violet-600' },
+        { id: 'agendamento',    title: 'Agendamento',     desc: 'Consulta marcada no calendário',         dot: 'bg-indigo-400',  color: 'bg-indigo-50',   borderColor: 'border-indigo-100',  titleColor: 'text-indigo-600' },
+        { id: 'cliente',        title: 'Cliente',         desc: 'Conversão concluída',                    dot: 'bg-emerald-400', color: 'bg-emerald-50',  borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
       ]
     : [
-        { id: 'open', title: 'Abertos', color: 'bg-amber-50', borderColor: 'border-amber-100', titleColor: 'text-amber-600' },
-        { id: 'pending', title: 'Pendentes', color: 'bg-primary-50', borderColor: 'border-primary-100', titleColor: 'text-primary-600' },
-        { id: 'resolved', title: 'Resolvidos', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' }
+        { id: 'open',     title: 'Abertos',    desc: '', dot: 'bg-amber-400',   color: 'bg-amber-50',   borderColor: 'border-amber-100',   titleColor: 'text-amber-600' },
+        { id: 'pending',  title: 'Pendentes',  desc: '', dot: 'bg-primary-400', color: 'bg-primary-50', borderColor: 'border-primary-100', titleColor: 'text-primary-600' },
+        { id: 'resolved', title: 'Resolvidos', desc: '', dot: 'bg-emerald-400', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
       ];
 
   // Agrupamento estático para mockup (na próxima fase ligaremos aos threads reais)
@@ -110,9 +113,9 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     onThreadsChange(prev => prev.map(t => {
       if (t.id === draggedCardId) {
         if (viewMode === 'funil') {
-          return { ...t, funilStatus: targetColumnId, ticketStatus: targetColumnId === 'Resolvido' ? 'resolved' : 'open' };
+          return { ...t, funilStatus: targetColumnId, ticketStatus: targetColumnId === 'cliente' ? 'resolved' : 'open' };
         } else {
-          return { ...t, ticketStatus: targetColumnId, funilStatus: targetColumnId === 'resolved' ? 'Resolvido' : 'Lead' };
+          return { ...t, ticketStatus: targetColumnId, funilStatus: targetColumnId === 'resolved' ? 'cliente' : 'novo_lead' };
         }
       }
       return t;
@@ -121,7 +124,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     // Send to Supabase
     try {
       if (viewMode === 'funil') {
-        const ticketStatusUpdate = targetColumnId === 'Resolvido' ? 'resolved' : 'open';
+        const ticketStatusUpdate = targetColumnId === 'cliente' ? 'resolved' : 'open';
         if (card.contactId) {
           await supabase.from('contacts').update({ status_funil: targetColumnId }).eq('id', card.contactId);
         } else {
@@ -130,7 +133,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
         }
         await supabase.from('threads').update({ ticket_status: ticketStatusUpdate }).eq('id', draggedCardId);
       } else {
-        const funilStatusUpdate = targetColumnId === 'resolved' ? 'Resolvido' : 'Lead';
+        const funilStatusUpdate = targetColumnId === 'resolved' ? 'cliente' : 'novo_lead';
         await supabase.from('threads').update({ ticket_status: targetColumnId }).eq('id', draggedCardId);
         if (card.contactId) {
           await supabase.from('contacts').update({ status_funil: funilStatusUpdate }).eq('id', card.contactId);
@@ -282,11 +285,17 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
             const cards = getCards(col.id);
             return (
               <div key={col.id} className="w-80 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-4 px-2">
-                  <h3 className={`text-sm font-black uppercase tracking-wider ${col.titleColor}`}>{col.title}</h3>
-                  <span className="bg-white px-2 py-0.5 rounded-full text-xs font-bold text-gray-500 shadow-sm border border-gray-100">
-                    {cards.length}
-                  </span>
+                <div className="mb-4 px-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${col.dot}`} />
+                      <h3 className={`text-sm font-black uppercase tracking-wider ${col.titleColor}`}>{col.title}</h3>
+                    </div>
+                    <span className="bg-white px-2 py-0.5 rounded-full text-xs font-bold text-gray-500 shadow-sm border border-gray-100">
+                      {cards.length}
+                    </span>
+                  </div>
+                  {col.desc && <p className="text-[11px] text-gray-400 mt-0.5 pl-4">{col.desc}</p>}
                 </div>
                 
                 <div 
@@ -297,7 +306,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                 >
                   {cards.length === 0 ? (
                     <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-200/50 rounded-xl opacity-50">
-                      <p className="text-xs font-bold text-gray-400">Nenhum card</p>
+                      <p className="text-xs font-bold text-gray-400">Arraste aqui</p>
                     </div>
                   ) : (
                     cards.map(card => (
