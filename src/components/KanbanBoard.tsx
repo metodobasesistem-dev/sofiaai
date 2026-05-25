@@ -288,14 +288,14 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
                 <div className="mb-4 px-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${col.dot}`} />
-                      <h3 className={`text-sm font-black uppercase tracking-wider ${col.titleColor}`}>{col.title}</h3>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${col.dot}`} />
+                      <h3 className={`text-[11px] font-black uppercase tracking-widest ${col.titleColor}`}>{col.title}</h3>
                     </div>
-                    <span className="bg-white px-2 py-0.5 rounded-full text-xs font-bold text-gray-500 shadow-sm border border-gray-100">
+                    <span className="bg-white px-1.5 py-0.5 rounded-full text-[10px] font-bold text-gray-400 shadow-sm border border-gray-100">
                       {cards.length}
                     </span>
                   </div>
-                  {col.desc && <p className="text-[11px] text-gray-400 mt-0.5 pl-4">{col.desc}</p>}
+                  {col.desc && <p className="text-[10px] text-gray-400 mt-0.5 pl-3">{col.desc}</p>}
                 </div>
                 
                 <div 
