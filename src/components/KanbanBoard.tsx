@@ -157,134 +157,110 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-50/50">
       {/* Header */}
-      <div className="p-6 md:p-8 border-b border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <LayoutGrid className="text-primary-600" />
-            Kanban Board
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">Gerencie seus contatos e tickets de forma visual.</p>
+      <div className="px-4 py-3 border-b border-gray-100 bg-white flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <LayoutGrid size={16} className="text-primary-600" />
+          <h1 className="text-sm font-black text-gray-900">Kanban Board</h1>
         </div>
-        
-        <div className="flex flex-col lg:flex-row items-center gap-4">
+
+        <div className="flex items-center gap-2 flex-1 justify-end">
           {/* Busca */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Buscar card..." 
+          <div className="relative w-40">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+            <input
+              type="text"
+              placeholder="Buscar card..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+              className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
             />
           </div>
 
-          {/* Filtros de Data */}
-          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-full sm:w-auto">
-            <div className="flex bg-white rounded-lg shadow-sm p-0.5 border border-gray-100">
-              <button 
-                onClick={() => setDateType('updated')}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'updated' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                Atualização
-              </button>
-              <button 
-                onClick={() => setDateType('created')}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'created' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                Criação
-              </button>
-            </div>
+          {/* Tipo de data */}
+          <div className="flex bg-gray-100 p-0.5 rounded-lg">
+            <button
+              onClick={() => setDateType('updated')}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'updated' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              Atualização
+            </button>
+            <button
+              onClick={() => setDateType('created')}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${dateType === 'created' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              Criação
+            </button>
+          </div>
 
-            <div className="relative">
-              <button 
-                onClick={() => setShowDatePicker(!showDatePicker)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-primary-300 transition-all shadow-sm"
-              >
-                <Calendar size={14} className="text-primary-500" />
-                {dateFilter === 'all' ? 'Todo o período' : 
-                 dateFilter === 'today' ? 'Hoje' :
-                 dateFilter === 'yesterday' ? 'Ontem' :
-                 dateFilter === '7days' ? 'Últimos 7 dias' :
-                 dateFilter === '30days' ? 'Últimos 30 dias' : 'Personalizado'}
-                <ChevronDown size={14} className={`transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showDatePicker && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setShowDatePicker(false)} />
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-30 animate-in fade-in zoom-in duration-200">
-                    {(['all', 'today', 'yesterday', '7days', '30days', 'custom'] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => {
-                          setDateFilter(f);
-                          if (f !== 'custom') setShowDatePicker(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors
-                          ${dateFilter === f ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}
-                      >
-                        {f === 'all' ? 'Todo o período' : 
-                         f === 'today' ? 'Hoje' :
-                         f === 'yesterday' ? 'Ontem' :
-                         f === '7days' ? 'Últimos 7 dias' :
-                         f === '30days' ? 'Últimos 30 dias' : 'Personalizado...'}
-                      </button>
-                    ))}
-                    
-                    {dateFilter === 'custom' && (
-                      <div className="mt-2 p-2 border-t border-gray-50 space-y-2">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-gray-400">Início</label>
-                          <input 
-                            type="date" 
-                            value={customRange.start}
-                            onChange={e => setCustomRange(prev => ({ ...prev, start: e.target.value }))}
-                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-primary-300"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-gray-400">Fim</label>
-                          <input 
-                            type="date" 
-                            value={customRange.end}
-                            onChange={e => setCustomRange(prev => ({ ...prev, end: e.target.value }))}
-                            className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-primary-300"
-                          />
-                        </div>
+          {/* Período */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:border-primary-300 transition-all shadow-sm"
+            >
+              <Calendar size={12} className="text-primary-500" />
+              {dateFilter === 'all' ? 'Todo o período' :
+               dateFilter === 'today' ? 'Hoje' :
+               dateFilter === 'yesterday' ? 'Ontem' :
+               dateFilter === '7days' ? '7 dias' :
+               dateFilter === '30days' ? '30 dias' : 'Personalizado'}
+              <ChevronDown size={12} className={`transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
+            </button>
+            {showDatePicker && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowDatePicker(false)} />
+                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-30">
+                  {(['all', 'today', 'yesterday', '7days', '30days', 'custom'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => { setDateFilter(f); if (f !== 'custom') setShowDatePicker(false); }}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${dateFilter === f ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {f === 'all' ? 'Todo o período' : f === 'today' ? 'Hoje' : f === 'yesterday' ? 'Ontem' : f === '7days' ? 'Últimos 7 dias' : f === '30days' ? 'Últimos 30 dias' : 'Personalizado...'}
+                    </button>
+                  ))}
+                  {dateFilter === 'custom' && (
+                    <div className="mt-2 p-2 border-t border-gray-50 space-y-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-gray-400">Início</label>
+                        <input type="date" value={customRange.start} onChange={e => setCustomRange(prev => ({ ...prev, start: e.target.value }))} className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-primary-300" />
                       </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-gray-400">Fim</label>
+                        <input type="date" value={customRange.end} onChange={e => setCustomRange(prev => ({ ...prev, end: e.target.value }))} className="w-full text-xs p-1.5 border border-gray-100 rounded-md outline-none focus:border-primary-300" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Modo de Visualização */}
-          <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
-            <button 
+          <div className="flex bg-gray-100 p-0.5 rounded-lg shrink-0">
+            <button
               onClick={() => setViewMode('funil')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'funil' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'funil' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
             >
-              <Filter size={16} /> <span className="whitespace-nowrap">Por Funil</span>
+              <Filter size={12} /> Por Funil
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('ticket')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'ticket' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'ticket' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
             >
-              <Ticket size={16} /> <span className="whitespace-nowrap">Por Ticket</span>
+              <Ticket size={12} /> Por Ticket
             </button>
           </div>
         </div>
       </div>
 
       {/* Board */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 md:p-8">
-        <div className="flex gap-6 h-full items-start min-w-max">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
+        <div className="flex gap-3 h-full items-start min-w-max">
           {columns.map(col => {
             const cards = getCards(col.id);
             return (
-              <div key={col.id} className="w-80 h-full flex flex-col">
+              <div key={col.id} className="w-52 h-full flex flex-col">
                 <div className="mb-4 px-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
