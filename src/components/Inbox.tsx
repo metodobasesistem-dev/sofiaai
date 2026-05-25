@@ -110,6 +110,16 @@ interface Thread {
   lastInboundAt?: number;
 }
 
+const FUNIL_COMPAT: Record<string, string> = {
+  'Lead': 'novo_lead',
+  'Qualificado': 'qualificado',
+  'Resolvido': 'cliente',
+};
+function normFunil(s?: string | null): string {
+  if (!s) return 'novo_lead';
+  return FUNIL_COMPAT[s] ?? s;
+}
+
 // ── Meta 24h Window ────────────────────────────────────────────────────────────
 // Apos 24h sem mensagem do cliente, o Meta rejeita mensagens livres (131047) e
 // so templates aprovados podem ser enviados. Calcula estado e tempo restante.
@@ -1630,7 +1640,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
 
     return {
       name: contact?.nome || fallbackName,
-      funilStatus: contact?.status_funil || 'Lead'
+      funilStatus: normFunil(contact?.status_funil)
     };
   };
 
@@ -1666,10 +1676,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             status: 'human',
             updatedAt: new Date().toISOString(),
             ticketStatus: 'open',
-            funilStatus: 'Lead',
+            funilStatus: 'novo_lead',
             isTemp: true
           };
-          
+
           const resolved = getResolvedContact(cleanJid, tempThread.name);
           tempThread.name = resolved.name;
           tempThread.funilStatus = resolved.funilStatus;
@@ -1927,7 +1937,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
               updatedAt: d.updated_at || new Date().toISOString(),
               lastMessageTime: d.last_message_time ? new Date(d.last_message_time).getTime() : 0,
               ticketStatus: d.ticket_status || 'open',
-              funilStatus: contact?.status_funil || 'Lead',
+              funilStatus: normFunil(contact?.status_funil),
               is_client: contact?.is_client || false,
               priority: contact?.priority,
               profilePictureUrl: d.profile_picture_url,
@@ -2056,7 +2066,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : (baseThread?.lastMessageTime || 0),
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (baseThread?.time || ''),
-                  funilStatus: resolvedFromCRM.funilStatus !== 'Lead' ? resolvedFromCRM.funilStatus : (baseThread?.funilStatus || 'Lead'),
+                  funilStatus: resolvedFromCRM.funilStatus !== 'novo_lead' ? resolvedFromCRM.funilStatus : (baseThread?.funilStatus || 'novo_lead'),
                   // Usa !== undefined para respeitar null explícito do banco
                   // (ex: quando o refresh invalidou a URL expirada)
                   profilePictureUrl: payload.new.profile_picture_url !== undefined
@@ -2113,7 +2123,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                   return { 
                     ...t, 
                     name: payload.new.nome || t.name,
-                    funilStatus: payload.new.status_funil || t.funilStatus,
+                    funilStatus: normFunil(payload.new.status_funil) || t.funilStatus,
                     is_client: payload.new.is_client ?? t.is_client
                   };
                 }
@@ -3050,10 +3060,10 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
         status: 'human',
         updatedAt: new Date().toISOString(),
         ticketStatus: 'open',
-        funilStatus: 'Lead',
+        funilStatus: 'novo_lead',
         isTemp: true
       };
-      
+
       const resolved = getResolvedContact(cleanJid, tempThread.name);
       tempThread.name = resolved.name;
       tempThread.funilStatus = resolved.funilStatus;
