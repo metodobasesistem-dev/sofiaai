@@ -258,11 +258,11 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
 
       {/* Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
-        <div className="flex gap-3 h-full items-start min-w-max">
+        <div className="flex gap-3 h-full items-start min-w-max w-full">
           {columns.map(col => {
             const cards = getCards(col.id);
             return (
-              <div key={col.id} className="w-52 h-full flex flex-col">
+              <div key={col.id} className="flex-1 min-w-[200px] max-w-xs h-full flex flex-col">
                 <div className="mb-4 px-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
