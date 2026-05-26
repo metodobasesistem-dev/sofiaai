@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { 
-  Bot, 
-  LogIn, 
-  Loader2, 
-  Mail, 
-  Lock, 
-  UserPlus, 
-  ChevronRight, 
+import React, { useState, useRef } from 'react';
+import {
+  Bot,
+  LogIn,
+  Loader2,
+  Mail,
+  Lock,
+  UserPlus,
+  ChevronRight,
   ShieldCheck,
   AlertCircle,
   User,
@@ -15,21 +15,26 @@ import {
   Target,
   ArrowLeft,
   Eye,
-  EyeOff
+  EyeOff,
+  KeyRound
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 type AuthMode = 'login' | 'register';
+type LoginStep = 'email' | 'otp';
 
 export default function Login() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [step, setStep] = useState(1);
+  const [loginStep, setLoginStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   // New Registration Fields
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -57,6 +62,12 @@ export default function Login() {
     };
     fetchSettings();
   }, []);
+
+  React.useEffect(() => {
+    if (mode === 'login' && loginStep === 'otp') {
+      setTimeout(() => otpRefs.current[0]?.focus(), 150);
+    }
+  }, [loginStep, mode]);
 
   const handleGoogleLogin = async () => {
     try {
@@ -94,9 +105,76 @@ export default function Login() {
     }
   };
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  const handleSendCode = async () => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Digite um e-mail válido.');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setFormError(null);
+      const res = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar código.');
+      toast.success('Código enviado! Verifique seu e-mail.');
+      setOtpDigits(['', '', '', '', '', '']);
+      setLoginStep('otp');
+    } catch (err: any) {
+      const msg = err.message || 'Erro ao enviar código.';
+      toast.error(msg);
+      setFormError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    const code = otpDigits.join('');
+    if (code.length !== 6) {
+      toast.error('Digite os 6 dígitos do código.');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setFormError(null);
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Código inválido.');
+
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: data.token_hash,
+        type: 'magiclink',
+      });
+      if (error) throw error;
+      toast.success('Bem-vindo!');
+    } catch (err: any) {
+      const msg = err.message || 'Código inválido ou expirado.';
+      toast.error(msg);
+      setFormError(msg);
+      setOtpDigits(['', '', '', '', '', '']);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+    setFormError(null);
+
+    if (mode === 'login') {
+      if (loginStep === 'email') { await handleSendCode(); return; }
+      if (loginStep === 'otp') { await handleVerifyCode(); return; }
+    }
+
     if (mode === 'register' && step === 1) {
       if (!email || !password) {
         toast.error('Preencha e-mail e senha.');
@@ -118,75 +196,63 @@ export default function Login() {
     try {
       setIsLoading(true);
       console.log(`[Auth] Starting ${mode} for:`, email);
-      
-      if (mode === 'login') {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        if (error) throw error;
-        toast.success('Bem-vindo de volta!');
-      } else {
-        // Mode = Register & Step = 2
-        if (!nomeCompleto || !whatsapp || !nomeEmpresa || !nicho) {
-          toast.error('Por favor, preencha todos os dados da empresa.');
-          setIsLoading(false);
-          return;
-        }
 
-        console.log('[Auth] Attempting signUp with metadata...');
-        
-        let trialDays = 10;
-        try {
-          const { getPublicSettings } = await import('../services/supabaseService');
-          const settings = await getPublicSettings();
-          trialDays = settings.trial_days || 10;
-        } catch (e) {
-          console.warn('[Login] Failed to fetch trial days, using default 10.');
-        }
+      // Mode = Register & Step = 2
+      if (!nomeCompleto || !whatsapp || !nomeEmpresa || !nicho) {
+        toast.error('Por favor, preencha todos os dados da empresa.');
+        setIsLoading(false);
+        return;
+      }
 
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              nome_completo: nomeCompleto,
-              whatsapp_organizacao: whatsapp,
-              nome_empresa: nomeEmpresa,
-              nicho: nicho,
-              role: 'client',
-              plano: 'Trial',
-              trial_ends_at: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString()
-            }
+      console.log('[Auth] Attempting signUp with metadata...');
+
+      let trialDays = 10;
+      try {
+        const { getPublicSettings } = await import('../services/supabaseService');
+        const settings = await getPublicSettings();
+        trialDays = settings.trial_days || 10;
+      } catch (e) {
+        console.warn('[Login] Failed to fetch trial days, using default 10.');
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            nome_completo: nomeCompleto,
+            whatsapp_organizacao: whatsapp,
+            nome_empresa: nomeEmpresa,
+            nicho: nicho,
+            role: 'client',
+            plano: 'Trial',
+            trial_ends_at: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString()
           }
+        }
+      });
+
+      if (error) {
+        console.error('[Auth] SignUp Error:', error);
+        throw error;
+      }
+
+      console.log('[Auth] SignUp Response:', data);
+
+      if (data.user && !data.session) {
+        setRegistrationSuccess(true);
+        toast.info('Conta criada! Verifique seu e-mail para acessar o sistema.', {
+          duration: 10000
         });
-
-        if (error) {
-          console.error('[Auth] SignUp Error:', error);
-          throw error;
-        }
-
-        console.log('[Auth] SignUp Response:', data);
-
-        if (data.user && !data.session) {
-          // Email confirmation is required
-          setRegistrationSuccess(true);
-          toast.info('Conta criada! Verifique seu e-mail para acessar o sistema.', {
-            duration: 10000
-          });
-        } else if (data.session) {
-          toast.success('Conta criada com sucesso! Aproveite seus 10 dias de teste.');
-          // App.tsx will detect session and redirect
-        }
+      } else if (data.session) {
+        toast.success('Conta criada com sucesso! Aproveite seus 10 dias de teste.');
       }
     } catch (error: any) {
       console.error('[Auth] Process Error:', error);
       const msg = error.message || 'Erro inesperado';
-      
+
       let displayMsg = 'Erro: ' + msg;
       setFormError(displayMsg);
-      
-      // Se o erro for de e-mail não confirmado, mostra a tela de sucesso/verificação
+
       if (msg.includes('Email not confirmed') || msg.includes('identity_not_confirmed')) {
         setRegistrationSuccess(true);
         toast.info('Sua conta ainda não foi confirmada. Verifique seu e-mail!');
@@ -200,6 +266,8 @@ export default function Login() {
 
   const [logoError, setLogoError] = useState(false);
 
+  const isOtpStep = mode === 'login' && loginStep === 'otp';
+
   return (
     <div className="min-h-screen bg-[#020408] flex items-center justify-center p-6 relative overflow-hidden">
       {/* Background Orbs */}
@@ -207,7 +275,7 @@ export default function Login() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-sofia-glow/10 blur-[120px] rounded-full animate-pulse-soft" style={{ animationDelay: '1s' }}></div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(124,58,237,0.05)_0%,transparent_70%)]"></div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-lg relative z-10"
@@ -216,9 +284,9 @@ export default function Login() {
         <div className="flex flex-col items-center mb-8">
           <div className="w-24 h-24 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white mb-6 shadow-2xl shadow-primary/20 ring-1 ring-white/10 overflow-hidden group">
             {!logoError ? (
-              <img 
-                src="/sofiamini.png" 
-                alt="Zyreo Sofia Logo" 
+              <img
+                src="/sofiamini.png"
+                alt="Zyreo Sofia Logo"
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 onError={() => setLogoError(true)}
               />
@@ -265,28 +333,28 @@ export default function Login() {
               </motion.div>
             ) : (
               <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                {/* Tabs */}
-                {step === 1 && (
+                {/* Tabs — hidden during OTP or register step 2 */}
+                {!isOtpStep && step === 1 && (
                   <div className="flex p-1 bg-slate-900/50 rounded-2xl mb-10 border border-white/5" onClick={() => setFormError(null)}>
+                    <button
+                      type="button"
+                      onClick={() => { setMode('login'); setLoginStep('email'); }}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
+                        mode === 'login' ? 'bg-sofia-purple text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <LogIn size={18} /> Entrar
+                    </button>
+                    {allowSignups ? (
                       <button
                         type="button"
-                        onClick={() => setMode('login')}
+                        onClick={() => setMode('register')}
                         className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                          mode === 'login' ? 'bg-sofia-purple text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                          mode === 'register' ? 'bg-sofia-purple text-white shadow-lg' : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <LogIn size={18} /> Entrar
+                        <UserPlus size={18} /> Cadastrar
                       </button>
-                      {allowSignups ? (
-                        <button
-                          type="button"
-                          onClick={() => setMode('register')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                            mode === 'register' ? 'bg-sofia-purple text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <UserPlus size={18} /> Cadastrar
-                        </button>
                     ) : (
                       <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-not-allowed">
                         <Lock size={14} /> Inscrições Off
@@ -295,14 +363,23 @@ export default function Login() {
                   </div>
                 )}
 
-                {step === 2 && (
-                  <button 
+                {/* Back button for OTP step or register step 2 */}
+                {(isOtpStep || step === 2) && (
+                  <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => {
+                      if (isOtpStep) {
+                        setLoginStep('email');
+                        setOtpDigits(['', '', '', '', '', '']);
+                        setFormError(null);
+                      } else {
+                        setStep(1);
+                      }
+                    }}
                     className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-bold mb-8 transition-colors group"
                   >
                     <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-                    Voltar para dados de acesso
+                    {isOtpStep ? 'Alterar e-mail' : 'Voltar para dados de acesso'}
                   </button>
                 )}
 
@@ -376,6 +453,73 @@ export default function Login() {
                           </div>
                         </div>
                       </motion.div>
+                    ) : isOtpStep ? (
+                      <motion.div
+                        key="otp"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-6"
+                      >
+                        <div className="text-center">
+                          <div className="w-14 h-14 bg-sofia-purple/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <KeyRound size={24} className="text-sofia-purple" />
+                          </div>
+                          <p className="text-slate-400 text-sm leading-relaxed">
+                            Código enviado para<br/>
+                            <span className="text-white font-bold">{email}</span>
+                          </p>
+                        </div>
+
+                        {/* 6-digit OTP boxes */}
+                        <div className="flex gap-2 justify-center">
+                          {otpDigits.map((digit, i) => (
+                            <input
+                              key={i}
+                              ref={(el) => { otpRefs.current[i] = el; }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={1}
+                              value={digit}
+                              className="w-11 h-14 text-center text-xl font-black bg-slate-900/50 border border-white/10 rounded-xl text-white focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none caret-transparent"
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '').slice(-1);
+                                const next = [...otpDigits];
+                                next[i] = val;
+                                setOtpDigits(next);
+                                if (val && i < 5) otpRefs.current[i + 1]?.focus();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Backspace' && !otpDigits[i] && i > 0) {
+                                  otpRefs.current[i - 1]?.focus();
+                                }
+                              }}
+                              onPaste={(e) => {
+                                const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                                if (pasted.length > 0) {
+                                  e.preventDefault();
+                                  const next = Array(6).fill('');
+                                  pasted.split('').forEach((ch, idx) => { if (idx < 6) next[idx] = ch; });
+                                  setOtpDigits(next);
+                                  otpRefs.current[Math.min(pasted.length, 5)]?.focus();
+                                }
+                              }}
+                            />
+                          ))}
+                        </div>
+
+                        <p className="text-center text-xs text-slate-500">
+                          Não recebeu o código?{' '}
+                          <button
+                            type="button"
+                            onClick={handleSendCode}
+                            disabled={isLoading}
+                            className="text-sofia-purple hover:text-[#7C3AED] font-bold transition-colors disabled:opacity-50"
+                          >
+                            Reenviar
+                          </button>
+                        </p>
+                      </motion.div>
                     ) : (
                       <motion.div
                         key="step1"
@@ -399,38 +543,30 @@ export default function Login() {
                           </div>
                         </div>
 
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between px-1">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Senha</label>
-                            {mode === 'login' && (
-                              <button 
-                                type="button" 
-                                onClick={handleForgotPassword}
-                                className="text-xs font-bold text-sofia-purple hover:text-[#7C3AED] transition-colors"
+                        {/* Password only for register */}
+                        {mode === 'register' && (
+                          <div className="space-y-2">
+                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Senha</label>
+                            <div className="relative">
+                              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                              <input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="••••••••"
+                                className="w-full pl-12 pr-12 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
                               >
-                                Esqueceu a senha?
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                               </button>
-                            )}
+                            </div>
                           </div>
-                          <div className="relative">
-                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                            <input
-                              type={showPassword ? 'text' : 'password'}
-                              placeholder="••••••••"
-                              className="w-full pl-12 pr-12 py-4 bg-slate-900/50 border border-white/10 rounded-2xl text-white placeholder:text-slate-600 focus:ring-4 focus:ring-sofia-purple/10 focus:border-sofia-purple transition-all outline-none"
-                              value={password}
-                              onChange={(e) => setPassword(e.target.value)}
-                              required
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
-                            >
-                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                          </div>
-                        </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -444,10 +580,12 @@ export default function Login() {
                       <Loader2 size={20} className="animate-spin" />
                     ) : (
                       <>
-                        {mode === 'login' 
-                          ? 'Entrar na Plataforma' 
-                          : step === 1 
-                            ? 'Próximo Passo' 
+                        {mode === 'login'
+                          ? loginStep === 'email'
+                            ? 'Enviar Código'
+                            : 'Verificar Código'
+                          : step === 1
+                            ? 'Próximo Passo'
                             : 'Finalizar Cadastro'}
                         <ChevronRight size={18} />
                       </>
@@ -455,7 +593,7 @@ export default function Login() {
                   </button>
 
                   {formError && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold"
@@ -466,23 +604,26 @@ export default function Login() {
                   )}
                 </form>
 
-                {/* Divider */}
-                <div className="relative my-8 text-center">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/5"></div>
-                  </div>
-                  <span className="relative px-4 bg-transparent text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">ou continue com</span>
-                </div>
+                {/* Divider + Google — hidden during OTP step */}
+                {!isOtpStep && (
+                  <>
+                    <div className="relative my-8 text-center">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-white/5"></div>
+                      </div>
+                      <span className="relative px-4 bg-transparent text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">ou continue com</span>
+                    </div>
 
-                {/* Social Provider */}
-                <button
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                  className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-white transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-70"
-                >
-                  <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5 grayscale-[0.5]" />
-                  Google
-                </button>
+                    <button
+                      onClick={handleGoogleLogin}
+                      disabled={isLoading}
+                      className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-white transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-70"
+                    >
+                      <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5 grayscale-[0.5]" />
+                      Google
+                    </button>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -497,7 +638,7 @@ export default function Login() {
         {/* Support Link */}
         <p className="mt-8 text-center text-slate-500 text-xs font-medium">
           Precisa de ajuda? {supportWhatsapp ? (
-            <a 
+            <a
               href={`https://wa.me/${supportWhatsapp.replace(/\D/g, '')}?text=Olá, preciso de ajuda com meu login na Sofia.`}
               target="_blank"
               rel="noopener noreferrer"
