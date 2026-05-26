@@ -1475,7 +1475,10 @@ ${customExamples}
         if (existing?.profile_picture_updated_at) {
           const lastUpdate = new Date(existing.profile_picture_updated_at);
           const diffHours = (new Date().getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
-          if (diffHours < 6 && existing.profile_picture_url) return;
+          // TTL: 6h quando temos URL válida; 1h quando contato não tem foto
+          // (evita spam na Evolution API para contatos sem foto)
+          const ttlHours = existing.profile_picture_url ? 6 : 1;
+          if (diffHours < ttlHours) return;
         }
       }
 
@@ -1484,11 +1487,18 @@ ${customExamples}
       const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       const photoUrl = await provider.fetchProfilePictureUrl(instanceName, remoteJid);
 
-      const updateData = {
-        profile_picture_url: photoUrl,
+      // Sempre atualiza o timestamp para respeitar o TTL
+      const updateData: Record<string, any> = {
         profile_picture_updated_at: new Date().toISOString(),
-        photo_url: photoUrl 
       };
+
+      // Só sobrescreve a URL se conseguimos uma nova OU se for force refresh.
+      // Isso evita que uma resposta null temporária da Evolution API apague
+      // uma URL válida já armazenada.
+      if (photoUrl !== null || force) {
+        updateData.profile_picture_url = photoUrl;
+        updateData.photo_url = photoUrl;
+      }
 
       await Promise.all([
         supabase.from('threads').update(updateData).eq('id', threadId),
