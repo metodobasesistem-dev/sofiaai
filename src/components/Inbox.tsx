@@ -1424,7 +1424,7 @@ const FollowUpModal: React.FC<{
   );
 };
 
-export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser | null, role: string | null, isFullscreen?: boolean }) {
+export default function Inbox({ user, role, isFullscreen, initialTab }: { user: SupabaseUser | null, role: string | null, isFullscreen?: boolean, initialTab?: 'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance' }) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1567,7 +1567,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance'>(initialTab || 'conversations');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
   const [isRecording, setIsRecording] = useState(false);

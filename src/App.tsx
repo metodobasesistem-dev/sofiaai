@@ -230,6 +230,9 @@ export default function App() {
       case 'inbox':
         if (role !== 'admin' && !chatEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Inbox user={user} role={role} />;
+      case 'kanban':
+        if (role !== 'admin' && !chatEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
+        return <Inbox user={user} role={role} initialTab="kanban" />;
       case 'contacts':
         return <Contacts onTabChange={handleTabChange} />;
       case 'clients':
