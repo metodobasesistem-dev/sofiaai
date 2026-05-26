@@ -1439,6 +1439,8 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   const [filterStatus, setFilterStatus] = useState<'Ativos' | 'Não Lidos' | 'Encerrados' | 'Todos'>('Ativos');
   const [filterSub, setFilterSub] = useState<'Todos' | 'Lead' | 'Em Suporte' | 'Clientes'>('Todos');
   const [filterBadge, setFilterBadge] = useState<'sem_resposta' | 'follow_up' | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [agents, setAgents] = useState<{ id: string; nome: string; company_name?: string }[]>([]);
@@ -3416,6 +3418,17 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
     (window as any).handleDeleteThread = handleDeleteThread;
   }, [threads, selectedThreadId]);
 
+  // Close filter panel on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // Contadores para badges
   const semRespostaCount = useMemo(() => threads.filter(t =>
     t.ticketStatus !== 'resolved' && t.status === 'human' && (t.unreadCount || 0) > 0
@@ -3619,77 +3632,159 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
             />
           </div>
 
-          {/* LINHA 1 — Filtros principais */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {(['Ativos', 'Não Lidos', 'Encerrados', 'Todos'] as const).map(f => (
+          {/* Filtros — botão compacto com painel colapsável */}
+          <div ref={filterPanelRef}>
+            {/* Trigger row */}
+            <div className="flex items-center gap-2">
               <button
-                key={f}
-                onClick={() => { setFilterStatus(f); setFilterBadge(null); }}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0
-                  ${filterStatus === f && filterBadge === null
-                    ? 'bg-primary-600 text-white shadow-md shadow-primary-200' 
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                onClick={() => setIsFilterOpen(v => !v)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex-shrink-0
+                  ${isFilterOpen
+                    ? 'bg-primary-600 text-white border-primary-600 shadow-md shadow-primary-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
               >
-                {f}
+                <Filter size={12} />
+                Filtros
+                {(filterStatus !== 'Ativos' || filterSub !== 'Todos' || filterBadge !== null) && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${isFilterOpen ? 'bg-white' : 'bg-primary-500'}`} />
+                )}
+                <ChevronDown size={12} className={`transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
               </button>
-            ))}
-          </div>
 
-          {/* LINHA 2 — Sub-filtros de perfil */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {(['Todos', 'Lead', 'Em Suporte', 'Clientes'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterSub(s)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 border
-                  ${filterSub === s
-                    ? s === 'Em Suporte'
-                      ? 'bg-amber-100 text-amber-700 border-amber-200'
-                      : s === 'Clientes'
-                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                      : 'bg-primary-100 text-primary-700 border-primary-200'
-                    : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}
-              >
-                {s === 'Todos' ? 'Geral' : s}
-              </button>
-            ))}
-          </div>
+              {/* Active filter pills (summary, read-only) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
+                {filterStatus !== 'Ativos' && (
+                  <span className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1">
+                    {filterStatus}
+                    <button onClick={() => { setFilterStatus('Ativos'); setFilterBadge(null); }} className="hover:text-primary-900 ml-0.5">×</button>
+                  </span>
+                )}
+                {filterSub !== 'Todos' && (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
+                    filterSub === 'Em Suporte' ? 'bg-amber-100 text-amber-700' : filterSub === 'Clientes' ? 'bg-emerald-100 text-emerald-700' : 'bg-primary-100 text-primary-700'
+                  }`}>
+                    {filterSub}
+                    <button onClick={() => setFilterSub('Todos')} className="hover:opacity-80 ml-0.5">×</button>
+                  </span>
+                )}
+                {filterBadge === 'sem_resposta' && (
+                  <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1">
+                    Sem resposta
+                    <button onClick={() => setFilterBadge(null)} className="hover:text-red-900 ml-0.5">×</button>
+                  </span>
+                )}
+                {filterBadge === 'follow_up' && (
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1">
+                    Follow-up
+                    <button onClick={() => setFilterBadge(null)} className="hover:text-amber-900 ml-0.5">×</button>
+                  </span>
+                )}
+              </div>
+            </div>
 
-          {/* LINHA 3 — Badges de alerta */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setFilterBadge(prev => prev === 'sem_resposta' ? null : 'sem_resposta')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border
-                ${filterBadge === 'sem_resposta'
-                  ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200'
-                  : 'bg-red-50 text-red-500 border-red-100 hover:bg-red-100'}`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-              Sem resposta
-              {semRespostaCount > 0 && (
-                <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black
-                  ${filterBadge === 'sem_resposta' ? 'bg-white/30 text-white' : 'bg-red-500 text-white'}`}>
-                  {semRespostaCount}
-                </span>
+            {/* Dropdown panel */}
+            <AnimatePresence>
+              {isFilterOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-2 bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
+                    {/* Status */}
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Status</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(['Ativos', 'Não Lidos', 'Encerrados', 'Todos'] as const).map(f => (
+                          <button
+                            key={f}
+                            onClick={() => { setFilterStatus(f); setFilterBadge(null); }}
+                            className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all
+                              ${filterStatus === f && filterBadge === null
+                                ? 'bg-primary-600 text-white shadow-sm'
+                                : 'bg-white text-slate-500 border border-slate-200 hover:border-primary-200 hover:text-primary-600'}`}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Perfil */}
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Perfil</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(['Todos', 'Lead', 'Em Suporte', 'Clientes'] as const).map(s => (
+                          <button
+                            key={s}
+                            onClick={() => setFilterSub(s)}
+                            className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border
+                              ${filterSub === s
+                                ? s === 'Em Suporte'
+                                  ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                  : s === 'Clientes'
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                  : 'bg-primary-100 text-primary-700 border-primary-200'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                          >
+                            {s === 'Todos' ? 'Geral' : s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Alertas */}
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Alertas</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => setFilterBadge(prev => prev === 'sem_resposta' ? null : 'sem_resposta')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold transition-all border
+                            ${filterBadge === 'sem_resposta'
+                              ? 'bg-red-500 text-white border-red-500'
+                              : 'bg-white text-red-500 border-red-100 hover:border-red-300'}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                          Sem resposta
+                          {semRespostaCount > 0 && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${filterBadge === 'sem_resposta' ? 'bg-white/30' : 'bg-red-500 text-white'}`}>
+                              {semRespostaCount}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setFilterBadge(prev => prev === 'follow_up' ? null : 'follow_up')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold transition-all border
+                            ${filterBadge === 'follow_up'
+                              ? 'bg-amber-500 text-white border-amber-500'
+                              : 'bg-white text-amber-600 border-amber-100 hover:border-amber-300'}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                          Em follow-up
+                          {followUpCount > 0 && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${filterBadge === 'follow_up' ? 'bg-white/30' : 'bg-amber-500 text-white'}`}>
+                              {followUpCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Limpar */}
+                    {(filterStatus !== 'Ativos' || filterSub !== 'Todos' || filterBadge !== null) && (
+                      <button
+                        onClick={() => { setFilterStatus('Ativos'); setFilterSub('Todos'); setFilterBadge(null); }}
+                        className="w-full py-1.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
               )}
-            </button>
-
-            <button
-              onClick={() => setFilterBadge(prev => prev === 'follow_up' ? null : 'follow_up')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border
-                ${filterBadge === 'follow_up'
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200'
-                  : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'}`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-              Em follow-up
-              {followUpCount > 0 && (
-                <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black
-                  ${filterBadge === 'follow_up' ? 'bg-white/30 text-white' : 'bg-amber-500 text-white'}`}>
-                  {followUpCount}
-                </span>
-              )}
-            </button>
+            </AnimatePresence>
           </div>
         </div>
         
