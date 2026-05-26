@@ -130,29 +130,34 @@ const SidePanel = ({
 
   return (
     <motion.div
-      initial={{ x: '100%', opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: '100%', opacity: 0 }}
+      initial={{ y: '100%', opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: '100%', opacity: 0 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-40 flex flex-col border-l border-slate-100"
+      className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-0 md:left-auto md:right-0 h-[90vh] md:h-full w-full md:max-w-md bg-white shadow-2xl z-40 flex flex-col rounded-t-3xl md:rounded-none md:border-l border-slate-100"
     >
+      {/* Mobile drag handle */}
+      <div className="md:hidden flex justify-center pt-3 pb-1 shrink-0">
+        <div className="w-10 h-1 bg-slate-200 rounded-full" />
+      </div>
+
       {/* Header */}
-      <div className="p-8 border-b border-slate-100 flex items-start justify-between bg-slate-50/30">
-        <div className="flex items-center gap-5">
+      <div className="px-5 md:px-8 py-4 md:py-8 border-b border-slate-100 flex items-start justify-between bg-slate-50/30">
+        <div className="flex items-center gap-4">
           <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="xl" />
           <div className="space-y-1">
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">{contact.nome}</h3>
+            <h3 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">{contact.nome}</h3>
             <p className="text-sm font-medium text-slate-500">{formatPhone(contact.telefone)}</p>
             <div className="pt-1">
               <StatusBadge status={contact.status_funil} />
             </div>
           </div>
         </div>
-        <button 
-          onClick={onClose} 
-          className="w-12 h-12 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-all"
+        <button
+          onClick={onClose}
+          className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-all"
         >
-          <X size={24} />
+          <X size={20} />
         </button>
       </div>
 
@@ -163,16 +168,16 @@ const SidePanel = ({
           { label: 'Agendas', value: appointments.length, icon: <Calendar size={16} /> },
           { label: 'Desde', value: formatRelative(contact.data_criacao), icon: <Clock size={16} /> },
         ].map((stat, i) => (
-          <div key={i} className="flex flex-col items-center justify-center py-6 px-2 space-y-1">
+          <div key={i} className="flex flex-col items-center justify-center py-4 md:py-6 px-2 space-y-1">
             <div className="text-slate-300">{stat.icon}</div>
-            <span className="text-lg font-black text-slate-900 leading-none">{stat.value}</span>
+            <span className="text-base md:text-lg font-black text-slate-900 leading-none">{stat.value}</span>
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</span>
           </div>
         ))}
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-8">
+      <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6 md:space-y-8">
         {/* Detalhes do Contato */}
         <section className="space-y-4">
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -241,18 +246,18 @@ const SidePanel = ({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-6 border-t border-slate-100 bg-slate-50/30 grid grid-cols-2 gap-4">
+      <div className="p-4 md:p-6 border-t border-slate-100 bg-slate-50/30 grid grid-cols-2 gap-3 pb-safe">
         <button
           onClick={() => onEdit(contact)}
-          className="flex items-center justify-center gap-2 px-4 py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+          className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
         >
-          <Edit2 size={16} /> Editar
+          <Edit2 size={15} /> Editar
         </button>
         <button
           onClick={openInbox}
-          className="flex items-center justify-center gap-2 px-4 py-4 bg-primary-600 text-white rounded-[20px] text-xs font-black uppercase tracking-widest hover:bg-primary-700 transition-all shadow-xl shadow-primary-500/30 active:scale-95"
+          className="flex items-center justify-center gap-2 px-4 py-3.5 bg-primary-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary-700 transition-all shadow-xl shadow-primary-500/30 active:scale-95"
         >
-          <MessageSquare size={16} /> Abrir Chat
+          <MessageSquare size={15} /> Abrir Chat
         </button>
       </div>
     </motion.div>
@@ -384,21 +389,21 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
   }), [contacts]);
 
   return (
-    <div className="flex-1 h-full bg-slate-50/50 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+    <div className="flex-1 h-full bg-slate-50/50 overflow-y-auto p-3 md:p-8 space-y-4 md:space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-             <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary-500/20">
-              <UserPlus size={22} />
-            </div>
-            Contatos (CRM)
-          </h1>
-          <p className="text-gray-500 text-sm font-medium mt-1">Gerencie seus leads e histórico via WhatsApp.</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 md:w-10 md:h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary-500/20 shrink-0">
+            <UserPlus size={18} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight leading-tight">Contatos</h1>
+            <p className="text-gray-400 text-[11px] font-medium hidden md:block">Gerencie seus leads e histórico via WhatsApp.</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button 
+        <div className="flex items-center gap-2 shrink-0">
+          <button
             onClick={async () => {
               try {
                 toast.loading('Sincronizando contatos...');
@@ -413,9 +418,10 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
                 toast.error('Erro ao sincronizar: ' + err.message);
               }
             }}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm"
+            title="Sincronizar"
+            className="p-2 md:px-4 md:py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm flex items-center gap-2"
           >
-            <RefreshCw size={14} /> Sincronizar
+            <RefreshCw size={14} /> <span className="hidden md:inline">Sincronizar</span>
           </button>
           
           <button 
@@ -453,45 +459,43 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
                 toast.error('Erro ao exportar contatos');
               }
             }}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
+            className="p-2 md:px-4 md:py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
+            title="Exportar CSV"
           >
-            <Download size={14} className="text-gray-400" /> Exportar
+            <Download size={14} className="text-gray-400" /> <span className="hidden md:inline">Exportar</span>
           </button>
 
-          <button 
-            onClick={() => { 
-              setEditingContactId(null); 
-              setFormData({ nome: '', telefone: '' }); 
-              setIsModalOpen(true); 
-            }}
-            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl text-xs font-black shadow-lg shadow-primary-500/30 hover:bg-primary-700 transition-all active:scale-95"
+          <button
+            onClick={() => { setEditingContactId(null); setFormData({ nome: '', telefone: '' }); setIsModalOpen(true); }}
+            className="flex items-center justify-center gap-1.5 px-3 md:px-6 py-2.5 bg-primary-600 text-white rounded-xl text-xs font-black shadow-lg shadow-primary-500/30 hover:bg-primary-700 transition-all active:scale-95"
           >
-            <Plus size={18} /> Novo Contato
+            <Plus size={16} /> <span>Novo</span>
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
       {!isLoading && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-6"
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6"
         >
           {[
-            { label: 'Total', value: stats.total, color: 'text-gray-900', bg: 'bg-white', border: 'border-slate-100', status: 'Todos' },
-            { label: 'Leads', value: stats.leads, color: 'text-primary-700', bg: 'bg-white', border: 'border-slate-100', status: 'Lead' },
-            { label: 'Clientes', value: stats.clientes, color: 'text-amber-600', bg: 'bg-white', border: 'border-slate-100', status: 'Cliente' },
-            { label: 'Resolvidos', value: stats.resolvidos, color: 'text-emerald-600', bg: 'bg-white', border: 'border-slate-100', status: 'Resolvido' },
+            { label: 'Total',     value: stats.total,      color: 'text-slate-800',   dot: 'bg-slate-400',   status: 'Todos'    },
+            { label: 'Leads',     value: stats.leads,      color: 'text-primary-700', dot: 'bg-primary-500', status: 'Lead'     },
+            { label: 'Clientes',  value: stats.clientes,   color: 'text-amber-600',   dot: 'bg-amber-500',   status: 'Cliente'  },
+            { label: 'Resolvidos',value: stats.resolvidos, color: 'text-emerald-600', dot: 'bg-emerald-500', status: 'Resolvido'},
           ].map((s, i) => (
             <button
               key={i}
               onClick={() => setFilterStatus(s.status as any)}
-              className={`w-full ${s.bg} border ${s.border} rounded-[32px] p-6 text-left transition-all hover:shadow-md relative overflow-hidden group ${filterStatus === s.status ? 'ring-2 ring-primary-500' : 'shadow-sm'}`}
+              className={`w-full bg-white border rounded-2xl md:rounded-[32px] p-4 md:p-6 text-left transition-all hover:shadow-md relative overflow-hidden ${filterStatus === s.status ? 'ring-2 ring-primary-500 shadow-md border-slate-100' : 'border-slate-100 shadow-sm'}`}
             >
-              <p className={`text-3xl font-black ${s.color}`}>{s.value}</p>
-              <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-widest">{s.label}</p>
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
-                 <UserPlus size={40} className={s.color} />
+              <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-2xl md:rounded-t-[32px] ${s.dot}`} />
+              <p className={`text-2xl md:text-3xl font-black ${s.color} mt-1`}>{s.value}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
               </div>
             </button>
           ))}
@@ -499,45 +503,43 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
       )}
 
       {/* Main Content Area */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-[40px] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden"
+        className="bg-white rounded-2xl md:rounded-[40px] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden"
       >
         {/* Search & Filter Bar */}
-        <div className="px-8 py-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/30">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Pesquisar por nome ou número..." 
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+        <div className="px-4 md:px-8 py-4 md:py-6 border-b border-slate-50 space-y-3 bg-slate-50/30">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Pesquisar..."
+                className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            
-            <div className="relative w-44">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <div className="relative shrink-0">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={13} />
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value as any)}
-                className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 focus:border-primary-500 outline-none transition-all appearance-none cursor-pointer"
+                className="pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:border-primary-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="all">Todo o período</option>
                 <option value="today">Hoje</option>
-                <option value="week">Últimos 7 dias</option>
-                <option value="month">Últimos 30 dias</option>
+                <option value="week">7 dias</option>
+                <option value="month">30 dias</option>
               </select>
             </div>
           </div>
-
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
             {(['Todos', 'Lead', 'Qualificado', 'Resolvido', 'Cliente'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f as any)}
-                className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all ${filterStatus === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100'}`}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${filterStatus === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
               >
                 {f}
               </button>
@@ -633,30 +635,35 @@ export default function Contacts({ onTabChange }: { onTabChange: (tab: string) =
               </div>
 
               {/* Mobile View */}
-              <div className="md:hidden divide-y divide-slate-50">
+              <div className="md:hidden divide-y divide-slate-100">
                 {filteredContacts.map((contact) => (
-                  <div 
-                    key={contact.id} 
+                  <div
+                    key={contact.id}
                     onClick={() => setSelectedContact(contact)}
-                    className="p-4 flex items-center gap-4 active:bg-slate-50 transition-colors"
+                    className="px-4 py-3.5 flex items-center gap-3 active:bg-slate-50 transition-colors"
                   >
-                    <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
+                    <div className="relative shrink-0">
+                      <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
+                      {contact.is_client && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center">
+                          <Star size={8} className="fill-white text-white" />
+                        </span>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <h4 className="text-sm font-black text-slate-900 truncate">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-slate-900 truncate">
                           {/^\d+$/.test(contact.nome) ? formatPhone(contact.nome) : contact.nome}
                         </h4>
-                        <span className="text-[10px] text-slate-400 font-bold whitespace-nowrap">
+                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">
                           {formatRelative(contact.ultimaInteracao)}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 truncate mb-2">{contact.ultimaMensagem || formatPhone(contact.telefone)}</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="text-[11px] text-slate-400 truncate">{contact.ultimaMensagem || formatPhone(contact.telefone)}</p>
                         <StatusBadge status={contact.status_funil} />
-                        {contact.is_client && <Star size={10} className="fill-amber-500 text-amber-500" />}
                       </div>
                     </div>
-                    <ChevronRight size={18} className="text-slate-300" />
                   </div>
                 ))}
               </div>
