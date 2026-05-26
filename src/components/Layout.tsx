@@ -302,7 +302,7 @@ export default function Layout({
               ),
               label: 'Atendimento'
             },
-            { id: 'kanban', icon: <Layers size={13} />, label: 'Triagem', minPlan: 'Pro' },
+            { id: 'kanban', icon: <Layers size={13} />, label: 'Kanban', minPlan: 'Pro' },
             { id: 'contacts', icon: <Users size={13} />, label: 'Contatos' },
           ]
         }
