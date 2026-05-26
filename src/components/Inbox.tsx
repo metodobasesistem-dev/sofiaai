@@ -2722,26 +2722,45 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
                     {predefinedLabels.map((lbl, idx) => {
                       const isActive = activeThread.labels && activeThread.labels.includes(lbl);
                       return (
-                        <button
-                          key={idx}
-                          onClick={async () => {
-                            let newLabels = [...(activeThread.labels || [])];
-                            if (isActive) {
-                              newLabels = newLabels.filter(l => l !== lbl);
-                            } else {
-                              newLabels.push(lbl);
-                            }
-                            await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
-                            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border ${
-                            isActive 
-                              ? 'bg-primary-500 text-white border-primary-500 shadow-md shadow-primary-500/20' 
-                              : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300 hover:text-primary-600'
-                          }`}
-                        >
-                          {lbl}
-                        </button>
+                        <div key={idx} className="relative group/lbl flex items-center">
+                          <button
+                            onClick={async () => {
+                              let newLabels = [...(activeThread.labels || [])];
+                              if (isActive) {
+                                newLabels = newLabels.filter(l => l !== lbl);
+                              } else {
+                                newLabels.push(lbl);
+                              }
+                              await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                              setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                            }}
+                            className={`pl-3 pr-6 py-1.5 rounded-xl text-[11px] font-bold transition-all border ${
+                              isActive
+                                ? 'bg-primary-500 text-white border-primary-500 shadow-md shadow-primary-500/20'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300 hover:text-primary-600'
+                            }`}
+                          >
+                            {lbl}
+                          </button>
+                          <button
+                            title="Excluir etiqueta"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const newGlobal = predefinedLabels.filter(l => l !== lbl);
+                              await supabase.from('profiles').update({ predefined_labels: newGlobal }).eq('id', user?.id);
+                              setPredefinedLabels(newGlobal);
+                              if (isActive) {
+                                const newLabels = (activeThread.labels || []).filter(l => l !== lbl);
+                                await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                                setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                              }
+                              toast.success(`Etiqueta "${lbl}" excluída.`);
+                            }}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/lbl:opacity-100 transition-opacity rounded-full p-0.5 hover:bg-red-100 hover:text-red-500 text-slate-400"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
