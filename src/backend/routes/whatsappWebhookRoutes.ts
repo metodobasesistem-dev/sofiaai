@@ -218,17 +218,31 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 }
 
 async function handleMediaMessage(userId: string, instanceName: string, threadId: string, message: any, provider: any, direction: 'inbound' | 'outbound' = 'inbound') {
-  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, quotedId, quotedText, contactJid, raw } = message;
+  const { from, body, contactName, id: messageId, type, caption, fileName, mimeType, quotedId, quotedText, contactJid, raw, mediaBase64: webhookBase64 } = message;
   const cleanPhone = normalizePhone(from);
   const isExternal = direction === 'outbound';
 
   console.log(`[Webhook] 📥 Downloading media for ${direction} message: ${messageId} (${type})`);
-  
+
   try {
-    const base64 = await provider.getMediaBase64(instanceName, raw?.key, raw?.message);
+    // Se o webhook já trouxer o base64 (Webhook Base64 habilitado na Evolution), usa direto
+    let base64 = webhookBase64 || null;
+
+    // Caso contrário, tenta baixar via API com até 3 tentativas e delays crescentes
     if (!base64) {
-      console.warn(`[Webhook] Could not get base64 for media message: ${messageId}`);
-      // BUG FIX: Pass quotedId/quotedText even in fallback path
+      const delays = [0, 2000, 5000];
+      for (let attempt = 0; attempt < delays.length; attempt++) {
+        if (delays[attempt] > 0) {
+          console.log(`[Webhook] ⏳ Retry ${attempt}/${delays.length - 1} for media ${messageId} (aguardando ${delays[attempt]}ms)`);
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        }
+        base64 = await provider.getMediaBase64(instanceName, raw?.key, raw?.message);
+        if (base64) break;
+      }
+    }
+
+    if (!base64) {
+      console.warn(`[Webhook] ⚠️ Could not get base64 after retries for message: ${messageId} (${type})`);
       await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid);
       return;
     }

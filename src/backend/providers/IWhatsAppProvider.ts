@@ -14,6 +14,7 @@ export interface WhatsAppMessage {
   timestamp: number;
   type?: string;
   mediaUrl?: string;
+  mediaBase64?: string;
   mimeType?: string;
   fileName?: string;
   caption?: string;

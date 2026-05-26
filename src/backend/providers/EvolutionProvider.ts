@@ -260,6 +260,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     let body = '';
     let type = 'text';
     let mediaUrl = undefined;
+    let mediaBase64 = undefined;
     let mimeType = undefined;
     let fileName = undefined;
     let caption = undefined;
@@ -282,24 +283,29 @@ export class EvolutionProvider implements IWhatsAppProvider {
       type = 'image';
       caption = messageContent.imageMessage.caption;
       mimeType = messageContent.imageMessage.mimetype;
+      mediaBase64 = messageContent.imageMessage.base64 || undefined;
     } else if (messageContent.videoMessage) {
       body = '[Vídeo]';
       type = 'video';
       caption = messageContent.videoMessage.caption;
       mimeType = messageContent.videoMessage.mimetype;
+      mediaBase64 = messageContent.videoMessage.base64 || undefined;
     } else if (messageContent.audioMessage) {
       body = '[Áudio]';
       type = 'audio';
       mimeType = messageContent.audioMessage.mimetype;
+      mediaBase64 = messageContent.audioMessage.base64 || undefined;
     } else if (messageContent.documentMessage) {
       body = `[Documento]: ${messageContent.documentMessage.fileName || 'arquivo'}`;
       type = 'document';
       fileName = messageContent.documentMessage.fileName;
       mimeType = messageContent.documentMessage.mimetype;
+      mediaBase64 = messageContent.documentMessage.base64 || undefined;
     } else if (messageContent.stickerMessage) {
       body = '[Figurinha]';
       type = 'sticker';
       mimeType = messageContent.stickerMessage.mimetype;
+      mediaBase64 = messageContent.stickerMessage.base64 || undefined;
     } else if (messageContent.contactMessage) {
       body = `[Contato]: ${messageContent.contactMessage.displayName || ''}`;
       type = 'contact';
@@ -353,6 +359,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
       timestamp: messageData.messageTimestamp || Math.floor(Date.now() / 1000),
       type,
       mediaUrl,
+      mediaBase64,
       mimeType,
       fileName,
       caption,
