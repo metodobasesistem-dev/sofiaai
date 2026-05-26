@@ -68,6 +68,7 @@ import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
 import stripeRoutes from './src/backend/routes/stripeRoutes.js';
+import authEmailRoutes from './src/backend/routes/authEmailRoutes.js';
 import { requireAuth, requireAdmin } from './src/backend/middleware/authMiddleware.js';
 import { globalLimiter, apiLimiter, authLimiter, webhookLimiter, adminLimiter } from './src/backend/middleware/rateLimiter.js';
 
@@ -113,6 +114,7 @@ async function startServer() {
   // REGISTRO DE EMERGÊNCIA - TOPO DO SERVIDOR
   app.use('/api/v2/sofia', apiLimiter, sofiaRoutes);
   app.use('/api/v2/stripe', stripeRoutes);
+  app.use('/api/auth', authEmailRoutes);
   
   // 2. Health Checks
   app.get('/api/health-check', async (req, res) => {

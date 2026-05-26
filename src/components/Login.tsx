@@ -82,11 +82,13 @@ export default function Login() {
       return;
     }
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       });
-      if (error) throw error;
-      toast.success('E-mail de recuperação enviado!');
+      if (!res.ok) throw new Error('Erro ao enviar e-mail.');
+      toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
     } catch (error: any) {
       toast.error(error.message || 'Erro ao enviar e-mail de recuperação.');
     }
