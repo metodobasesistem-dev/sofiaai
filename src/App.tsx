@@ -31,6 +31,7 @@ const LeoApp = lazy(() => import('./pages/Leo/LeoApp'));
 const Finance = lazy(() => import('./components/Finance'));
 const MetaTemplatesAdminPage = lazy(() => import('./components/MetaTemplatesAdminPage'));
 const SofiaConfig = lazy(() => import('./components/Sofia/SofiaConfig'));
+const OnboardingGuide = lazy(() => import('./components/OnboardingGuide'));
 
 const PageFallback = () => (
   <div className="h-[60vh] w-full flex items-center justify-center text-primary-500">
@@ -248,6 +249,8 @@ export default function App() {
         return <QuickReplies />;
       case 'finance':
         return <Finance />;
+      case 'onboarding':
+        return <OnboardingGuide user={user} onTabChange={handleTabChange} />;
 
       default:
         return (
