@@ -415,22 +415,6 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onTabChange?.('inbox')}
-            className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex items-center gap-2"
-          >
-            <MessageSquare size={16} /> Ver Inbox
-          </button>
-          {checkPlan('Pro') && (
-            <button
-              onClick={() => onTabChange?.('schedule')}
-              className="px-4 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-900/20"
-            >
-              <Calendar size={16} /> Nova Task
-            </button>
-          )}
-        </div>
       </div>
 
       {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado e NÃO estiver expirado */}
