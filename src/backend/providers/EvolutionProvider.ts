@@ -46,8 +46,14 @@ export class EvolutionProvider implements IWhatsAppProvider {
   }
 
   private async setWebhook(instanceId: string): Promise<void> {
-    const WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || '';
+    let WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || '';
     if (!WEBHOOK_URL) return;
+
+    const SECRET = process.env.EVOLUTION_WEBHOOK_SECRET;
+    if (SECRET && !WEBHOOK_URL.includes('token=')) {
+      const separator = WEBHOOK_URL.includes('?') ? '&' : '?';
+      WEBHOOK_URL = `${WEBHOOK_URL}${separator}token=${SECRET}`;
+    }
 
     await this.api.post(`/webhook/set/${instanceId}`, {
       webhook: {
@@ -175,8 +181,25 @@ export class EvolutionProvider implements IWhatsAppProvider {
           message: messageContent
         }
       });
-      return data.base64 || data;
-    } catch (error) {
+
+      let base64: string | null = null;
+      if (typeof data === 'string' && data.length > 0) {
+        base64 = data;
+      } else if (data && typeof data.base64 === 'string' && data.base64.length > 0) {
+        base64 = data.base64;
+      } else {
+        console.warn('[EvolutionProvider] getBase64FromMediaMessage: resposta inesperada:', JSON.stringify(data)?.slice(0, 200));
+        return null;
+      }
+
+      // Strip data URL prefix if Evolution returns "data:image/jpeg;base64,..."
+      if (base64.includes(';base64,')) {
+        base64 = base64.split(';base64,')[1];
+      }
+
+      return base64 || null;
+    } catch (error: any) {
+      console.error('[EvolutionProvider] getBase64FromMediaMessage falhou:', error.response?.status, JSON.stringify(error.response?.data || error.message)?.slice(0, 300));
       return null;
     }
   }

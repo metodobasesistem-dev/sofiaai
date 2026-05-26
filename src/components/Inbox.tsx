@@ -51,7 +51,8 @@ import {
   Wallet,
   TrendingUp,
   TrendingDown,
-  DollarSign
+  DollarSign,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -841,18 +842,26 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
       case 'image':
         return (
           <div className="space-y-2">
-            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity"
-                 onClick={() => onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
-              <img
-                src={message.media_url}
-                alt="WhatsApp"
-                loading="lazy"
-                decoding="async"
-                className="max-w-full max-h-[300px] object-contain"
-                onLoad={() => {
-                  if (onImageLoad) onImageLoad();
-                }}
-              />
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity min-w-[120px]"
+                 onClick={() => message.media_url && onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
+              {message.media_url ? (
+                <img
+                  src={message.media_url}
+                  alt="Imagem"
+                  loading="lazy"
+                  decoding="async"
+                  className="max-w-full max-h-[300px] object-contain"
+                  onLoad={() => { if (onImageLoad) onImageLoad(); }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`flex flex-col items-center justify-center gap-2 p-6 text-slate-400 ${message.media_url ? 'hidden' : ''}`}>
+                <ImageIcon size={32} className="opacity-40" />
+                <span className="text-[11px]">Imagem indisponível</span>
+              </div>
             </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
           </div>
@@ -1088,7 +1097,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
         {renderMediaContent()}
 
         {!isRevoked && (
-          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-all z-10">
+          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-all z-10 hidden md:block">
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -1128,7 +1137,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
       </motion.div>
 
       {!isRevoked && (
-        <div className={`flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`hidden md:flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="relative group/emoji">
             <button 
               className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
@@ -3891,7 +3900,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
                   <h3 className="text-[15px] font-black text-slate-900 leading-tight truncate flex items-center gap-2">
                     {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
                     {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm
+                    <span className={`hidden md:inline px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm
                       ${{
                         novo_lead:      'bg-slate-50 text-slate-600 border-slate-200',
                         primeiro_atend: 'bg-blue-50 text-blue-600 border-blue-100',
@@ -4627,8 +4636,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
 
       {/* Mobile Bottom Navigation */}
       {isFullscreen && (
-        <div className={`md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 items-center justify-around z-50 px-2
-          ${selectedThreadId ? 'hidden' : 'flex'}`}>
+        <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 items-center justify-around z-50 px-2 pb-[env(safe-area-inset-bottom,0px)]
+          ${selectedThreadId ? 'hidden' : 'flex'} h-16`}>
           <button 
             onClick={() => { setActiveTab('conversations'); setSelectedThreadId(null); }}
             className={`flex flex-col items-center gap-1 ${activeTab === 'conversations' ? 'text-primary-600' : 'text-slate-400'}`}
