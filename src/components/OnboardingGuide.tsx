@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, ArrowRight, Rocket, Plug, UserCircle, FileText, Bot, Users, Send } from 'lucide-react';
+import { CheckCircle2, Circle, ArrowRight, Rocket, Plug, UserCircle, FileText, Bot, Users } from 'lucide-react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { motion } from 'motion/react';
 
@@ -30,6 +30,14 @@ const STEPS: Step[] = [
     cta: 'Ir para Configurações',
   },
   {
+    id: 'add_team',
+    title: 'Adicionar sua equipe',
+    description: 'Convide colaboradores e defina quem vai atender os leads pelo sistema.',
+    icon: <Users size={16} />,
+    tab: 'professionals',
+    cta: 'Ir para Equipe',
+  },
+  {
     id: 'create_template',
     title: 'Criar primeiro Template',
     description: 'Crie um template de boas-vindas para envios fora da janela de 24h do WhatsApp.',
@@ -39,27 +47,11 @@ const STEPS: Step[] = [
   },
   {
     id: 'setup_ai',
-    title: 'Configurar o Autopiloto',
+    title: 'Configurar Agente de IA',
     description: 'Ative e configure o agente de IA para atender seus leads automaticamente.',
     icon: <Bot size={16} />,
     tab: 'agents',
     cta: 'Ir para Agentes de IA',
-  },
-  {
-    id: 'add_team',
-    title: 'Adicionar sua equipe',
-    description: 'Convide colaboradores e defina quem vai atender os leads pelo sistema.',
-    icon: <Users size={16} />,
-    tab: 'professionals',
-    cta: 'Ir para Equipe',
-  },
-  {
-    id: 'first_campaign',
-    title: 'Fazer primeiro disparo',
-    description: 'Crie uma campanha para enviar sua primeira mensagem em massa para leads.',
-    icon: <Send size={16} />,
-    tab: 'campaigns',
-    cta: 'Ir para Campanhas',
   },
 ];
 

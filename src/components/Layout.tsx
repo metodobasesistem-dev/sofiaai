@@ -483,13 +483,13 @@ export default function Layout({
             )}
             {!collapsed && (
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0
-                ${onboardingDone >= 6
+                ${onboardingDone >= 5
                   ? 'bg-emerald-100 text-emerald-600'
                   : activeTab === 'onboarding'
                     ? 'bg-white/20 text-white'
                     : 'bg-orange-100 text-orange-600'
                 }`}>
-                {onboardingDone}/6
+                {onboardingDone}/5
               </span>
             )}
             {collapsed && (
@@ -612,8 +612,8 @@ export default function Layout({
                   </div>
                   <span className="text-sm font-semibold flex-1">Primeiros Passos</span>
                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full
-                    ${onboardingDone >= 6 ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
-                    {onboardingDone}/6
+                    ${onboardingDone >= 5 ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
+                    {onboardingDone}/5
                   </span>
                 </div>
 
