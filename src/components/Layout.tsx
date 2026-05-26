@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  Bell,
   User as UserIcon,
   Menu,
   X,
@@ -33,6 +32,7 @@ import {
   Rocket
 } from 'lucide-react';
 import { ONBOARDING_STORAGE_KEY } from './OnboardingGuide';
+import NotificationBell from './NotificationBell';
 
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
@@ -690,10 +690,7 @@ export default function Layout({
           </div>
 
           <div className="flex items-center gap-3 md:gap-6">
-            <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <NotificationBell user={user} onTabChange={onTabChange} />
             
             <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
             
