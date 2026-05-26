@@ -61,26 +61,47 @@ import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useFeatureContext } from '../contexts/FeatureFlagContext';
 
-const QuickNavCard = ({ icon: Icon, imageSrc, title, subtitle, onClick }: { icon?: any, imageSrc?: string, title: string, subtitle: string, onClick?: () => void }) => (
-  <div 
-    onClick={onClick}
-    className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-  >
-    <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-primary-600 group-hover:bg-primary-50 transition-colors overflow-hidden">
-        {imageSrc ? (
-          <img src={imageSrc} alt="Zyreo Sofia" className="w-full h-full object-cover" />
-        ) : Icon && (
-          <Icon size={20} />
-        )}
-      </div>
-      <div>
-        <h4 className="text-sm font-bold text-gray-900">{title}</h4>
-        <p className="text-[11px] text-gray-400">{subtitle}</p>
+const ACCENT: Record<string, { bg: string; text: string; border: string }> = {
+  violet: { bg: 'bg-violet-50', text: 'text-violet-500', border: 'hover:border-violet-200' },
+  blue:   { bg: 'bg-blue-50',   text: 'text-blue-500',   border: 'hover:border-blue-200' },
+  emerald:{ bg: 'bg-emerald-50',text: 'text-emerald-500',border: 'hover:border-emerald-200' },
+  indigo: { bg: 'bg-indigo-50', text: 'text-indigo-500', border: 'hover:border-indigo-200' },
+  amber:  { bg: 'bg-amber-50',  text: 'text-amber-500',  border: 'hover:border-amber-200' },
+  orange: { bg: 'bg-orange-50', text: 'text-orange-500', border: 'hover:border-orange-200' },
+  teal:   { bg: 'bg-teal-50',   text: 'text-teal-500',   border: 'hover:border-teal-200' },
+  purple: { bg: 'bg-purple-50', text: 'text-purple-500', border: 'hover:border-purple-200' },
+  rose:   { bg: 'bg-rose-50',   text: 'text-rose-500',   border: 'hover:border-rose-200' },
+  sky:    { bg: 'bg-sky-50',    text: 'text-sky-500',    border: 'hover:border-sky-200' },
+  pink:   { bg: 'bg-pink-50',   text: 'text-pink-500',   border: 'hover:border-pink-200' },
+  slate:  { bg: 'bg-slate-50',  text: 'text-slate-400',  border: 'hover:border-slate-200' },
+};
+
+const QuickNavCard = ({ icon: Icon, imageSrc, title, subtitle, onClick, accent = 'slate' }: {
+  icon?: any, imageSrc?: string, title: string, subtitle: string, onClick?: () => void, accent?: string
+}) => {
+  const a = ACCENT[accent] ?? ACCENT.slate;
+  return (
+    <div
+      onClick={onClick}
+      className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group ${a.border}`}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl ${a.bg} ${a.text} flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden shrink-0`}>
+          {imageSrc ? (
+            <img src={imageSrc} alt="Zyreo Sofia" className="w-full h-full object-cover" />
+          ) : Icon && (
+            <Icon size={20} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-bold text-gray-900">{title}</h4>
+          <p className="text-[11px] text-gray-400 truncate">{subtitle}</p>
+        </div>
+        <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 transition-colors shrink-0" />
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const MetricCard = ({ icon: Icon, title, value }: { icon: any, title: string, value: string }) => (
   <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -376,30 +397,37 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
   return (
     <div className="space-y-8">
       {/* 1. Dashboard Header: Greetings & Quick Actions */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            {role === 'admin' ? 'Painel Geral Zyreo Sofia' : `Olá, ${(profile?.nome_completo || profile?.name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0]) || 'Usuário'}!`}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Sistema Operacional
+            </span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            {role === 'admin'
+              ? 'Painel Geral'
+              : `Olá, ${(profile?.nome_completo?.split(' ')[0] || profile?.name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0]) || 'Usuário'}`}
           </h1>
-          <p className="text-slate-500 font-medium mt-1 flex items-center gap-2">
-            {role === 'admin' ? 'Visão global de todos os clientes e métricas da plataforma.' : 'Aqui está o que aconteceu no seu CRM hoje.'}
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <p className="text-slate-500 text-sm font-medium mt-0.5">
+            {role === 'admin' ? 'Visão global de todos os clientes e métricas da plataforma.' : 'Aqui está o resumo do seu CRM hoje.'}
           </p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <button 
+
+        <div className="flex items-center gap-2">
+          <button
             onClick={() => onTabChange?.('inbox')}
-            className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+            className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex items-center gap-2"
           >
-            <MessageSquare size={18} /> Ver Inbox
+            <MessageSquare size={16} /> Ver Inbox
           </button>
           {checkPlan('Pro') && (
-            <button 
+            <button
               onClick={() => onTabChange?.('schedule')}
-              className="px-4 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all flex items-center gap-2"
+              className="px-4 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-900/20"
             >
-              <Calendar size={18} /> Nova Task
+              <Calendar size={16} /> Nova Task
             </button>
           )}
         </div>
@@ -472,92 +500,59 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           return (
             <>
               {checkPlan('Pro') && (
-                <QuickNavCard 
-                  imageSrc="/sofiamini.png" 
-                  title="Agentes" 
-                  subtitle="Configure seu agente" 
-                  onClick={() => onTabChange?.('agents')}
-                />
+                <QuickNavCard imageSrc="/sofiamini.png" accent="violet"
+                  title="Agentes" subtitle="Configure seu agente"
+                  onClick={() => onTabChange?.('agents')} />
               )}
               {(role === 'admin' || flags['chat'] !== false) && (
-                <QuickNavCard 
-                  icon={MessageSquare} 
-                  title="Chats" 
-                  subtitle="Acompanhe suas conversas" 
-                  onClick={() => onTabChange?.('inbox')}
-                />
+                <QuickNavCard icon={MessageSquare} accent="blue"
+                  title="Chats" subtitle="Acompanhe suas conversas"
+                  onClick={() => onTabChange?.('inbox')} />
               )}
               {checkPlan('Pro') && (role === 'admin' || flags['agendas'] !== false) && (
-                <QuickNavCard 
-                  icon={Calendar} 
-                  title="Agendamentos" 
-                  subtitle="Veja seus agendamentos" 
-                  onClick={() => onTabChange?.('schedule')}
-                />
+                <QuickNavCard icon={Calendar} accent="emerald"
+                  title="Agendamentos" subtitle="Veja seus agendamentos"
+                  onClick={() => onTabChange?.('schedule')} />
               )}
               {(role === 'admin' || flags['crm'] !== false) && (
-                <QuickNavCard 
-                  icon={Users} 
-                  title="Contatos" 
-                  subtitle="Gerencie seus contatos" 
-                  onClick={() => onTabChange?.('contacts')}
-                />
+                <QuickNavCard icon={Users} accent="indigo"
+                  title="Contatos" subtitle="Gerencie seus contatos"
+                  onClick={() => onTabChange?.('contacts')} />
               )}
               {checkPlan('Pro') && (role === 'admin' || flags['agendas'] !== false) && (
-                <QuickNavCard 
-                  icon={Clock} 
-                  title="Disponibilidade" 
-                  subtitle="Defina seus horários" 
-                  onClick={() => onTabChange?.('availability')}
-                />
+                <QuickNavCard icon={Clock} accent="amber"
+                  title="Disponibilidade" subtitle="Defina seus horários"
+                  onClick={() => onTabChange?.('availability')} />
               )}
               {checkPlan('Starter') && (role === 'admin' || flags['official_api'] !== false) && (
-                <QuickNavCard 
-                  icon={Radio} 
-                  title="Canais" 
-                  subtitle="Gerencie seus canais" 
-                  onClick={() => onTabChange?.('settings', 'channels')}
-                />
+                <QuickNavCard icon={Radio} accent="orange"
+                  title="Canais" subtitle="Gerencie seus canais"
+                  onClick={() => onTabChange?.('settings', 'channels')} />
               )}
               {checkPlan('Starter') && (role === 'admin' || flags['official_api'] !== false) && (
-                <QuickNavCard 
-                  icon={Plug} 
-                  title="Integrações" 
-                  subtitle="Conecte suas ferramentas" 
-                  onClick={() => onTabChange?.('integrations')}
-                />
+                <QuickNavCard icon={Plug} accent="teal"
+                  title="Integrações" subtitle="Conecte suas ferramentas"
+                  onClick={() => onTabChange?.('integrations')} />
               )}
               {checkPlan('Pro') && (
-                <QuickNavCard 
-                  icon={LayoutGrid} 
-                  title="Kanban" 
-                  subtitle="Organize seus leads" 
-                  onClick={() => onTabChange?.('inbox', 'kanban')}
-                />
+                <QuickNavCard icon={LayoutGrid} accent="purple"
+                  title="Kanban" subtitle="Organize seus leads"
+                  onClick={() => onTabChange?.('inbox', 'kanban')} />
               )}
               {checkPlan('Pro') && (role === 'admin' || flags['reports'] !== false) && (
-                <QuickNavCard 
-                  icon={BarChart3} 
-                  title="Relatórios" 
-                  subtitle="Confira seus resultados" 
-                  onClick={() => onTabChange?.('reports')}
-                />
+                <QuickNavCard icon={BarChart3} accent="rose"
+                  title="Relatórios" subtitle="Confira seus resultados"
+                  onClick={() => onTabChange?.('reports')} />
               )}
               {checkPlan('Starter') && (
-                <QuickNavCard 
-                  icon={MessageSquare} 
-                  title="Atalhos" 
-                  subtitle="Respostas rápidas" 
-                  onClick={() => onTabChange?.('quick_replies')}
-                />
+                <QuickNavCard icon={MessageSquare} accent="sky"
+                  title="Atalhos" subtitle="Respostas rápidas"
+                  onClick={() => onTabChange?.('quick_replies')} />
               )}
               {checkPlan('Elite') && (role === 'admin' || flags['campaigns'] !== false) && (
-                <QuickNavCard 
-                  icon={Send} 
-                  title="Campanhas" 
-                  subtitle="Envio em massa" 
-                  onClick={() => onTabChange?.('campaigns')}
-                />
+                <QuickNavCard icon={Send} accent="pink"
+                  title="Campanhas" subtitle="Envio em massa"
+                  onClick={() => onTabChange?.('campaigns')} />
               )}
             </>
           );
@@ -658,13 +653,15 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.4 }}
-              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group transform-gpu backface-visibility-hidden"
+              className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group transform-gpu"
             >
+              {/* Colored top accent bar */}
+              <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl" style={{ background: item.color }} />
               <div className="flex items-start justify-between relative z-10">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-slate-50 text-slate-400 group-hover:scale-110 transition-transform">
-                      <item.icon size={18} />
+                    <div className="p-2 rounded-xl group-hover:scale-110 transition-transform" style={{ background: `${item.color}18`, color: item.color }}>
+                      <item.icon size={16} />
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.label}</p>
                   </div>
@@ -701,8 +698,8 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                 </div>
               </div>
 
-              {/* Decorative Circle */}
-              <div className="absolute -top-6 -right-6 w-24 h-24 bg-slate-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50" />
+              {/* Decorative glow */}
+              <div className="absolute -bottom-8 -right-8 w-28 h-28 rounded-full opacity-[0.06] group-hover:opacity-[0.12] transition-opacity duration-500" style={{ background: item.color }} />
             </motion.div>
           ))}
         </div>
@@ -929,10 +926,12 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
       {/* 5. Painéis Inferiores (Split 50/50) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Coluna Esquerda: Próximos Agendamentos */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col min-h-[400px]">
-          <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-            <h3 className="font-bold text-gray-900">Próximos Agendamentos</h3>
-            <Calendar size={18} className="text-gray-400" />
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[400px]">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+            <h3 className="font-black text-slate-900 text-sm tracking-tight">Próximos Agendamentos</h3>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+              <Calendar size={16} />
+            </div>
           </div>
           
           <div className="flex-1 p-6 space-y-4 overflow-y-auto max-h-[400px]">
@@ -969,10 +968,10 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
             )}
           </div>
 
-          <div className="p-4 bg-gray-50/50 border-t border-gray-50 text-center">
-            <button 
+          <div className="p-4 border-t border-slate-50 text-center">
+            <button
               onClick={() => onTabChange?.('schedule')}
-              className="text-xs font-bold text-gray-500 hover:text-primary-600 transition-colors"
+              className="text-xs font-bold text-slate-400 hover:text-primary-600 transition-colors"
             >
               Ver todos os agendamentos
             </button>
@@ -980,10 +979,10 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         </div>
 
         {/* Coluna Direita: Atividades Recentes */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col min-h-[400px]">
-          <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-            <h3 className="font-bold text-gray-900">Atividades Recentes</h3>
-            <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{activities.length}</span>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[400px]">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+            <h3 className="font-black text-slate-900 text-sm tracking-tight">Atividades Recentes</h3>
+            <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-2.5 py-1 rounded-full">{activities.length}</span>
           </div>
           
           <div className="p-6 space-y-4 overflow-y-auto max-h-[400px]">

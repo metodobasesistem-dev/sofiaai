@@ -774,14 +774,14 @@ export default function Layout({
           className={`flex-1 flex flex-col min-h-0 overscroll-none ${
             activeTab === 'inbox'
               ? 'overflow-hidden pt-20 md:pt-0'
-              : 'overflow-y-auto p-4 md:p-8 pt-24 md:pt-8'
+              : 'overflow-y-auto p-4 md:p-6 pt-24 md:pt-6'
           }`}
           style={{ overscrollBehaviorY: 'none' }}
         >
           {activeTab === 'inbox' ? (
             <div className="flex-1 min-h-0 flex flex-col">{children}</div>
           ) : (
-            <div className="max-w-7xl mx-auto">{children}</div>
+            <div className="w-full max-w-screen-2xl mx-auto">{children}</div>
           )}
         </main>
       </div>
