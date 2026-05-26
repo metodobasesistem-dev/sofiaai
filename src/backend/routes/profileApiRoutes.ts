@@ -93,23 +93,25 @@ router.patch('/', async (req: AuthenticatedRequest, res: Response) => {
 router.get('/growth', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId!;
   try {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    
-    // Buscar leads e resolvidos do usuário nos últimos 7 dias
+    const rawDays = parseInt(String(req.query.days || '7'), 10);
+    const days = isNaN(rawDays) || rawDays < 1 ? 7 : Math.min(rawDays, 365);
+
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
     const [leads, resolved] = await Promise.all([
       supabase.from('contacts')
         .select('created_at')
         .eq('user_id', userId)
-        .gt('created_at', sevenDaysAgo),
+        .gt('created_at', since),
       supabase.from('contacts')
-        .select('updated_at') // Usamos updated_at para capturar quando virou resolvido
+        .select('updated_at')
         .eq('user_id', userId)
         .eq('status_funil', 'Resolvido')
-        .gt('updated_at', sevenDaysAgo)
+        .gt('updated_at', since)
     ]);
 
     const dailyData: Record<string, any> = {};
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < days; i++) {
       const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       dailyData[d] = { date: d, leads: 0, resolvidos: 0 };
     }

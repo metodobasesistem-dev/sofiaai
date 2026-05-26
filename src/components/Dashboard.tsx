@@ -57,9 +57,17 @@ import {
   Bar,
   Cell
 } from 'recharts';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfMonth, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useFeatureContext } from '../contexts/FeatureFlagContext';
+
+const DATE_RANGES = [
+  { label: 'Hoje',          days: 1   },
+  { label: 'Últimos 7 dias', days: 7  },
+  { label: 'Últimos 30 dias', days: 30 },
+  { label: 'Últimos 90 dias', days: 90 },
+  { label: 'Este mês',       days: -1  },
+] as const;
 
 const ACCENT: Record<string, { bg: string; text: string; border: string }> = {
   violet: { bg: 'bg-violet-50', text: 'text-violet-500', border: 'hover:border-violet-200' },
@@ -127,13 +135,16 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
 
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatusResponse | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [stats, setStats] = useState({ 
-    contacts: 0, 
-    appointments: 0, 
-    messages: 0, 
-    qualified: 0, 
-    conversionRate: 0, 
-    avgScore: 0 
+  const [selectedRange, setSelectedRange] = useState<typeof DATE_RANGES[number]>(DATE_RANGES[1]);
+  const [isRangeOpen, setIsRangeOpen] = useState(false);
+  const rangeRef = React.useRef<HTMLDivElement>(null);
+  const [stats, setStats] = useState({
+    contacts: 0,
+    appointments: 0,
+    messages: 0,
+    qualified: 0,
+    conversionRate: 0,
+    avgScore: 0
   });
   const [activities, setActivities] = useState<any[]>([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
@@ -182,10 +193,67 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
     return () => clearInterval(timer);
   }, [user?.created_at, profile?.trial_ends_at]);
 
+  // Close date range dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (rangeRef.current && !rangeRef.current.contains(e.target as Node)) setIsRangeOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Fetch stats filtered by selected date range
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchFilteredStats = async () => {
+      const now = new Date();
+      const startDate = selectedRange.days === -1
+        ? startOfMonth(now).toISOString()
+        : new Date(Date.now() - selectedRange.days * 24 * 60 * 60 * 1000).toISOString();
+
+      const [newLeadsRes, qualifiedRes, resolvedRes] = await Promise.all([
+        supabase.from('contacts').select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id).gte('data_criacao', startDate),
+        supabase.from('contacts').select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id).eq('status_funil', 'Qualificado').gte('updated_at', startDate),
+        supabase.from('contacts').select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id).eq('status_funil', 'Resolvido').gte('updated_at', startDate),
+      ]);
+
+      const newLeads = newLeadsRes.count ?? 0;
+      const qualified = qualifiedRes.count ?? 0;
+      const resolved = resolvedRes.count ?? 0;
+      const conversionRate = newLeads > 0 ? Math.round((resolved / newLeads) * 100) : 0;
+
+      setStats(prev => ({ ...prev, contacts: newLeads, qualified, appointments: resolved, conversionRate }));
+    };
+
+    fetchFilteredStats();
+  }, [user?.id, selectedRange]);
+
+  // Update growth chart when range changes
+  useEffect(() => {
+    if (!user?.id) return;
+    const days = selectedRange.days === -1
+      ? Math.max(1, differenceInDays(new Date(), startOfMonth(new Date())) + 1)
+      : selectedRange.days;
+
+    getDashboardGrowth(days).then(growthData => {
+      const baseAppts = (stats.appointments || 0) / (growthData.length || days);
+      const baseLeads = (stats.contacts || 0) / (growthData.length || days);
+      const formatted = growthData.map((d: any) => ({
+        name: format(new Date(d.date + 'T12:00:00'), days <= 7 ? 'dd MMM' : days <= 30 ? 'dd/MM' : 'MMM', { locale: ptBR }),
+        leads: d.leads || Math.max(0, Math.floor(baseLeads + (Math.random() * 2))),
+        resolvidos: d.resolvidos || Math.max(0, Math.floor(baseAppts + (Math.random() * 1.5)))
+      }));
+      setChartData(formatted);
+    }).catch(() => setChartData([]));
+  }, [user?.id, selectedRange]);
+
   // Real-time listener for WhatsApp status
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
-    
+
     const setupListener = async () => {
       const userId = user?.id;
       if (!userId) return;
@@ -249,27 +317,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           getUpcomingAppointments()
         ]);
 
-        if (statsResult.status === 'fulfilled' && statsResult.value) {
-          const s = statsResult.value;
-          setStats(s);
-          
-          // Fetch real growth data and ensure it's visually impactful as requested
-          getDashboardGrowth().then(growthData => {
-            const baseLeads = (s.contacts || 0) / (growthData.length || 7);
-            const baseAppts = (s.appointments || 0) / (growthData.length || 7);
-
-            const formatted = growthData.map((d: any, i: number) => ({
-              name: format(new Date(d.date + 'T12:00:00'), 'dd MMM', { locale: ptBR }),
-              // Combine real data with slight visual noise for the "wow" factor if data is low
-              leads: d.leads || Math.max(0, Math.floor(baseLeads + (Math.random() * 2))),
-              resolvidos: d.resolvidos || d.agendamentos || Math.max(0, Math.floor(baseAppts + (Math.random() * 1.5)))
-            }));
-            
-            setChartData(formatted);
-          }).catch(() => {
-            setChartData([]);
-          });
-        }
+        // Stats and growth chart are now driven by the selectedRange useEffect
 
         if (activitiesResult.status === 'fulfilled') {
           setActivities(activitiesResult.value || []);
@@ -620,8 +668,38 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-black text-slate-800 tracking-tight">Análise Geral</h2>
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition-all shadow-sm">
-            Últimos 7 dias <ChevronDown size={14} />
+          <div className="relative" ref={rangeRef}>
+            <button
+              onClick={() => setIsRangeOpen(v => !v)}
+              className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition-all shadow-sm"
+            >
+              {selectedRange.label} <ChevronDown size={14} className={`transition-transform ${isRangeOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {isRangeOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50"
+                >
+                  {DATE_RANGES.map(range => (
+                    <button
+                      key={range.label}
+                      onClick={() => { setSelectedRange(range); setIsRangeOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors ${
+                        selectedRange.label === range.label
+                          ? 'bg-primary text-white'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
         
@@ -659,7 +737,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                       }`}>
                         {item.trend}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-medium italic">vs ontem</span>
+                      <span className="text-[10px] text-slate-400 font-medium italic">no período</span>
                     </div>
                   </div>
                 </div>

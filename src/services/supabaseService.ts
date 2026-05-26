@@ -1777,11 +1777,11 @@ export const getAgentSecret = async (agentId: string, key: string) => {
   if (error) throw error;
   return data?.secret_value || '';
 };
-export const getDashboardGrowth = async () => {
+export const getDashboardGrowth = async (days = 7) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const res = await fetch('/api/v2/profile/growth', {
+  const res = await fetch(`/api/v2/profile/growth?days=${days}`, {
     headers: { 'Authorization': `Bearer ${session.access_token}` }
   });
   const result = await res.json();
