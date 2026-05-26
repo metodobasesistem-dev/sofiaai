@@ -3451,9 +3451,9 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   }, [threads, searchTerm, filterStatus, filterSub, filterBadge]);
 
   return (
-    <div className={isFullscreen 
-      ? "h-screen w-full bg-[#f0f2f5] flex overflow-hidden relative" 
-      : "h-[calc(100vh-130px)] md:h-[calc(100vh-120px)] bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
+    <div className={isFullscreen
+      ? "h-screen w-full bg-[#f0f2f5] flex overflow-hidden relative"
+      : "h-full bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
     }>
       {isFullscreen && (
         <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 hidden md:flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>

@@ -770,10 +770,19 @@ export default function Layout({
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-24 md:pt-8 overscroll-none" style={{ overscrollBehaviorY: 'none' }}>
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
+        <main
+          className={`flex-1 overscroll-none ${
+            activeTab === 'inbox'
+              ? 'overflow-hidden pt-20 md:pt-0'
+              : 'overflow-y-auto p-4 md:p-8 pt-24 md:pt-8'
+          }`}
+          style={{ overscrollBehaviorY: 'none' }}
+        >
+          {activeTab === 'inbox' ? (
+            <div className="h-full">{children}</div>
+          ) : (
+            <div className="max-w-7xl mx-auto">{children}</div>
+          )}
         </main>
       </div>
 
