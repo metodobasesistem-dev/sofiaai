@@ -3453,7 +3453,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
   return (
     <div className={isFullscreen
       ? "h-screen w-full bg-[#f0f2f5] flex overflow-hidden relative"
-      : "h-full bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
+      : "flex-1 min-h-0 bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
     }>
       {isFullscreen && (
         <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 hidden md:flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>
@@ -3758,7 +3758,7 @@ export default function Inbox({ user, role, isFullscreen }: { user: SupabaseUser
       {/* Right Column: Chat Area */}
       <div
         className={`${selectedThreadId ? 'flex fixed inset-0 z-[60] md:relative md:inset-auto md:z-0' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}
-        style={viewportHeight && selectedThreadId ? { height: viewportHeight } : undefined}
+        style={viewportHeight && selectedThreadId && viewportHeight < window.innerHeight ? { height: viewportHeight } : undefined}
       >
         {selectedThreadId && activeThread ? (
           <>
