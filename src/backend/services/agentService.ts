@@ -361,6 +361,7 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
       let aiFinalText: string | null = null;
       let toolCalledInThisTurn = false;
       let transferredToHuman = false;
+      let bookingExecuted = false; // flag para safety net — true se sub-agente OU handleBookAppointment teve sucesso
       let modelUsed: string | null = null;
       const toolsUsed: string[] = [];
       const MAX_TOOL_ITERATIONS = 5;
@@ -428,37 +429,62 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
             let toolResult;
             try {
               if (functionName === 'Agendar') {
-                // SAFETY NET: se detectamos booking ready E o modelo chamou Agendar mas
-                // com a acao errada (ex: 'verificar' de novo), forçamos para 'agendar'
-                // com os dados que já detectamos deterministicamente.
-                if (bookingReady && iterationCount === 1 && args.acao !== 'agendar') {
-                  console.warn(`[AgentService] 🔧 Booking ready mas modelo chamou Agendar(${args.acao}). Forçando para 'agendar' com dados detectados.`);
-                  args = {
-                    acao: 'agendar',
-                    date: bookingReady.date,
-                    time: bookingReady.time,
-                    clientName: bookingReady.clientName,
-                    ...(args.tipo ? { tipo: args.tipo } : {}),
-                    ...(args.professional_name ? { professional_name: args.professional_name } : {})
-                  };
+                // ─────────────────────────────────────────────────────────
+                // NOVA ARQUITETURA: Agendar agora DELEGA ao SUB-AGENTE
+                // dedicado. O sub-agente tem prompt focado + tools especializadas
+                // (verificar_disponibilidade, confirmar_agendamento, cancelar_agendamento).
+                // Inspirado no fluxo n8n de referência.
+                // ─────────────────────────────────────────────────────────
+
+                // Backward compat: se modelo passou intent (formato novo), usa direto.
+                // Se passou no formato antigo (acao + date + time + clientName), constrói
+                // o intent a partir desses params.
+                let intent: string;
+                if (args.intent) {
+                  intent = args.intent;
+                } else {
+                  const parts: string[] = [];
+                  if (args.acao === 'agendar') parts.push('Cliente quer CONFIRMAR o agendamento.');
+                  else if (args.acao === 'cancelar') parts.push('Cliente quer CANCELAR agendamento.');
+                  else if (args.acao === 'verificar') parts.push('Cliente quer VERIFICAR disponibilidade.');
+                  else parts.push('Cliente fez um pedido relacionado a agendamento.');
+                  if (args.date) parts.push(`Data: ${args.date}.`);
+                  if (args.time) parts.push(`Horário: ${args.time}.`);
+                  if (args.clientName) parts.push(`Nome do cliente: ${args.clientName}.`);
+                  if (args.professional_name) parts.push(`Profissional: ${args.professional_name}.`);
+                  if (args.tipo) parts.push(`Modalidade: ${args.tipo}.`);
+                  parts.push(`Mensagem atual do cliente: "${processBody}".`);
+                  intent = parts.join(' ');
                 }
 
-                if (args.acao === 'agendar') {
-                  // Se booking ready foi detectado mas o modelo veio com args incompletos,
-                  // preenche com os dados detectados (defesa em profundidade).
-                  if (bookingReady) {
-                    if (!args.date) args.date = bookingReady.date;
-                    if (!args.time) args.time = bookingReady.time;
-                    if (!args.clientName) args.clientName = bookingReady.clientName;
-                  }
-                  toolResult = await this.handleBookAppointment(dbUserId, threadId, contactName, args, agentData, activeProfessionals);
-                  if (toolResult?.success && args.clientName) {
-                    await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
-                  }
-                } else if (args.acao === 'cancelar') {
-                  toolResult = await this.handleCancelAppointment(dbUserId, threadId, args);
-                } else {
-                  toolResult = await this.handleCheckAvailability(dbUserId, args.date, agentData, activeProfessionals, args.professional_name);
+                // Hint: dados deterministicamente detectados ANTES do LLM (camada extra de defesa)
+                const subHint = bookingReady ? {
+                  date: bookingReady.date,
+                  time: bookingReady.time,
+                  clientName: bookingReady.clientName,
+                  tipo: args.tipo
+                } : (args.acao === 'agendar' && args.date && args.time && args.clientName ? {
+                  date: args.date, time: args.time, clientName: args.clientName, tipo: args.tipo
+                } : null);
+
+                const subResult = await this.processSchedulingSubAgent(
+                  intent,
+                  dbUserId,
+                  threadId,
+                  contactName,
+                  agentData,
+                  activeProfessionals,
+                  [...history, { role: 'user' as const, content: processBody }],
+                  subHint
+                );
+
+                // O texto do sub-agente VIRA a resposta final ao cliente.
+                // Pulamos o resto do loop principal — Sofia não precisa rephrase.
+                toolResult = { success: true, message: subResult.text, booked: subResult.bookingOccurred };
+                aiFinalText = subResult.text;
+                if (subResult.bookingOccurred) {
+                  bookingExecuted = true;
+                  if (!toolsUsed.includes('Agendar')) toolsUsed.push('Agendar');
                 }
               } else if (functionName === 'servicoTool') {
                 toolResult = await this.handleSearchCatalog(dbUserId, args.pergunta || args.query);
@@ -512,18 +538,11 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
 
       // ─────────────────────────────────────────────────────────────────
       // 🛡️ SAFETY NET DETERMINÍSTICO PARA AGENDAMENTO
-      // Se o estado da conversa indica que deveríamos agendar (data+hora+nome+confirmação)
-      // mas o modelo terminou retornando TEXTO ao invés de chamar a tool Agendar(agendar),
-      // executamos o booking aqui mesmo, ignorando a resposta em texto do modelo.
-      // Esta é a barreira final contra o loop infinito.
+      // Barreira final: se o estado indica booking ready, mas nem o sub-agente
+      // nem o modelo principal executaram o agendamento, fazemos aqui.
       // ─────────────────────────────────────────────────────────────────
-      const usedBookingTool = toolsUsed.includes('Agendar') &&
-        currentMessages.some((m: any) =>
-          m.role === 'tool' && m.name === 'Agendar' &&
-          typeof m.content === 'string' && m.content.includes('"success":true') && m.content.includes('professional')
-        );
-      if (bookingReady && !usedBookingTool && !transferredToHuman) {
-        console.warn(`[AgentService] 🛡️ SAFETY NET: booking ready (${bookingReady.date} ${bookingReady.time} ${bookingReady.clientName}) mas modelo não chamou tool. Forçando agendamento determinístico.`);
+      if (bookingReady && !bookingExecuted && !transferredToHuman) {
+        console.warn(`[AgentService] 🛡️ SAFETY NET: booking ready (${bookingReady.date} ${bookingReady.time} ${bookingReady.clientName}) mas nada executou o agendamento. Forçando determinístico.`);
         try {
           const forcedArgs = {
             acao: 'agendar',
@@ -542,6 +561,7 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
           if (forcedResult?.success) {
             await supabase.from('threads').update({ lead_name: bookingReady.clientName }).eq('id', threadId);
             if (!toolsUsed.includes('Agendar')) toolsUsed.push('Agendar');
+            bookingExecuted = true;
             aiFinalText = `Prontinho, ${bookingReady.clientName.split(/\s+/)[0]}! Agendamento confirmado para ${bookingReady.date} às ${bookingReady.time}. Te espero! 😊`;
             console.log('[AgentService] ✅ SAFETY NET: agendamento forçado com sucesso.');
           } else {
@@ -1823,6 +1843,213 @@ ${customExamples}
     return 'simple';
   }
 
+  /**
+   * Tools especializadas do SUB-AGENTE de agendamento.
+   * Diferente da tool Agendar polimórfica do agente principal,
+   * estas são 3 tools com nomes e propósitos claros — modelo de IA decide
+   * com muito mais confiabilidade qual chamar.
+   *
+   * Inspirado no fluxo n8n de referência (ver_horarios, criar_reuniao, cancelar_reuniao).
+   */
+  private getSchedulingTools() {
+    return [
+      {
+        type: 'function',
+        function: {
+          name: 'verificar_disponibilidade',
+          description: 'Consulta horários reais disponíveis em uma data específica. SEMPRE use ANTES de confirmar agendamento. NUNCA invente horários.',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'Data no formato YYYY-MM-DD (ex: 2026-05-28)' },
+              professional_name: { type: 'string', description: 'Nome do profissional (opcional)' }
+            },
+            required: ['date']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'confirmar_agendamento',
+          description: 'Efetiva o agendamento no banco e Google Calendar. SÓ chame quando tiver TODOS os dados: data, horário, nome do cliente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'YYYY-MM-DD' },
+              time: { type: 'string', description: 'HH:mm (ex: 10:00)' },
+              clientName: { type: 'string', description: 'Nome completo do cliente' },
+              professional_name: { type: 'string', description: 'Profissional (opcional)' },
+              tipo: { type: 'string', enum: ['presencial', 'online'], description: 'Modalidade (opcional)' }
+            },
+            required: ['date', 'time', 'clientName']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'cancelar_agendamento',
+          description: 'Cancela o agendamento confirmado mais recente do cliente.',
+          parameters: { type: 'object', properties: {} }
+        }
+      }
+    ];
+  }
+
+  /**
+   * Sub-agente focado APENAS em agendamento.
+   * Inspirado no fluxo n8n: tem prompt enxuto, calendário pré-computado e
+   * 3 tools especializadas. Resposta vira diretamente o texto enviado ao cliente.
+   *
+   * @returns { text, bookingOccurred } — texto final + flag se houve agendamento
+   */
+  private async processSchedulingSubAgent(
+    intent: string,
+    userId: string,
+    threadId: string,
+    contactName: string,
+    agentData: any,
+    professionals: any[],
+    history: Array<{ role: string; content: string }>,
+    hint?: { date?: string; time?: string; clientName?: string; tipo?: string } | null
+  ): Promise<{ text: string; bookingOccurred: boolean }> {
+    console.log(`[SchedulingSubAgent] 🗓️ Processing intent on thread ${threadId}: "${intent.substring(0, 100)}"`);
+    if (hint) console.log(`[SchedulingSubAgent] 💡 Hint:`, hint);
+
+    const dateContext = this.buildDateContext();
+    const tools = this.getSchedulingTools();
+
+    // Contexto da conversa: últimas 8 trocas, formatadas como diálogo
+    const recentHistory = history.slice(-8)
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
+      .map(m => `${m.role === 'user' ? 'Cliente' : 'Atendente'}: ${m.content}`)
+      .join('\n');
+
+    // Bloco com dados já detectados deterministicamente
+    let hintBlock = '';
+    if (hint && (hint.date || hint.time || hint.clientName)) {
+      const lines: string[] = ['[DADOS JÁ COLETADOS NESTA CONVERSA — USE DIRETAMENTE]'];
+      if (hint.date) lines.push(`- Data: ${hint.date}`);
+      if (hint.time) lines.push(`- Horário: ${hint.time}`);
+      if (hint.clientName) lines.push(`- Nome do cliente: ${hint.clientName}`);
+      if (hint.tipo) lines.push(`- Modalidade: ${hint.tipo}`);
+      lines.push('');
+      lines.push('⚠️ Estes dados JÁ FORAM informados. NÃO PERGUNTE NOVAMENTE. Use-os para confirmar_agendamento.');
+      hintBlock = '\n' + lines.join('\n') + '\n';
+    }
+
+    const profList = professionals && professionals.length > 0
+      ? professionals.map((p: any) => `- ${p.name}${p.specialties ? ` (${p.specialties})` : ''}`).join('\n')
+      : 'Agenda universal (nenhum profissional específico cadastrado).';
+
+    const systemPrompt = `# IDENTIDADE
+Você é o módulo de agendamento de ${agentData.company_name || 'Nossa Empresa'}.
+Sua ÚNICA função: processar agendamentos usando as 3 tools disponíveis.
+
+# REGRAS CRÍTICAS
+1. NUNCA invente horários. SEMPRE chame verificar_disponibilidade ANTES de propor horários ao cliente.
+2. Se a conversa JÁ TEM data + horário + nome do cliente, chame confirmar_agendamento IMEDIATAMENTE. Não repita perguntas.
+3. NUNCA peça novamente um dado que já está na conversa.
+4. Após executar a tool, escreva resposta final em 1-2 frases curtas, em PT-BR, sem markdown, com tom natural.
+5. Se confirmar_agendamento retornar success=true, parabenize brevemente. Se success=false, peça desculpas e informe o problema com naturalidade.
+
+# TOOLS DISPONÍVEIS
+- verificar_disponibilidade(date YYYY-MM-DD, professional_name?) — consultar slots livres
+- confirmar_agendamento(date, time, clientName, professional_name?, tipo?) — efetivar
+- cancelar_agendamento() — cancelar consulta existente
+
+# PROFISSIONAIS DESTA EMPRESA
+${profList}
+
+# CALENDÁRIO DE REFERÊNCIA (use para converter "amanhã", "dia 28", etc em YYYY-MM-DD)
+${dateContext}
+${hintBlock}
+# CONVERSA RECENTE
+${recentHistory}
+
+# PEDIDO ATUAL DO CLIENTE
+${intent}
+
+Decida e execute a próxima ação usando as tools. Após executar, responda ao cliente em 1-2 frases.`;
+
+    const subMessages: any[] = [{ role: 'user', content: intent }];
+    let bookingOccurred = false;
+    let finalText: string | null = null;
+    const MAX_SUB_ITERATIONS = 4;
+
+    for (let iter = 0; iter < MAX_SUB_ITERATIONS; iter++) {
+      console.log(`[SchedulingSubAgent] 🤖 Iteration ${iter + 1}/${MAX_SUB_ITERATIONS}`);
+      // tool_choice='required' na primeira iteração se temos hint completo
+      const toolChoice = (iter === 0 && hint && hint.date && hint.time && hint.clientName) ? 'required' : 'auto';
+      const response = await generateAIResponse(systemPrompt, subMessages, tools, toolChoice as any, userId);
+
+      if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
+        console.warn('[SchedulingSubAgent] ⚠️ Empty response, breaking loop');
+        break;
+      }
+
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        subMessages.push({ role: 'assistant', content: response.text || '', tool_calls: response.toolCalls });
+
+        for (const toolCall of response.toolCalls) {
+          const name = toolCall.function.name;
+          let args: any = {};
+          try { args = JSON.parse(toolCall.function.arguments || '{}'); } catch { args = {}; }
+          console.log(`[SchedulingSubAgent] 🛠️ TOOL: ${name}`, args);
+
+          let result: any;
+          try {
+            if (name === 'verificar_disponibilidade') {
+              result = await this.handleCheckAvailability(userId, args.date, agentData, professionals, args.professional_name);
+            } else if (name === 'confirmar_agendamento') {
+              result = await this.handleBookAppointment(
+                userId, threadId, contactName,
+                { acao: 'agendar', ...args },
+                agentData, professionals
+              );
+              if (result?.success) {
+                bookingOccurred = true;
+                if (args.clientName) {
+                  await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
+                }
+              }
+            } else if (name === 'cancelar_agendamento') {
+              result = await this.handleCancelAppointment(userId, threadId, args);
+            } else {
+              result = { error: `Tool desconhecida: ${name}` };
+            }
+          } catch (toolErr: any) {
+            result = { success: false, error: toolErr?.message || 'Erro interno' };
+          }
+
+          console.log(`[SchedulingSubAgent] ✅ Result:`, result);
+          subMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            name,
+            content: JSON.stringify(result)
+          });
+        }
+      } else {
+        finalText = response.text;
+        break;
+      }
+    }
+
+    // Fallback de texto: se o sub-agente não gerou resposta final, mas houve agendamento, monta resposta
+    if (!finalText) {
+      if (bookingOccurred && hint?.clientName) {
+        const firstName = hint.clientName.trim().split(/\s+/)[0];
+        finalText = `Prontinho, ${firstName}! Agendamento confirmado. Te espero! 😊`;
+      } else {
+        finalText = 'Tudo certo por aqui!';
+      }
+    }
+
+    return { text: finalText, bookingOccurred };
+  }
+
   private getAgentTools() {
     return [
       {
@@ -1843,55 +2070,40 @@ ${customExamples}
         type: 'function',
         function: {
           name: 'Agendar',
-          description: `Ferramenta de agendamento — TRÊS modos de uso:
+          description: `Delega o pedido para o módulo de agendamento (verificar disponibilidade, confirmar consulta ou cancelar).
 
-MODO 1 — verificar (SEMPRE faça isso primeiro antes de agendar):
-  Chame com acao='verificar' e date='YYYY-MM-DD' para consultar os horários reais disponíveis.
-  Retorna: { slots: ["09:00","10:00",...], date, professional, total_available }
-  Se slots estiver vazio, não há vagas naquele dia — pergunte outra data.
+USE SEMPRE QUE o cliente:
+- perguntar sobre horários disponíveis ('tem horário?', 'quais dias estão livres?')
+- pedir um dia/horário específico ('tem amanhã às 10h?')
+- confirmar um agendamento ('pode agendar', 'pode confirmar')
+- pedir para cancelar uma consulta
 
-MODO 2 — agendar (só após cliente confirmar horário e nome):
-  Chame com acao='agendar', date, time (HH:mm), clientName (nome que o cliente disse na conversa).
-  Opcionalmente informe tipo='presencial' ou tipo='online' se o cliente especificar.
-  Retorna: { success: true, id, professional } ou { success: false, reason: "mensagem de erro" }.
-  Se success=false, leia o campo reason e informe o cliente com naturalidade.
+PASSE EM 'intent' a descrição completa do que o cliente quer, incluindo TODAS
+as informações relevantes que já foram trocadas na conversa: data, horário,
+nome do cliente (se já informado), modalidade (presencial/online).
 
-MODO 3 — cancelar (quando o cliente pede para cancelar uma consulta existente):
-  Chame com acao='cancelar'. Cancela o agendamento confirmado mais recente do contato.
-  Retorna: { success: true, cancelled_date, cancelled_time, professional } ou { success: false, reason }.
+EXEMPLOS de intent:
+- "Cliente quer verificar horários disponíveis no dia 28/05"
+- "Cliente Natan Vilela quer confirmar agendamento dia 28/05 às 10h"
+- "Cliente quer cancelar a consulta marcada"
 
-IMPORTANTE: nunca chame 'agendar' sem antes ter chamado 'verificar' e sem o cliente ter escolhido um horário.`,
+O módulo de agendamento processa o pedido com tools especializadas e retorna
+uma resposta pronta. NÃO PERGUNTE ao cliente dados que ele já forneceu — passe
+tudo que tiver no 'intent'.`,
           parameters: {
             type: 'object',
             properties: {
-              acao: {
+              intent: {
                 type: 'string',
-                enum: ['verificar', 'agendar', 'cancelar'],
-                description: "Use 'verificar' para listar horários disponíveis. Use 'agendar' para confirmar o agendamento após o cliente escolher. Use 'cancelar' para cancelar a consulta mais recente do cliente."
-              },
-              date: {
-                type: 'string',
-                description: "Data no formato YYYY-MM-DD (ex: 2026-06-10). Obrigatório para acao='verificar' e acao='agendar'."
-              },
-              time: {
-                type: 'string',
-                description: "Horário no formato HH:mm ou formatos amigáveis como '9h', '11h30'. Obrigatório quando acao='agendar'. Deve ser um dos horários retornados pelo verificar."
-              },
-              clientName: {
-                type: 'string',
-                description: "Nome completo do cliente/paciente, exatamente como ele informou na conversa. Obrigatório quando acao='agendar'."
-              },
-              professional_name: {
-                type: 'string',
-                description: 'Nome do profissional desejado (opcional). Omitir usa o profissional padrão ou agenda universal.'
+                description: 'Descrição completa do pedido do cliente, com TODOS os dados conhecidos (data, hora, nome, modalidade). Use a linguagem natural.'
               },
               tipo: {
                 type: 'string',
                 enum: ['presencial', 'online'],
-                description: "Modalidade da consulta. Informe apenas se o cliente especificar. Omitir quando não mencionado."
+                description: "Modalidade (presencial/online), se o cliente especificou. Opcional."
               }
             },
-            required: ['acao']
+            required: ['intent']
           }
         }
       },
