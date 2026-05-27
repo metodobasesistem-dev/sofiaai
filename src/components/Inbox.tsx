@@ -662,7 +662,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
   );
 };
 
-const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, onClick, onDelete }) => (
+const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, onClick, onDelete }) => (
   <div 
     onClick={onClick}
     className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
@@ -683,7 +683,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
           {thread.is_client && <Star size={12} className="fill-amber-500 text-amber-500 shrink-0" />}
           {thread.priority === 'urgent' && <span className="text-xs" title="Urgente">🔥</span>}
           {thread.priority === 'high' && <span className="text-xs" title="Alta">🔴</span>}
-          {showWindow && <WindowCountdown lastInboundAt={thread.lastInboundAt} variant="badge" />}
+          {showWindow && <WindowCountdown lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt} variant="badge" />}
         </h4>
         <div className="flex items-center gap-2">
           <button 
@@ -3877,6 +3877,9 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
                 thread={thread}
                 active={selectedThreadId === thread.id}
                 showWindow={currentProvider === 'meta_official'}
+                // Para o thread ativo, usa o cálculo com fallback de mensagens em memória
+                // (mesmo que o painel direito usa). Evita badge "24H ⚠" obsoleta.
+                lastInboundAtOverride={selectedThreadId === thread.id ? activeThreadLastInbound : undefined}
                 onClick={() => setSelectedThreadId(thread.id)}
                 onDelete={() => handleDeleteThread(thread)}
               />
