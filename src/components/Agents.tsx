@@ -2727,8 +2727,15 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                                     onChange={e => {
                                       const val = parseInt(e.target.value) || 0;
                                       const newFollowUps = [...(formData.followUps || [])];
-                                      // Default to minutes for now, the unit selector will handle the multiplier
-                                      newFollowUps[index].delayMinutes = val; 
+                                      
+                                      // Detect current unit from the current delayMinutes value
+                                      const unit = followUp.delayMinutes % 1440 === 0 && followUp.delayMinutes > 0 ? 'days' : followUp.delayMinutes % 60 === 0 && followUp.delayMinutes > 0 ? 'hours' : 'minutes';
+                                      
+                                      let multiplier = 1;
+                                      if (unit === 'days') multiplier = 1440;
+                                      else if (unit === 'hours') multiplier = 60;
+
+                                      newFollowUps[index].delayMinutes = val * multiplier; 
                                       setFormData({...formData, followUps: newFollowUps});
                                     }}
                                     className="w-24 px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm"

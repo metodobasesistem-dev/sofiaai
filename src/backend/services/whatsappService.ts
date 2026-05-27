@@ -1402,6 +1402,33 @@ class WhatsAppService {
         return;
       }
 
+      // 1.5. Verificar se o contato já agendou ou se tornou cliente/resolvido
+      const [{ data: contact }, { data: appointment }] = await Promise.all([
+        supabase
+          .from('contacts')
+          .select('status_funil')
+          .eq('user_id', userId)
+          .eq('telefone', cleanPhone)
+          .maybeSingle(),
+        supabase
+          .from('appointments')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('client_phone', cleanPhone)
+          .eq('status', 'confirmed')
+          .maybeSingle()
+      ]);
+
+      if (appointment && !isManual) {
+        console.log(`[FollowUp] 🛑 Skipping auto follow-up for ${from} because they have a confirmed appointment.`);
+        return;
+      }
+
+      if (contact && (contact.status_funil === 'Cliente' || contact.status_funil === 'Resolvido') && !isManual) {
+        console.log(`[FollowUp] 🛑 Skipping auto follow-up for ${from} because contact status is ${contact.status_funil}.`);
+        return;
+      }
+
       // 2. Definir a mensagem
       let finalMessage = message || config?.message;
 
