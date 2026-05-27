@@ -280,6 +280,11 @@ export class AgentService {
       // 5. AI Loop (Process Tools)
       const systemPrompt = this.buildSystemPrompt(agentData, threadData, activeProfessionals, knowledgeBlocks || []);
       const now = new Date();
+
+      // CALENDÁRIO DE REFERÊNCIA (próximos 10 dias) — inspirado no node proximos_dias do n8n.
+      // Remove a necessidade do LLM fazer math de datas e resolve casos como "dia 28" / "amanhã".
+      const calendarContext = `\n[CALENDÁRIO DE REFERÊNCIA]\n${this.buildDateContext()}\n\nQUANDO o cliente disser "dia X", "amanhã", "depois de amanhã" ou "sexta", use a tabela acima para descobrir o ISO YYYY-MM-DD e passe esse valor para a tool Agendar.\n`;
+
       const dateContext = `\n[CONTEXTO TEMPORAL]\nHOJE: ${format(now, 'dd/MM/yyyy')}\nDATA ATUAL: ${format(now, 'yyyy-MM-dd')}\n`;
 
       // DETECÇÃO DETERMINÍSTICA DE AGENDAMENTO PRONTO:
@@ -302,7 +307,7 @@ A conversa JÁ TEM TODOS OS DADOS necessários para confirmar o agendamento:
 - Data: ${bookingReady.date}
 - Horário: ${bookingReady.time}
 - Nome do cliente: ${bookingReady.clientName}
-- O cliente acabou de confirmar na última mensagem.
+- O cliente acabou de confirmar.
 
 VOCÊ DEVE chamar AGORA, sem fazer NENHUMA pergunta adicional:
   Agendar(acao='agendar', date='${bookingReady.date}', time='${bookingReady.time}', clientName='${bookingReady.clientName}')
@@ -312,7 +317,7 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
 `;
       }
 
-      const fullPrompt = systemPrompt + dateContext + bookingDirective;
+      const fullPrompt = systemPrompt + calendarContext + dateContext + bookingDirective;
       const tools = this.getAgentTools();
 
       // Filtra e formata histórico
@@ -503,6 +508,48 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
 
       if (!aiFinalText && !toolCalledInThisTurn) {
         aiFinalText = "Hm, tive um pequeno problema técnico aqui. Poderia repetir o que você disse? Vou adorar te ajudar!";
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // 🛡️ SAFETY NET DETERMINÍSTICO PARA AGENDAMENTO
+      // Se o estado da conversa indica que deveríamos agendar (data+hora+nome+confirmação)
+      // mas o modelo terminou retornando TEXTO ao invés de chamar a tool Agendar(agendar),
+      // executamos o booking aqui mesmo, ignorando a resposta em texto do modelo.
+      // Esta é a barreira final contra o loop infinito.
+      // ─────────────────────────────────────────────────────────────────
+      const usedBookingTool = toolsUsed.includes('Agendar') &&
+        currentMessages.some((m: any) =>
+          m.role === 'tool' && m.name === 'Agendar' &&
+          typeof m.content === 'string' && m.content.includes('"success":true') && m.content.includes('professional')
+        );
+      if (bookingReady && !usedBookingTool && !transferredToHuman) {
+        console.warn(`[AgentService] 🛡️ SAFETY NET: booking ready (${bookingReady.date} ${bookingReady.time} ${bookingReady.clientName}) mas modelo não chamou tool. Forçando agendamento determinístico.`);
+        try {
+          const forcedArgs = {
+            acao: 'agendar',
+            date: bookingReady.date,
+            time: bookingReady.time,
+            clientName: bookingReady.clientName
+          };
+          const forcedResult = await this.handleBookAppointment(
+            dbUserId,
+            threadId,
+            contactName,
+            forcedArgs,
+            agentData,
+            activeProfessionals
+          );
+          if (forcedResult?.success) {
+            await supabase.from('threads').update({ lead_name: bookingReady.clientName }).eq('id', threadId);
+            if (!toolsUsed.includes('Agendar')) toolsUsed.push('Agendar');
+            aiFinalText = `Prontinho, ${bookingReady.clientName.split(/\s+/)[0]}! Agendamento confirmado para ${bookingReady.date} às ${bookingReady.time}. Te espero! 😊`;
+            console.log('[AgentService] ✅ SAFETY NET: agendamento forçado com sucesso.');
+          } else {
+            console.warn('[AgentService] ⚠️ SAFETY NET: falha no agendamento forçado:', forcedResult?.reason);
+          }
+        } catch (forceErr: any) {
+          console.error('[AgentService] ❌ SAFETY NET error:', forceErr?.message || forceErr);
+        }
       }
 
       // 8. Handle Voice
@@ -1147,50 +1194,95 @@ ${customExamples}
   }
 
   /**
+   * Gera contexto de calendário com os próximos 10 dias em PT-BR.
+   * Inspirado no node `proximos_dias` do fluxo n8n de referência.
+   * Remove a necessidade do LLM fazer matemática de datas.
+   */
+  private buildDateContext(): string {
+    const days = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const lines: string[] = [];
+    lines.push(`Hoje é ${days[now.getDay()]}, ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}.`);
+    for (let i = 1; i <= 10; i++) {
+      const f = new Date(now);
+      f.setDate(now.getDate() + i);
+      const dateStr = `${pad(f.getDate())}/${pad(f.getMonth() + 1)}/${f.getFullYear()}`;
+      const isoStr = `${f.getFullYear()}-${pad(f.getMonth() + 1)}-${pad(f.getDate())}`;
+      const dayName = days[f.getDay()];
+      let label: string;
+      if (i === 1) label = `Amanhã é ${dayName}, ${dateStr} (ISO: ${isoStr})`;
+      else if (i === 2) label = `Depois de amanhã é ${dayName}, ${dateStr} (ISO: ${isoStr})`;
+      else label = `${dayName} dia ${dateStr} (ISO: ${isoStr})`;
+      lines.push(label);
+    }
+    return lines.join('\n');
+  }
+
+  /**
    * Detecta quando a conversa já tem TODOS os dados necessários para agendar:
-   * data, horário, nome do cliente e sinal de confirmação na última mensagem do usuário.
+   * data, horário, nome do cliente e sinal de confirmação recente.
    *
-   * Quando detectado, retorna o payload pronto para a tool Agendar(agendar).
-   * Caso contrário, retorna null e o fluxo segue normal (modelo decide).
+   * Tolerante a mensagens divididas: aceita "pode agendar" numa mensagem
+   * e "Natan Vilela" na seguinte. Também detecta confirmação implícita
+   * quando o assistente pediu o nome para confirmar.
    *
-   * Esta detecção é determinística e contorna o problema de loops onde o modelo
-   * ignora a regra ANTI-LOOP mesmo com todos os dados na conversa.
+   * Retorna payload pronto OU null (fluxo normal).
    */
   private detectBookingReady(
     history: Array<{ role: string; content: string }>,
     currentUserMsg: string,
     leadName: string | null
   ): { date: string; time: string; clientName: string } | null {
-    // Combina histórico recente + mensagem atual do usuário
-    const recent = [...history.slice(-10), { role: 'user', content: currentUserMsg }];
+    // Combina histórico recente + mensagem atual
+    const recent = [...history.slice(-12), { role: 'user', content: currentUserMsg }];
+    const lowerCurrent = (currentUserMsg || '').toLowerCase().trim();
 
-    // 1) Última mensagem do usuário precisa ter sinal de confirmação
-    const lastUserMsg = (currentUserMsg || '').toLowerCase().trim();
+    // ── 1) SINAIS DE CONFIRMAÇÃO ────────────────────────────────────────
     const confirmSignals = [
       'pode agendar', 'pode marcar', 'pode confirmar', 'pode reservar',
-      'sim, agenda', 'sim agenda', 'sim, pode', 'sim pode', 'sim, agende',
+      'sim agenda', 'sim pode', 'sim agende', 'sim confirma',
       'confirmo', 'confirma sim', 'confirmado', 'agende', 'agenda sim',
-      'marca aí', 'marca ai', 'marca pra mim', 'fechado', 'fechou',
-      'beleza', 'perfeito', 'isso mesmo', 'pode ser', 'tá ótimo', 'ta otimo',
-      'tudo certo', 'tá bom', 'ta bom', 'ok pode', 'agendar sim'
+      'marca aí', 'marca ai', 'marca pra mim', 'pode marca',
+      'fechado', 'fechou', 'beleza', 'perfeito', 'isso mesmo',
+      'pode ser', 'tá ótimo', 'ta otimo', 'tudo certo', 'tá bom', 'ta bom',
+      'ok pode', 'agendar sim', 'confirma', 'agende sim'
     ];
-    const hasConfirm = confirmSignals.some(s => lastUserMsg.includes(s));
-    if (!hasConfirm) return null;
+    // Verifica nas 3 últimas mensagens do usuário (tolerância a split)
+    const lastUserMsgs = recent.filter(m => m.role === 'user').slice(-3);
+    const recentUserText = lastUserMsgs.map(m => (m.content || '').toLowerCase()).join(' || ');
+    let hasExplicitConfirm = confirmSignals.some(s => recentUserText.includes(s));
 
-    // 2) Extrai data — prioriza ISO YYYY-MM-DD, depois DD/MM, depois "dia N"
+    // CONFIRMAÇÃO IMPLÍCITA: assistente pediu nome para confirmar, usuário forneceu
+    const lastAssistant = [...recent].reverse().find(m => m.role === 'assistant')?.content?.toLowerCase() || '';
+    const askedToConfirm =
+      (lastAssistant.includes('confirmar') || lastAssistant.includes('confirmação') ||
+       lastAssistant.includes('agendar') || lastAssistant.includes('agendamento')) &&
+      (lastAssistant.includes('nome') || lastAssistant.includes('seu nome'));
+    const looksLikeJustAName = !!lowerCurrent.match(/^[a-zà-úA-ZÀ-Ú\s]{2,40}$/) && lowerCurrent.split(/\s+/).length <= 4;
+    const hasImplicitConfirm = askedToConfirm && looksLikeJustAName;
+
+    if (!hasExplicitConfirm && !hasImplicitConfirm) return null;
+
+    // ── 2) DATA ──────────────────────────────────────────────────────────
     let date: string | null = null;
     const today = new Date();
     const yearStr = String(today.getFullYear());
     const monthStr = String(today.getMonth() + 1).padStart(2, '0');
+    const dayStr = today.getDate();
 
-    for (const msg of recent) {
+    // Varre histórico mais recente primeiro
+    const reverseRecent = [...recent].reverse();
+    for (const msg of reverseRecent) {
       if (date) break;
       const text = msg.content || '';
+      const lower = text.toLowerCase();
+
+      // ISO YYYY-MM-DD
       const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
-      if (iso) {
-        date = `${iso[1]}-${iso[2]}-${iso[3]}`;
-        continue;
-      }
+      if (iso) { date = `${iso[1]}-${iso[2]}-${iso[3]}`; continue; }
+
+      // DD/MM ou DD/MM/YYYY
       const br = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?\b/);
       if (br) {
         const dd = br[1].padStart(2, '0');
@@ -1199,24 +1291,48 @@ ${customExamples}
         date = `${yyyy}-${mm}-${dd}`;
         continue;
       }
+
+      // "amanhã"
+      if (lower.includes('amanhã') || lower.includes('amanha')) {
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+        date = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+        continue;
+      }
+
+      // "hoje"
+      if (lower.includes(' hoje') || lower.startsWith('hoje')) {
+        date = `${yearStr}-${monthStr}-${String(dayStr).padStart(2, '0')}`;
+        continue;
+      }
+
+      // "dia N" (assume mês atual; se já passou, vai pro próximo mês)
       const dia = text.match(/\bdia\s+(\d{1,2})\b/i);
       if (dia) {
-        const dd = dia[1].padStart(2, '0');
-        date = `${yearStr}-${monthStr}-${dd}`;
+        const dd = parseInt(dia[1], 10);
+        let mm = today.getMonth() + 1;
+        let yy = today.getFullYear();
+        if (dd < dayStr) { // dia já passou neste mês → próximo mês
+          mm++;
+          if (mm > 12) { mm = 1; yy++; }
+        }
+        date = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+        continue;
       }
     }
     if (!date) return null;
 
-    // 3) Extrai horário — HH:MM, HHh, HHhMM, "às HH"
+    // ── 3) HORÁRIO ───────────────────────────────────────────────────────
     let time: string | null = null;
-    for (const msg of recent) {
+    for (const msg of reverseRecent) {
       if (time) break;
       const text = msg.content || '';
+
+      // HH:MM
       const colon = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-      if (colon) {
-        time = `${colon[1].padStart(2, '0')}:${colon[2]}`;
-        continue;
-      }
+      if (colon) { time = `${colon[1].padStart(2, '0')}:${colon[2]}`; continue; }
+
+      // NHhMM ou NHh
       const hForm = text.match(/\b(\d{1,2})h(?:s|oras)?(?:\s*(\d{2}))?\b/i);
       if (hForm) {
         const hh = hForm[1].padStart(2, '0');
@@ -1224,26 +1340,37 @@ ${customExamples}
         time = `${hh}:${mm}`;
         continue;
       }
+
+      // "às NN" (acompanhado de h opcional)
       const as = text.match(/\b[àa]s?\s+(\d{1,2})(?:h(?:oras)?)?\b/i);
-      if (as) {
-        time = `${as[1].padStart(2, '0')}:00`;
-      }
+      if (as) { time = `${as[1].padStart(2, '0')}:00`; }
     }
     if (!time) return null;
 
-    // 4) Nome — prioriza padrões explícitos nas mensagens do usuário, depois leadName
+    // ── 4) NOME DO CLIENTE ──────────────────────────────────────────────
     let clientName: string | null = null;
     const userMsgs = recent.filter(m => m.role === 'user');
-    for (const msg of userMsgs) {
+    for (const msg of [...userMsgs].reverse()) {  // do mais recente para o mais antigo
       if (clientName) break;
-      const text = msg.content || '';
+      const text = (msg.content || '').trim();
+
+      // "meu nome é X"
       const meuNome = text.match(/meu nome [eé]\s+([A-ZÀ-Ú][a-zà-úA-ZÀ-Ú\s]{1,40}?)(?:[.,!?\n]|$)/);
       if (meuNome) { clientName = meuNome[1].trim(); continue; }
+
+      // "sou X"
       const sou = text.match(/\bsou\s+(?:o\s+|a\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/);
       if (sou) { clientName = sou[1].trim(); continue; }
-      // Padrão "Natan Vilela. Pode agendar" ou "Natan Vilela, pode agendar"
+
+      // "Natan Vilela. Pode agendar" / "Natan Vilela, pode confirmar"
       const beforeConfirm = text.match(/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de\s+|da\s+|do\s+|dos\s+|das\s+)?[A-ZÀ-Ú][a-zà-ú]+){0,3})\s*[.,]\s*(?:pode|agend|confir|marca|fechad)/i);
       if (beforeConfirm) { clientName = beforeConfirm[1].trim(); continue; }
+
+      // Mensagem que é APENAS um nome (ex: usuário responde "Natan Vilela" depois da pergunta do nome)
+      if (askedToConfirm) {
+        const onlyName = text.match(/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})\.?$/);
+        if (onlyName) { clientName = onlyName[1].trim(); continue; }
+      }
     }
     if (!clientName) clientName = leadName;
     if (!clientName) return null;
