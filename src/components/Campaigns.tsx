@@ -66,6 +66,7 @@ export default function Campaigns() {
   const [metaTemplates, setMetaTemplates] = useState<any[]>([]);
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
   const [userProvider, setUserProvider] = useState<string>('evolution');
+  const [showContactsList, setShowContactsList] = useState(false);
   
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -281,6 +282,7 @@ export default function Campaigns() {
       variables: campaign.variables || {}
     });
     setCurrentStep(1);
+    setShowContactsList(false);
     setIsModalOpen(true);
   };
 
@@ -336,6 +338,17 @@ export default function Campaigns() {
     };
     loadFilters();
   }, []);
+
+  const updateUploadedContact = (index: number, field: 'nome' | 'telefone', value: string) => {
+    const newList = [...campaignData.uploadedContacts];
+    newList[index] = { ...newList[index], [field]: value };
+    setCampaignData({ ...campaignData, uploadedContacts: newList });
+  };
+
+  const removeUploadedContact = (index: number) => {
+    const newList = campaignData.uploadedContacts.filter((_, i) => i !== index);
+    setCampaignData({ ...campaignData, uploadedContacts: newList });
+  };
 
   // Modal - New Campaign Wizard
   const renderWizard = () => {
@@ -509,22 +522,64 @@ export default function Campaigns() {
                   </div>
                   
                   {campaignData.uploadedContacts.length > 0 && (
-                    <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center">
-                          <CheckCircle2 size={20} />
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center">
+                            <CheckCircle2 size={20} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-emerald-900">{campaignData.uploadedContacts.length} contatos importados</p>
+                            <p className="text-[10px] font-bold text-emerald-600">Pronto para o disparo</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-black text-emerald-900">{campaignData.uploadedContacts.length} contatos importados</p>
-                          <p className="text-[10px] font-bold text-emerald-600">Pronto para o disparo</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowContactsList(!showContactsList)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            {showContactsList ? 'Ocultar' : 'Visualizar/Editar'}
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setCampaignData({...campaignData, uploadedContacts: []})}
+                            className="p-2 text-emerald-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => setCampaignData({...campaignData, uploadedContacts: []})}
-                        className="p-2 text-emerald-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+
+                      {showContactsList && (
+                        <div className="border border-slate-100 rounded-3xl p-4 bg-slate-50/50 space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                          {campaignData.uploadedContacts.map((contact: any, index: number) => (
+                            <div key={index} className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-100">
+                              <input
+                                type="text"
+                                value={contact.nome || ''}
+                                onChange={(e) => updateUploadedContact(index, 'nome', e.target.value)}
+                                className="flex-1 min-w-0 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-primary-500 transition-all text-slate-800"
+                                placeholder="Nome"
+                              />
+                              <input
+                                type="text"
+                                value={contact.telefone || ''}
+                                onChange={(e) => updateUploadedContact(index, 'telefone', e.target.value)}
+                                className="w-32 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono outline-none focus:border-primary-500 transition-all text-slate-800"
+                                placeholder="Telefone"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeUploadedContact(index)}
+                                className="p-1 text-slate-300 hover:text-red-500 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -669,7 +724,7 @@ export default function Campaigns() {
                     </div>
                     
                     <div className="space-y-4">
-                      {Array.from({ length: selectedTemplate.variables_count }).map((_, i) => (
+                      {Array.from({ length: varCount }).map((_, i) => (
                         <div key={i} className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variável {"{{"}{i+1}{"}}"}</label>
                           <select
@@ -890,6 +945,7 @@ export default function Campaigns() {
                 variables: {} 
               });
               setCurrentStep(1);
+              setShowContactsList(false);
               setIsModalOpen(true);
             }}
             className="flex items-center justify-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 group"
