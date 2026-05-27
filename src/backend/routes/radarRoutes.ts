@@ -271,10 +271,12 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       // Obter dados do perfil do remetente uma única vez antes de iniciar o loop de disparos
       const { data: profile } = await supabase
         .from('profiles')
-        .select('name, nome_completo')
+        .select('name, nome_completo, full_name')
         .eq('id', userId)
         .maybeSingle();
-      const senderName = profile?.nome_completo || profile?.name || 'Consultor';
+      // Usa só o primeiro nome — fica mais natural no template WhatsApp
+      const fullSenderName = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
+      const senderName = fullSenderName.trim().split(/\s+/)[0] || fullSenderName;
 
       for (let i = 0; i < leads.length; i++) {
         if (job.cancelRequested) { job.jobStatus = 'cancelled'; return; }
@@ -346,10 +348,11 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('name, nome_completo')
+      .select('name, nome_completo, full_name')
       .eq('id', userId)
       .maybeSingle();
-    const senderName = profile?.nome_completo || profile?.name || 'Consultor';
+    const fullSenderName2 = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
+    const senderName = fullSenderName2.trim().split(/\s+/)[0] || fullSenderName2;
 
     if (provider.sendTemplate) {
       const components = [
@@ -436,10 +439,11 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
     if (templateName && provider.sendTemplate) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('name, nome_completo')
+        .select('name, nome_completo, full_name')
         .eq('id', userId)
         .maybeSingle();
-      const senderName = profile?.nome_completo || profile?.name || 'Consultor';
+      const fullSenderName3 = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
+      const senderName = fullSenderName3.trim().split(/\s+/)[0] || fullSenderName3;
 
       // Em vez de injetar a mensagem gerada pela IA, enviamos o texto exato do template
       // mapeando: {{1}} = nome do estabelecimento, {{2}} = nome do remetente

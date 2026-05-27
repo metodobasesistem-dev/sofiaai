@@ -691,10 +691,15 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
-      // Busca o nome real do remetente para exibir no preview
+      // Busca o nome real do remetente para exibir no preview.
+      // Usa full_name como fallback (populado pelo Google/auth) e extrai só o primeiro nome.
       if (user?.id) {
-        supabase.from('profiles').select('name, nome_completo').eq('id', user.id).maybeSingle()
-          .then(({ data }) => setSenderName(data?.nome_completo || data?.name || null));
+        supabase.from('profiles').select('name, nome_completo, full_name').eq('id', user.id).maybeSingle()
+          .then(({ data }) => {
+            const fullName = data?.nome_completo || data?.full_name || data?.name || null;
+            const firstName = fullName ? fullName.trim().split(/\s+/)[0] : null;
+            setSenderName(firstName);
+          });
       }
     } else {
       setMetaTemplates([]);
