@@ -1086,17 +1086,20 @@ ${customExamples}
         summary: `Agendado com ${selectedProf?.name || 'IA'}`
       }).select().single();
 
-      if (error) throw error;
-      
-      return { 
-        success: true, 
-        id: newDoc.id, 
+      if (error) {
+        console.error('[AgentService] Appointment INSERT error:', error);
+        return { success: false, reason: error.message || 'Erro ao salvar no banco de dados' };
+      }
+
+      return {
+        success: true,
+        id: newDoc.id,
         professional: selectedProf?.name || null,
-        google_synced: !!googleEventId 
+        google_synced: !!googleEventId
       };
-    } catch (e) { 
+    } catch (e: any) {
       console.error('[AgentService] Book appointment error:', e);
-      return { success: false }; 
+      return { success: false, reason: e?.message || 'Erro interno ao agendar' };
     }
   }
 
