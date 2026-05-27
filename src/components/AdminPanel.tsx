@@ -643,10 +643,12 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
-  const exportLeadsCSV = () => {
-    const headers = ['Nome', 'Telefone'];
+  const exportLeadsCSV = async () => {
+    // 1. Gera e baixa o arquivo CSV contendo Nome, Responsável e Telefone
+    const headers = ['Nome', 'Responsável', 'Telefone'];
     const rows = radarLeads.map(l => [
       `"${(l.name || '').replace(/"/g, '""')}"`,
+      `"${(l.contact_name || '').replace(/"/g, '""')}"`,
       l.phone || '',
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -657,6 +659,73 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     a.download = `leads_radar_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+
+    // 2. Salva a planilha na aba de Campanhas automaticamente
+    if (!user?.id) return;
+    try {
+      toast.loading('Enviando dados para a seção de Campanhas...');
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      const tenantId = profile?.tenant_id || user.id;
+
+      let campaignName = 'Importação Radar';
+      if (selectedCampaignId) {
+        const selectedC = campaigns.find(c => c.id === selectedCampaignId);
+        if (selectedC?.name) {
+          campaignName = `Radar: ${selectedC.name}`;
+        }
+      }
+
+      // Filtra e formata os contatos da lista de radar
+      const uploadedContacts = radarLeads
+        .map(l => ({
+          nome: l.contact_name || l.name || '',
+          telefone: (l.phone || '').replace(/\D/g, '')
+        }))
+        .filter(c => c.telefone);
+
+      if (uploadedContacts.length === 0) {
+        toast.dismiss();
+        toast.warning('Nenhum contato com telefone válido para criar campanha.');
+        return;
+      }
+
+      const { error } = await supabase.from('campaigns').insert({
+        tenant_id: tenantId,
+        name: campaignName,
+        template_name: 'prospeccao_fria', // Nome temporário do template
+        status: 'pending',
+        target_type: 'upload',
+        uploaded_contacts: uploadedContacts,
+        total_contacts: uploadedContacts.length,
+        variables: {},
+        sent_count: 0,
+        error_count: 0
+      });
+
+      toast.dismiss();
+      if (error) {
+        console.error('[ExportToCampaign] DB Error:', error);
+        toast.error('Erro ao salvar na seção de campanhas: ' + error.message);
+      } else {
+        toast.success(`Planilha importada em Campanhas como "${campaignName}"!`, {
+          action: onTabChange ? {
+            label: 'Ir para Campanhas',
+            onClick: () => onTabChange('campaigns')
+          } : undefined,
+          duration: 6000
+        });
+      }
+    } catch (err: any) {
+      toast.dismiss();
+      console.error('[ExportToCampaign] Error:', err);
+      toast.error('Erro ao salvar campanha: ' + err.message);
+    }
   };
 
   const handleSaveSettings = async () => {
