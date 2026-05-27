@@ -554,6 +554,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     const firstLead = radarLeads.find((l: any) => l.id === firstSelectedId);
     const leadName = firstLead?.name || undefined;
 
+    // Corpo do template já disponível no frontend (para armazenar texto legível no chat)
+    const selectedTemplate = metaTemplates.find(t => t.name === autopilotTemplateName);
+    const templateBodyText = selectedTemplate?.components?.find((c: any) => c.type === 'BODY')?.text || undefined;
+
     setIsTestSending(true);
     try {
       const response = await standardFetch('/api/v2/radar/leads/test-send', {
@@ -561,7 +565,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         body: JSON.stringify({
           phone: testPhone,
           templateName: autopilotTemplateName,
-          leadName
+          leadName,
+          templateBodyText
         })
       });
       const res = await response.json();

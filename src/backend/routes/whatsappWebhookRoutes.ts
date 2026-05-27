@@ -149,8 +149,32 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
   if (from.includes('@g.us')) return; // Ignore groups for now
 
   const cleanPhone = normalizePhone(from);
-  const threadId = `${userId}_${cleanPhone}`;
+  let threadId = `${userId}_${cleanPhone}`;
 
+  // ── Deduplicação do 9º dígito brasileiro ──────────────────────────────────
+  // A Evolution às vezes entrega o mesmo número com e sem o 9º dígito:
+  //   outbound para 553288996173 (12 dig) → inbound de 5532988996173 (13 dig)
+  // Isso cria dois threads para o mesmo contato. Antes de processar, verifica
+  // se já existe um thread para a versão alternativa do número e usa esse ID.
+  if (cleanPhone.startsWith('55') && (cleanPhone.length === 12 || cleanPhone.length === 13)) {
+    const ddd = cleanPhone.slice(2, 4);   // ex: "32"
+    const rest = cleanPhone.slice(4);      // restante após DDD
+    let altPhone = '';
+    if (cleanPhone.length === 13 && rest.startsWith('9')) {
+      altPhone = '55' + ddd + rest.slice(1); // 13→12: remove o 9
+    } else if (cleanPhone.length === 12) {
+      altPhone = '55' + ddd + '9' + rest;   // 12→13: adiciona o 9
+    }
+    if (altPhone) {
+      const altThreadId = `${userId}_${altPhone}`;
+      const { data: altThread } = await supabase.from('threads').select('id').eq('id', altThreadId).maybeSingle();
+      if (altThread) {
+        threadId = altThreadId;
+        console.log(`[Webhook] 🔀 9º dígito dedup: roteando ${cleanPhone} → ${altPhone}`);
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // If it's fromMe, it was sent from the phone (or system echo)
   if (fromMe) {

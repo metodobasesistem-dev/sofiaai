@@ -759,7 +759,8 @@ class WhatsAppService {
     to: string,
     templateName: string,
     languageCode: string = 'pt_BR',
-    components?: any[]
+    components?: any[],
+    bodyText?: string   // Corpo real do template (opcional) — usado para armazenar texto legível no chat
   ): Promise<{ success: boolean; messageId?: string; error?: string; errorInfo?: any; warnings?: Violation[] }> {
     if (!userId) return { success: false, error: 'userId is required' };
 
@@ -777,10 +778,19 @@ class WhatsAppService {
     const tempId = `tpl-sending-${Date.now()}-${cleanTo}`; // whatsapp_id temporário
     const tempUUID = randomUUID();                           // uuid real para messages.id
     const sendTimestamp = Date.now();
-    const previewText = `[Template: ${templateName}]`;
 
     // Template Defense — Camada 3: valida variáveis antes de chamar Meta
     const variables = extractBodyParameters(components);
+
+    // Texto armazenado no chat: usa o corpo real do template com variáveis substituídas,
+    // ou cai no fallback "[Template: nome]" se o corpo não foi fornecido.
+    let previewText = `[Template: ${templateName}]`;
+    if (bodyText) {
+      previewText = bodyText;
+      variables.forEach((val, idx) => {
+        previewText = previewText.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), val);
+      });
+    }
     const { warnings, blocked } = validateTemplateVariables(variables);
     const variablesMasked = variables.map((v, i) => ({ idx: i + 1, value_masked: maskVariableValue(v) }));
     const variablesHash = hashVariables(variables);

@@ -7,6 +7,7 @@ import axios from 'axios';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { generateAIResponse } from '../services/aiService.js';
+import { MetaProvider } from '../providers/MetaProvider.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { whatsappService } from '../services/whatsappService.js';
 
@@ -211,6 +212,19 @@ router.get('/leads/autopilot/progress', (req: AuthenticatedRequest, res: Respons
   res.json({ active: true, ...job });
 });
 
+/** Busca o texto do corpo (BODY) de um template Meta para armazenar mensagem legível no chat. */
+async function fetchTemplateBodyText(userId: string, templateName: string): Promise<string | undefined> {
+  try {
+    const provider = new MetaProvider(userId);
+    const templates = await provider.listTemplates(userId, { limit: 200 });
+    const tpl = templates?.find((t: any) => t.name === templateName);
+    const bodyComp = tpl?.components?.find((c: any) => c.type === 'BODY');
+    return bodyComp?.text || undefined;
+  } catch {
+    return undefined; // best-effort — fallback para "[Template: nome]"
+  }
+}
+
 router.delete('/leads/autopilot', (req: AuthenticatedRequest, res: Response) => {
   const job = autopilotJobs.get(req.userId!);
   if (!job || job.jobStatus !== 'running') return res.json({ success: false, message: 'Nenhum job ativo.' });
@@ -278,6 +292,9 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       const fullSenderName = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
       const senderName = fullSenderName.trim().split(/\s+/)[0] || fullSenderName;
 
+      // Busca o corpo do template uma vez antes do loop (para armazenar texto legível no chat)
+      const templateBodyText = templateName ? await fetchTemplateBodyText(userId!, templateName) : undefined;
+
       for (let i = 0; i < leads.length; i++) {
         if (job.cancelRequested) { job.jobStatus = 'cancelled'; return; }
         const lead = leads[i];
@@ -293,7 +310,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
                 ]
               }
             ];
-            const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, 'pt_BR', components);
+            const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, 'pt_BR', components, templateBodyText);
             if (!result.success) throw new Error(result.error);
           } else {
             if (!lead.personalized_message) throw new Error('Sem mensagem personalizada para enviar');
@@ -330,7 +347,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
 router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const { phone, templateName, templateLanguage = 'pt_BR', leadName } = req.body;
+    const { phone, templateName, templateLanguage = 'pt_BR', leadName, templateBodyText } = req.body;
     if (!phone) return res.status(400).json({ success: false, error: 'Telefone é obrigatório' });
     if (!templateName) return res.status(400).json({ success: false, error: 'Template é obrigatório' });
 
@@ -364,7 +381,9 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
           ]
         }
       ];
-      const result = await whatsappService.sendTemplate(userId, digits, templateName, templateLanguage, components);
+      // templateBodyText vem do frontend (que já tem o template carregado); fallback para busca na Meta
+      const resolvedBodyText = templateBodyText || await fetchTemplateBodyText(userId!, templateName);
+      const result = await whatsappService.sendTemplate(userId, digits, templateName, templateLanguage, components, resolvedBodyText);
       if (result.success) {
         res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
       } else {
@@ -456,7 +475,8 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
           ]
         }
       ];
-      const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, templateLanguage, components);
+      const bodyText = await fetchTemplateBodyText(userId!, templateName);
+      const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, templateLanguage, components, bodyText);
       if (!result.success) throw new Error(result.error);
     } else {
       const msg = customMessage || lead.personalized_message;
