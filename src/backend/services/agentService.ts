@@ -281,7 +281,38 @@ export class AgentService {
       const systemPrompt = this.buildSystemPrompt(agentData, threadData, activeProfessionals, knowledgeBlocks || []);
       const now = new Date();
       const dateContext = `\n[CONTEXTO TEMPORAL]\nHOJE: ${format(now, 'dd/MM/yyyy')}\nDATA ATUAL: ${format(now, 'yyyy-MM-dd')}\n`;
-      const fullPrompt = systemPrompt + dateContext;
+
+      // DETECÇÃO DETERMINÍSTICA DE AGENDAMENTO PRONTO:
+      // Quando a conversa já contém data + horário + nome + sinal de confirmação,
+      // injetamos uma diretiva explícita + forçamos tool_choice='required'.
+      // Isso resolve o problema de loops em que o modelo ignora a regra ANTI-LOOP.
+      const bookingReady = this.detectBookingReady(
+        history,
+        processBody,
+        threadData?.lead_name || null
+      );
+
+      let bookingDirective = '';
+      if (bookingReady) {
+        console.log(`[AgentService] 🎯 BOOKING READY DETECTED on thread ${threadId}:`, bookingReady);
+        bookingDirective = `
+
+# ⚠️ AÇÃO OBRIGATÓRIA — AGENDAR AGORA
+A conversa JÁ TEM TODOS OS DADOS necessários para confirmar o agendamento:
+- Data: ${bookingReady.date}
+- Horário: ${bookingReady.time}
+- Nome do cliente: ${bookingReady.clientName}
+- O cliente acabou de confirmar na última mensagem.
+
+VOCÊ DEVE chamar AGORA, sem fazer NENHUMA pergunta adicional:
+  Agendar(acao='agendar', date='${bookingReady.date}', time='${bookingReady.time}', clientName='${bookingReady.clientName}')
+
+NÃO PERGUNTE de novo a data. NÃO PERGUNTE de novo o horário. NÃO PERGUNTE o nome.
+Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
+`;
+      }
+
+      const fullPrompt = systemPrompt + dateContext + bookingDirective;
       const tools = this.getAgentTools();
 
       // Filtra e formata histórico
@@ -346,7 +377,11 @@ export class AgentService {
         console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId}, Iter: ${iterationCount}/${MAX_TOOL_ITERATIONS})`);
         // Usa mini model para mensagens simples; após tool call, já não importa (toolCalledInThisTurn=true = iteração de resposta)
         const modelForThisCall = toolCalledInThisTurn ? undefined : modelOverride;
-        const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', dbUserId, modelForThisCall);
+        // Força tool_choice='required' na PRIMEIRA iteração quando detectamos
+        // que a conversa está pronta para agendar — garante que o modelo chame Agendar.
+        const effectiveToolChoice: 'auto' | 'required' =
+          bookingReady && iterationCount === 1 && !toolCalledInThisTurn ? 'required' : 'auto';
+        const response = await generateAIResponse(fullPrompt, currentMessages, tools, effectiveToolChoice, dbUserId, modelForThisCall);
         
         if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
           console.warn(`[AgentService] ⚠️ Resposta da IA vazia na thread: ${threadId}. Encerrando loop.`);
@@ -388,7 +423,29 @@ export class AgentService {
             let toolResult;
             try {
               if (functionName === 'Agendar') {
+                // SAFETY NET: se detectamos booking ready E o modelo chamou Agendar mas
+                // com a acao errada (ex: 'verificar' de novo), forçamos para 'agendar'
+                // com os dados que já detectamos deterministicamente.
+                if (bookingReady && iterationCount === 1 && args.acao !== 'agendar') {
+                  console.warn(`[AgentService] 🔧 Booking ready mas modelo chamou Agendar(${args.acao}). Forçando para 'agendar' com dados detectados.`);
+                  args = {
+                    acao: 'agendar',
+                    date: bookingReady.date,
+                    time: bookingReady.time,
+                    clientName: bookingReady.clientName,
+                    ...(args.tipo ? { tipo: args.tipo } : {}),
+                    ...(args.professional_name ? { professional_name: args.professional_name } : {})
+                  };
+                }
+
                 if (args.acao === 'agendar') {
+                  // Se booking ready foi detectado mas o modelo veio com args incompletos,
+                  // preenche com os dados detectados (defesa em profundidade).
+                  if (bookingReady) {
+                    if (!args.date) args.date = bookingReady.date;
+                    if (!args.time) args.time = bookingReady.time;
+                    if (!args.clientName) args.clientName = bookingReady.clientName;
+                  }
                   toolResult = await this.handleBookAppointment(dbUserId, threadId, contactName, args, agentData, activeProfessionals);
                   if (toolResult?.success && args.clientName) {
                     await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
@@ -1087,6 +1144,111 @@ ${customExamples}
     if (numOnly) return `${numOnly[1].padStart(2, '0')}:00`;
     // "11:30" já está no formato correto
     return time;
+  }
+
+  /**
+   * Detecta quando a conversa já tem TODOS os dados necessários para agendar:
+   * data, horário, nome do cliente e sinal de confirmação na última mensagem do usuário.
+   *
+   * Quando detectado, retorna o payload pronto para a tool Agendar(agendar).
+   * Caso contrário, retorna null e o fluxo segue normal (modelo decide).
+   *
+   * Esta detecção é determinística e contorna o problema de loops onde o modelo
+   * ignora a regra ANTI-LOOP mesmo com todos os dados na conversa.
+   */
+  private detectBookingReady(
+    history: Array<{ role: string; content: string }>,
+    currentUserMsg: string,
+    leadName: string | null
+  ): { date: string; time: string; clientName: string } | null {
+    // Combina histórico recente + mensagem atual do usuário
+    const recent = [...history.slice(-10), { role: 'user', content: currentUserMsg }];
+
+    // 1) Última mensagem do usuário precisa ter sinal de confirmação
+    const lastUserMsg = (currentUserMsg || '').toLowerCase().trim();
+    const confirmSignals = [
+      'pode agendar', 'pode marcar', 'pode confirmar', 'pode reservar',
+      'sim, agenda', 'sim agenda', 'sim, pode', 'sim pode', 'sim, agende',
+      'confirmo', 'confirma sim', 'confirmado', 'agende', 'agenda sim',
+      'marca aí', 'marca ai', 'marca pra mim', 'fechado', 'fechou',
+      'beleza', 'perfeito', 'isso mesmo', 'pode ser', 'tá ótimo', 'ta otimo',
+      'tudo certo', 'tá bom', 'ta bom', 'ok pode', 'agendar sim'
+    ];
+    const hasConfirm = confirmSignals.some(s => lastUserMsg.includes(s));
+    if (!hasConfirm) return null;
+
+    // 2) Extrai data — prioriza ISO YYYY-MM-DD, depois DD/MM, depois "dia N"
+    let date: string | null = null;
+    const today = new Date();
+    const yearStr = String(today.getFullYear());
+    const monthStr = String(today.getMonth() + 1).padStart(2, '0');
+
+    for (const msg of recent) {
+      if (date) break;
+      const text = msg.content || '';
+      const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+      if (iso) {
+        date = `${iso[1]}-${iso[2]}-${iso[3]}`;
+        continue;
+      }
+      const br = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?\b/);
+      if (br) {
+        const dd = br[1].padStart(2, '0');
+        const mm = br[2].padStart(2, '0');
+        const yyyy = br[3] || yearStr;
+        date = `${yyyy}-${mm}-${dd}`;
+        continue;
+      }
+      const dia = text.match(/\bdia\s+(\d{1,2})\b/i);
+      if (dia) {
+        const dd = dia[1].padStart(2, '0');
+        date = `${yearStr}-${monthStr}-${dd}`;
+      }
+    }
+    if (!date) return null;
+
+    // 3) Extrai horário — HH:MM, HHh, HHhMM, "às HH"
+    let time: string | null = null;
+    for (const msg of recent) {
+      if (time) break;
+      const text = msg.content || '';
+      const colon = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+      if (colon) {
+        time = `${colon[1].padStart(2, '0')}:${colon[2]}`;
+        continue;
+      }
+      const hForm = text.match(/\b(\d{1,2})h(?:s|oras)?(?:\s*(\d{2}))?\b/i);
+      if (hForm) {
+        const hh = hForm[1].padStart(2, '0');
+        const mm = hForm[2] || '00';
+        time = `${hh}:${mm}`;
+        continue;
+      }
+      const as = text.match(/\b[àa]s?\s+(\d{1,2})(?:h(?:oras)?)?\b/i);
+      if (as) {
+        time = `${as[1].padStart(2, '0')}:00`;
+      }
+    }
+    if (!time) return null;
+
+    // 4) Nome — prioriza padrões explícitos nas mensagens do usuário, depois leadName
+    let clientName: string | null = null;
+    const userMsgs = recent.filter(m => m.role === 'user');
+    for (const msg of userMsgs) {
+      if (clientName) break;
+      const text = msg.content || '';
+      const meuNome = text.match(/meu nome [eé]\s+([A-ZÀ-Ú][a-zà-úA-ZÀ-Ú\s]{1,40}?)(?:[.,!?\n]|$)/);
+      if (meuNome) { clientName = meuNome[1].trim(); continue; }
+      const sou = text.match(/\bsou\s+(?:o\s+|a\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/);
+      if (sou) { clientName = sou[1].trim(); continue; }
+      // Padrão "Natan Vilela. Pode agendar" ou "Natan Vilela, pode agendar"
+      const beforeConfirm = text.match(/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de\s+|da\s+|do\s+|dos\s+|das\s+)?[A-ZÀ-Ú][a-zà-ú]+){0,3})\s*[.,]\s*(?:pode|agend|confir|marca|fechad)/i);
+      if (beforeConfirm) { clientName = beforeConfirm[1].trim(); continue; }
+    }
+    if (!clientName) clientName = leadName;
+    if (!clientName) return null;
+
+    return { date, time, clientName };
   }
 
   /**
