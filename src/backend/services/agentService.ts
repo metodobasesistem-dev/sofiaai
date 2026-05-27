@@ -211,12 +211,29 @@ export class AgentService {
         .eq('agent_id', agentData.id)
         .eq('is_active', true);
 
-      // 3. Persistent History — busca até 50 msgs para habilitar sumarização automática
-      const HISTORY_LIMIT = 50;
-      const RECENT_COUNT = 20;
+      // 3. Persistent History — busca até 30 msgs (reduzido de 50 para evitar poluição
+      // de contexto em casos de loop repetitivo, ex: agente pedindo mesma info várias vezes)
+      const HISTORY_LIMIT = 30;
+      const RECENT_COUNT = 12;
       let history = await redisService.getHistory(threadId, HISTORY_LIMIT);
       if (history.length === 0) {
         history = await this.getHistoryFromSupabase(threadId, HISTORY_LIMIT);
+      }
+
+      // Detecção de loop: se as últimas 6 mensagens do assistente contêm a mesma pergunta
+      // (ex: "qual dia" ou "qual horário"), descarta o histórico antigo e usa só as últimas 4.
+      // Isso quebra ciclos onde o contexto poluído força o modelo a repetir o padrão.
+      const recentAssistantMsgs = history
+        .filter((m: any) => m.role === 'assistant')
+        .slice(-6)
+        .map((m: any) => (m.content || '').toLowerCase());
+      const loopKeywords = ['qual dia', 'qual horário', 'fica melhor para você', 'pela manhã ou à tarde'];
+      const loopCount = recentAssistantMsgs.filter(msg =>
+        loopKeywords.some(kw => msg.includes(kw))
+      ).length;
+      if (loopCount >= 3) {
+        console.warn(`[AgentService] 🔄 Loop detectado na thread ${threadId} (${loopCount} repetições). Truncando histórico para últimas 4 msgs.`);
+        history = history.slice(-4);
       }
 
       // 4. Save Inbound Message
@@ -881,6 +898,7 @@ ${leadName ? `O cliente se chama **${leadName}**. Use o nome dele com naturalida
    Etapa 3 → Após o cliente escolher o horário E confirmar o agendamento, chame Agendar(acao='agendar', date='YYYY-MM-DD', time='HH:mm', clientName='nome que o cliente informou').
    Se Agendar retornar success=false, leia o campo 'reason' e informe ao cliente com naturalidade que houve um problema (ex: "Tive um probleminha ao confirmar, pode tentar novamente?").
    Para clientName: use o nome que o cliente disse na conversa. Se não souber o nome, pergunte antes de chamar 'agendar'.
+   ANTI-LOOP: Se você já sabe o dia, horário E nome — chame Agendar(acao='agendar') AGORA. Não faça nenhuma pergunta. Não repita perguntas já respondidas nesta conversa. Ver o mesmo dado informado mais de uma vez significa que você deve usar esse dado, não perguntar de novo.
 5. **PERSONA**: Você é um humano da equipe da empresa — não revele que é IA, mesmo se perguntado diretamente. Se insistirem, redirecione: "Sou parte do atendimento, e estou aqui pra te ajudar com o que precisar 😊".
 6. **EMOJIS**: Use no máximo 1 emoji por mensagem, e só quando combinar com o contexto. Nada de spam de emoji.
 7. **FORMATAÇÃO**: NÃO use markdown (**negrito**, _itálico_, # títulos, listas com -). É WhatsApp puro. Se quiser destacar, use frases curtas em linhas separadas.
