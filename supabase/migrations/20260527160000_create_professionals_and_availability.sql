@@ -51,13 +51,18 @@ GRANT ALL ON public.professionals TO service_role;
 --    professional_id IS NULL).
 --    config JSONB: { weekly: [...], specificDates: [...] }
 -- ──────────────────────────────────────────────────────────────────────────────
+
+-- Cria a tabela base (sem professional_id) — idempotente
 CREATE TABLE IF NOT EXISTS public.availability (
-  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  professional_id UUID        REFERENCES public.professionals(id) ON DELETE CASCADE,
-  config          JSONB       NOT NULL DEFAULT '{"weekly":[],"specificDates":[]}'::jsonb,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  config     JSONB       NOT NULL DEFAULT '{"weekly":[],"specificDates":[]}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Adiciona professional_id se ainda não existir (funciona tanto em tabela nova quanto existente)
+ALTER TABLE public.availability
+  ADD COLUMN IF NOT EXISTS professional_id UUID REFERENCES public.professionals(id) ON DELETE CASCADE;
 
 -- Unique: um registro por (user_id, professional_id).
 -- Como professional_id pode ser NULL (agenda geral), usamos COALESCE para contornar
