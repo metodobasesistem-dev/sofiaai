@@ -87,6 +87,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [isTestInputVisible, setIsTestInputVisible] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
+  const [senderName, setSenderName] = useState<string | null>(null);
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -690,13 +691,19 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
+      // Busca o nome real do remetente para exibir no preview
+      if (user?.id) {
+        supabase.from('profiles').select('name, nome_completo').eq('id', user.id).maybeSingle()
+          .then(({ data }) => setSenderName(data?.nome_completo || data?.name || null));
+      }
     } else {
       setMetaTemplates([]);
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
+      setSenderName(null);
     }
-  }, [isAutopilotModalOpen]);
+  }, [isAutopilotModalOpen, user?.id]);
 
   // Carrega credenciais Meta quando seleciona usuário. Lê do profile (novas colunas)
   // com fallback para tenant_secrets (legacy) caso o admin ainda não tenha migrado.
@@ -2815,16 +2822,20 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          if (body.includes('{{1}}') || body.includes('{{2}}')) {
                            const firstSelId = [...selectedLeadIds][0];
                            const firstSelLead = radarLeads.find((l: any) => l.id === firstSelId);
-                           const previewName = firstSelLead?.name || '[Nome do Estabelecimento]';
+                           const previewLeadName = firstSelLead?.name || '[Nome do Estabelecimento]';
+                           const previewSender = senderName || '[Seu Nome]';
                            return body
-                             .replace(/\{\{1\}\}/g, previewName)
-                             .replace(/\{\{2\}\}/g, '[Seu Nome]');
+                             .replace(/\{\{1\}\}/g, previewLeadName)
+                             .replace(/\{\{2\}\}/g, previewSender);
                          }
                          return body;
                        })()}
                      </div>
                      <p className="text-[10px] text-slate-400 font-medium px-1">
                        O nome do estabelecimento será injetado na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{1}}'}</code> e o seu nome de perfil na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{2}}'}</code>.
+                       {!senderName && (
+                         <span className="ml-1 text-amber-500 font-bold">⚠ Seu nome não está configurado — vá em Configurações → Conta e preencha o campo Nome Completo.</span>
+                       )}
                      </p>
                    </div>
                  )}
