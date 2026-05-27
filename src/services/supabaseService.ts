@@ -818,7 +818,7 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
     const profile = result.data;
 
     if (profile) {
-      const finalFullName = profile.nome_completo || profile.full_name || '';
+      const finalFullName = profile.nome_completo || profile.full_name || profile.name || '';
       return {
         id: profile.id,
         email: profile.email,
@@ -826,20 +826,34 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
         name: finalFullName,
         role: profile.role,
         whatsapp_status: profile.whatsapp_status,
+        whatsapp_instance_id: profile.whatsapp_instance_id,
+        whatsapp_provider: profile.whatsapp_provider,
+        whatsapp_provider_config: profile.whatsapp_provider_config,
+        whatsapp_phone_number_id: profile.whatsapp_phone_number_id,
         google_calendar_active: profile.google_calendar_active ?? false,
         google_calendar_email: profile.google_calendar_email,
         selected_calendar_id: profile.selected_calendar_id,
-        nome_empresa: profile.nome_empresa,
+        // Dados da organização
+        nome_empresa: profile.nome_empresa || profile.company_name || '',
+        whatsapp_organizacao: profile.whatsapp_organizacao || '',
+        descricao_empresa: profile.descricao_empresa || '',
+        produtos_servicos: profile.produtos_servicos || '',
+        faq: profile.faq || '',
+        links_importantes: profile.links_importantes || '',
+        // Plano e assinatura
         plano: profile.plano,
-        notification_phone: profile.notification_phone,
-        nicho: profile.nicho,
         trial_ends_at: profile.trial_ends_at,
-        llm_provider: profile.llm_provider,
-        openai_api_key: profile.openai_api_key,
-        gemini_api_key: profile.gemini_api_key,
-        default_ai_model: profile.default_ai_model,
-        sofia_prompt: profile.sofia_prompt,
-        sofia_active: profile.sofia_active ?? true
+        subscription_ends_at: profile.subscription_ends_at,
+        nicho: profile.nicho,
+        // Contato e notificações
+        notification_phone: profile.notification_phone || '',
+        // IA
+        llm_provider: profile.llm_provider || '',
+        openai_api_key: profile.openai_api_key || '',
+        gemini_api_key: profile.gemini_api_key || '',
+        default_ai_model: profile.default_ai_model || '',
+        sofia_prompt: profile.sofia_prompt || '',
+        sofia_active: profile.sofia_active ?? true,
       };
     }
     return null;

@@ -59,8 +59,15 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 // those must go through the admin endpoints or the dedicated meta-credentials
 // flow so the changes get validated + audited.
 const SELF_PROFILE_PATCH_ALLOWED_FIELDS = new Set([
-  'name', 'nome_completo', 'avatar_url', 'phone', 'company_name',
-  'preferred_locale', 'sofia_active', 'feature_flags',
+  // Identificação pessoal
+  'name', 'nome_completo', 'avatar_url', 'phone',
+  // Dados da organização (usados na página Configurações → Conta)
+  'nome_empresa', 'company_name', 'whatsapp_organizacao',
+  'descricao_empresa', 'produtos_servicos', 'faq', 'links_importantes',
+  // Notificações e preferências
+  'notification_phone', 'preferred_locale', 'sofia_active', 'feature_flags',
+  // IA e modelos (Configurações → Configuração IA)
+  'llm_provider', 'openai_api_key', 'gemini_api_key', 'default_ai_model', 'sofia_prompt',
 ]);
 
 router.patch('/', async (req: AuthenticatedRequest, res: Response) => {
