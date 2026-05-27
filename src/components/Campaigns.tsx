@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Send, 
@@ -25,7 +25,8 @@ import {
   Upload,
   FileText,
   ClipboardList,
-  ShieldCheck
+  ShieldCheck,
+  XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -102,7 +103,7 @@ export default function Campaigns() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
 
-  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch Templates
   const fetchTemplates = async () => {
@@ -161,185 +162,96 @@ export default function Campaigns() {
     }
   };
 
+  const startPolling = (campaignId: string) => {
+    pollingRef.current = setInterval(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/v2/campaigns/${campaignId}/status`, {
+          headers: { 'Authorization': `Bearer ${session?.access_token}` }
+        });
+        const result = await res.json();
+        if (!result.success) return;
+
+        const job = result.data;
+
+        // Update local campaign list with live progress from backend
+        setCampaigns(prev => prev.map(c => c.id === campaignId ? {
+          ...c,
+          sent_count: job.sent,
+          error_count: job.errors,
+          status: job.jobStatus === 'running'
+            ? 'sending'
+            : job.jobStatus === 'done'
+            ? 'completed'
+            : c.status
+        } : c));
+
+        // Update countdown display
+        if (job.nextSendAt) {
+          const remaining = Math.max(0, Math.ceil((job.nextSendAt - Date.now()) / 1000));
+          setCountdown(remaining);
+          setIsWaiting(remaining > 0);
+        } else {
+          setCountdown(null);
+          setIsWaiting(false);
+        }
+
+        // Stop polling when job is done
+        if (job.jobStatus !== 'running') {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          setProcessingCampaignId(null);
+          setCountdown(null);
+          setIsWaiting(false);
+          fetchCampaigns();
+          if (job.jobStatus === 'done') {
+            toast.success(`Campanha finalizada! Enviadas: ${job.sent}, Erros: ${job.errors}`);
+          } else if (job.jobStatus === 'cancelled') {
+            toast.info('Campanha cancelada.');
+          }
+        }
+      } catch (pollErr: any) {
+        console.warn('[Campaigns] Polling error:', pollErr.message);
+      }
+    }, 3000);
+  };
+
   const startCampaign = async (campaign: Campaign) => {
     if (processingCampaignId) {
       toast.error('Já existe uma campanha sendo processada.');
       return;
     }
-
     try {
       setProcessingCampaignId(campaign.id);
-      
-      // 1. Update status to sending
-      await supabase.from('campaigns').update({ status: 'sending' }).eq('id', campaign.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/v2/campaigns/${campaign.id}/start`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+      toast.success('Campanha iniciada! Você pode fechar esta aba com segurança.');
       fetchCampaigns();
-
-      // 2. Fetch target contacts and user profile (provider)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Usuário não autenticado');
-      
-      const { data: profile } = await supabase.from('profiles').select('whatsapp_provider').eq('id', user.id).single();
-      const provider = profile?.whatsapp_provider || 'evolution';
-
-      // 2.1 Fetch the template body for Web providers (Evolution/UazAPI)
-      // Only needed if we are NOT on meta_official
-      let templateBody = '';
-      if (provider !== 'meta_official') {
-        const { data: templateData } = await supabase.from('message_templates').select('body').eq('id', campaign.template_id).single();
-        templateBody = templateData?.body || '';
-      }
-
-      let finalContacts: any[] = [];
-      const { data: allContacts, error: contactsErr } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (contactsErr) throw new Error('Erro ao buscar contatos: ' + contactsErr.message);
-
-      if (campaign.target_type === 'labels' && campaign.selected_labels) {
-         const { data: threads, error: threadsErr } = await supabase
-           .from('threads')
-           .select('id, remote_jid, contact_name, labels')
-           .eq('user_id', user.id);
-         
-         if (threadsErr) throw new Error('Erro ao buscar conversas: ' + threadsErr.message);
-
-         if (threads && threads.length > 0) {
-            const targetLabel = campaign.selected_labels.trim().toLowerCase();
-            const matchingThreads = threads.filter(t => 
-              t.labels && Array.isArray(t.labels) && 
-              t.labels.some(l => String(l).trim().toLowerCase() === targetLabel)
-            );
-
-            finalContacts = matchingThreads.map(t => ({
-               id: t.id,
-               telefone: (t.remote_jid || '').split('@')[0].replace(/\D/g, ''),
-               nome: t.contact_name || 'Lead'
-            }));
-         }
-      } else if (campaign.target_type === 'funnel') {
-        finalContacts = (allContacts || []).filter(c => c.status_funil === campaign.selected_funnel_status);
-      } else if (campaign.target_type === 'manual') {
-        const numbers = (campaign.manual_list || '').split('\n').map(n => n.trim()).filter(n => n);
-        finalContacts = numbers.map(n => ({ id: 'manual-' + n, telefone: n.replace(/\D/g, ''), nome: 'Lead Manual' }));
-      } else if (campaign.target_type === 'upload') {
-        finalContacts = (campaign.uploaded_contacts || []).map((c: any) => ({
-           id: 'upload-' + (c.telefone || c.number),
-           telefone: (c.telefone || c.number || '').replace(/\D/g, ''),
-           nome: c.nome || c.name || 'Lead Planilha'
-        }));
-      } else {
-        finalContacts = allContacts || [];
-      }
-
-      const contacts = finalContacts;
-
-      if (!contacts || contacts.length === 0) {
-        toast.error('Nenhum contato encontrado para os filtros selecionados.');
-        await supabase.from('campaigns').update({ status: 'completed' }).eq('id', campaign.id);
-        fetchCampaigns();
-        return;
-      }
-
-      // Update total contacts if it was 0
-      await supabase.from('campaigns').update({ total_contacts: contacts.length }).eq('id', campaign.id);
-
-      // 3. Loop and send
-      let sentCount = 0;
-      let errorCount = 0;
-
-      for (let i = 0; i < contacts.length; i++) {
-        const contact = contacts[i];
-        
-        // Anti-ban delay: Wait between messages (except the first one)
-        if (i > 0) {
-          setIsWaiting(true);
-          const randomDelay = Math.floor(Math.random() * (180 - 60 + 1) + 60);
-          
-          for (let remaining = randomDelay; remaining > 0; remaining--) {
-            setCountdown(remaining);
-            await sleep(1000);
-            // Check if processing was cancelled (optional enhancement, but keep it simple for now)
-          }
-          
-          setCountdown(null);
-          setIsWaiting(false);
-        }
-
-        try {
-          // Map variables based on the contact fields, sorted by var index (var1, var2...)
-          const mappedVars = Object.entries(campaign.variables || {})
-            .sort((a, b) => {
-              const aNum = parseInt(a[0].replace('var', ''));
-              const bNum = parseInt(b[0].replace('var', ''));
-              return aNum - bNum;
-            })
-            .map(([key, field]) => {
-              return (contact as any)[field] || '';
-            });
-
-          const phoneToSend = contact.telefone || contact.phone;
-
-          if (provider === 'meta_official') {
-            await sendTemplateMessage(phoneToSend, campaign.template_name, mappedVars);
-          } else {
-            if (!templateBody) throw new Error('Corpo da mensagem vazio.');
-            
-            let finalMessage = templateBody;
-            mappedVars.forEach((val, index) => {
-              finalMessage = finalMessage.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), String(val));
-            });
-
-            const { sendMessage } = await import('../services/whatsappService');
-            await sendMessage(phoneToSend, finalMessage);
-          }
-
-          sentCount++;
-          
-          await supabase.from('campaign_logs').insert({
-            campaign_id: campaign.id,
-            contact_id: contact.id,
-            status: 'sent'
-          });
-
-        } catch (err) {
-          console.error(`Error sending to ${contact.telefone}:`, err);
-          errorCount++;
-          await supabase.from('campaign_logs').insert({
-            campaign_id: campaign.id,
-            contact_id: contact.id,
-            status: 'error',
-            error_message: (err as any).message
-          });
-        }
-
-        // Update progress every 5 messages or at the end
-        if (sentCount % 5 === 0 || sentCount + errorCount === contacts.length) {
-          await supabase.from('campaigns').update({
-            sent_count: sentCount,
-            error_count: errorCount
-          }).eq('id', campaign.id);
-          fetchCampaigns();
-        }
-      }
-
-      // 4. Finalize
-      await supabase.from('campaigns').update({
-        status: 'completed',
-        sent_count: sentCount,
-        error_count: errorCount
-      }).eq('id', campaign.id);
-      
-      toast.success(`Campanha finalizada! Enviadas: ${sentCount}, Erros: ${errorCount}`);
-      fetchCampaigns();
-
+      startPolling(campaign.id);
     } catch (err: any) {
-      toast.error('Erro ao processar campanha: ' + err.message);
-      await supabase.from('campaigns').update({ status: 'failed' }).eq('id', campaign.id);
-      fetchCampaigns();
-    } finally {
+      toast.error('Erro ao iniciar campanha: ' + err.message);
       setProcessingCampaignId(null);
+    }
+  };
+
+  const cancelCampaign = async (campaignId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(`/api/v2/campaigns/${campaignId}/cancel`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      toast.info('Cancelamento solicitado...');
+    } catch (err: any) {
+      toast.error('Erro ao cancelar: ' + err.message);
     }
   };
 
@@ -376,6 +288,11 @@ export default function Campaigns() {
     fetchCampaigns();
     fetchTemplates();
     fetchUserProfile();
+  }, []);
+
+  // Clean up polling interval on unmount
+  useEffect(() => () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
   }, []);
 
   const getStatusBadge = (status: string) => {
@@ -999,7 +916,7 @@ export default function Campaigns() {
         </div>
         <div className="flex items-center gap-2 bg-white/50 px-4 py-2 rounded-xl border border-white">
            <Info size={14} className="text-primary-500" />
-           <span className="text-[10px] font-black uppercase text-slate-500">Mantenha esta aba aberta durante o envio</span>
+           <span className="text-[10px] font-black uppercase text-slate-500">Envio continua mesmo se fechar esta aba</span>
         </div>
       </div>
 
@@ -1110,36 +1027,52 @@ export default function Campaigns() {
                         </button>
                       </div>
 
-                      {campaign.status === 'pending' && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('Deseja iniciar o envio para esta campanha agora?')) {
-                              startCampaign(campaign);
-                            }
-                          }}
-                          disabled={!!processingCampaignId}
-                          className="flex items-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-50 min-w-[180px] justify-center"
-                        >
-                          {processingCampaignId === campaign.id ? (
-                            isWaiting ? (
-                              <span className="flex items-center gap-2">
-                                <Clock size={16} className="animate-pulse" />
-                                Próximo em {countdown}s
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-2">
-                                <Loader2 className="animate-spin" size={16} />
-                                Enviando...
-                              </span>
-                            )
-                          ) : (
-                            <>
-                              <Play size={16} />
-                              Iniciar Envio
-                            </>
+                      {(campaign.status === 'pending' || processingCampaignId === campaign.id) && (
+                        <div className="flex items-center gap-2">
+                          {processingCampaignId === campaign.id && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelCampaign(campaign.id);
+                              }}
+                              title="Cancelar campanha"
+                              className="flex items-center gap-2 px-4 py-3 bg-red-50 text-red-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100"
+                            >
+                              <XCircle size={16} />
+                              Cancelar
+                            </button>
                           )}
-                        </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (processingCampaignId === campaign.id) return;
+                              if (confirm('Deseja iniciar o envio para esta campanha agora?')) {
+                                startCampaign(campaign);
+                              }
+                            }}
+                            disabled={!!processingCampaignId}
+                            className="flex items-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-50 min-w-[180px] justify-center"
+                          >
+                            {processingCampaignId === campaign.id ? (
+                              isWaiting ? (
+                                <span className="flex items-center gap-2">
+                                  <Clock size={16} className="animate-pulse" />
+                                  Próximo em {countdown}s
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-2">
+                                  <Loader2 className="animate-spin" size={16} />
+                                  Enviando...
+                                </span>
+                              )
+                            ) : (
+                              <>
+                                <Play size={16} />
+                                Iniciar Envio
+                              </>
+                            )}
+                          </button>
+                        </div>
                       )}
 
                       <div className="hidden md:flex items-center gap-6">

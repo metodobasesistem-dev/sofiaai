@@ -60,6 +60,7 @@ import profileApiRoutes from './src/backend/routes/profileApiRoutes.js';
 import quickReplyApiRoutes from './src/backend/routes/quickReplyApiRoutes.js';
 import adminApiRoutes from './src/backend/routes/adminApiRoutes.js';
 import radarRoutes from './src/backend/routes/radarRoutes.js';
+import campaignRoutes from './src/backend/routes/campaignRoutes.js';
 import whatsappRoutes from './src/backend/routes/whatsappRoutes.js';
 import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js';
 import metaWebhookRoutes from './src/backend/routes/metaWebhookRoutes.js';
@@ -313,6 +314,7 @@ async function startServer() {
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
     app.use('/api/v2/admin', adminLimiter, adminApiRoutes);
     app.use('/api/v2/radar', apiLimiter, radarRoutes);
+    app.use('/api/v2/campaigns', apiLimiter, campaignRoutes);
     app.use('/api/v2/push', pushRoutes);
     app.use('/api/whatsapp', whatsappRoutes);
     app.use('/api/v2/whatsapp/meta', apiLimiter, metaApiRoutes);
