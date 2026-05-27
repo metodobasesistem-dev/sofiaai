@@ -628,6 +628,21 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
+  const updateLeadContactName = async (id: string, contact_name: string) => {
+    try {
+      const response = await standardFetch(`/api/v2/radar/leads/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ contact_name })
+      });
+      const res = await response.json();
+      if (res.success) {
+        setRadarLeads(prev => prev.map(l => l.id === id ? { ...l, contact_name } : l));
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   const exportLeadsCSV = () => {
     const headers = ['Nome', 'Telefone', 'Endereço', 'Nicho', 'Cidade', 'Categoria', 'Rating', 'Avaliações', 'Dor', 'Potencial', 'Website', 'Instagram', 'Email', 'Resumo IA', 'Status', 'Observações'];
     const rows = radarLeads.map(l => [
@@ -1223,6 +1238,20 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                            <span className="text-sm font-black text-slate-900 leading-tight">{lead.name}</span>
                                            {isHot && <span className="text-base leading-none mt-0.5" title="Hot Lead">🔥</span>}
                                          </div>
+                                         {/* Nome próprio do responsável — usado como {{1}} no template */}
+                                         <input
+                                           type="text"
+                                           placeholder="Nome do responsável..."
+                                           className={`w-full px-2 py-1 rounded-md text-[10px] border outline-none transition-all ${lead.contact_name ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold' : 'bg-slate-50 border-slate-100 text-slate-500'} focus:border-primary-300 focus:bg-white`}
+                                           defaultValue={lead.contact_name || ''}
+                                           title="Nome próprio para usar no template WhatsApp (variável {{1}})"
+                                           onBlur={(e) => {
+                                             const val = e.target.value.trim();
+                                             if (val !== (lead.contact_name || '')) {
+                                               updateLeadContactName(lead.id, val);
+                                             }
+                                           }}
+                                         />
                                          {lead.niche && (
                                            <span className="inline-flex w-fit px-2 py-0.5 bg-primary-50 text-primary-600 rounded-md text-[9px] font-black uppercase tracking-widest">{lead.niche}</span>
                                          )}
@@ -2834,8 +2863,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                            const firstSelId = [...selectedLeadIds][0];
                            const firstSelLead = radarLeads.find((l: any) => l.id === firstSelId);
                            const rawLeadName = firstSelLead?.name || '[Nome do Estabelecimento]';
-                           // Encurta o nome do estabelecimento igual ao backend (antes do | ou -)
-                           const previewLeadName = rawLeadName.split(/\s*[|–-]\s*/)[0].trim().substring(0, 40) || rawLeadName;
+                           // Usa o nome próprio editado (contact_name) se disponível, senão encurta o nome do negócio
+                           const previewLeadName = firstSelLead?.contact_name || rawLeadName.split(/\s*[|–-]\s*/)[0].trim().substring(0, 40) || rawLeadName;
                            const previewSender = senderName || '[Seu Nome]';
                            return body
                              .replace(/\{\{1\}\}/g, previewLeadName)

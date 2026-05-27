@@ -330,7 +330,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
               {
                 type: 'body',
                 parameters: [
-                  { type: 'text', text: shortenEstablishmentName(lead.name || 'Cliente') },
+                  { type: 'text', text: lead.contact_name || shortenEstablishmentName(lead.name || 'Cliente') },
                   { type: 'text', text: senderName }
                 ]
               }
@@ -437,6 +437,7 @@ router.patch('/leads/:id', async (req: AuthenticatedRequest, res: Response) => {
     const updateFields: Record<string, any> = { updated_at: new Date().toISOString() };
     if (status !== undefined) updateFields.status = status;
     if (notes !== undefined) updateFields.notes = notes;
+    if (req.body.contact_name !== undefined) updateFields.contact_name = req.body.contact_name;
     const { data, error } = await supabase.from('leads_radar').update(updateFields).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json({ success: true, data });
@@ -483,7 +484,7 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
         {
           type: 'body',
           parameters: [
-            { type: 'text', text: shortenEstablishmentName(lead.name || 'Cliente') },
+            { type: 'text', text: lead.contact_name || shortenEstablishmentName(lead.name || 'Cliente') },
             { type: 'text', text: senderName }
           ]
         }

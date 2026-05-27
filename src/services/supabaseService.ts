@@ -112,7 +112,8 @@ export interface UserProfile {
   id: string;
   email: string;
   nome_completo?: string;
-  name?: string; 
+  full_name?: string;
+  name?: string;
   photo_url?: string;
   role: 'admin' | 'client';
   whatsapp_status: 'connected' | 'disconnected' | 'connecting';
