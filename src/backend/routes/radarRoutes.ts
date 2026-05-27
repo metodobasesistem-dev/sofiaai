@@ -17,6 +17,17 @@ router.use(requireAuth as any);
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 /**
+ * Encurta o nome de um estabelecimento para uso em variáveis de template WhatsApp.
+ * Pega só a primeira parte antes de "|", "–" ou "-", e limita a 40 caracteres.
+ * Ex: "Instituto Life Sense | Clínica Multidisciplinar em Muriaé" → "Instituto Life Sense"
+ */
+function shortenEstablishmentName(name: string): string {
+  if (!name) return name;
+  const short = name.split(/\s*[|–-]\s*/)[0].trim();
+  return short.length > 40 ? short.substring(0, 40).trimEnd() : short;
+}
+
+/**
  * Busca o primeiro nome do remetente com fallback resiliente.
  * Tenta nome_completo > full_name > name.
  * Se a query falhar (ex: coluna não existe no PostgREST), tenta query mínima.
@@ -319,7 +330,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
               {
                 type: 'body',
                 parameters: [
-                  { type: 'text', text: lead.name || 'Cliente' },
+                  { type: 'text', text: shortenEstablishmentName(lead.name || 'Cliente') },
                   { type: 'text', text: senderName }
                 ]
               }
@@ -384,7 +395,7 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
         {
           type: 'body',
           parameters: [
-            { type: 'text', text: leadName || 'Estabelecimento Teste' },
+            { type: 'text', text: shortenEstablishmentName(leadName || 'Estabelecimento Teste') },
             { type: 'text', text: senderName }
           ]
         }
@@ -472,7 +483,7 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
         {
           type: 'body',
           parameters: [
-            { type: 'text', text: lead.name || 'Cliente' },
+            { type: 'text', text: shortenEstablishmentName(lead.name || 'Cliente') },
             { type: 'text', text: senderName }
           ]
         }
