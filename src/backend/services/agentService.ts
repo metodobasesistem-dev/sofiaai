@@ -1368,7 +1368,7 @@ ${customExamples}
             synced++;
           } else {
             // JÁ EXISTE: Verificar se o status_funil é válido para o novo SQL
-            const validStatus = ['Lead', 'Qualificado', 'Resolvido'];
+            const validStatus = ['Lead', 'Qualificado', 'Agendado', 'Resolvido'];
             if (!validStatus.includes(existing.status_funil)) {
                console.log(`[AgentService] 🛠️ Fixing invalid status "${existing.status_funil}" for contact ${contactId}`);
                await supabase.from('contacts').update({ status_funil: 'Lead' }).eq('id', contactId);
