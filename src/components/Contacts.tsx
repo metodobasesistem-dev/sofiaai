@@ -97,7 +97,7 @@ const SidePanel = ({
 }: { 
   contact: any; 
   onClose: () => void; 
-  onTabChange: (tab: string) => void;
+  onTabChange: (tab: string, passedPhone?: string) => void;
   onStatusChange: (id: string, status: string) => void;
   onEdit: (contact: any) => void;
 }) => {
@@ -118,14 +118,14 @@ const SidePanel = ({
 
   const openInbox = () => {
     if (!contact.telefone) return;
-    const jid = `${contact.telefone.replace(/\D/g, '')}@s.whatsapp.net`;
+    const cleanPhone = contact.telefone.replace(/\D/g, '');
+    const jid = `${cleanPhone}@s.whatsapp.net`;
     const url = new URL(window.location.href);
     url.searchParams.set('jid', jid);
     window.history.pushState({}, '', url);
     // Dispara evento manual para o Inbox perceber a mudança sem reload
     window.dispatchEvent(new PopStateEvent('popstate'));
-    onTabChange('inbox');
-
+    onTabChange('inbox', cleanPhone);
   };
 
   return (
@@ -264,7 +264,7 @@ const SidePanel = ({
   );
 };
 
-export default function Contacts({ onTabChange }: { onTabChange: (tab: string) => void }) {
+export default function Contacts({ user, role, onTabChange }: { user?: any; role?: any; onTabChange: (tab: string, passedPhone?: string) => void }) {
   const [contacts, setContacts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');

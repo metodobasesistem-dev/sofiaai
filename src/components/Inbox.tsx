@@ -3270,16 +3270,56 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
     if (!window.confirm(`Excluir conversa com ${thread.name}?`)) return;
 
     try {
-      await supabase.from('messages').delete().eq('thread_id', thread.id);
-      await supabase.from('threads').delete().eq('id', thread.id);
-      
+      const userId = user?.id;
+      if (!userId) return;
+
       const phoneNumber = (thread.remoteJid || '').split('@')[0];
-      await supabase.from('contacts').delete().ilike('telefone', `%${phoneNumber.slice(-8)}%`);
+      const phoneEnd = phoneNumber.slice(-8);
+
+      // 1. Buscar contatos correspondentes para obter seus IDs
+      const { data: contactsToDelete } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('user_id', userId)
+        .ilike('telefone', `%${phoneEnd}%`);
+
+      if (contactsToDelete && contactsToDelete.length > 0) {
+        const contactIds = contactsToDelete.map(c => c.id);
+        
+        // 2. Deletar os logs de campanha vinculados a esses contatos para evitar erros de chave estrangeira
+        await supabase
+          .from('campaign_logs')
+          .delete()
+          .in('contact_id', contactIds);
+          
+        // 3. Deletar os contatos
+        await supabase
+          .from('contacts')
+          .delete()
+          .in('id', contactIds);
+      } else {
+        // Fallback caso não encontre por ID de contato direto
+        await supabase
+          .from('contacts')
+          .delete()
+          .eq('user_id', userId)
+          .ilike('telefone', `%${phoneEnd}%`);
+      }
+
+      // 4. Deletar as threads correspondentes (o CASCADE no banco deleta automaticamente as mensagens)
+      await supabase
+        .from('threads')
+        .delete()
+        .eq('user_id', userId)
+        .ilike('remote_jid', `%${phoneEnd}%`);
 
       toast.success('Conversa excluída');
       if (selectedThreadId === thread.id) setSelectedThreadId(null);
-      setThreads(prev => prev.filter(t => t.id !== thread.id));
+      
+      // Atualizar o estado local removendo todas as threads afetadas
+      setThreads(prev => prev.filter(t => !t.remoteJid.includes(phoneEnd)));
     } catch (err) {
+      console.error('Erro ao excluir conversa:', err);
       toast.error('Erro ao excluir conversa');
     }
   };

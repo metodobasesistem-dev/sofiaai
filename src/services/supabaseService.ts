@@ -797,6 +797,12 @@ export const deleteSofiaInteraction = async (messageId: string, assistantMessage
 };
 
 export const deleteContact = async (contactId: string) => {
+  // Deletar os logs de campanha vinculados a este contato primeiro para evitar erros de chave estrangeira
+  await supabase
+    .from('campaign_logs')
+    .delete()
+    .eq('contact_id', contactId);
+
   // Note: threads would need to be deleted too if we want parity
   const { error } = await supabase
     .from('contacts')
@@ -804,6 +810,7 @@ export const deleteContact = async (contactId: string) => {
     .eq('id', contactId);
   
   if (error) throw error;
+  return { success: true };
 };
 
 /**
