@@ -9,6 +9,16 @@ import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js
 import { normalizePhone } from '../lib/phoneHelper.js';
 
 /**
+ * Normaliza timestamp para ISO string.
+ * A Evolution API envia timestamps em Unix SEGUNDOS; Date.now() e outros
+ * sources usam MILISSEGUNDOS. Valores < 1e11 são tratados como segundos.
+ */
+function tsToIso(ts: number): string {
+  const ms = ts > 0 && ts < 1e11 ? ts * 1000 : ts;
+  return new Date(ms).toISOString();
+}
+
+/**
  * Retry com backoff exponencial para operações de banco de dados.
  * Protege contra falhas transitórias de rede e sobrecarga do Supabase.
  */
@@ -619,7 +629,7 @@ export class AgentService {
       tokens_prompt:       usage?.prompt_tokens     || 0,
       tokens_completion:   usage?.completion_tokens || 0,
       cost_brl:            usage?.cost_brl          || 0,
-      created_at:          new Date(timestamp).toISOString()
+      created_at:          tsToIso(timestamp)
     };
 
     const threadPayload = {
@@ -629,12 +639,12 @@ export class AgentService {
       display_phone:              cleanPhone,
       contact_name:               resolvedContactName,
       last_message:               text.substring(0, 1000),
-      last_message_time:          new Date(timestamp).toISOString(),
+      last_message_time:          tsToIso(timestamp),
       status:                     'ia',
       unread_count:               newUnreadCount,
       ticket_status:              finalTicketStatus,
       agent_name:                 agentName || 'Sofia',
-      updated_at:                 new Date(timestamp).toISOString(),
+      updated_at:                 tsToIso(timestamp),
       // Preserva foto existente — nunca sobrescreve com null
       profile_picture_url:        existingThread?.profile_picture_url        || null,
       profile_picture_updated_at: existingThread?.profile_picture_updated_at || null
@@ -648,10 +658,10 @@ export class AgentService {
       status_funil:    existingContact?.status_funil || 'Lead',
       source:          'whatsapp',
       ultima_mensagem: text.substring(0, 500),
-      ultima_interacao:new Date(timestamp).toISOString(),
+      ultima_interacao:tsToIso(timestamp),
       // Para novos contatos: usa NOW() via COALESCE na SQL se não passado
-      primeiro_contato:existingContact?.primeiro_contato || new Date(timestamp).toISOString(),
-      data_criacao:    existingContact?.data_criacao     || new Date(timestamp).toISOString(),
+      primeiro_contato:existingContact?.primeiro_contato || tsToIso(timestamp),
+      data_criacao:    existingContact?.data_criacao     || tsToIso(timestamp),
       total_mensagens: existingContact?.total_mensagens  || 0,
       // Flags de controle para a RPC
       increment_count: direction === 'inbound',
@@ -686,7 +696,7 @@ export class AgentService {
       if (direction === 'inbound') {
         void supabase
           .from('threads')
-          .update({ last_inbound_at: new Date(timestamp).toISOString() })
+          .update({ last_inbound_at: tsToIso(timestamp) })
           .eq('id', threadId);
       }
     } catch (err: any) {
