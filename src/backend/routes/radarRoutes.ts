@@ -28,21 +28,43 @@ function shortenEstablishmentName(name: string): string {
 }
 
 /**
- * Busca o primeiro nome do remetente com fallback resiliente.
- * Tenta nome_completo > full_name > name.
- * Se a query falhar (ex: coluna não existe no PostgREST), tenta query mínima.
+ * Busca o primeiro nome do remetente com fallback em cascata:
+ * 1. profiles.nome_completo  (salvo nas Configurações → Conta)
+ * 2. profiles.name           (nome legado)
+ * 3. auth.users.raw_user_meta_data->>'full_name'  (Google OAuth)
+ * 4. auth.users.raw_user_meta_data->>'name'       (outros provedores OAuth)
+ * 5. 'Consultor'             (último recurso)
+ *
+ * Os passos 3-4 garantem que mesmo sem a migration de nome_completo rodada,
+ * o nome real do usuário é usado.
  */
 async function fetchSenderFirstName(userId: string): Promise<string> {
-  // Seleciona apenas colunas que existem em produção.
-  // nome_completo = campo preenchido nas Configurações → Conta.
-  const { data } = await supabase
+  // Tenta profiles primeiro (colunas podem não existir se migration pendente)
+  const { data: profile } = await supabase
     .from('profiles')
     .select('name, nome_completo')
     .eq('id', userId)
     .maybeSingle();
 
-  const full = data?.nome_completo || data?.name || 'Consultor';
-  return full.trim().split(/\s+/)[0] || full;
+  const profileName = (profile as any)?.nome_completo || (profile as any)?.name;
+  if (profileName) {
+    return profileName.trim().split(/\s+/)[0] || profileName;
+  }
+
+  // Fallback: metadados do auth (Google OAuth / outros provedores)
+  // Só acessível com service_role — seguro no backend.
+  try {
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const meta = authUser?.user?.user_metadata;
+    const oauthName = meta?.full_name || meta?.name || null;
+    if (oauthName) {
+      return oauthName.trim().split(/\s+/)[0] || oauthName;
+    }
+  } catch (_) {
+    // admin.getUserById pode não estar disponível em todos os planos — ignora
+  }
+
+  return 'Consultor';
 }
 
 // ─── In-memory autopilot job tracker (per userId) ─────────────────────────
