@@ -1400,8 +1400,9 @@ ${customExamples}
 
   /**
    * Cancela o agendamento confirmado mais recente do contato.
-   * Soft-delete: atualiza status → 'cancelled', não remove o registro.
-   * Nota: não cancela o evento no Google Calendar (gap conhecido).
+   * Soft-delete: atualiza status → 'cancelled' no banco E remove o evento do
+   * Google Calendar do profissional (se houver). Falha do Google é tolerada
+   * — não bloqueia o cancelamento no banco.
    */
   private async handleCancelAppointment(userId: string, threadId: string, _args: any) {
     try {
@@ -1413,7 +1414,7 @@ ${customExamples}
       // com fallback para client_phone para registros legados sem contact_id preenchido.
       const { data: appt } = await supabase
         .from('appointments')
-        .select('id, data, time, professional_name, google_event_id')
+        .select('id, data, time, professional_id, professional_name, google_event_id')
         .eq('user_id', userId)
         .or(`contact_id.eq.${contactId},client_phone.eq.${clientPhone}`)
         .eq('status', 'confirmed')
@@ -1436,8 +1437,24 @@ ${customExamples}
         return { success: false, reason: error.message };
       }
 
-      console.log(`[AgentService] ✅ Appointment ${appt.id} cancelled`);
-      // Nota: evento do Google Calendar NÃO é removido automaticamente (gap conhecido)
+      console.log(`[AgentService] ✅ Appointment ${appt.id} cancelled in DB`);
+
+      // Remove o evento do Google Calendar (resiliente — não bloqueia se falhar)
+      if (appt.google_event_id && appt.professional_id) {
+        try {
+          const { data: prof } = await supabase
+            .from('professionals')
+            .select('google_calendar_id')
+            .eq('id', appt.professional_id)
+            .maybeSingle();
+          if (prof?.google_calendar_id) {
+            await googleCalendarService.deleteEvent(userId, prof.google_calendar_id, appt.google_event_id);
+            console.log(`[AgentService] ✅ Google Calendar event ${appt.google_event_id} deleted`);
+          }
+        } catch (gErr: any) {
+          console.warn('[AgentService] ⚠️ Failed to delete Google Calendar event (DB cancel succeeded):', gErr?.message || gErr);
+        }
+      }
 
       return {
         success: true,
@@ -1449,6 +1466,121 @@ ${customExamples}
     } catch (e: any) {
       console.error('[AgentService] Cancel appointment error:', e);
       return { success: false, reason: e?.message || 'Erro interno ao cancelar' };
+    }
+  }
+
+  /**
+   * Reagenda o agendamento confirmado mais recente do contato para nova data/horário.
+   *
+   * Operação ATÔMICA: atualiza o MESMO registro (sem criar duplicata) e sincroniza
+   * com Google Calendar (apaga evento antigo, cria novo). Se a atualização do DB
+   * falhar, nada é alterado. Se o Google falhar, o DB ainda é atualizado e o
+   * agendamento fica válido — apenas o calendário do profissional fica dessincronizado.
+   */
+  private async handleRescheduleAppointment(
+    userId: string,
+    threadId: string,
+    contactName: string,
+    args: any,
+    agentData: any,
+    professionals: any[]
+  ) {
+    try {
+      const newDate = args.date;
+      const newTime = this.normalizeTimeInput(args.time);
+      if (!newDate || !newTime) {
+        return { success: false, reason: 'Data e horário novos são obrigatórios para reagendar.' };
+      }
+
+      const clientPhone = threadId.split('_')[1];
+      const contactId = `${userId}_${clientPhone}`;
+      console.log(`[AgentService] 🔄 Rescheduling for ${contactId} → ${newDate} ${newTime}`);
+
+      // Busca o agendamento confirmado mais recente
+      const { data: appt } = await supabase
+        .from('appointments')
+        .select('id, data, time, client_name, professional_id, professional_name, google_event_id, agent_id')
+        .eq('user_id', userId)
+        .or(`contact_id.eq.${contactId},client_phone.eq.${clientPhone}`)
+        .eq('status', 'confirmed')
+        .order('data', { ascending: false })
+        .order('time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!appt) {
+        return { success: false, reason: 'Nenhum agendamento confirmado encontrado para reagendar.' };
+      }
+
+      // Não muda se for o mesmo horário
+      const previousTime = (appt.time || '').substring(0, 5);
+      if (appt.data === newDate && previousTime === newTime) {
+        return { success: false, reason: 'O novo horário é o mesmo do atual.' };
+      }
+
+      // Resolve profissional para acessar Google Calendar
+      let selectedProf: any = appt.professional_id
+        ? professionals.find(p => p.id === appt.professional_id)
+        : null;
+      if (!selectedProf && args.professional_name) {
+        selectedProf = professionals.find(
+          p => p.name.toLowerCase().includes(String(args.professional_name).toLowerCase())
+        );
+      }
+
+      // Sincroniza Google Calendar (resiliente) — delete antigo + create novo
+      let newGoogleEventId = appt.google_event_id;
+      if (selectedProf?.google_calendar_id) {
+        try {
+          if (appt.google_event_id) {
+            await googleCalendarService.deleteEvent(userId, selectedProf.google_calendar_id, appt.google_event_id);
+          }
+          const start = new Date(`${newDate}T${newTime}:00`);
+          const end = new Date(start.getTime() + (agentData.appointment_duration || 30) * 60000);
+          const event = await googleCalendarService.createEvent(userId, selectedProf.google_calendar_id, {
+            summary: `📅 Reagendamento: ${appt.client_name || contactName} (${agentData.nome || agentData.company_name || 'IA'})`,
+            description: `Reagendado via WhatsApp AI.\nCliente: ${contactName}\nProtocolo: ${threadId}`,
+            start: start.toISOString(),
+            end: end.toISOString()
+          });
+          newGoogleEventId = event.id;
+        } catch (gErr) {
+          console.warn('[AgentService] ⚠️ Google Calendar reschedule failed (DB update will proceed):', gErr);
+        }
+      }
+
+      // Atualiza o MESMO registro — mantém histórico ligado a um único agendamento
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update({
+          data: newDate,
+          time: newTime,
+          google_event_id: newGoogleEventId,
+          summary: `Reagendado com ${appt.professional_name || selectedProf?.name || 'a equipe'}`
+        })
+        .eq('id', appt.id);
+
+      if (updateError) {
+        console.error('[AgentService] Reschedule UPDATE error:', updateError);
+        return { success: false, reason: updateError.message };
+      }
+
+      console.log(`[AgentService] ✅ Appointment ${appt.id} rescheduled ${appt.data} ${previousTime} → ${newDate} ${newTime}`);
+
+      return {
+        success: true,
+        id: appt.id,
+        previous_date: appt.data,
+        previous_time: previousTime,
+        new_date: newDate,
+        new_time: newTime,
+        professional: appt.professional_name,
+        google_synced: !!(selectedProf?.google_calendar_id && newGoogleEventId !== appt.google_event_id),
+        message: `Reagendamento confirmado: de ${appt.data} às ${previousTime} para ${newDate} às ${newTime} com ${appt.professional_name || 'a equipe'}.`
+      };
+    } catch (e: any) {
+      console.error('[AgentService] Reschedule error:', e);
+      return { success: false, reason: e?.message || 'Erro interno ao reagendar' };
     }
   }
 
@@ -1889,8 +2021,24 @@ ${customExamples}
       {
         type: 'function',
         function: {
+          name: 'reagendar_consulta',
+          description: 'Move o agendamento confirmado mais recente do cliente para nova data/horário. USE quando o cliente pedir REMARCAR/REAGENDAR uma consulta existente (NÃO use para novos agendamentos). Sempre verifique disponibilidade do NOVO horário via verificar_disponibilidade antes de chamar.',
+          parameters: {
+            type: 'object',
+            properties: {
+              date: { type: 'string', description: 'Nova data YYYY-MM-DD' },
+              time: { type: 'string', description: 'Novo horário HH:mm' },
+              professional_name: { type: 'string', description: 'Profissional (opcional — mantém o atual se omitido)' }
+            },
+            required: ['date', 'time']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'cancelar_agendamento',
-          description: 'Cancela o agendamento confirmado mais recente do cliente.',
+          description: 'Cancela o agendamento confirmado mais recente do cliente. Também remove o evento do Google Calendar do profissional.',
           parameters: { type: 'object', properties: {} }
         }
       }
@@ -1956,8 +2104,14 @@ Sua ÚNICA função: processar agendamentos usando as 3 tools disponíveis.
 
 # TOOLS DISPONÍVEIS
 - verificar_disponibilidade(date YYYY-MM-DD, professional_name?) — consultar slots livres
-- confirmar_agendamento(date, time, clientName, professional_name?, tipo?) — efetivar
+- confirmar_agendamento(date, time, clientName, professional_name?, tipo?) — efetivar NOVO agendamento
+- reagendar_consulta(date, time, professional_name?) — mover consulta existente para outro dia/horário
 - cancelar_agendamento() — cancelar consulta existente
+
+# QUANDO USAR CADA TOOL
+- Cliente quer NOVO agendamento → confirmar_agendamento (após verificar_disponibilidade)
+- Cliente quer MUDAR data/horário de consulta já marcada → reagendar_consulta (após verificar_disponibilidade do novo horário)
+- Cliente quer CANCELAR sem remarcar → cancelar_agendamento
 
 # PROFISSIONAIS DESTA EMPRESA
 ${profList}
@@ -2013,6 +2167,11 @@ Decida e execute a próxima ação usando as tools. Após executar, responda ao 
                 if (args.clientName) {
                   await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
                 }
+              }
+            } else if (name === 'reagendar_consulta') {
+              result = await this.handleRescheduleAppointment(userId, threadId, contactName, args, agentData, professionals);
+              if (result?.success) {
+                bookingOccurred = true;
               }
             } else if (name === 'cancelar_agendamento') {
               result = await this.handleCancelAppointment(userId, threadId, args);
