@@ -547,14 +547,20 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const sendTestMessage = async () => {
     if (!testPhone) return toast.error('O número de telefone é obrigatório para o teste.');
     if (!autopilotTemplateName) return toast.error('Selecione um template para testar.');
-    
+
+    // Usa o nome do primeiro lead selecionado para preencher {{1}} na mensagem de teste
+    const firstSelectedId = [...selectedLeadIds][0];
+    const firstLead = radarLeads.find((l: any) => l.id === firstSelectedId);
+    const leadName = firstLead?.name || undefined;
+
     setIsTestSending(true);
     try {
       const response = await standardFetch('/api/v2/radar/leads/test-send', {
         method: 'POST',
         body: JSON.stringify({
           phone: testPhone,
-          templateName: autopilotTemplateName
+          templateName: autopilotTemplateName,
+          leadName
         })
       });
       const res = await response.json();
@@ -2807,8 +2813,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          if (!body) return <span className="text-slate-400 italic">Template sem corpo de texto.</span>;
                          
                          if (body.includes('{{1}}') || body.includes('{{2}}')) {
+                           const firstSelId = [...selectedLeadIds][0];
+                           const firstSelLead = radarLeads.find((l: any) => l.id === firstSelId);
+                           const previewName = firstSelLead?.name || '[Nome do Estabelecimento]';
                            return body
-                             .replace(/\{\{1\}\}/g, '[Nome do Estabelecimento]')
+                             .replace(/\{\{1\}\}/g, previewName)
                              .replace(/\{\{2\}\}/g, '[Seu Nome]');
                          }
                          return body;

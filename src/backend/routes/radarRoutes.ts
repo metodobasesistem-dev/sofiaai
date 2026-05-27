@@ -328,7 +328,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
 router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const { phone, templateName, templateLanguage = 'pt_BR' } = req.body;
+    const { phone, templateName, templateLanguage = 'pt_BR', leadName } = req.body;
     if (!phone) return res.status(400).json({ success: false, error: 'Telefone é obrigatório' });
     if (!templateName) return res.status(400).json({ success: false, error: 'Template é obrigatório' });
 
@@ -356,7 +356,7 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
         {
           type: 'body',
           parameters: [
-            { type: 'text', text: 'Clínica de Teste' },
+            { type: 'text', text: leadName || 'Estabelecimento Teste' },
             { type: 'text', text: senderName }
           ]
         }
