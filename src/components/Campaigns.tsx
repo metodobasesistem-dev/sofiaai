@@ -158,10 +158,19 @@ export default function Campaigns() {
   const fetchUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('whatsapp_provider, phone').eq('id', user.id).single();
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('whatsapp_provider, whatsapp_organizacao')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('Erro ao carregar perfil do usuário:', error.message);
+      }
+
       setUserProvider(profile?.whatsapp_provider || 'evolution');
-      if (profile?.phone) {
-        setTestPhone(profile.phone.replace(/\D/g, ''));
+      if (profile?.whatsapp_organizacao) {
+        setTestPhone(profile.whatsapp_organizacao.replace(/\D/g, ''));
       }
       if (profile?.whatsapp_provider === 'meta_official') {
         fetchMetaTemplates();
