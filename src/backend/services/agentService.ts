@@ -376,6 +376,8 @@ export class AgentService {
                   if (toolResult?.success && args.clientName) {
                     await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
                   }
+                } else if (args.acao === 'cancelar') {
+                  toolResult = await this.handleCancelAppointment(dbUserId, threadId, args);
                 } else {
                   toolResult = await this.handleCheckAvailability(dbUserId, args.date, agentData, activeProfessionals, args.professional_name);
                 }
@@ -1049,30 +1051,108 @@ ${customExamples}
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
+  /**
+   * Normaliza múltiplos formatos de horário para HH:mm.
+   * Suporta: "11h", "11hs", "11:30", "9h30", "11", "11:00"
+   */
+  private normalizeTimeInput(time: string): string {
+    if (!time) return time;
+    const t = time.trim().toLowerCase();
+    // "9h30" | "11h30" → "09:30" | "11:30"
+    const hm = t.match(/^(\d{1,2})h(\d{2})$/);
+    if (hm) return `${hm[1].padStart(2, '0')}:${hm[2]}`;
+    // "11h" | "11hs" | "9h" | "9hs" → "11:00" | "09:00"
+    const hOnly = t.match(/^(\d{1,2})h(?:s)?$/);
+    if (hOnly) return `${hOnly[1].padStart(2, '0')}:00`;
+    // "11" (só dígitos) → "11:00"
+    const numOnly = t.match(/^(\d{1,2})$/);
+    if (numOnly) return `${numOnly[1].padStart(2, '0')}:00`;
+    // "11:30" já está no formato correto
+    return time;
+  }
+
+  /**
+   * Cancela o agendamento confirmado mais recente do contato.
+   * Soft-delete: atualiza status → 'cancelled', não remove o registro.
+   * Nota: não cancela o evento no Google Calendar (gap conhecido).
+   */
+  private async handleCancelAppointment(userId: string, threadId: string, _args: any) {
+    try {
+      const clientPhone = threadId.split('_')[1];
+      const contactId = `${userId}_${clientPhone}`;
+      console.log(`[AgentService] 🚫 Cancelling appointment for contact ${contactId}`);
+
+      // Busca agendamento confirmado mais recente — prefere contact_id (mais confiável),
+      // com fallback para client_phone para registros legados sem contact_id preenchido.
+      const { data: appt } = await supabase
+        .from('appointments')
+        .select('id, data, time, professional_name, google_event_id')
+        .eq('user_id', userId)
+        .or(`contact_id.eq.${contactId},client_phone.eq.${clientPhone}`)
+        .eq('status', 'confirmed')
+        .order('data', { ascending: false })
+        .order('time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!appt) {
+        return { success: false, reason: 'Nenhum agendamento confirmado encontrado para este contato.' };
+      }
+
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', appt.id);
+
+      if (error) {
+        console.error('[AgentService] Cancel appointment error:', error);
+        return { success: false, reason: error.message };
+      }
+
+      console.log(`[AgentService] ✅ Appointment ${appt.id} cancelled`);
+      // Nota: evento do Google Calendar NÃO é removido automaticamente (gap conhecido)
+
+      return {
+        success: true,
+        cancelled_date: appt.data,
+        cancelled_time: appt.time,
+        professional: appt.professional_name,
+        message: `Agendamento de ${appt.data} às ${appt.time} com ${appt.professional_name || 'a equipe'} foi cancelado com sucesso.`
+      };
+    } catch (e: any) {
+      console.error('[AgentService] Cancel appointment error:', e);
+      return { success: false, reason: e?.message || 'Erro interno ao cancelar' };
+    }
+  }
+
   private async handleBookAppointment(userId: string, threadId: string, contactName: string, args: any, agentData: any, professionals: any[]) {
     try {
-      console.log(`[AgentService] 📝 Booking appointment for ${args.clientName} on ${args.date} at ${args.time}`);
-      
-      let selectedProf = args.professional_name 
+      // Normaliza o horário antes de qualquer uso: "11h" → "11:00", "9h30" → "09:30"
+      const normalizedTime = this.normalizeTimeInput(args.time);
+      console.log(`[AgentService] 📝 Booking appointment for ${args.clientName} on ${args.date} at ${normalizedTime} (raw: ${args.time})`);
+
+      let selectedProf = args.professional_name
         ? professionals.find(p => p.name.toLowerCase().includes(args.professional_name.toLowerCase()))
         : (professionals.length > 0 ? professionals[0] : null);
 
-      let isUniversal = false;
       if (!selectedProf) {
-        isUniversal = true;
         selectedProf = {
           id: null, // Deixamos null para evitar erro de chave estrangeira
           name: agentData.company_name || 'Agenda Principal'
         };
       }
 
+      // Resolve contact_id para associar ao agendamento
+      const clientPhone = threadId.split('_')[1];
+      const contactId = `${userId}_${clientPhone}`;
+
       // 1. Create in Google Calendar if integrated
       let googleEventId = null;
       if (selectedProf?.google_calendar_id) {
         try {
-          const start = new Date(`${args.date}T${args.time}:00`);
+          const start = new Date(`${args.date}T${normalizedTime}:00`);
           const end = new Date(start.getTime() + (agentData.appointment_duration || 30) * 60000);
-          
+
           const event = await googleCalendarService.createEvent(userId, selectedProf.google_calendar_id, {
             summary: `📅 Agendamento: ${args.clientName} (${agentData.nome})`,
             description: `Agendamento realizado via WhatsApp AI.\nCliente: ${contactName}\nProtocolo: ${threadId}`,
@@ -1086,18 +1166,21 @@ ${customExamples}
       }
 
       // 2. Save in Local DB
+      const tipoConsulta = args.tipo || null; // 'presencial' | 'online' | null
       const { data: newDoc, error } = await supabase.from('appointments').insert({
-        user_id: userId,
-        data: args.date,
-        time: args.time,
-        client_name: args.clientName,
-        client_phone: threadId.split('_')[1],
-        status: 'confirmed',
-        professional_id: selectedProf?.id,
-        professional_name: selectedProf?.name,
-        google_event_id: googleEventId,
-        agent_id: agentData.id,
-        summary: `Agendado com ${selectedProf?.name || 'IA'}`
+        user_id:          userId,
+        data:             args.date,
+        time:             normalizedTime,
+        client_name:      args.clientName,
+        client_phone:     clientPhone,
+        contact_id:       contactId,
+        status:           'confirmed',
+        professional_id:  selectedProf?.id,
+        professional_name:selectedProf?.name,
+        google_event_id:  googleEventId,
+        agent_id:         agentData.id,
+        tipo_consulta:    tipoConsulta,
+        summary:          `Agendado com ${selectedProf?.name || 'IA'}`
       }).select().single();
 
       if (error) {
@@ -1105,12 +1188,23 @@ ${customExamples}
         return { success: false, reason: error.message || 'Erro ao salvar no banco de dados' };
       }
 
+      // 3. Atualiza contato: avança funil para 'Agendado' (fire-and-forget)
+      void supabase
+        .from('contacts')
+        .update({ status_funil: 'Agendado', ultima_interacao: new Date().toISOString() })
+        .eq('id', contactId)
+        .then(({ error: cErr }) => {
+          if (cErr) console.warn('[AgentService] Contact funnel update after booking failed:', cErr.message);
+          else console.log(`[AgentService] ✅ Contact ${contactId} avançado para funil 'Agendado'`);
+        });
+
       return {
         success: true,
         id: newDoc.id,
         professional: selectedProf?.name || null,
+        tipo: tipoConsulta,
         google_synced: !!googleEventId,
-        message: `Agendamento confirmado para ${args.clientName} em ${args.date} às ${args.time} com ${selectedProf?.name || 'a equipe'}.`
+        message: `Agendamento confirmado para ${args.clientName} em ${args.date} às ${normalizedTime} com ${selectedProf?.name || 'a equipe'}.`
       };
     } catch (e: any) {
       console.error('[AgentService] Book appointment error:', e);
@@ -1418,17 +1512,22 @@ ${customExamples}
         type: 'function',
         function: {
           name: 'Agendar',
-          description: `Ferramenta de agendamento — DOIS modos de uso:
+          description: `Ferramenta de agendamento — TRÊS modos de uso:
 
-MODO 1 — verificar (SEMPRE faça isso primeiro):
+MODO 1 — verificar (SEMPRE faça isso primeiro antes de agendar):
   Chame com acao='verificar' e date='YYYY-MM-DD' para consultar os horários reais disponíveis.
   Retorna: { slots: ["09:00","10:00",...], date, professional, total_available }
   Se slots estiver vazio, não há vagas naquele dia — pergunte outra data.
 
 MODO 2 — agendar (só após cliente confirmar horário e nome):
   Chame com acao='agendar', date, time (HH:mm), clientName (nome que o cliente disse na conversa).
+  Opcionalmente informe tipo='presencial' ou tipo='online' se o cliente especificar.
   Retorna: { success: true, id, professional } ou { success: false, reason: "mensagem de erro" }.
   Se success=false, leia o campo reason e informe o cliente com naturalidade.
+
+MODO 3 — cancelar (quando o cliente pede para cancelar uma consulta existente):
+  Chame com acao='cancelar'. Cancela o agendamento confirmado mais recente do contato.
+  Retorna: { success: true, cancelled_date, cancelled_time, professional } ou { success: false, reason }.
 
 IMPORTANTE: nunca chame 'agendar' sem antes ter chamado 'verificar' e sem o cliente ter escolhido um horário.`,
           parameters: {
@@ -1436,16 +1535,16 @@ IMPORTANTE: nunca chame 'agendar' sem antes ter chamado 'verificar' e sem o clie
             properties: {
               acao: {
                 type: 'string',
-                enum: ['verificar', 'agendar'],
-                description: "Use 'verificar' para listar horários disponíveis. Use 'agendar' para confirmar o agendamento após o cliente escolher."
+                enum: ['verificar', 'agendar', 'cancelar'],
+                description: "Use 'verificar' para listar horários disponíveis. Use 'agendar' para confirmar o agendamento após o cliente escolher. Use 'cancelar' para cancelar a consulta mais recente do cliente."
               },
               date: {
                 type: 'string',
-                description: 'Data no formato YYYY-MM-DD (ex: 2026-06-10). Obrigatório sempre.'
+                description: "Data no formato YYYY-MM-DD (ex: 2026-06-10). Obrigatório para acao='verificar' e acao='agendar'."
               },
               time: {
                 type: 'string',
-                description: "Horário no formato HH:mm (ex: 14:30). Obrigatório quando acao='agendar'. Deve ser um dos horários retornados pelo verificar."
+                description: "Horário no formato HH:mm ou formatos amigáveis como '9h', '11h30'. Obrigatório quando acao='agendar'. Deve ser um dos horários retornados pelo verificar."
               },
               clientName: {
                 type: 'string',
@@ -1454,9 +1553,14 @@ IMPORTANTE: nunca chame 'agendar' sem antes ter chamado 'verificar' e sem o clie
               professional_name: {
                 type: 'string',
                 description: 'Nome do profissional desejado (opcional). Omitir usa o profissional padrão ou agenda universal.'
+              },
+              tipo: {
+                type: 'string',
+                enum: ['presencial', 'online'],
+                description: "Modalidade da consulta. Informe apenas se o cliente especificar. Omitir quando não mencionado."
               }
             },
-            required: ['acao', 'date']
+            required: ['acao']
           }
         }
       },
