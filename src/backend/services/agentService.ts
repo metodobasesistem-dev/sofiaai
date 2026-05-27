@@ -647,7 +647,11 @@ export class AgentService {
       updated_at:                 tsToIso(timestamp),
       // Preserva foto existente — nunca sobrescreve com null
       profile_picture_url:        existingThread?.profile_picture_url        || null,
-      profile_picture_updated_at: existingThread?.profile_picture_updated_at || null
+      profile_picture_updated_at: existingThread?.profile_picture_updated_at || null,
+      // Janela de 24h Meta: atualizado atomicamente no RPC para mensagens inbound.
+      // Para mensagens outbound o campo fica ausente (null no JSONB) e o RPC
+      // preserva o valor existente via COALESCE.
+      ...(direction === 'inbound' ? { last_inbound_at: tsToIso(timestamp) } : {})
     };
 
     const contactPayload = {
@@ -690,15 +694,6 @@ export class AgentService {
       });
 
       console.log(`[AgentService] ✅ Escrita atômica concluída: ${messageId}`);
-
-      // Atualiza last_inbound_at para o UI calcular janela de 24h do Meta.
-      // Fire-and-forget — cosmetico, nao bloqueia o fluxo principal.
-      if (direction === 'inbound') {
-        void supabase
-          .from('threads')
-          .update({ last_inbound_at: tsToIso(timestamp) })
-          .eq('id', threadId);
-      }
     } catch (err: any) {
       console.error(
         `[AgentService] ❌ FALHA NA ESCRITA ATÔMICA — msgId: ${messageId} | thread: ${threadId} | err:`,

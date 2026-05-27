@@ -2383,12 +2383,19 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
   const showMeta24hWindow = currentProvider === 'meta_official';
   const activeThreadLastInbound = useMemo(() => {
     if (!activeThread) return undefined;
-    if (activeThread.lastInboundAt && activeThread.lastInboundAt > 0) return activeThread.lastInboundAt;
-    // Fallback: scan messages se a coluna ainda nao foi backfilled
-    return messages
+    // Timestamp mais recente das mensagens inbound em memória (fonte confiável)
+    const messagesTs = messages
       .filter(m => m.sender === 'lead')
-      .map(m => new Date(m.timestamp).getTime() || 0)
-      .reduce((max, t) => Math.max(max, t), 0) || undefined;
+      .map(m => {
+        const t = typeof m.timestamp === 'number' ? m.timestamp : new Date(m.timestamp).getTime();
+        return isNaN(t) ? 0 : t;
+      })
+      .reduce((max, t) => Math.max(max, t), 0);
+    // Usa o máximo entre o valor do DB e as mensagens em memória.
+    // Isso corrige casos onde last_inbound_at ficou preso em timestamp antigo/errado.
+    const dbTs = activeThread.lastInboundAt || 0;
+    const maxTs = Math.max(dbTs, messagesTs);
+    return maxTs > 0 ? maxTs : undefined;
   }, [activeThread, messages]);
 
   // Dedupe O(N) via Set — antes era O(N²) com findIndex a cada render
