@@ -675,11 +675,11 @@ export default function Campaigns() {
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
                 {templateSource === 'internal' ? 'Selecione o Modelo Interno' : 'Selecione o Modelo da Meta'}
               </label>
-              <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                 {templateSource === 'internal' ? (
                   templates.length === 0 ? (
                     <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
@@ -690,7 +690,7 @@ export default function Campaigns() {
                     <button
                       key={template.id}
                       onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
-                      className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${
+                      className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
                         campaignData.templateId === template.id 
                           ? 'border-primary-500 bg-primary-50/30' 
                           : 'border-slate-50 bg-white hover:border-slate-100'
@@ -727,7 +727,7 @@ export default function Campaigns() {
                       <button
                         key={template.id}
                         onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
-                        className={`p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${
+                        className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
                           campaignData.templateId === template.id 
                             ? 'border-primary-500 bg-primary-50/30' 
                             : 'border-slate-50 bg-white hover:border-slate-100'
@@ -768,15 +768,15 @@ export default function Campaigns() {
                 if (varCount === 0) return null;
                 
                 return (
-                  <div className="p-5 bg-slate-900 rounded-3xl space-y-4 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
+                  <div className="p-4 bg-slate-900 rounded-2xl space-y-3 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
                     <div className="flex items-center gap-2 text-white">
                        <Sparkles className="text-amber-400" size={18} />
                        <h4 className="text-sm font-black">Personalização da Mensagem</h4>
                     </div>
                     
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {Array.from({ length: varCount }).map((_, i) => (
-                        <div key={i} className="space-y-2">
+                        <div key={i} className="space-y-1">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variável {"{{"}{i+1}{"}}"}</label>
                           <select
                             value={campaignData.variables[`var${i+1}`] || ''}
@@ -784,7 +784,7 @@ export default function Campaigns() {
                               ...campaignData, 
                               variables: { ...campaignData.variables, [`var${i+1}`]: e.target.value }
                             })}
-                            className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary-500 outline-none transition-all font-bold"
+                            className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary-500 outline-none transition-all font-bold"
                           >
                             <option value="">Selecione o campo do contato...</option>
                             {contactFields.map(field => (
@@ -800,7 +800,7 @@ export default function Campaigns() {
             )}
 
             {campaignData.templateId && (
-              <div className="p-4 md:p-5 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
+              <div className="p-3 md:p-4 border border-slate-100 rounded-2xl bg-slate-50 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Send className="text-slate-500" size={16} />
@@ -818,13 +818,13 @@ export default function Campaigns() {
                     placeholder="Ex: 5511999999999"
                     value={testPhone}
                     onChange={e => setTestPhone(e.target.value)}
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 focus:border-primary-500 outline-none transition-all font-bold"
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:border-primary-500 outline-none transition-all font-bold"
                   />
                   <button
                     type="button"
                     onClick={sendCampaignTestMessage}
                     disabled={isTestSending}
-                    className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {isTestSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                     Enviar Teste
@@ -1318,7 +1318,7 @@ export default function Campaigns() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden"
             >
-              <div className="p-6 border-b border-slate-50 bg-slate-50/50">
+              <div className="p-4 md:p-5 border-b border-slate-50 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-white text-primary-600 rounded-xl shadow-sm">
@@ -1332,7 +1332,7 @@ export default function Campaigns() {
                 </div>
                 
                 {/* Steps Indicator */}
-                <div className="flex items-center gap-4 mt-4">
+                <div className="flex items-center gap-4 mt-2">
                    {[1, 2, 3].map(s => (
                      <div key={s} className="flex items-center gap-2">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
@@ -1351,7 +1351,7 @@ export default function Campaigns() {
                 </div>
               </div>
 
-              <div className="p-6 md:p-8">
+              <div className="p-4 md:p-6">
                  {renderWizard()}
               </div>
             </motion.div>
