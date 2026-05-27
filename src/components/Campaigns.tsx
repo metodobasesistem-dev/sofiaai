@@ -818,11 +818,22 @@ export default function Campaigns() {
                     placeholder="Ex: 5511999999999"
                     value={testPhone}
                     onChange={e => setTestPhone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        sendCampaignTestMessage();
+                      }
+                    }}
                     className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:border-primary-500 outline-none transition-all font-bold"
                   />
                   <button
                     type="button"
-                    onClick={sendCampaignTestMessage}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      sendCampaignTestMessage();
+                    }}
                     disabled={isTestSending}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5"
                   >
