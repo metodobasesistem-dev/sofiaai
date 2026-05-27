@@ -10,9 +10,18 @@ ALTER TABLE public.appointments
   ADD COLUMN IF NOT EXISTS contact_id    TEXT;
 
 -- Constraint de validação: aceita null (não informado) ou os valores válidos
-ALTER TABLE public.appointments
-  ADD CONSTRAINT IF NOT EXISTS appointments_tipo_consulta_check
-    CHECK (tipo_consulta IS NULL OR tipo_consulta IN ('presencial', 'online'));
+-- Nota: IF NOT EXISTS não existe para ADD CONSTRAINT — usamos DO block para idempotência
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'appointments_tipo_consulta_check'
+  ) THEN
+    ALTER TABLE public.appointments
+      ADD CONSTRAINT appointments_tipo_consulta_check
+        CHECK (tipo_consulta IS NULL OR tipo_consulta IN ('presencial', 'online'));
+  END IF;
+END
+$$;
 
 -- Índice para busca de agendamentos por contato (usado no cancelamento)
 CREATE INDEX IF NOT EXISTS appointments_contact_id_idx
