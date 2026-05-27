@@ -14,6 +14,26 @@ import { whatsappService } from '../services/whatsappService.js';
 const router = Router();
 router.use(requireAuth as any);
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Busca o primeiro nome do remetente com fallback resiliente.
+ * Tenta nome_completo > full_name > name.
+ * Se a query falhar (ex: coluna não existe no PostgREST), tenta query mínima.
+ */
+async function fetchSenderFirstName(userId: string): Promise<string> {
+  // Seleciona apenas colunas que existem em produção.
+  // nome_completo = campo preenchido nas Configurações → Conta.
+  const { data } = await supabase
+    .from('profiles')
+    .select('name, nome_completo')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const full = data?.nome_completo || data?.name || 'Consultor';
+  return full.trim().split(/\s+/)[0] || full;
+}
+
 // ─── In-memory autopilot job tracker (per userId) ─────────────────────────
 interface AutopilotJob {
   total: number;
@@ -283,14 +303,8 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
 
     const runAutopilot = async () => {
       // Obter dados do perfil do remetente uma única vez antes de iniciar o loop de disparos
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name, nome_completo, full_name')
-        .eq('id', userId)
-        .maybeSingle();
       // Usa só o primeiro nome — fica mais natural no template WhatsApp
-      const fullSenderName = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
-      const senderName = fullSenderName.trim().split(/\s+/)[0] || fullSenderName;
+      const senderName = await fetchSenderFirstName(userId!);
 
       // Busca o corpo do template uma vez antes do loop (para armazenar texto legível no chat)
       const templateBodyText = templateName ? await fetchTemplateBodyText(userId!, templateName) : undefined;
@@ -363,13 +377,7 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
     const digits = phone.replace(/\D/g, '');
     const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('name, nome_completo, full_name')
-      .eq('id', userId)
-      .maybeSingle();
-    const fullSenderName2 = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
-    const senderName = fullSenderName2.trim().split(/\s+/)[0] || fullSenderName2;
+    const senderName = await fetchSenderFirstName(userId!);
 
     if (provider.sendTemplate) {
       const components = [
@@ -456,13 +464,7 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
     const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
 
     if (templateName && provider.sendTemplate) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name, nome_completo, full_name')
-        .eq('id', userId)
-        .maybeSingle();
-      const fullSenderName3 = profile?.nome_completo || profile?.full_name || profile?.name || 'Consultor';
-      const senderName = fullSenderName3.trim().split(/\s+/)[0] || fullSenderName3;
+      const senderName = await fetchSenderFirstName(userId!);
 
       // Em vez de injetar a mensagem gerada pela IA, enviamos o texto exato do template
       // mapeando: {{1}} = nome do estabelecimento, {{2}} = nome do remetente

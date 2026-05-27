@@ -697,13 +697,12 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       setIsTestSending(false);
       setTestPhone('');
       // Busca o nome real do remetente para exibir no preview.
-      // Usa full_name como fallback (populado pelo Google/auth) e extrai só o primeiro nome.
+      // nome_completo é o campo preenchido nas Configurações → Conta.
       if (user?.id) {
-        supabase.from('profiles').select('name, nome_completo, full_name').eq('id', user.id).maybeSingle()
+        supabase.from('profiles').select('name, nome_completo').eq('id', user.id).maybeSingle()
           .then(({ data }) => {
-            const fullName = data?.nome_completo || data?.full_name || data?.name || null;
-            const firstName = fullName ? fullName.trim().split(/\s+/)[0] : null;
-            setSenderName(firstName);
+            const fullName = data?.nome_completo || data?.name || null;
+            setSenderName(fullName ? fullName.trim().split(/\s+/)[0] : null);
           });
       }
     } else {
