@@ -1166,8 +1166,10 @@ ${customExamples}
       }
 
       // 2. Save in Local DB
+      // Tenta com todos os campos primeiro; se falhar por coluna inexistente,
+      // retenta com o payload mínimo (resiliência a migrações pendentes).
       const tipoConsulta = args.tipo || null; // 'presencial' | 'online' | null
-      const { data: newDoc, error } = await supabase.from('appointments').insert({
+      const fullPayload: Record<string, any> = {
         user_id:          userId,
         data:             args.date,
         time:             normalizedTime,
@@ -1181,11 +1183,33 @@ ${customExamples}
         agent_id:         agentData.id,
         tipo_consulta:    tipoConsulta,
         summary:          `Agendado com ${selectedProf?.name || 'IA'}`
-      }).select().single();
+      };
 
-      if (error) {
-        console.error('[AgentService] Appointment INSERT error:', error);
-        return { success: false, reason: error.message || 'Erro ao salvar no banco de dados' };
+      let newDoc: any = null;
+      let insertError: any = null;
+
+      // Primeira tentativa: payload completo
+      ({ data: newDoc, error: insertError } = await supabase
+        .from('appointments').insert(fullPayload).select().single());
+
+      // Se falhou por coluna inexistente (SQLSTATE 42703), retenta sem campos opcionais
+      if (insertError && (insertError.code === '42703' || insertError.message?.includes('column'))) {
+        console.warn('[AgentService] ⚠️ Retrying appointment insert without optional columns (migration pending?):', insertError.message);
+        const minPayload = {
+          user_id:     userId,
+          data:        args.date,
+          time:        normalizedTime,
+          client_name: args.clientName,
+          client_phone:clientPhone,
+          status:      'confirmed'
+        };
+        ({ data: newDoc, error: insertError } = await supabase
+          .from('appointments').insert(minPayload).select().single());
+      }
+
+      if (insertError) {
+        console.error('[AgentService] Appointment INSERT error:', insertError);
+        return { success: false, reason: insertError.message || 'Erro ao salvar no banco de dados' };
       }
 
       // 3. Atualiza contato: avança funil para 'Agendado' (fire-and-forget)
