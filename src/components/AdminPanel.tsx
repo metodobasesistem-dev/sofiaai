@@ -644,24 +644,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   };
 
   const exportLeadsCSV = () => {
-    const headers = ['Nome', 'Telefone', 'Endereço', 'Nicho', 'Cidade', 'Categoria', 'Rating', 'Avaliações', 'Dor', 'Potencial', 'Website', 'Instagram', 'Email', 'Resumo IA', 'Status', 'Observações'];
+    const headers = ['Nome', 'Telefone'];
     const rows = radarLeads.map(l => [
       `"${(l.name || '').replace(/"/g, '""')}"`,
       l.phone || '',
-      `"${(l.address || '').replace(/"/g, '""')}"`,
-      l.niche || '',
-      l.city || '',
-      l.category || '',
-      l.rating || '',
-      l.user_rating_count || '',
-      l.pain_score || 0,
-      l.opportunity_score || 0,
-      l.website || '',
-      l.instagram || '',
-      l.email || '',
-      `"${(l.review_summary || '').replace(/"/g, '""')}"`,
-      l.status || '',
-      `"${(l.notes || '').replace(/"/g, '""')}"`,
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
