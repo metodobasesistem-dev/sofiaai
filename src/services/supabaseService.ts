@@ -895,17 +895,38 @@ export const saveAvailability = async (config: Omit<AvailabilityConfig, 'userId'
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const { error } = await supabase
+  // onConflict com coluna nullable (professional_id) não funciona via PostgREST.
+  // Fazemos select → update se existir, insert se não existir.
+  let existingQuery = supabase
     .from('availability')
-    .upsert({
-      user_id: user.id,
-      professional_id: professionalId || null,
-      config: config
-    }, {
-      onConflict: 'user_id, professional_id'
-    });
+    .select('id')
+    .eq('user_id', user.id);
 
-  if (error) throw error;
+  if (professionalId) {
+    existingQuery = existingQuery.eq('professional_id', professionalId);
+  } else {
+    existingQuery = existingQuery.is('professional_id', null);
+  }
+
+  const { data: existing, error: selErr } = await existingQuery.maybeSingle();
+  if (selErr) throw selErr;
+
+  if (existing?.id) {
+    const { error } = await supabase
+      .from('availability')
+      .update({ config })
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('availability')
+      .insert({
+        user_id: user.id,
+        professional_id: professionalId || null,
+        config
+      });
+    if (error) throw error;
+  }
 };
 
 /**
