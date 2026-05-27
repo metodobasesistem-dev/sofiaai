@@ -406,13 +406,13 @@ export default function Campaigns() {
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome da Campanha</label>
               <input 
                 type="text" 
                 placeholder="Ex: Promoção de Verão 2024"
-                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 transition-all font-bold"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 transition-all font-bold"
                 value={campaignData.name}
                 onChange={e => setCampaignData({...campaignData, name: e.target.value})}
               />
@@ -528,7 +528,7 @@ export default function Campaigns() {
                   exit={{ opacity: 0, y: 10 }}
                   className="space-y-4"
                 >
-                  <div className="relative border-2 border-dashed border-slate-200 rounded-[2.5rem] p-10 text-center hover:border-primary-500/50 transition-all bg-white group overflow-hidden">
+                  <div className="relative border-2 border-dashed border-slate-200 rounded-3xl p-6 text-center hover:border-primary-500/50 transition-all bg-white group overflow-hidden">
                     <input 
                       type="file" 
                       accept=".csv"
@@ -561,9 +561,9 @@ export default function Campaigns() {
                       }}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     />
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="w-20 h-20 bg-primary-50 text-primary-600 rounded-[2rem] flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                        <Upload size={32} />
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-14 h-14 bg-primary-50 text-primary-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                        <Upload size={24} />
                       </div>
                       <div className="space-y-1">
                         <p className="font-black text-slate-800">Clique para selecionar .CSV</p>
@@ -640,7 +640,7 @@ export default function Campaigns() {
             <button 
               disabled={!campaignData.name}
               onClick={() => setCurrentStep(2)}
-              className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl disabled:opacity-50 disabled:grayscale"
+              className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl disabled:opacity-50 disabled:grayscale"
             >
               Próximo Passo: Escolher Mensagem
               <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
@@ -649,7 +649,7 @@ export default function Campaigns() {
         );
       case 2:
         return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
             {userProvider === 'meta_official' && (
               <div className="flex p-1 bg-slate-100 rounded-2xl">
                 <button
@@ -768,9 +768,9 @@ export default function Campaigns() {
                 if (varCount === 0) return null;
                 
                 return (
-                  <div className="p-6 bg-slate-900 rounded-[2rem] space-y-6 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
+                  <div className="p-5 bg-slate-900 rounded-3xl space-y-4 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
                     <div className="flex items-center gap-2 text-white">
-                       <Sparkles className="text-amber-400" size={20} />
+                       <Sparkles className="text-amber-400" size={18} />
                        <h4 className="text-sm font-black">Personalização da Mensagem</h4>
                     </div>
                     
@@ -800,7 +800,7 @@ export default function Campaigns() {
             )}
 
             {campaignData.templateId && (
-              <div className="p-6 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
+              <div className="p-4 md:p-5 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Send className="text-slate-500" size={16} />
@@ -836,14 +836,14 @@ export default function Campaigns() {
             <div className="flex items-center gap-4 pt-4">
               <button 
                 onClick={() => setCurrentStep(1)}
-                className="px-8 py-5 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all"
+                className="px-6 py-3.5 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all"
               >
                 Voltar
               </button>
               <button 
                 disabled={!campaignData.templateId}
                 onClick={() => setCurrentStep(3)}
-                className="flex-1 py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl"
+                className="flex-1 py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl"
               >
                 Revisar Disparo
                 <Zap size={18} className="text-amber-400" />
@@ -853,13 +853,13 @@ export default function Campaigns() {
         );
       case 3:
         return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-             <div className="p-8 bg-slate-900 rounded-[2rem] text-white space-y-6 relative overflow-hidden">
+          <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+             <div className="p-5 bg-slate-900 rounded-3xl text-white space-y-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-6 opacity-10"><BarChart3 size={80} /></div>
                 
                 <div>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Resumo da Campanha</p>
-                   <h3 className="text-2xl font-black">{campaignData.name}</h3>
+                   <h3 className="text-xl font-black">{campaignData.name}</h3>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
@@ -874,7 +874,7 @@ export default function Campaigns() {
                 </div>
              </div>
 
-             <div className="p-6 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
+             <div className="p-4 md:p-5 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
                 <div className="flex items-center gap-3 text-slate-600">
                    <AlertCircle size={20} className="text-amber-500" />
                    <p className="text-xs font-bold leading-tight">Ao confirmar, as mensagens serão enviadas em fila. O custo será debitado da sua conta da Meta.</p>
@@ -884,7 +884,7 @@ export default function Campaigns() {
              <div className="flex items-center gap-4 pt-4">
               <button 
                 onClick={() => setCurrentStep(2)}
-                className="px-8 py-5 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all"
+                className="px-6 py-3.5 bg-slate-50 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all"
               >
                 Voltar
               </button>
@@ -979,7 +979,7 @@ export default function Campaigns() {
                     setIsSaving(false);
                   }
                 }}
-                className="flex-1 py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-emerald-500/20"
+                className="flex-1 py-3.5 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 group shadow-xl shadow-emerald-500/20"
               >
                 {isSaving ? <RefreshCw className="animate-spin" size={18} /> : (
                   <>
@@ -1316,15 +1316,15 @@ export default function Campaigns() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+              className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-50 bg-slate-50/50">
+              <div className="p-6 border-b border-slate-50 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-white text-primary-600 rounded-xl shadow-sm">
                       <Plus size={20} />
                     </div>
-                    <h2 className="text-2xl font-black text-slate-900">Nova Campanha</h2>
+                    <h2 className="text-xl font-black text-slate-900">Nova Campanha</h2>
                   </div>
                   <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
                     <Trash2 size={20} />
@@ -1332,7 +1332,7 @@ export default function Campaigns() {
                 </div>
                 
                 {/* Steps Indicator */}
-                <div className="flex items-center gap-4 mt-6">
+                <div className="flex items-center gap-4 mt-4">
                    {[1, 2, 3].map(s => (
                      <div key={s} className="flex items-center gap-2">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
@@ -1351,7 +1351,7 @@ export default function Campaigns() {
                 </div>
               </div>
 
-              <div className="p-10">
+              <div className="p-6 md:p-8">
                  {renderWizard()}
               </div>
             </motion.div>
