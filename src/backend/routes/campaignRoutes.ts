@@ -296,6 +296,72 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+/** POST /test-send — send a real test message with resolved template variables */
+router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { phone, templateName, templateLanguage = 'pt_BR', variables = {}, contact = {} } = req.body;
+    if (!phone) return res.status(400).json({ success: false, error: 'Telefone é obrigatório' });
+    if (!templateName) return res.status(400).json({ success: false, error: 'Template é obrigatório' });
+
+    const digits = phone.replace(/\D/g, '');
+
+    // Resolve as variáveis mapeadas no contato de teste
+    const mappedVars = Object.entries(variables as Record<string, string>)
+      .sort((a, b) => {
+        const aNum = parseInt(a[0].replace('var', ''), 10);
+        const bNum = parseInt(b[0].replace('var', ''), 10);
+        return aNum - bNum;
+      })
+      .map(([, field]) => getContactFieldValue(contact, field as string));
+
+    let resolvedBodyText = '';
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('whatsapp_provider')
+      .eq('id', userId)
+      .maybeSingle();
+    const isMetaOfficial = (profile as any)?.whatsapp_provider === 'meta_official';
+
+    if (!isMetaOfficial && req.body.templateId) {
+      const { data: tplData } = await supabase
+        .from('message_templates')
+        .select('body')
+        .eq('id', req.body.templateId)
+        .maybeSingle();
+      resolvedBodyText = (tplData as any)?.body || '';
+    }
+
+    if (isMetaOfficial) {
+      const components = [{
+        type: 'body',
+        parameters: mappedVars.map(v => ({ type: 'text', text: v }))
+      }];
+      const result = await whatsappService.sendTemplate(userId, digits, templateName, templateLanguage, components, undefined);
+      if (result.success) {
+        res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
+      } else {
+        res.status(400).json({ success: false, error: result.error || 'Erro ao enviar template de teste.' });
+      }
+    } else {
+      if (!resolvedBodyText) throw new Error('Corpo do template não encontrado.');
+      let finalMessage = resolvedBodyText;
+      mappedVars.forEach((val, idx) => {
+        finalMessage = finalMessage.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), String(val));
+      });
+      const result = await whatsappService.sendMessage(userId, digits, finalMessage);
+      if (result.success) {
+        res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
+      } else {
+        res.status(400).json({ success: false, error: result.error || 'Erro ao enviar mensagem de teste.' });
+      }
+    }
+  } catch (err: any) {
+    console.error('[Campaigns] Erro ao enviar mensagem de teste:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** POST / — create a new campaign */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {

@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { Skeleton } from './common/SkeletonLoader';
 import { sendTemplateMessage, getMetaTemplates } from '../services/whatsappService';
+import { standardFetch } from '../services/supabaseService';
 
 interface Campaign {
   id: string;
@@ -67,6 +68,8 @@ export default function Campaigns() {
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
   const [userProvider, setUserProvider] = useState<string>('evolution');
   const [showContactsList, setShowContactsList] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [isTestSending, setIsTestSending] = useState(false);
   
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -155,8 +158,11 @@ export default function Campaigns() {
   const fetchUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('whatsapp_provider').eq('id', user.id).single();
+      const { data: profile } = await supabase.from('profiles').select('whatsapp_provider, phone').eq('id', user.id).single();
       setUserProvider(profile?.whatsapp_provider || 'evolution');
+      if (profile?.phone) {
+        setTestPhone(profile.phone.replace(/\D/g, ''));
+      }
       if (profile?.whatsapp_provider === 'meta_official') {
         fetchMetaTemplates();
       }
@@ -348,6 +354,42 @@ export default function Campaigns() {
   const removeUploadedContact = (index: number) => {
     const newList = campaignData.uploadedContacts.filter((_, i) => i !== index);
     setCampaignData({ ...campaignData, uploadedContacts: newList });
+  };
+
+  const sendCampaignTestMessage = async () => {
+    if (!testPhone) return toast.error('O número de telefone é obrigatório para o teste.');
+    if (!campaignData.templateId) return toast.error('Selecione um template para testar.');
+
+    // Encontra o primeiro contato da lista da campanha como contato de teste.
+    // Fallback: se a lista estiver vazia, cria um contato fictício para resolver as variáveis.
+    const sampleContact = campaignData.uploadedContacts[0] || {
+      nome: 'Cliente Teste',
+      telefone: testPhone
+    };
+
+    setIsTestSending(true);
+    try {
+      const response = await standardFetch('/api/v2/campaigns/test-send', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone: testPhone,
+          templateId: campaignData.templateId,
+          templateName: campaignData.templateName,
+          variables: campaignData.variables,
+          contact: sampleContact
+        })
+      });
+      const res = await response.json();
+      if (res.success) {
+        toast.success(res.message || 'Mensagem de teste enviada!');
+      } else {
+        toast.error(res.error || 'Erro ao enviar mensagem de teste.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro de rede ao enviar teste.');
+    } finally {
+      setIsTestSending(false);
+    }
   };
 
   // Modal - New Campaign Wizard
@@ -746,6 +788,40 @@ export default function Campaigns() {
                   </div>
                 );
               })()
+            )}
+
+            {campaignData.templateId && (
+              <div className="p-6 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Send className="text-slate-500" size={16} />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Enviar Mensagem de Teste</label>
+                  </div>
+                  {isTestSending && (
+                    <span className="flex items-center gap-1 text-[10px] font-black uppercase text-amber-500">
+                      <Loader2 size={10} className="animate-spin" /> Enviando...
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    placeholder="Ex: 5511999999999"
+                    value={testPhone}
+                    onChange={e => setTestPhone(e.target.value)}
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 focus:border-primary-500 outline-none transition-all font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={sendCampaignTestMessage}
+                    disabled={isTestSending}
+                    className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isTestSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    Enviar Teste
+                  </button>
+                </div>
+              </div>
             )}
 
             <div className="flex items-center gap-4 pt-4">
