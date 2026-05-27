@@ -697,11 +697,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       setIsTestSending(false);
       setTestPhone('');
       // Busca o nome real do remetente para exibir no preview.
-      // nome_completo é o campo preenchido nas Configurações → Conta.
+      // Prioridade: nome_completo (Configurações) → name (profiles) → user_metadata (Google OAuth)
       if (user?.id) {
         supabase.from('profiles').select('name, nome_completo').eq('id', user.id).maybeSingle()
           .then(({ data }) => {
-            const fullName = data?.nome_completo || data?.name || null;
+            // Fallback final: metadados do Google OAuth já disponíveis no objeto user
+            const oauthName = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
+            const fullName = (data as any)?.nome_completo || (data as any)?.name || oauthName || null;
             setSenderName(fullName ? fullName.trim().split(/\s+/)[0] : null);
           });
       }
@@ -2831,7 +2833,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                          if (body.includes('{{1}}') || body.includes('{{2}}')) {
                            const firstSelId = [...selectedLeadIds][0];
                            const firstSelLead = radarLeads.find((l: any) => l.id === firstSelId);
-                           const previewLeadName = firstSelLead?.name || '[Nome do Estabelecimento]';
+                           const rawLeadName = firstSelLead?.name || '[Nome do Estabelecimento]';
+                           // Encurta o nome do estabelecimento igual ao backend (antes do | ou -)
+                           const previewLeadName = rawLeadName.split(/\s*[|–-]\s*/)[0].trim().substring(0, 40) || rawLeadName;
                            const previewSender = senderName || '[Seu Nome]';
                            return body
                              .replace(/\{\{1\}\}/g, previewLeadName)
