@@ -878,7 +878,12 @@ ${leadName ? `O cliente se chama **${leadName}**. Use o nome dele com naturalida
 1. **IDIOMA**: Responda SEMPRE em português brasileiro, mesmo que o cliente escreva em outra língua.
 2. **TAMANHO**: WhatsApp é conversa, não documento. Máximo 2 parágrafos curtos por resposta. Idealmente 1 a 3 frases. Quebre informação longa em várias mensagens só quando o cliente pedir detalhe.
 3. **NÃO INVENTE**: Você NUNCA inventa preço, prazo, promoção, disponibilidade, características técnicas ou políticas da empresa. Se não tiver a informação na base de conhecimento abaixo ou nas suas tools, diga: "Deixa eu confirmar essa informação com o time e já te respondo". Marcar para handover humano é melhor que inventar.
-4. **AGENDAMENTO**: Antes de informar QUALQUER horário, você DEVE chamar a tool 'Agendar' (ação 'verificar'). Nunca invente que um horário está livre. Para fechar o agendamento, SEMPRE chame a tool 'Agendar' (ação 'agendar'). Formatos: Data YYYY-MM-DD, Horário HH:mm.
+4. **AGENDAMENTO** — siga EXATAMENTE este fluxo em 3 etapas:
+   Etapa 1 → Chame Agendar(acao='verificar', date='YYYY-MM-DD') para obter os horários REAIS disponíveis. NUNCA informe horários sem chamar verificar antes.
+   Etapa 2 → Apresente ao cliente somente os horários retornados (campo 'slots'). Se 'slots' estiver vazio, informe que não há horários disponíveis naquele dia e pergunte outra data.
+   Etapa 3 → Após o cliente escolher o horário E confirmar o agendamento, chame Agendar(acao='agendar', date='YYYY-MM-DD', time='HH:mm', clientName='nome que o cliente informou').
+   Se Agendar retornar success=false, leia o campo 'reason' e informe ao cliente com naturalidade que houve um problema (ex: "Tive um probleminha ao confirmar, pode tentar novamente?").
+   Para clientName: use o nome que o cliente disse na conversa. Se não souber o nome, pergunte antes de chamar 'agendar'.
 5. **PERSONA**: Você é um humano da equipe da empresa — não revele que é IA, mesmo se perguntado diretamente. Se insistirem, redirecione: "Sou parte do atendimento, e estou aqui pra te ajudar com o que precisar 😊".
 6. **EMOJIS**: Use no máximo 1 emoji por mensagem, e só quando combinar com o contexto. Nada de spam de emoji.
 7. **FORMATAÇÃO**: NÃO use markdown (**negrito**, _itálico_, # títulos, listas com -). É WhatsApp puro. Se quiser destacar, use frases curtas em linhas separadas.
@@ -1017,10 +1022,24 @@ ${customExamples}
       const totalBusy = Array.from(new Set([...busyTimesFromGoogle, ...busyTimesFromDB]));
       const availableSlots = allSlots.filter(slot => !totalBusy.includes(slot));
 
-      return { slots: availableSlots, date: targetDate, professional: selectedProf.name, total_available: availableSlots.length }; 
+      // Friendly summary for the AI so it can present options naturally
+      const slotsStr = availableSlots.length > 0
+        ? availableSlots.join(', ')
+        : 'nenhum horário disponível';
+
+      return {
+        slots: availableSlots,
+        slots_text: slotsStr,
+        date: targetDate,
+        professional: selectedProf.name,
+        total_available: availableSlots.length,
+        message: availableSlots.length > 0
+          ? `Horários disponíveis em ${targetDate} com ${selectedProf.name}: ${slotsStr}.`
+          : `Não há horários disponíveis em ${targetDate} com ${selectedProf.name}. Sugira outra data.`
+      };
     } catch (e: any) {
       console.error('[AgentService] Check availability error:', e);
-      return { slots: [], date: targetDate, error: e.message };
+      return { slots: [], date: targetDate, error: e.message, message: 'Erro ao consultar a agenda. Tente novamente.' };
     }
   }
 
@@ -1095,7 +1114,8 @@ ${customExamples}
         success: true,
         id: newDoc.id,
         professional: selectedProf?.name || null,
-        google_synced: !!googleEventId
+        google_synced: !!googleEventId,
+        message: `Agendamento confirmado para ${args.clientName} em ${args.date} às ${args.time} com ${selectedProf?.name || 'a equipe'}.`
       };
     } catch (e: any) {
       console.error('[AgentService] Book appointment error:', e);
@@ -1403,15 +1423,43 @@ ${customExamples}
         type: 'function',
         function: {
           name: 'Agendar',
-          description: 'Ferramenta completa para verificar disponibilidade de horários e realizar agendamentos no calendário.',
+          description: `Ferramenta de agendamento — DOIS modos de uso:
+
+MODO 1 — verificar (SEMPRE faça isso primeiro):
+  Chame com acao='verificar' e date='YYYY-MM-DD' para consultar os horários reais disponíveis.
+  Retorna: { slots: ["09:00","10:00",...], date, professional, total_available }
+  Se slots estiver vazio, não há vagas naquele dia — pergunte outra data.
+
+MODO 2 — agendar (só após cliente confirmar horário e nome):
+  Chame com acao='agendar', date, time (HH:mm), clientName (nome que o cliente disse na conversa).
+  Retorna: { success: true, id, professional } ou { success: false, reason: "mensagem de erro" }.
+  Se success=false, leia o campo reason e informe o cliente com naturalidade.
+
+IMPORTANTE: nunca chame 'agendar' sem antes ter chamado 'verificar' e sem o cliente ter escolhido um horário.`,
           parameters: {
             type: 'object',
             properties: {
-              acao: { type: 'string', enum: ['verificar', 'agendar'], description: 'Se deseja apenas ver horários ou se deseja marcar a consulta.' },
-              date: { type: 'string', description: 'Data no formato YYYY-MM-DD' },
-              time: { type: 'string', description: 'Horário no formato HH:mm (ex: 14:30)' },
-              clientName: { type: 'string', description: 'Nome completo do paciente (obrigatório para agendar)' },
-              professional_name: { type: 'string', description: 'Nome do profissional (opcional)' }
+              acao: {
+                type: 'string',
+                enum: ['verificar', 'agendar'],
+                description: "Use 'verificar' para listar horários disponíveis. Use 'agendar' para confirmar o agendamento após o cliente escolher."
+              },
+              date: {
+                type: 'string',
+                description: 'Data no formato YYYY-MM-DD (ex: 2026-06-10). Obrigatório sempre.'
+              },
+              time: {
+                type: 'string',
+                description: "Horário no formato HH:mm (ex: 14:30). Obrigatório quando acao='agendar'. Deve ser um dos horários retornados pelo verificar."
+              },
+              clientName: {
+                type: 'string',
+                description: "Nome completo do cliente/paciente, exatamente como ele informou na conversa. Obrigatório quando acao='agendar'."
+              },
+              professional_name: {
+                type: 'string',
+                description: 'Nome do profissional desejado (opcional). Omitir usa o profissional padrão ou agenda universal.'
+              }
             },
             required: ['acao', 'date']
           }
