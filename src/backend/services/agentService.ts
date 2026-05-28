@@ -1,6 +1,6 @@
 import { audioService } from './audioService.js';
 import { supabase } from '../lib/supabaseClient.js';
-import { generateAIResponse, truncateHistoryByTokens, transcribeAudio, summarizeHistory } from './aiService.js';
+import { generateAIResponse, truncateHistoryByTokens, transcribeAudio } from './aiService.js';
 import { redisService } from './redisService.js';
 import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fns';
 import { googleCalendarService } from './googleCalendarService.js';
@@ -211,29 +211,15 @@ export class AgentService {
         .eq('agent_id', agentData.id)
         .eq('is_active', true);
 
-      // 3. Persistent History — busca até 30 msgs (reduzido de 50 para evitar poluição
-      // de contexto em casos de loop repetitivo, ex: agente pedindo mesma info várias vezes)
-      const HISTORY_LIMIT = 30;
-      const RECENT_COUNT = 12;
+      // 3. Persistent History — lê as últimas 40 mensagens íntegras, como no fluxo n8n original.
+      // Sem auto-summary, sem truncamento por "loop detection" — esses hacks acabavam
+      // cortando contexto crítico (data já mencionada, escolha de horário, etc.) e quebravam
+      // mais coisas do que arrumavam. O modelo lida bem com 40 msgs e o detectBookingReady
+      // abaixo é a camada determinística pra forçar agendamento quando tudo já está dito.
+      const HISTORY_LIMIT = 40;
       let history = await redisService.getHistory(threadId, HISTORY_LIMIT);
       if (history.length === 0) {
         history = await this.getHistoryFromSupabase(threadId, HISTORY_LIMIT);
-      }
-
-      // Detecção de loop: se as últimas 6 mensagens do assistente contêm a mesma pergunta
-      // (ex: "qual dia" ou "qual horário"), descarta o histórico antigo e usa só as últimas 4.
-      // Isso quebra ciclos onde o contexto poluído força o modelo a repetir o padrão.
-      const recentAssistantMsgs = history
-        .filter((m: any) => m.role === 'assistant')
-        .slice(-6)
-        .map((m: any) => (m.content || '').toLowerCase());
-      const loopKeywords = ['qual dia', 'qual horário', 'fica melhor para você', 'pela manhã ou à tarde'];
-      const loopCount = recentAssistantMsgs.filter(msg =>
-        loopKeywords.some(kw => msg.includes(kw))
-      ).length;
-      if (loopCount >= 3) {
-        console.warn(`[AgentService] 🔄 Loop detectado na thread ${threadId} (${loopCount} repetições). Truncando histórico para últimas 4 msgs.`);
-        history = history.slice(-4);
       }
 
       // 4. Save Inbound Message
@@ -320,31 +306,13 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
       const fullPrompt = systemPrompt + calendarContext + dateContext + bookingDirective;
       const tools = this.getAgentTools();
 
-      // Filtra e formata histórico
+      // Filtra e formata histórico — passa as 40 msgs íntegras pro modelo.
       const filteredHistory = history
         .filter((m: any) => (m.role === 'user' || m.role === 'assistant') && m.content)
         .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content as string }));
 
-      // 3.A: Auto-sumariza histórico antigo quando > 20 mensagens para comprimir contexto
-      let historyForAI: { role: 'user' | 'assistant'; content: string }[] = filteredHistory;
-      if (filteredHistory.length > RECENT_COUNT) {
-        const olderPart = filteredHistory.slice(0, filteredHistory.length - RECENT_COUNT);
-        const recentPart = filteredHistory.slice(filteredHistory.length - RECENT_COUNT);
-        const summary = await summarizeHistory(olderPart, dbUserId);
-        if (summary) {
-          historyForAI = [
-            { role: 'user', content: `[Resumo do histórico anterior desta conversa]: ${summary}` },
-            { role: 'assistant', content: 'Entendido. Considerei esse contexto.' },
-            ...recentPart
-          ];
-          console.log(`[AgentService] 📝 Histórico resumido: ${olderPart.length} msgs antigas → 1 resumo`);
-        } else {
-          historyForAI = recentPart;
-        }
-      }
-
-      // Aplica limite duro de tokens (8k) — preserva sempre as mais recentes
-      const truncatedHistory = truncateHistoryByTokens(historyForAI, 8000);
+      // Aplica limite duro de tokens (8k) — preserva sempre as mais recentes em caso de explosão.
+      const truncatedHistory = truncateHistoryByTokens(filteredHistory, 8000);
 
       let currentMessages: any[] = [
         ...truncatedHistory,
@@ -1280,8 +1248,9 @@ ${customExamples}
     currentUserMsg: string,
     leadName: string | null
   ): { date: string; time: string; clientName: string } | null {
-    // Combina histórico recente + mensagem atual
-    const recent = [...history.slice(-12), { role: 'user', content: currentUserMsg }];
+    // Combina histórico recente + mensagem atual (janela ampliada para cobrir
+    // fluxos mais longos onde a data foi mencionada várias trocas atrás).
+    const recent = [...history.slice(-20), { role: 'user', content: currentUserMsg }];
     const lowerCurrent = (currentUserMsg || '').toLowerCase().trim();
 
     // ── 1) SINAIS DE CONFIRMAÇÃO ────────────────────────────────────────
