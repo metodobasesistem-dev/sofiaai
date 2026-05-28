@@ -266,56 +266,10 @@ export class AgentService {
 
       const dateContext = `\n[CONTEXTO TEMPORAL]\nHOJE: ${format(now, 'dd/MM/yyyy')}\nDATA ATUAL: ${format(now, 'yyyy-MM-dd')}\n`;
 
-      // DETECÇÃO DETERMINÍSTICA DE AGENDAMENTO PRONTO:
-      // Quando a conversa já contém data + horário + nome + sinal de confirmação,
-      // injetamos uma diretiva explícita + forçamos tool_choice='required'.
-      // Isso resolve o problema de loops em que o modelo ignora a regra ANTI-LOOP.
-      const bookingReady = this.detectBookingReady(
-        history,
-        processBody,
-        threadData?.lead_name || null
-      );
-
-      let bookingDirective = '';
-      if (bookingReady) {
-        console.log(`[AgentService] 🎯 BOOKING READY DETECTED on thread ${threadId}:`, bookingReady);
-        if (bookingReady.clientName) {
-          // Tem tudo — força a tool de agendamento
-          bookingDirective = `
-
-# ⚠️ AÇÃO OBRIGATÓRIA — AGENDAR AGORA
-A conversa JÁ TEM TODOS OS DADOS necessários para confirmar o agendamento:
-- Data: ${bookingReady.date}
-- Horário: ${bookingReady.time}
-- Nome do cliente: ${bookingReady.clientName}
-- O cliente acabou de confirmar.
-
-VOCÊ DEVE chamar AGORA, sem fazer NENHUMA pergunta adicional:
-  Agendar(acao='agendar', date='${bookingReady.date}', time='${bookingReady.time}', clientName='${bookingReady.clientName}')
-
-NÃO PERGUNTE de novo a data. NÃO PERGUNTE de novo o horário. NÃO PERGUNTE o nome.
-Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
-`;
-        } else {
-          // Falta SÓ o nome — instrui a IA a perguntar APENAS o nome
-          bookingDirective = `
-
-# ⚠️ INSTRUÇÃO CRÍTICA — FALTA SÓ O NOME
-A conversa JÁ TEM data e horário definidos:
-- Data: ${bookingReady.date}
-- Horário: ${bookingReady.time}
-- O cliente já confirmou que quer agendar nesse horário.
-
-Falta APENAS o nome completo dele para finalizar.
-Sua próxima resposta deve ser EXATAMENTE uma pergunta curta e natural pedindo o nome completo do cliente — algo como "Perfeito! Pra finalizar, qual seu nome completo?".
-
-NÃO pergunte de novo a data. NÃO pergunte de novo o horário. NÃO chame Agendar(acao='verificar') de novo. Pergunte SÓ o nome.
-Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', date='${bookingReady.date}', time='${bookingReady.time}', clientName='<nome que ele disser>').
-`;
-        }
-      }
-
-      const fullPrompt = systemPrompt + calendarContext + dateContext + bookingDirective;
+      // Arquitetura n8n: SEM detecção determinística, SEM diretivas obrigatórias.
+      // O modelo (gpt-4.1-mini recomendado) lê as 40 msgs íntegras e segue o prompt + tools.
+      // As camadas determinísticas anteriores acabavam confundindo mais que ajudando.
+      const fullPrompt = systemPrompt + calendarContext + dateContext;
       const tools = this.getAgentTools();
 
       // Filtra e formata histórico — passa as 40 msgs íntegras pro modelo.
@@ -341,7 +295,6 @@ Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', dat
       let aiFinalText: string | null = null;
       let toolCalledInThisTurn = false;
       let transferredToHuman = false;
-      let bookingExecuted = false; // flag para safety net — true se sub-agente OU handleBookAppointment teve sucesso
       let modelUsed: string | null = null;
       const toolsUsed: string[] = [];
       const MAX_TOOL_ITERATIONS = 5;
@@ -352,14 +305,8 @@ Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', dat
         console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId}, Iter: ${iterationCount}/${MAX_TOOL_ITERATIONS})`);
         // Usa mini model para mensagens simples; após tool call, já não importa (toolCalledInThisTurn=true = iteração de resposta)
         const modelForThisCall = toolCalledInThisTurn ? undefined : modelOverride;
-        // Força tool_choice='required' na PRIMEIRA iteração quando todos os dados estão prontos
-        // (data + horário + nome). Quando só falta o nome, NÃO força tool — a IA precisa responder
-        // em texto pedindo o nome.
-        const effectiveToolChoice: 'auto' | 'required' =
-          bookingReady && bookingReady.clientName && iterationCount === 1 && !toolCalledInThisTurn
-            ? 'required'
-            : 'auto';
-        const response = await generateAIResponse(fullPrompt, currentMessages, tools, effectiveToolChoice, dbUserId, modelForThisCall);
+        // tool_choice='auto' — deixa o modelo decidir quando chamar tools, como no n8n.
+        const response = await generateAIResponse(fullPrompt, currentMessages, tools, 'auto', dbUserId, modelForThisCall);
         
         if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
           console.warn(`[AgentService] ⚠️ Resposta da IA vazia na thread: ${threadId}. Encerrando loop.`);
@@ -429,15 +376,10 @@ Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', dat
                   intent = parts.join(' ');
                 }
 
-                // Hint: dados deterministicamente detectados ANTES do LLM (camada extra de defesa)
-                const subHint = bookingReady ? {
-                  date: bookingReady.date,
-                  time: bookingReady.time,
-                  clientName: bookingReady.clientName,
-                  tipo: args.tipo
-                } : (args.acao === 'agendar' && args.date && args.time && args.clientName ? {
+                // Hint: dados que vieram diretamente da tool call do agente principal.
+                const subHint = (args.acao === 'agendar' && args.date && args.time && args.clientName) ? {
                   date: args.date, time: args.time, clientName: args.clientName, tipo: args.tipo
-                } : null);
+                } : null;
 
                 const subResult = await this.processSchedulingSubAgent(
                   intent,
@@ -455,7 +397,6 @@ Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', dat
                 toolResult = { success: true, message: subResult.text, booked: subResult.bookingOccurred };
                 aiFinalText = subResult.text;
                 if (subResult.bookingOccurred) {
-                  bookingExecuted = true;
                   if (!toolsUsed.includes('Agendar')) toolsUsed.push('Agendar');
                 }
               } else if (functionName === 'servicoTool') {
@@ -499,42 +440,6 @@ Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', dat
 
       if (!aiFinalText && !toolCalledInThisTurn) {
         aiFinalText = "Hm, tive um pequeno problema técnico aqui. Poderia repetir o que você disse? Vou adorar te ajudar!";
-      }
-
-      // ─────────────────────────────────────────────────────────────────
-      // 🛡️ SAFETY NET DETERMINÍSTICO PARA AGENDAMENTO
-      // Barreira final: se o estado indica booking ready, mas nem o sub-agente
-      // nem o modelo principal executaram o agendamento, fazemos aqui.
-      // ─────────────────────────────────────────────────────────────────
-      if (bookingReady && !bookingExecuted && !transferredToHuman) {
-        console.warn(`[AgentService] 🛡️ SAFETY NET: booking ready (${bookingReady.date} ${bookingReady.time} ${bookingReady.clientName}) mas nada executou o agendamento. Forçando determinístico.`);
-        try {
-          const forcedArgs = {
-            acao: 'agendar',
-            date: bookingReady.date,
-            time: bookingReady.time,
-            clientName: bookingReady.clientName
-          };
-          const forcedResult = await this.handleBookAppointment(
-            dbUserId,
-            threadId,
-            contactName,
-            forcedArgs,
-            agentData,
-            activeProfessionals
-          );
-          if (forcedResult?.success) {
-            await supabase.from('threads').update({ lead_name: bookingReady.clientName }).eq('id', threadId);
-            if (!toolsUsed.includes('Agendar')) toolsUsed.push('Agendar');
-            bookingExecuted = true;
-            aiFinalText = `Prontinho, ${bookingReady.clientName.split(/\s+/)[0]}! Agendamento confirmado para ${bookingReady.date} às ${bookingReady.time}. Te espero! 😊`;
-            console.log('[AgentService] ✅ SAFETY NET: agendamento forçado com sucesso.');
-          } else {
-            console.warn('[AgentService] ⚠️ SAFETY NET: falha no agendamento forçado:', forcedResult?.reason);
-          }
-        } catch (forceErr: any) {
-          console.error('[AgentService] ❌ SAFETY NET error:', forceErr?.message || forceErr);
-        }
       }
 
       // 8. Handle Voice
@@ -1224,16 +1129,12 @@ ${customExamples}`;
   }
 
   /**
-   * Detecta quando a conversa já tem TODOS os dados necessários para agendar:
-   * data, horário, nome do cliente e sinal de confirmação recente.
-   *
-   * Tolerante a mensagens divididas: aceita "pode agendar" numa mensagem
-   * e "Natan Vilela" na seguinte. Também detecta confirmação implícita
-   * quando o assistente pediu o nome para confirmar.
-   *
-   * Retorna payload pronto OU null (fluxo normal).
+   * @deprecated Removido — confiamos no modelo + memória de 40 msgs + tools como o fluxo n8n original.
+   * Mantido temporariamente como _detectBookingReady_unused (não é referenciado em lugar nenhum)
+   * para preservar o histórico git se precisarmos voltar atrás.
    */
-  private detectBookingReady(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private _detectBookingReady_unused(
     history: Array<{ role: string; content: string }>,
     currentUserMsg: string,
     leadName: string | null

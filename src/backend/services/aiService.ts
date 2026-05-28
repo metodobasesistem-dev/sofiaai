@@ -95,6 +95,8 @@ export function truncateHistoryByTokens<T extends { content: string | null | und
 
 // Pricing per 1k tokens (Estimated USD)
 const PRICING = {
+  'gpt-4.1': { in: 0.002, out: 0.008 },
+  'gpt-4.1-mini': { in: 0.0004, out: 0.0016 },
   'gpt-4o': { in: 0.005, out: 0.015 },
   'gpt-4o-mini': { in: 0.00015, out: 0.0006 },
   'o1-preview': { in: 0.015, out: 0.060 },

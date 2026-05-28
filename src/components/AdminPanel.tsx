@@ -1947,6 +1947,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                           >
                             {globalSettings.llm_provider === 'openai' ? (
                               <>
+                                <option value="gpt-4.1-mini">GPT-4.1 Mini (Recomendado — usado no n8n)</option>
+                                <option value="gpt-4.1">GPT-4.1 (Robusto Premium)</option>
                                 <option value="gpt-4o">GPT-4o (Robusto)</option>
                                 <option value="gpt-4o-mini">GPT-4o Mini (Econômico)</option>
                                 <option value="o1-preview">o1-preview (Raciocínio Avançado)</option>
