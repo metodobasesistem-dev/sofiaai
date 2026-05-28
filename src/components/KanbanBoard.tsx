@@ -47,7 +47,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
         { id: 'resolved', title: 'Resolvidos', desc: '', dot: 'bg-emerald-400', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
       ];
 
-  const FUNIL_COMPAT: Record<string, string> = { 'Lead': 'novo_lead', 'Qualificado': 'qualificado', 'Resolvido': 'cliente' };
+  const FUNIL_COMPAT: Record<string, string> = { 'Lead': 'novo_lead', 'Qualificado': 'qualificado', 'Agendado': 'agendamento', 'Resolvido': 'cliente' };
   const normFunil = (s?: string) => { if (!s) return 'novo_lead'; return FUNIL_COMPAT[s] ?? s; };
 
   const getCards = (columnId: string) => {

@@ -114,6 +114,7 @@ interface Thread {
 const FUNIL_COMPAT: Record<string, string> = {
   'Lead': 'novo_lead',
   'Qualificado': 'qualificado',
+  'Agendado': 'agendamento',
   'Resolvido': 'cliente',
 };
 function normFunil(s?: string | null): string {
@@ -2829,7 +2830,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
                        <Calendar size={48} className="text-primary-500/5 -mr-4 -mt-4 rotate-12" />
                     </div>
                     <div className="flex justify-between items-start mb-3 relative z-10">
-                      <p className="text-[14px] font-black text-slate-900 truncate flex-1">{app.service || 'Procedimento'}</p>
+                      <p className="text-[14px] font-black text-slate-900 truncate flex-1">{app.service || 'Agendamento'}</p>
                       <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ml-2 border shadow-sm
                         ${app.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                         {app.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
