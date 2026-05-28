@@ -95,11 +95,13 @@ export default function Campaigns() {
   const [funnelStatuses, setFunnelStatuses] = useState<string[]>([]);
 
   const contactFields = [
-    { id: 'full_name', label: 'Nome Completo' },
-    { id: 'first_name', label: 'Primeiro Nome' },
-    { id: 'phone', label: 'Telefone' },
-    { id: 'email', label: 'E-mail' },
-    { id: 'status_funil', label: 'Status do Funil' }
+    { id: 'full_name', label: 'Nome Completo (Contato)' },
+    { id: 'first_name', label: 'Primeiro Nome (Contato)' },
+    { id: 'phone', label: 'Telefone (Contato)' },
+    { id: 'email', label: 'E-mail (Contato)' },
+    { id: 'status_funil', label: 'Status do Funil (Contato)' },
+    { id: 'sender_full_name', label: 'Meu Nome (Remetente)' },
+    { id: 'sender_first_name', label: 'Meu Primeiro Nome (Remetente)' }
   ];
 
   const [processingCampaignId, setProcessingCampaignId] = useState<string | null>(null);
