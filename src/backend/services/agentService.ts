@@ -1018,7 +1018,7 @@ ${leadName ? `O cliente se chama **${leadName}**. Use o nome dele com naturalida
 3. **NÃO INVENTE**: Você NUNCA inventa preço, prazo, promoção, disponibilidade, características técnicas ou políticas da empresa. Se não tiver a informação na base de conhecimento abaixo ou nas suas tools, diga: "Deixa eu confirmar essa informação com o time e já te respondo". Marcar para handover humano é melhor que inventar.
 4. **AGENDAMENTO** — siga EXATAMENTE este fluxo em 3 etapas:
    Etapa 1 → Chame Agendar(acao='verificar', date='YYYY-MM-DD') para obter os horários REAIS disponíveis. NUNCA informe horários sem chamar verificar antes.
-   Etapa 2 → Apresente ao cliente somente os horários retornados (campo 'slots'). Se 'slots' estiver vazio, informe que não há horários disponíveis naquele dia e pergunte outra data.
+   Etapa 2 → Apresente ao cliente APENAS os horários do campo 'suggested_slots' (no máximo 3 ou 4). NUNCA liste o campo 'slots' completo — fica gigante e parece spam. Se o cliente disser que nenhum dos sugeridos serve, aí sim ofereça outros da lista completa, sempre em blocos pequenos. Se 'slots' estiver vazio, informe que não há horários e pergunte outra data.
    Etapa 3 → Após o cliente escolher o horário E confirmar o agendamento, chame Agendar(acao='agendar', date='YYYY-MM-DD', time='HH:mm', clientName='nome que o cliente informou').
    Se Agendar retornar success=false, leia o campo 'reason' e informe ao cliente com naturalidade que houve um problema (ex: "Tive um probleminha ao confirmar, pode tentar novamente?").
    Para clientName: use o nome que o cliente disse na conversa. Se não souber o nome, pergunte antes de chamar 'agendar'.
@@ -1167,19 +1167,22 @@ ${customExamples}
       const totalBusy = Array.from(new Set([...busyTimesFromGoogle, ...busyTimesFromDB]));
       const availableSlots = allSlots.filter(slot => !totalBusy.includes(slot));
 
-      // Friendly summary for the AI so it can present options naturally
-      const slotsStr = availableSlots.length > 0
-        ? availableSlots.join(', ')
+      // Sugere no máximo 4 slots distribuídos (manhã/meio-dia/tarde/final) para não poluir a mensagem.
+      // Lista completa permanece em 'slots' para validação interna.
+      const suggestedSlots = this.pickSuggestedSlots(availableSlots, 4);
+      const slotsStr = suggestedSlots.length > 0
+        ? suggestedSlots.join(', ')
         : 'nenhum horário disponível';
 
       return {
         slots: availableSlots,
+        suggested_slots: suggestedSlots,
         slots_text: slotsStr,
         date: targetDate,
         professional: selectedProf.name,
         total_available: availableSlots.length,
         message: availableSlots.length > 0
-          ? `Horários disponíveis em ${targetDate} com ${selectedProf.name}: ${slotsStr}.`
+          ? `APRESENTE ao cliente APENAS estes ${suggestedSlots.length} horários distribuídos ao longo do dia (não liste a agenda inteira): ${slotsStr}. Total real disponível: ${availableSlots.length}. Se o cliente pedir outros horários ou disser que nenhum serve, ofereça mais opções da lista completa.`
           : `Não há horários disponíveis em ${targetDate} com ${selectedProf.name}. Sugira outra data.`
       };
     } catch (e: any) {
@@ -1197,6 +1200,23 @@ ${customExamples}
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  /**
+   * Escolhe até `max` horários distribuídos uniformemente ao longo da lista,
+   * sempre incluindo o primeiro e o último para dar variedade de manhã/tarde.
+   * Evita poluir o WhatsApp com lista enorme.
+   */
+  private pickSuggestedSlots(slots: string[], max: number = 4): string[] {
+    if (slots.length <= max) return slots;
+    const picked: string[] = [];
+    const step = (slots.length - 1) / (max - 1);
+    for (let i = 0; i < max; i++) {
+      const idx = Math.round(i * step);
+      const slot = slots[idx];
+      if (slot && !picked.includes(slot)) picked.push(slot);
+    }
+    return picked;
   }
 
   /**
