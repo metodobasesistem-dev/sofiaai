@@ -165,7 +165,7 @@ export default function Campaigns() {
     if (user) {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('whatsapp_provider, whatsapp_organizacao, nome_completo, full_name, name')
+        .select('whatsapp_provider, whatsapp_organizacao')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -174,8 +174,8 @@ export default function Campaigns() {
       }
 
       setUserProvider(profile?.whatsapp_provider || 'evolution');
-      // Resolve sender name with same priority as getUserProfile normalization
-      const resolvedName = (profile as any)?.nome_completo || (profile as any)?.full_name || (profile as any)?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
+      // Get sender name from auth user_metadata (always available from Google OAuth)
+      const resolvedName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || '';
       setSenderName(resolvedName);
       if (profile?.whatsapp_organizacao) {
         setTestPhone(profile.whatsapp_organizacao.replace(/\D/g, ''));
