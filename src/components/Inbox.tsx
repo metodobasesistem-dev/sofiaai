@@ -2838,7 +2838,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold relative z-10 bg-white/50 w-fit px-3 py-1 rounded-full border border-slate-100/50">
                       <Clock size={12} className="text-primary-500" />
-                      {new Date(app.start_time).toLocaleDateString('pt-BR')} • {new Date(app.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {app.data ? new Date(app.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'} • {app.time || '—'}
                     </div>
                   </div>
                 ))
