@@ -279,7 +279,9 @@ export class AgentService {
       let bookingDirective = '';
       if (bookingReady) {
         console.log(`[AgentService] 🎯 BOOKING READY DETECTED on thread ${threadId}:`, bookingReady);
-        bookingDirective = `
+        if (bookingReady.clientName) {
+          // Tem tudo — força a tool de agendamento
+          bookingDirective = `
 
 # ⚠️ AÇÃO OBRIGATÓRIA — AGENDAR AGORA
 A conversa JÁ TEM TODOS OS DADOS necessários para confirmar o agendamento:
@@ -294,6 +296,23 @@ VOCÊ DEVE chamar AGORA, sem fazer NENHUMA pergunta adicional:
 NÃO PERGUNTE de novo a data. NÃO PERGUNTE de novo o horário. NÃO PERGUNTE o nome.
 Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
 `;
+        } else {
+          // Falta SÓ o nome — instrui a IA a perguntar APENAS o nome
+          bookingDirective = `
+
+# ⚠️ INSTRUÇÃO CRÍTICA — FALTA SÓ O NOME
+A conversa JÁ TEM data e horário definidos:
+- Data: ${bookingReady.date}
+- Horário: ${bookingReady.time}
+- O cliente já confirmou que quer agendar nesse horário.
+
+Falta APENAS o nome completo dele para finalizar.
+Sua próxima resposta deve ser EXATAMENTE uma pergunta curta e natural pedindo o nome completo do cliente — algo como "Perfeito! Pra finalizar, qual seu nome completo?".
+
+NÃO pergunte de novo a data. NÃO pergunte de novo o horário. NÃO chame Agendar(acao='verificar') de novo. Pergunte SÓ o nome.
+Quando o cliente responder com o nome, aí sim chame Agendar(acao='agendar', date='${bookingReady.date}', time='${bookingReady.time}', clientName='<nome que ele disser>').
+`;
+        }
       }
 
       const fullPrompt = systemPrompt + calendarContext + dateContext + bookingDirective;
@@ -333,10 +352,13 @@ Os dados já estão acima. Apenas chame a tool com EXATAMENTE esses valores.
         console.log(`[AgentService] 🤖 IA está pensando... (Thread: ${threadId}, Iter: ${iterationCount}/${MAX_TOOL_ITERATIONS})`);
         // Usa mini model para mensagens simples; após tool call, já não importa (toolCalledInThisTurn=true = iteração de resposta)
         const modelForThisCall = toolCalledInThisTurn ? undefined : modelOverride;
-        // Força tool_choice='required' na PRIMEIRA iteração quando detectamos
-        // que a conversa está pronta para agendar — garante que o modelo chame Agendar.
+        // Força tool_choice='required' na PRIMEIRA iteração quando todos os dados estão prontos
+        // (data + horário + nome). Quando só falta o nome, NÃO força tool — a IA precisa responder
+        // em texto pedindo o nome.
         const effectiveToolChoice: 'auto' | 'required' =
-          bookingReady && iterationCount === 1 && !toolCalledInThisTurn ? 'required' : 'auto';
+          bookingReady && bookingReady.clientName && iterationCount === 1 && !toolCalledInThisTurn
+            ? 'required'
+            : 'auto';
         const response = await generateAIResponse(fullPrompt, currentMessages, tools, effectiveToolChoice, dbUserId, modelForThisCall);
         
         if (!response || (!response.text && (!response.toolCalls || response.toolCalls.length === 0))) {
@@ -1370,12 +1392,12 @@ ${customExamples}`;
       if (clientName) break;
       const text = (msg.content || '').trim();
 
-      // "meu nome é X"
-      const meuNome = text.match(/meu nome [eé]\s+([A-ZÀ-Ú][a-zà-úA-ZÀ-Ú\s]{1,40}?)(?:[.,!?\n]|$)/);
+      // "meu nome é X" / "me chamo X" / "chamo-me X"
+      const meuNome = text.match(/(?:meu nome [eé]|me chamo|chamo-me)\s+([A-ZÀ-Ú][a-zà-úA-ZÀ-Ú\s]{1,40}?)(?:[.,!?\n]|$)/i);
       if (meuNome) { clientName = meuNome[1].trim(); continue; }
 
-      // "sou X"
-      const sou = text.match(/\bsou\s+(?:o\s+|a\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/);
+      // "sou X" / "eu sou X"
+      const sou = text.match(/\b(?:eu\s+)?sou\s+(?:o\s+|a\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/);
       if (sou) { clientName = sou[1].trim(); continue; }
 
       // "Natan Vilela. Pode agendar" / "Natan Vilela, pode confirmar"
@@ -1419,9 +1441,9 @@ ${customExamples}`;
     }
 
     if (!clientName) clientName = leadName;
-    if (!clientName) return null;
-
-    return { date, time, clientName };
+    // Se ainda não temos nome, retorna mesmo assim com clientName vazio.
+    // O bookingDirective abaixo vai instruir a IA a perguntar APENAS o nome (não a data/horário de novo).
+    return { date, time, clientName: clientName || '' };
   }
 
   /**
