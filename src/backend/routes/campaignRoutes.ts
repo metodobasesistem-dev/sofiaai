@@ -36,7 +36,7 @@ function normalizePhone(phone: string): string {
  * Supports the contact field IDs used in the campaign wizard.
  * Campos `sender_*` referem-se ao perfil do remetente (usuário logado).
  */
-function getContactFieldValue(contact: any, field: string, sender?: { nome_completo?: string | null; name?: string | null } | null): string {
+function getContactFieldValue(contact: any, field: string, sender?: { nome_completo?: string | null; name?: string | null; full_name?: string | null } | null): string {
   switch (field) {
     case 'full_name':
       return contact.nome || contact.name || contact.contact_name || '';
@@ -51,9 +51,9 @@ function getContactFieldValue(contact: any, field: string, sender?: { nome_compl
     case 'status_funil':
       return contact.status_funil || '';
     case 'sender_full_name':
-      return sender?.nome_completo || sender?.name || '';
+      return sender?.nome_completo || sender?.full_name || sender?.name || '';
     case 'sender_first_name': {
-      const full = sender?.nome_completo || sender?.name || '';
+      const full = sender?.nome_completo || sender?.full_name || sender?.name || '';
       return full.trim().split(/\s+/)[0] || full;
     }
     default:
@@ -155,11 +155,15 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
     let templateBody = '';
     const { data: profile } = await supabase
       .from('profiles')
-      .select('whatsapp_provider, nome_completo, name')
+      .select('whatsapp_provider, nome_completo, full_name, name')
       .eq('id', userId)
       .maybeSingle();
     const isMetaOfficial = (profile as any)?.whatsapp_provider === 'meta_official';
-    const sender = { nome_completo: (profile as any)?.nome_completo, name: (profile as any)?.name };
+    const sender = {
+      nome_completo: (profile as any)?.nome_completo,
+      full_name: (profile as any)?.full_name,
+      name: (profile as any)?.name,
+    };
 
     if (!isMetaOfficial && campaign.template_id) {
       const { data: tplData } = await supabase
@@ -317,12 +321,16 @@ router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
     // Carrega perfil do remetente (pra resolver vars sender_*)
     const { data: profile } = await supabase
       .from('profiles')
-      .select('whatsapp_provider, nome_completo, name')
+      .select('whatsapp_provider, nome_completo, full_name, name')
       .eq('id', userId)
       .maybeSingle();
     // isMetaTemplate from request body takes precedence; fallback to profile provider check
     const isMetaOfficial = isMetaTemplate === true || (profile as any)?.whatsapp_provider === 'meta_official';
-    const sender = { nome_completo: (profile as any)?.nome_completo, name: (profile as any)?.name };
+    const sender = {
+      nome_completo: (profile as any)?.nome_completo,
+      full_name: (profile as any)?.full_name,
+      name: (profile as any)?.name,
+    };
 
     // Resolve as variáveis mapeadas no contato de teste (ou no perfil pro caso sender_*)
     const mappedVars = Object.entries(variables as Record<string, string>)
@@ -332,6 +340,17 @@ router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
         return aNum - bNum;
       })
       .map(([, field]) => getContactFieldValue(contact, field as string, sender));
+
+    // Validação antecipada: variável sender_* vazia = perfil sem nome preenchido
+    const emptySenderIdx = Object.entries(variables as Record<string, string>)
+      .sort((a, b) => parseInt(a[0].replace('var', ''), 10) - parseInt(b[0].replace('var', ''), 10))
+      .findIndex(([, field]) => (field === 'sender_full_name' || field === 'sender_first_name') && !getContactFieldValue(contact, field, sender).trim());
+    if (emptySenderIdx !== -1) {
+      return res.status(400).json({
+        success: false,
+        error: `Variável {{${emptySenderIdx + 1}}} usa "Meu Nome (Remetente)" mas seu perfil não tem nome preenchido. Vá em Configurações → Conta e preencha o campo "Nome Completo".`,
+      });
+    }
 
     let resolvedBodyText = '';
 
