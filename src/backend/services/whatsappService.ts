@@ -829,8 +829,19 @@ class WhatsAppService {
       };
     }
 
+    // Resolve contact name so the thread doesn't fall back to 'Lead WhatsApp'
+    const [{ data: existingTplThread }, { data: contactExact }] = await Promise.all([
+      supabase.from('threads').select('contact_name').eq('id', threadId).maybeSingle(),
+      supabase.from('contacts').select('nome').eq('user_id', userId).ilike('telefone', `%${cleanTo.slice(-8)}`).maybeSingle(),
+    ]);
+    const isPhone = (s: string) => !/[a-zA-Z]/.test(s) && s.replace(/\D/g, '').length >= 8;
+    const resolvedTplContactName =
+      (contactExact?.nome && !isPhone(contactExact.nome)) ? contactExact.nome
+      : (existingTplThread?.contact_name && !isPhone(existingTplThread.contact_name)) ? existingTplThread.contact_name
+      : null;
+
     // Pre-persist with status='sending' so the UI reflects the outbound attempt immediately
-    await supabase.from('threads').upsert({
+    const tplThreadData: Record<string, any> = {
       id: threadId,
       user_id: userId,
       last_message: previewText,
@@ -838,7 +849,9 @@ class WhatsAppService {
       remote_jid: to.includes('@') ? to : `${cleanTo}@s.whatsapp.net`,
       display_phone: cleanTo,
       updated_at: new Date(sendTimestamp).toISOString(),
-    });
+    };
+    if (resolvedTplContactName) tplThreadData.contact_name = resolvedTplContactName;
+    await supabase.from('threads').upsert(tplThreadData);
     await supabase.from('messages').insert({
       id: tempUUID,        // uuid válido como PK
       whatsapp_id: tempId, // tpl-sending-* apenas no campo text
