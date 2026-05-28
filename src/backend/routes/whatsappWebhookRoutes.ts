@@ -5,7 +5,7 @@ import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
-import { normalizePhone } from '../lib/phoneHelper.js';
+import { normalizePhone, isSamePhone } from '../lib/phoneHelper.js';
 
 
 const router = Router();
@@ -82,10 +82,10 @@ router.post('/webhook', async (req, res) => {
   }
 
   try {
-    // 1. Resolve o usuário pelo whatsapp_instance_id
+    // 1. Resolve o usuário pelo whatsapp_instance_id (selecionando whatsapp_organizacao e whatsapp_provider_config)
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, whatsapp_organizacao, whatsapp_provider_config')
       .eq('whatsapp_instance_id', instanceName)
       .single();
 
@@ -111,7 +111,7 @@ router.post('/webhook', async (req, res) => {
 
     // 5. Processa se for uma mensagem válida
     if (message) {
-      await handleStandardizedMessage(userId, instanceName, message, provider);
+      await handleStandardizedMessage(userId, instanceName, message, provider, profile);
     }
 
     // 6. Tratamento de Eventos de Conexão
@@ -128,7 +128,7 @@ router.post('/webhook', async (req, res) => {
   res.status(200).send('OK');
 });
 
-async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any) {
+async function handleStandardizedMessage(userId: string, instanceName: string, message: any, provider: any, profile?: any) {
   const { from, body, contactName, id: messageId, fromMe, type, caption, fileName, mimeType, quotedId, quotedText, contactJid, raw } = message;
   
   // Filtro de Tipos Não Suportados/Técnicos
@@ -150,6 +150,32 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
   const cleanPhone = normalizePhone(from);
   let threadId = `${userId}_${cleanPhone}`;
+
+  // ── Auto-chat / Self-chat Detection ──────────────────────────────────────
+  const orgPhone = profile?.whatsapp_organizacao ? normalizePhone(profile.whatsapp_organizacao) : '';
+  const configPhone = profile?.whatsapp_provider_config?.connectedPhone ? normalizePhone(profile.whatsapp_provider_config.connectedPhone) : '';
+  const isSelfChat = (orgPhone && isSamePhone(cleanPhone, orgPhone)) || 
+                     (configPhone && isSamePhone(cleanPhone, configPhone));
+
+  if (isSelfChat && !fromMe) {
+    const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+    const { data: pendingOutbound } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('thread_id', threadId)
+      .eq('direction', 'outbound')
+      .eq('status', 'sending')
+      .eq('text', body)
+      .gte('created_at', thirtySecondsAgo)
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingOutbound) {
+      console.log(`[Webhook] 🛡️ Self-chat duplicate echo detected for pending outbound message: ${messageId}. Skipping to prevent loop.`);
+      return;
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   // ── Deduplicação do 9º dígito brasileiro ──────────────────────────────────
   // A Evolution às vezes entrega o mesmo número com e sem o 9º dígito:

@@ -1388,6 +1388,36 @@ ${customExamples}`;
         if (onlyName) { clientName = onlyName[1].trim(); continue; }
       }
     }
+    if (!clientName) {
+      // Resiliência / Fallback: Se não detectamos o nome nas mensagens do 'user',
+      // mas o bot perguntou pelo nome (askedToConfirm === true), varre as mensagens
+      // recentes independentemente de role para encontrar um padrão de nome.
+      // Isso protege contra inversão de papéis (role reversal) em chats próprios de teste.
+      for (const msg of [...recent].reverse()) {
+        if (clientName) break;
+        const text = (msg.content || '').trim();
+
+        // Evita casar a própria pergunta do bot
+        if (text.includes('qual é o seu nome') || text.includes('qual o seu nome') || text.includes('nome, por favor')) {
+          continue;
+        }
+
+        const meuNome = text.match(/meu nome [eé]\s+([A-ZÀ-Ú][a-zà-úA-ZÀ-Ú\s]{1,40}?)(?:[.,!?\n]|$)/);
+        if (meuNome) { clientName = meuNome[1].trim(); continue; }
+
+        const sou = text.match(/\bsou\s+(?:o\s+|a\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/);
+        if (sou) { clientName = sou[1].trim(); continue; }
+
+        const beforeConfirm = text.match(/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de\s+|da\s+|do\s+|dos\s+|das\s+)?[A-ZÀ-Ú][a-zà-ú]+){0,3})\s*[.,]\s*(?:pode|agend|confir|marca|fechad)/i);
+        if (beforeConfirm) { clientName = beforeConfirm[1].trim(); continue; }
+
+        if (askedToConfirm) {
+          const onlyName = text.match(/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})\.?$/);
+          if (onlyName) { clientName = onlyName[1].trim(); continue; }
+        }
+      }
+    }
+
     if (!clientName) clientName = leadName;
     if (!clientName) return null;
 

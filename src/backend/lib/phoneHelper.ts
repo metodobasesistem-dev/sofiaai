@@ -44,3 +44,30 @@ export function normalizePhone(phone: string): string {
 export function getThreadId(userId: string, phone: string): string {
   return `${userId}_${normalizePhone(phone)}`;
 }
+
+/**
+ * Compara dois números de telefone ignorando diferenças no 9º dígito brasileiro.
+ */
+export function isSamePhone(phoneA: string, phoneB: string): boolean {
+  const cleanA = normalizePhone(phoneA);
+  const cleanB = normalizePhone(phoneB);
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB) return true;
+  
+  if (cleanA.startsWith('55') && cleanB.startsWith('55')) {
+    const dddA = cleanA.slice(2, 4);
+    const dddB = cleanB.slice(2, 4);
+    if (dddA === dddB) {
+      const restA = cleanA.slice(4);
+      const restB = cleanB.slice(4);
+      if (restA.length === 9 && restA.startsWith('9') && restB.length === 8) {
+        return restA.slice(1) === restB;
+      }
+      if (restB.length === 9 && restB.startsWith('9') && restA.length === 8) {
+        return restB.slice(1) === restA;
+      }
+    }
+  }
+  return false;
+}
+
