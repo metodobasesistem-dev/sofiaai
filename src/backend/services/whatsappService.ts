@@ -782,11 +782,23 @@ class WhatsAppService {
     // Template Defense — Camada 3: valida variáveis antes de chamar Meta
     const variables = extractBodyParameters(components);
 
-    // Texto armazenado no chat: usa o corpo real do template com variáveis substituídas,
-    // ou cai no fallback "[Template: nome]" se o corpo não foi fornecido.
+    // Texto armazenado no chat: usa o corpo real do template com variáveis substituídas.
+    // Se o caller não passou bodyText, busca na Meta (best-effort) para evitar o placeholder feio.
+    let resolvedBodyText = bodyText;
+    if (!resolvedBodyText) {
+      try {
+        const tplProvider = new MetaProvider(userId);
+        const templates = await tplProvider.listTemplates(userId, { limit: 200 });
+        const tpl = templates?.find((t: any) => t.name === templateName);
+        const bodyComp = tpl?.components?.find((c: any) => c.type === 'BODY');
+        resolvedBodyText = bodyComp?.text || undefined;
+      } catch {
+        // best-effort — segue para o fallback
+      }
+    }
     let previewText = `[Template: ${templateName}]`;
-    if (bodyText) {
-      previewText = bodyText;
+    if (resolvedBodyText) {
+      previewText = resolvedBodyText;
       variables.forEach((val, idx) => {
         previewText = previewText.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), val);
       });
