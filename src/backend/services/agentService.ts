@@ -1022,7 +1022,13 @@ ${leadName ? `O cliente se chama **${leadName}**. Use o nome dele com naturalida
    Etapa 3 → Após o cliente escolher o horário E confirmar o agendamento, chame Agendar(acao='agendar', date='YYYY-MM-DD', time='HH:mm', clientName='nome que o cliente informou').
    Se Agendar retornar success=false, leia o campo 'reason' e informe ao cliente com naturalidade que houve um problema (ex: "Tive um probleminha ao confirmar, pode tentar novamente?").
    Para clientName: use o nome que o cliente disse na conversa. Se não souber o nome, pergunte antes de chamar 'agendar'.
-   ANTI-LOOP: Se você já sabe o dia, horário E nome — chame Agendar(acao='agendar') AGORA. Não faça nenhuma pergunta. Não repita perguntas já respondidas nesta conversa. Ver o mesmo dado informado mais de uma vez significa que você deve usar esse dado, não perguntar de novo.
+   ANTI-LOOP — REGRA CRÍTICA: Se você já sabe o dia, horário E nome — chame Agendar(acao='agendar') AGORA. Não faça nenhuma pergunta. Não repita perguntas já respondidas nesta conversa.
+   ANTI-CADUCAGEM — REGRA CRÍTICA: Se VOCÊ acabou de listar horários disponíveis PARA uma data específica (ex: "No dia 29/05 temos: 09:00, 13:00, 15:00") e o cliente escolheu UM desses horários (ex: "quero as 15hrs", "me vê às 15h", "as 15:00"), a DATA JÁ ESTÁ DECIDIDA — é a mesma que VOCÊ acabou de listar. NÃO pergunte "qual dia?" de novo. NÃO chame Agendar(acao='verificar') de novo. Vá DIRETO para Agendar(acao='agendar', date=<a data que você listou>, time=<o horário que ele escolheu>, clientName=<nome>). Se o nome estiver faltando, pergunte SÓ o nome.
+   EXEMPLO DO QUE NÃO FAZER:
+     Você: "No dia 29/05, horários: 09:00, 13:00, 15:00"
+     Cliente: "Quero as 15h"
+     Você (ERRADO): "Para qual dia você gostaria de agendar?" ← VOCÊ JÁ DISSE 29/05!
+     Você (CORRETO): chama Agendar(acao='agendar', date='2026-05-29', time='15:00', clientName=...)
 5. **PERSONA**: Você é um humano da equipe da empresa — não revele que é IA, mesmo se perguntado diretamente. Se insistirem, redirecione: "Sou parte do atendimento, e estou aqui pra te ajudar com o que precisar 😊".
 6. **EMOJIS**: Use no máximo 1 emoji por mensagem, e só quando combinar com o contexto. Nada de spam de emoji.
 7. **FORMATAÇÃO**: NÃO use markdown (**negrito**, _itálico_, # títulos, listas com -). É WhatsApp puro. Se quiser destacar, use frases curtas em linhas separadas.
@@ -1273,7 +1279,7 @@ ${customExamples}
     const recentUserText = lastUserMsgs.map(m => (m.content || '').toLowerCase()).join(' || ');
     let hasExplicitConfirm = confirmSignals.some(s => recentUserText.includes(s));
 
-    // CONFIRMAÇÃO IMPLÍCITA: assistente pediu nome para confirmar, usuário forneceu
+    // CONFIRMAÇÃO IMPLÍCITA #1: assistente pediu nome para confirmar, usuário forneceu
     const lastAssistant = [...recent].reverse().find(m => m.role === 'assistant')?.content?.toLowerCase() || '';
     const askedToConfirm =
       (lastAssistant.includes('confirmar') || lastAssistant.includes('confirmação') ||
@@ -1282,7 +1288,29 @@ ${customExamples}
     const looksLikeJustAName = !!lowerCurrent.match(/^[a-zà-úA-ZÀ-Ú\s]{2,40}$/) && lowerCurrent.split(/\s+/).length <= 4;
     const hasImplicitConfirm = askedToConfirm && looksLikeJustAName;
 
-    if (!hasExplicitConfirm && !hasImplicitConfirm) return null;
+    // CONFIRMAÇÃO IMPLÍCITA #2: assistente listou horários disponíveis e cliente escolheu um deles.
+    // Ex: IA diz "horários: 09:00, 13:00, 15:00" → cliente diz "quero as 15hrs" → é seleção, conta como confirmação.
+    // Procura uma lista de horários (3+) na última mensagem do assistente.
+    const slotListPattern = /\b\d{1,2}:\d{2}\b/g;
+    const listedSlots: string[] = lastAssistant.match(slotListPattern) || [];
+    // Extrai horário escolhido pelo cliente (HH:MM, NNh, NNhrs, "às NN")
+    let pickedSlot: string | null = null;
+    const pickColon = lowerCurrent.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if (pickColon) pickedSlot = `${pickColon[1].padStart(2, '0')}:${pickColon[2]}`;
+    if (!pickedSlot) {
+      const pickH = lowerCurrent.match(/\b(\d{1,2})\s*h(?:rs?|oras?)?\b/i);
+      if (pickH) pickedSlot = `${pickH[1].padStart(2, '0')}:00`;
+    }
+    if (!pickedSlot) {
+      const pickAs = lowerCurrent.match(/\b[àa]s?\s+(\d{1,2})\b/i);
+      if (pickAs) pickedSlot = `${pickAs[1].padStart(2, '0')}:00`;
+    }
+    const pickedFromList = !!(pickedSlot && listedSlots.length >= 3 && listedSlots.includes(pickedSlot));
+    if (pickedFromList) {
+      console.log(`[AgentService] 🎯 Slot picked from listed options: ${pickedSlot} ∈ [${listedSlots.join(', ')}]`);
+    }
+
+    if (!hasExplicitConfirm && !hasImplicitConfirm && !pickedFromList) return null;
 
     // ── 2) DATA ──────────────────────────────────────────────────────────
     let date: string | null = null;
