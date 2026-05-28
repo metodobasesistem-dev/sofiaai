@@ -1299,8 +1299,19 @@ ${customExamples}
     const recentUserText = lastUserMsgs.map(m => (m.content || '').toLowerCase()).join(' || ');
     let hasExplicitConfirm = confirmSignals.some(s => recentUserText.includes(s));
 
+    // BLOCO recente do assistente: agrupa TODAS as mensagens consecutivas do assistant
+    // posteriores ao último user. Necessário porque a IA frequentemente quebra a resposta
+    // em duas msgs ("horários: 09:00, 11:00..." + "Qual deles te atende?") e olhar só a
+    // ÚLTIMA perderia a lista de horários.
+    const assistantBlock: string[] = [];
+    for (let i = recent.length - 1; i >= 0; i--) {
+      const m = recent[i];
+      if (m.role === 'user' && i < recent.length - 1) break; // parou no user anterior à mensagem atual
+      if (m.role === 'assistant') assistantBlock.unshift((m.content || '').toLowerCase());
+    }
+    const lastAssistant = assistantBlock.join(' ');
+
     // CONFIRMAÇÃO IMPLÍCITA #1: assistente pediu nome para confirmar, usuário forneceu
-    const lastAssistant = [...recent].reverse().find(m => m.role === 'assistant')?.content?.toLowerCase() || '';
     const askedToConfirm =
       (lastAssistant.includes('confirmar') || lastAssistant.includes('confirmação') ||
        lastAssistant.includes('agendar') || lastAssistant.includes('agendamento')) &&
@@ -1310,7 +1321,7 @@ ${customExamples}
 
     // CONFIRMAÇÃO IMPLÍCITA #2: assistente listou horários disponíveis e cliente escolheu um deles.
     // Ex: IA diz "horários: 09:00, 13:00, 15:00" → cliente diz "quero as 15hrs" → é seleção, conta como confirmação.
-    // Procura uma lista de horários (3+) na última mensagem do assistente.
+    // Procura uma lista de horários (3+) no bloco recente do assistente (pode estar dividido em várias msgs).
     const slotListPattern = /\b\d{1,2}:\d{2}\b/g;
     const listedSlots: string[] = lastAssistant.match(slotListPattern) || [];
     // Extrai horário escolhido pelo cliente (HH:MM, NNh, NNhrs, "às NN")
