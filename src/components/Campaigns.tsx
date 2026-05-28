@@ -88,6 +88,8 @@ export default function Campaigns() {
     uploadedContacts: [] as any[],
     templateId: '',
     templateName: '',
+    templateLanguage: 'pt_BR',
+    isMetaTemplate: false,
     variables: {} as Record<string, string>
   });
 
@@ -386,6 +388,8 @@ export default function Campaigns() {
           phone: testPhone,
           templateId: campaignData.templateId,
           templateName: campaignData.templateName,
+          templateLanguage: campaignData.templateLanguage || 'pt_BR',
+          isMetaTemplate: campaignData.isMetaTemplate,
           variables: campaignData.variables,
           contact: sampleContact
         })
@@ -691,10 +695,10 @@ export default function Campaigns() {
                   ) : templates.map(template => (
                     <button
                       key={template.id}
-                      onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
+                      onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: false, templateLanguage: 'pt_BR', variables: {}})}
                       className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
-                        campaignData.templateId === template.id 
-                          ? 'border-primary-500 bg-primary-50/30' 
+                        campaignData.templateId === template.id
+                          ? 'border-primary-500 bg-primary-50/30'
                           : 'border-slate-50 bg-white hover:border-slate-100'
                       }`}
                     >
@@ -728,10 +732,10 @@ export default function Campaigns() {
                     return (
                       <button
                         key={template.id}
-                        onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, variables: {}})}
+                        onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: true, templateLanguage: template.language || 'pt_BR', variables: {}})}
                         className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
-                          campaignData.templateId === template.id 
-                            ? 'border-primary-500 bg-primary-50/30' 
+                          campaignData.templateId === template.id
+                            ? 'border-primary-500 bg-primary-50/30'
                             : 'border-slate-50 bg-white hover:border-slate-100'
                         }`}
                       >

@@ -308,7 +308,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { phone, templateName, templateLanguage = 'pt_BR', variables = {}, contact = {} } = req.body;
+    const { phone, templateName, templateLanguage = 'pt_BR', isMetaTemplate, variables = {}, contact = {} } = req.body;
     if (!phone) return res.status(400).json({ success: false, error: 'Telefone é obrigatório' });
     if (!templateName) return res.status(400).json({ success: false, error: 'Template é obrigatório' });
 
@@ -320,7 +320,8 @@ router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
       .select('whatsapp_provider, nome_completo, name')
       .eq('id', userId)
       .maybeSingle();
-    const isMetaOfficial = (profile as any)?.whatsapp_provider === 'meta_official';
+    // isMetaTemplate from request body takes precedence; fallback to profile provider check
+    const isMetaOfficial = isMetaTemplate === true || (profile as any)?.whatsapp_provider === 'meta_official';
     const sender = { nome_completo: (profile as any)?.nome_completo, name: (profile as any)?.name };
 
     // Resolve as variáveis mapeadas no contato de teste (ou no perfil pro caso sender_*)
