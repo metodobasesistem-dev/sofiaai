@@ -67,6 +67,7 @@ export default function Campaigns() {
   const [metaTemplates, setMetaTemplates] = useState<any[]>([]);
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
   const [userProvider, setUserProvider] = useState<string>('evolution');
+  const [senderName, setSenderName] = useState<string>('');
   const [showContactsList, setShowContactsList] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
@@ -164,7 +165,7 @@ export default function Campaigns() {
     if (user) {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('whatsapp_provider, whatsapp_organizacao')
+        .select('whatsapp_provider, whatsapp_organizacao, nome_completo, full_name, name')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -173,6 +174,9 @@ export default function Campaigns() {
       }
 
       setUserProvider(profile?.whatsapp_provider || 'evolution');
+      // Resolve sender name with same priority as getUserProfile normalization
+      const resolvedName = (profile as any)?.nome_completo || (profile as any)?.full_name || (profile as any)?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
+      setSenderName(resolvedName);
       if (profile?.whatsapp_organizacao) {
         setTestPhone(profile.whatsapp_organizacao.replace(/\D/g, ''));
       }
@@ -390,6 +394,7 @@ export default function Campaigns() {
           templateName: campaignData.templateName,
           templateLanguage: campaignData.templateLanguage || 'pt_BR',
           isMetaTemplate: campaignData.isMetaTemplate,
+          senderName,
           variables: campaignData.variables,
           contact: sampleContact
         })
