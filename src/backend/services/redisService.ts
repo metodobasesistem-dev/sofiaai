@@ -164,7 +164,9 @@ export const redisService = {
       await client.rpush(key, message);
       await client.ltrim(key, -50, -1);
       await client.expire(key, 60 * 60 * 24 * 7);
-    } catch (error) {}
+    } catch (error) {
+      console.error('[RedisService] ❌ pushMessage falhou — histórico do Supabase será usado como fallback:', (error as any)?.message);
+    }
   },
 
 

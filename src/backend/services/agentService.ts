@@ -217,10 +217,14 @@ export class AgentService {
       // mais coisas do que arrumavam. O modelo lida bem com 40 msgs e o detectBookingReady
       // abaixo é a camada determinística pra forçar agendamento quando tudo já está dito.
       const HISTORY_LIMIT = 40;
-      let history = await redisService.getHistory(threadId, HISTORY_LIMIT);
-      if (history.length === 0) {
-        history = await this.getHistoryFromSupabase(threadId, HISTORY_LIMIT);
-      }
+      // Busca Redis e Supabase em paralelo e usa a fonte com mais mensagens.
+      // Guarda contra falhas silenciosas de escrita no Redis: se o rpush falha sem
+      // propagar erro, Redis fica com histórico incompleto enquanto o Supabase tem tudo.
+      const [redisHistory, dbHistory] = await Promise.all([
+        redisService.getHistory(threadId, HISTORY_LIMIT),
+        this.getHistoryFromSupabase(threadId, HISTORY_LIMIT),
+      ]);
+      let history = redisHistory.length >= dbHistory.length ? redisHistory : dbHistory;
 
       // 4. Save Inbound Message
       if (!skipPersist) {
