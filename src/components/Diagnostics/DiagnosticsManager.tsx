@@ -32,11 +32,10 @@ interface SemaphoreDetail {
 }
 
 interface ScenarioCurrent {
-  clarity_of_offer?: SemaphoreDetail;
-  perceived_speed?: SemaphoreDetail;
-  whatsapp_contact_ease?: SemaphoreDetail;
+  first_impression?: SemaphoreDetail;
+  contact_friction?: SemaphoreDetail;
   objections_handling?: SemaphoreDetail;
-  overall_conversion?: SemaphoreDetail;
+  [key: string]: any;
 }
 
 interface ActionItem {
@@ -51,13 +50,22 @@ interface ActionPlan {
 }
 
 interface ContentScript {
-  channel: string;
-  objective: string;
-  script: string;
+  title: string;
+  hook: string;
+  body: string;
+  cta: string;
+}
+
+interface ContentStrategy {
+  authority: string;
+  connection: string;
+  objections: string;
 }
 
 interface ExecutionGuide {
   content_scripts?: ContentScript[];
+  content_strategy?: ContentStrategy;
+  next_steps_traffic?: string;
   strategic_directions?: string[];
 }
 
@@ -235,7 +243,11 @@ export default function DiagnosticsManager() {
   const loadDiagnosticForEditing = (diag: Diagnostic) => {
     setEditScenario(diag.scenario_current || {});
     setEditActionPlan(diag.action_plan || { short_term: [], medium_term: [] });
-    setEditExecutionGuide(diag.execution_guide || { content_scripts: [], strategic_directions: [] });
+    setEditExecutionGuide(diag.execution_guide || {
+      content_scripts: [],
+      content_strategy: { authority: '', connection: '', objections: '' },
+      next_steps_traffic: ''
+    });
   };
 
   const handleOpenDiagnostic = (diag: Diagnostic) => {
@@ -1032,11 +1044,9 @@ export default function DiagnosticsManager() {
                     
                     <div className="space-y-4">
                       {Object.entries({
-                        clarity_of_offer: 'Clareza da Oferta',
-                        perceived_speed: 'Velocidade Percebida',
-                        whatsapp_contact_ease: 'Fácil Contato via WhatsApp',
-                        objections_handling: 'Quebra de Objeções',
-                        overall_conversion: 'Prontidão de Conversão Geral'
+                        first_impression: 'Primeira Impressão e Autoridade',
+                        contact_friction: 'Fricção de Contato',
+                        objections_handling: 'Quebra de Objeções'
                       }).map(([key, label]) => {
                         const semaphore = editScenario[key as keyof ScenarioCurrent];
                         if (!semaphore) return null;
@@ -1258,85 +1268,213 @@ export default function DiagnosticsManager() {
                   <div className="hidden print:block print:page-break-before"></div>
 
                   {/* ─────────────────────── */}
-                  {/* SECTION 3: Execution Guide & Scripts */}
+                  {/* SECTION 3: Content Strategy */}
                   {/* ─────────────────────── */}
                   <section className="space-y-4">
                     <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                       <span className="flex items-center justify-center w-5 h-5 rounded-md bg-emerald-500 text-white text-xs font-bold">3</span>
-                      Guia de Execução & Copies Prontas
+                      Estratégia de Conteúdo (Pilares de Atração)
+                    </h3>
+                    
+                    <div className="space-y-4 text-xs">
+                      {/* Pilar de Autoridade */}
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/20 shadow-sm space-y-1.5">
+                        <span className="font-bold text-slate-900 text-sm block">Pilar de Autoridade (Especialista)</span>
+                        {isEditing ? (
+                          <textarea
+                            value={editExecutionGuide.content_strategy?.authority || ''}
+                            onChange={(e) => {
+                              const strategy = { ...(editExecutionGuide.content_strategy || { authority: '', connection: '', objections: '' }) };
+                              strategy.authority = e.target.value;
+                              setEditExecutionGuide({ ...editExecutionGuide, content_strategy: strategy });
+                            }}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs"
+                            rows={3}
+                          />
+                        ) : (
+                          <p className="text-slate-600 leading-relaxed">{editExecutionGuide.content_strategy?.authority || 'Sem estratégia de autoridade definida.'}</p>
+                        )}
+                      </div>
+
+                      {/* Pilar de Conexão */}
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/20 shadow-sm space-y-1.5">
+                        <span className="font-bold text-slate-900 text-sm block">Pilar de Conexão (Bastidores & Confiança)</span>
+                        {isEditing ? (
+                          <textarea
+                            value={editExecutionGuide.content_strategy?.connection || ''}
+                            onChange={(e) => {
+                              const strategy = { ...(editExecutionGuide.content_strategy || { authority: '', connection: '', objections: '' }) };
+                              strategy.connection = e.target.value;
+                              setEditExecutionGuide({ ...editExecutionGuide, content_strategy: strategy });
+                            }}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs"
+                            rows={3}
+                          />
+                        ) : (
+                          <p className="text-slate-600 leading-relaxed">{editExecutionGuide.content_strategy?.connection || 'Sem estratégia de conexão definida.'}</p>
+                        )}
+                      </div>
+
+                      {/* Pilar de Quebra de Objeções */}
+                      <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/20 shadow-sm space-y-1.5">
+                        <span className="font-bold text-slate-900 text-sm block">Pilar de Quebra de Objeções (Educação)</span>
+                        {isEditing ? (
+                          <textarea
+                            value={editExecutionGuide.content_strategy?.objections || ''}
+                            onChange={(e) => {
+                              const strategy = { ...(editExecutionGuide.content_strategy || { authority: '', connection: '', objections: '' }) };
+                              strategy.objections = e.target.value;
+                              setEditExecutionGuide({ ...editExecutionGuide, content_strategy: strategy });
+                            }}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs"
+                            rows={3}
+                          />
+                        ) : (
+                          <p className="text-slate-600 leading-relaxed">{editExecutionGuide.content_strategy?.objections || 'Sem estratégia de quebra de objeções definida.'}</p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Page break element for print */}
+                  <div className="hidden print:block print:page-break-before"></div>
+
+                  {/* ─────────────────────── */}
+                  {/* SECTION 4: Traffic Payoff */}
+                  {/* ─────────────────────── */}
+                  <section className="space-y-4">
+                    <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-md bg-emerald-500 text-white text-xs font-bold">4</span>
+                      O Próximo Passo: Tráfego Pago
+                    </h3>
+                    
+                    <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/20 shadow-sm text-xs">
+                      {isEditing ? (
+                        <textarea
+                          value={editExecutionGuide.next_steps_traffic || ''}
+                          onChange={(e) => {
+                            setEditExecutionGuide({ ...editExecutionGuide, next_steps_traffic: e.target.value });
+                          }}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs"
+                          rows={4}
+                        />
+                      ) : (
+                        <p className="text-slate-600 leading-relaxed font-medium bg-emerald-55/30 p-3 rounded-lg border border-emerald-100/50">
+                          {editExecutionGuide.next_steps_traffic || 'Nenhum direcionamento de tráfego pago gerado.'}
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Page break element for print */}
+                  <div className="hidden print:block print:page-break-before"></div>
+
+                  {/* ─────────────────────── */}
+                  {/* SECTION 5: High Retention Video Scripts */}
+                  {/* ─────────────────────── */}
+                  <section className="space-y-4">
+                    <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+                      <span className="flex items-center justify-center w-5 h-5 rounded-md bg-emerald-500 text-white text-xs font-bold">5</span>
+                      Guia de Execução (Roteiros de Vídeos Curtos)
                     </h3>
 
-                    {/* Scripts content list */}
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {editExecutionGuide.content_scripts?.map((item, idx) => (
-                        <div key={idx} className="border border-slate-100 rounded-2xl p-4 shadow-sm bg-slate-50/10">
-                          <div className="flex items-center justify-between gap-4 mb-2 flex-wrap text-xs">
-                            <span className="font-bold text-slate-800">
-                              Canal: {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={item.channel}
-                                  onChange={(e) => {
-                                    const scripts = [...(editExecutionGuide.content_scripts || [])];
-                                    scripts[idx] = { ...item, channel: e.target.value };
-                                    setEditExecutionGuide({ ...editExecutionGuide, content_scripts: scripts });
-                                  }}
-                                  className="border border-slate-200 rounded px-2 py-0.5 w-36"
-                                />
-                              ) : (
-                                <span className="text-emerald-700">{item.channel}</span>
-                              )}
-                            </span>
-                            <span className="text-slate-400">
-                              Objetivo:{' '}
+                        <div key={idx} className="border border-slate-150 rounded-2xl p-4 shadow-sm bg-slate-50/10 space-y-3">
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 flex-wrap text-xs">
+                            <span className="font-bold text-slate-900 text-sm">
                               {isEditing ? (
                                 <input
                                   type="text"
-                                  value={item.objective}
+                                  placeholder="Título do vídeo"
+                                  value={item.title}
                                   onChange={(e) => {
                                     const scripts = [...(editExecutionGuide.content_scripts || [])];
-                                    scripts[idx] = { ...item, objective: e.target.value };
+                                    scripts[idx] = { ...item, title: e.target.value };
                                     setEditExecutionGuide({ ...editExecutionGuide, content_scripts: scripts });
                                   }}
-                                  className="border border-slate-200 rounded px-2 py-0.5 w-48"
+                                  className="border border-slate-200 rounded px-2.5 py-0.5 w-64"
                                 />
                               ) : (
-                                <span className="font-semibold text-slate-700">{item.objective}</span>
+                                <span>Roteiro {idx + 1}: <span className="text-emerald-700 font-extrabold">{item.title || 'Sem título'}</span></span>
                               )}
                             </span>
+                            {!isEditing && (
+                              <button
+                                onClick={() => handleCopyScript(`*Roteiro: ${item.title}*\n\n1. GANCHO (3s):\n${item.hook}\n\n2. DESENVOLVIMENTO:\n${item.body}\n\n3. CHAMADA DE AÇÃO (CTA):\n${item.cta}`)}
+                                className="text-slate-400 hover:text-slate-900 flex items-center gap-1 hover:bg-slate-100 px-2 py-1 rounded transition-all cursor-pointer"
+                                title="Copiar roteiro formatado"
+                              >
+                                <Copy size={12} /> Copiar
+                              </button>
+                            )}
                           </div>
 
                           {isEditing ? (
-                            <textarea
-                              value={item.script}
-                              onChange={(e) => {
-                                const scripts = [...(editExecutionGuide.content_scripts || [])];
-                                scripts[idx] = { ...item, script: e.target.value };
-                                setEditExecutionGuide({ ...editExecutionGuide, content_scripts: scripts });
-                              }}
-                              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs"
-                              rows={4}
-                            />
+                            <div className="space-y-3 text-xs">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-1">Gancho Forte (Dor/Desejo - primeiros 3s) *</label>
+                                <textarea
+                                  value={item.hook}
+                                  onChange={(e) => {
+                                    const scripts = [...(editExecutionGuide.content_scripts || [])];
+                                    scripts[idx] = { ...item, hook: e.target.value };
+                                    setEditExecutionGuide({ ...editExecutionGuide, content_scripts: scripts });
+                                  }}
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl"
+                                  rows={2}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-1">Desenvolvimento Rápido *</label>
+                                <textarea
+                                  value={item.body}
+                                  onChange={(e) => {
+                                    const scripts = [...(editExecutionGuide.content_scripts || [])];
+                                    scripts[idx] = { ...item, body: e.target.value };
+                                    setEditExecutionGuide({ ...editExecutionGuide, content_scripts: scripts });
+                                  }}
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl"
+                                  rows={3}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 mb-1">Chamada para Ação (CTA WhatsApp) *</label>
+                                <textarea
+                                  value={item.cta}
+                                  onChange={(e) => {
+                                    const scripts = [...(editExecutionGuide.content_scripts || [])];
+                                    scripts[idx] = { ...item, cta: e.target.value };
+                                    setEditExecutionGuide({ ...editExecutionGuide, content_scripts: scripts });
+                                  }}
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl"
+                                  rows={1}
+                                />
+                              </div>
+                            </div>
                           ) : (
-                            <div className="relative group">
-                              <pre className="bg-slate-900 text-slate-100 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap leading-relaxed overflow-x-auto">
-                                {item.script}
-                              </pre>
-                              <button
-                                onClick={() => handleCopyScript(item.script)}
-                                className="absolute top-2 right-2 p-2 bg-slate-800 group-hover:bg-slate-700 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 print:hidden cursor-pointer"
-                                title="Copiar roteiro"
-                              >
-                                <Copy size={13} />
-                              </button>
+                            <div className="grid grid-cols-1 gap-3 text-xs leading-relaxed">
+                              <div className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm">
+                                <span className="block text-[9px] font-bold uppercase tracking-wider text-rose-500 mb-1">Gancho (Dor/Desejo - primeiros 3s)</span>
+                                <p className="text-slate-800 font-semibold">{item.hook}</p>
+                              </div>
+                              <div className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm">
+                                <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Desenvolvimento (Direto ao ponto)</span>
+                                <p className="text-slate-700">{item.body}</p>
+                              </div>
+                              <div className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm border-l-emerald-400 border-l-2">
+                                <span className="block text-[9px] font-bold uppercase tracking-wider text-emerald-600 mb-1">Chamada para Ação (WhatsApp)</span>
+                                <p className="text-slate-800 font-medium">{item.cta}</p>
+                              </div>
                             </div>
                           )}
                         </div>
                       ))}
                     </div>
+                  </section>
 
-                    {/* Strategic directions bullet list */}
-                    {editExecutionGuide.strategic_directions && editExecutionGuide.strategic_directions.length > 0 && (
+                  {/* Strategic directions bullet list */}
+                  {editExecutionGuide.strategic_directions && editExecutionGuide.strategic_directions.length > 0 && (
                       <div className="border-t border-slate-100 pt-4 space-y-2">
                         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Direcionamentos Estratégicos</h4>
                         <ul className="list-disc pl-5 text-xs text-slate-600 space-y-1.5 leading-relaxed">
@@ -1361,7 +1499,6 @@ export default function DiagnosticsManager() {
                         </ul>
                       </div>
                     )}
-                  </section>
                 </div>
               </div>
             )}
