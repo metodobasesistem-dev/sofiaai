@@ -32,6 +32,7 @@ const Finance = lazy(() => import('./components/Finance'));
 const MetaTemplatesAdminPage = lazy(() => import('./components/MetaTemplatesAdminPage'));
 const SofiaConfig = lazy(() => import('./components/Sofia/SofiaConfig'));
 const OnboardingGuide = lazy(() => import('./components/OnboardingGuide'));
+const DiagnosticsManager = lazy(() => import('./components/Diagnostics/DiagnosticsManager'));
 
 const PageFallback = () => (
   <div className="h-[60vh] w-full flex items-center justify-center text-primary-500">
@@ -254,6 +255,9 @@ export default function App() {
         return <Finance />;
       case 'onboarding':
         return <OnboardingGuide user={user} onTabChange={handleTabChange} />;
+      case 'diagnostics':
+        if (role !== 'admin') return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
+        return <DiagnosticsManager />;
 
       default:
         return (

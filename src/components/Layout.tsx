@@ -215,7 +215,7 @@ export default function Layout({
 
   // Auto-expandir os submenus se a aba correspondente estiver ativa
   useEffect(() => {
-    if (['admin', 'sofia_config', 'overview', 'clients', 'meta_templates'].includes(activeTab)) {
+    if (['admin', 'sofia_config', 'overview', 'clients', 'meta_templates', 'diagnostics'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, admin_menu: true }));
     }
     if (['lead_radar'].includes(activeTab)) {
@@ -253,6 +253,7 @@ export default function Layout({
             { id: 'overview', label: 'Visão Geral', icon: <Activity size={13} /> },
             { id: 'clients', label: 'Carteira', icon: <Star size={13} /> },
             { id: 'meta_templates', label: 'Templates', icon: <FileText size={13} className="text-violet-500" /> },
+            { id: 'diagnostics', label: 'Diagnósticos', icon: <Rocket size={13} className="text-emerald-500" /> },
           ]
         }
       ]

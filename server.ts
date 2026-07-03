@@ -65,6 +65,7 @@ import whatsappRoutes from './src/backend/routes/whatsappRoutes.js';
 import whatsappWebhookRoutes from './src/backend/routes/whatsappWebhookRoutes.js';
 import metaWebhookRoutes from './src/backend/routes/metaWebhookRoutes.js';
 import metaApiRoutes from './src/backend/routes/metaApiRoutes.js';
+import diagnosticsRoutes from './src/backend/routes/diagnosticsRoutes.js';
 import { rPing } from './src/backend/lib/redisClient.js';
 import leoRoutes from './src/backend/routes/leoRoutes.js';
 import sofiaRoutes from './src/backend/routes/sofiaRoutes.js';
@@ -313,6 +314,7 @@ async function startServer() {
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
     app.use('/api/v2/admin', adminLimiter, adminApiRoutes);
+    app.use('/api/v2/admin/diagnostics', adminLimiter, requireAuth as any, requireAdmin as any, diagnosticsRoutes);
     app.use('/api/v2/radar', apiLimiter, radarRoutes);
     app.use('/api/v2/campaigns', apiLimiter, campaignRoutes);
     app.use('/api/v2/push', pushRoutes);
