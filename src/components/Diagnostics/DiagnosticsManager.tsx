@@ -78,6 +78,7 @@ interface Diagnostic {
   instagram_link?: string;
   website_link?: string;
   gmb_link?: string;
+  additional_info?: string;
   screenshot_urls?: string[];
   status: 'pending' | 'processing' | 'completed' | 'failed';
   error_message?: string;
@@ -103,6 +104,7 @@ export default function DiagnosticsManager() {
   const [instagramLink, setInstagramLink] = useState('');
   const [websiteLink, setWebsiteLink] = useState('');
   const [gmbLink, setGmbLink] = useState('');
+  const [additionalInfo, setAdditionalInfo] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
   
@@ -307,6 +309,7 @@ export default function DiagnosticsManager() {
       formData.append('instagramLink', instagramLink);
       formData.append('websiteLink', websiteLink);
       formData.append('gmbLink', gmbLink);
+      formData.append('additionalInfo', additionalInfo);
       
       selectedFiles.forEach(file => {
         formData.append('screenshots', file);
@@ -347,6 +350,7 @@ export default function DiagnosticsManager() {
       setInstagramLink('');
       setWebsiteLink('');
       setGmbLink('');
+      setAdditionalInfo('');
       setSelectedFiles([]);
       setFilePreviews([]);
       setCreationStatus('idle');
@@ -380,6 +384,7 @@ export default function DiagnosticsManager() {
           instagramLink: activeDiagnostic.instagram_link,
           websiteLink: activeDiagnostic.website_link,
           gmbLink: activeDiagnostic.gmb_link,
+          additionalInfo: activeDiagnostic.additional_info,
           scenario_current: editScenario,
           action_plan: editActionPlan,
           execution_guide: editExecutionGuide
@@ -752,6 +757,25 @@ export default function DiagnosticsManager() {
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Additional Information Container */}
+              <div className="border-t border-slate-100 pt-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-900">Informações Adicionais</h3>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs text-slate-500 font-medium leading-relaxed">
+                    Detalhes extras sobre o cliente, particularidades do negócio ou observações específicas que deseja destacar para orientar a análise da IA.
+                  </label>
+                  <textarea
+                    placeholder="Ex: Cliente quer focar em atrair leads corporativos de alto padrão. O site principal está lento e instável..."
+                    value={additionalInfo}
+                    onChange={(e) => setAdditionalInfo(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-xs transition-all font-sans"
+                    rows={3}
+                  />
                 </div>
               </div>
 

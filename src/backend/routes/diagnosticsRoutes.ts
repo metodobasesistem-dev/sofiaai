@@ -131,7 +131,7 @@ router.get('/:id', requireAuth as any, requireAdmin as any, async (req: Authenti
 
 // 3. POST / - Create a new diagnostic using OpenAI Vision
 router.post('/', requireAuth as any, requireAdmin as any, upload.array('screenshots', 5), async (req: AuthenticatedRequest, res: Response) => {
-  const { clientName, niche, mainProduct, mainObjections, instagramLink, websiteLink, gmbLink } = req.body;
+  const { clientName, niche, mainProduct, mainObjections, instagramLink, websiteLink, gmbLink, additionalInfo } = req.body;
   const files = req.files as Express.Multer.File[] || [];
   const userId = req.userId!;
 
@@ -153,6 +153,7 @@ router.post('/', requireAuth as any, requireAdmin as any, upload.array('screensh
         instagram_link: instagramLink || null,
         website_link: websiteLink || null,
         gmb_link: gmbLink || null,
+        additional_info: additionalInfo || null,
         status: 'processing'
       })
       .select()
@@ -211,6 +212,7 @@ Objeções Frequentes dos Clientes: ${mainObjections || 'Não informado'}
 Instagram: ${instagramLink || 'Não informado'}
 Site/Landing Page: ${websiteLink || 'Não informado'}
 Google Meu Negócio: ${gmbLink || 'Não informado'}
+${additionalInfo ? `Informações Adicionais (Instruções Extras): ${additionalInfo}` : ''}
 
 Analise as imagens anexadas (prints de telas da estrutura digital deste cliente) com foco em conversão de Growth.
 Gere o relatório estruturado em JSON conforme as regras do sistema.`;
@@ -278,7 +280,7 @@ Gere o relatório estruturado em JSON conforme as regras do sistema.`;
 // 4. PUT /:id - Update diagnostic details (Editable Report)
 router.put('/:id', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-  const { clientName, niche, mainProduct, mainObjections, instagramLink, websiteLink, gmbLink, scenario_current, action_plan, execution_guide } = req.body;
+  const { clientName, niche, mainProduct, mainObjections, instagramLink, websiteLink, gmbLink, additionalInfo, scenario_current, action_plan, execution_guide } = req.body;
 
   try {
     const { data, error } = await supabase
@@ -291,6 +293,7 @@ router.put('/:id', requireAuth as any, requireAdmin as any, async (req: Authenti
         instagram_link: instagramLink,
         website_link: websiteLink,
         gmb_link: gmbLink,
+        additional_info: additionalInfo,
         scenario_current,
         action_plan,
         execution_guide,
