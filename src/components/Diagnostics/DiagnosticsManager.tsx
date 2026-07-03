@@ -145,6 +145,50 @@ export default function DiagnosticsManager() {
     fetchDiagnostics();
   }, []);
 
+  // Listen for paste events to capture screenshots directly from clipboard
+  useEffect(() => {
+    if (view !== 'create') return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      // Ignore if user is typing in a text field, but only if they are not pasting in a non-text area
+      // Actually, we want to allow paste globally in the form, as they might have just snapped a screenshot
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const newFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            const ext = file.type.split('/')[1] || 'png';
+            const pastedFile = new File([file], `screenshot_pasted_${Date.now()}_${i}.${ext}`, { type: file.type });
+            
+            if (pastedFile.size <= 10 * 1024 * 1024) {
+              newFiles.push(pastedFile);
+            } else {
+              toast.error(`A imagem colada excede o limite de 10MB.`);
+            }
+          }
+        }
+      }
+
+      if (newFiles.length > 0) {
+        setSelectedFiles(prev => {
+          const combined = [...prev, ...newFiles].slice(0, 5);
+          setFilePreviews(combined.map(f => URL.createObjectURL(f)));
+          return combined;
+        });
+        toast.success(`${newFiles.length} imagem(ns) colada(s) da área de transferência!`);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [view]);
+
   // Poll processing diagnostics until they complete
   useEffect(() => {
     const processingItems = diagnostics.filter(d => d.status === 'processing');
@@ -659,8 +703,8 @@ export default function DiagnosticsManager() {
                     disabled={selectedFiles.length >= 5}
                   />
                   <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                  <p className="text-sm font-semibold text-slate-700">Arraste ou clique para selecionar prints</p>
-                  <p className="text-xs text-slate-400 mt-1">Anexe imagens da bio, páginas ou anúncios (máx. 10MB por arquivo)</p>
+                  <p className="text-sm font-semibold text-slate-700">Arraste, clique ou cole (Ctrl + V) os prints</p>
+                  <p className="text-xs text-slate-400 mt-1">Anexe imagens da bio, páginas ou anúncios (máx. 5 imagens, até 10MB cada)</p>
                 </div>
 
                 {filePreviews.length > 0 && (
