@@ -446,6 +446,63 @@ export default function DiagnosticsManager() {
   return (
     <div className="w-full h-full min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans overflow-x-hidden">
       
+      {/* Estilos para impressão que resetam o layout do app do Sofia e garantem paginação sem cortes */}
+      <style>{`
+        @media print {
+          /* Esconder menus laterais, cabeçalhos, botões de ação e modais do app */
+          aside,
+          header,
+          nav,
+          button,
+          .print-hidden,
+          .print\\:hidden,
+          .print-exclude {
+            display: none !important;
+          }
+
+          /* Resetar overflows escondidos e alturas fixas de todo o app para permitir quebra de página */
+          body, html, #root, #root > div, main, .w-full, .h-full, .flex {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+          }
+
+          /* Garantir que o container do relatório ocupe toda a página naturalmente */
+          .printable-report {
+            display: block !important;
+            position: relative !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 20px !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+            overflow: visible !important;
+          }
+
+          /* Quebras de linha e pre-wrap legíveis */
+          pre, code {
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+          }
+
+          /* Evitar quebras de página no meio de critérios do semáforo */
+          section, .border {
+            page-break-inside: avoid !important;
+          }
+
+          /* Quebra de página explícita antes das seções */
+          .page-break-before {
+            page-break-before: always !important;
+          }
+        }
+      `}</style>
+      
       {/* ─── HEADER ─── */}
       <header className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
@@ -941,8 +998,7 @@ export default function DiagnosticsManager() {
                 </div>
 
                 {/* Right Side: Main audit sections (Scenario, Action Plan, Execution Scripts) */}
-                {/* Note: This block has the CSS printing setup embedded. We use print:fixed print:inset-0 for a full screen print formatting */}
-                <div className="lg:col-span-2 space-y-6 bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm print:fixed print:inset-0 print:z-50 print:bg-white print:overflow-visible print:p-8">
+                <div className="lg:col-span-2 space-y-6 bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm printable-report">
                   
                   {/* PRINT HEADER ONLY (hidden in regular UI, displays on printing) */}
                   <div className="hidden print:flex flex-col border-b-2 border-slate-900 pb-6 mb-8">
