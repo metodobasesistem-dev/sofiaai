@@ -119,6 +119,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [sendModalTemplate, setSendModalTemplate] = useState('');
   const [sendModalTemplates, setSendModalTemplates] = useState<MetaTemplate[]>([]);
   const [loadingSendTemplates, setLoadingSendTemplates] = useState(false);
+  const [sendMode, setSendMode] = useState<'text' | 'template'>('text');
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -348,13 +349,20 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     setSendModalLead(lead);
     setSendModalTemplate('');
     setCustomMessage('');
-    if (globalSettings.whatsapp_provider === 'meta_official') {
-      setLoadingSendTemplates(true);
-      try {
-        const templates = await listMetaTemplates('APPROVED');
-        setSendModalTemplates(templates);
-      } catch { setSendModalTemplates([]); }
-      finally { setLoadingSendTemplates(false); }
+    setLoadingSendTemplates(true);
+    try {
+      const templates = await listMetaTemplates('APPROVED');
+      setSendModalTemplates(templates);
+      if (globalSettings.whatsapp_provider === 'meta_official' && templates.length > 0) {
+        setSendMode('template');
+      } else {
+        setSendMode('text');
+      }
+    } catch {
+      setSendModalTemplates([]);
+      setSendMode('text');
+    } finally {
+      setLoadingSendTemplates(false);
     }
   };
 
@@ -363,7 +371,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     setSendingLeadId(sendModalLead.id);
     try {
       const body: any = {};
-      if (globalSettings.whatsapp_provider === 'meta_official') {
+      if (sendMode === 'template') {
         if (sendModalTemplate) {
           body.templateName = sendModalTemplate;
           body.templateLanguage = 'pt_BR';
@@ -3098,9 +3106,41 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
               </div>
 
               <div className="p-8 flex flex-col gap-5">
-                {globalSettings.whatsapp_provider === 'meta_official' ? (
+                {/* Seletor de Tipo de Envio */}
+                {sendModalTemplates.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tipo de Envio</label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                      <button
+                        type="button"
+                        onClick={() => setSendMode('text')}
+                        className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                          sendMode === 'text'
+                            ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        📝 Mensagem de Texto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSendMode('template')}
+                        className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                          sendMode === 'template'
+                            ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        🤖 Template Meta
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Conteúdo Dinâmico */}
+                {sendMode === 'template' ? (
                   <div className="flex flex-col gap-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Template Aprovado pela Meta</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Template Aprovado pela Meta</label>
                     {loadingSendTemplates ? (
                       <div className="flex items-center gap-2 text-xs text-slate-400">
                         <div className="w-4 h-4 border-2 border-primary-300 border-t-transparent rounded-full animate-spin" />
@@ -3112,7 +3152,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                       <select
                         value={sendModalTemplate}
                         onChange={e => setSendModalTemplate(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:border-primary-300"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 outline-none focus:border-primary-300"
                       >
                         <option value="">Selecione um template...</option>
                         {sendModalTemplates.map(t => (
@@ -3123,7 +3163,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Mensagem a enviar</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Mensagem a enviar</label>
                     <textarea
                       value={customMessage}
                       onChange={e => setCustomMessage(e.target.value)}
@@ -3143,7 +3183,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                 </button>
                 <button
                   onClick={sendToLead}
-                  disabled={sendingLeadId === sendModalLead.id || (globalSettings.whatsapp_provider === 'meta_official' && !sendModalTemplate) || (globalSettings.whatsapp_provider !== 'meta_official' && !customMessage.trim())}
+                  disabled={
+                    sendingLeadId === sendModalLead.id ||
+                    (sendMode === 'template' && !sendModalTemplate) ||
+                    (sendMode === 'text' && !customMessage.trim())
+                  }
                   className="flex-1 py-3.5 bg-[#25D366] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[#128C7E] shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {sendingLeadId === sendModalLead.id ? (
