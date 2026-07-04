@@ -3093,9 +3093,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-100">
+              <div className="p-6 border-b border-slate-100 flex-shrink-0">
                 <div className="flex items-center gap-3 mb-1">
                   <div className="w-10 h-10 rounded-2xl bg-[#25D366]/10 flex items-center justify-center">
                     <MessageSquare size={18} className="text-[#25D366]" />
@@ -3107,7 +3107,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                 </div>
               </div>
 
-              <div className="p-8 flex flex-col gap-5">
+              <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4 border-b border-slate-50">
                 {/* Seletor de Tipo de Envio */}
                 {sendModalTemplates.length > 0 && (
                   <div className="flex flex-col gap-2">
@@ -3243,13 +3243,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                       value={customMessage}
                       onChange={e => setCustomMessage(e.target.value)}
                       placeholder="Escreva a mensagem personalizada aqui..."
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 outline-none focus:border-primary-500 transition-all resize-none h-32"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 outline-none focus:border-primary-500 transition-all resize-none h-24"
                     />
                   </div>
                 )}
               </div>
 
-              <div className="px-8 pb-8 flex gap-3">
+              <div className="p-6 bg-slate-50/50 flex gap-3 flex-shrink-0">
                 <button
                   onClick={() => setSendModalLead(null)}
                   className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
