@@ -95,6 +95,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [radarCity, setRadarCity] = useState('');
   const [radarContext, setRadarContext] = useState('');
   const [radarLimit, setRadarLimit] = useState(10);
+  const [radarSource, setRadarSource] = useState<'google' | 'instagram'>('google');
   const [radarLeads, setRadarLeads] = useState<any[]>([]);
   const [radarStatusFilter, setRadarStatusFilter] = useState<string>('todos');
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -397,7 +398,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     try {
       const response = await standardFetch('/api/v2/radar/leads/scan', {
         method: 'POST',
-        body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext })
+        body: JSON.stringify({ niche: radarNiche, city: radarCity, limit: radarLimit, context: radarContext, source: radarSource })
       }, 15000);
       const res = await response.json();
       if (!res.success) { toast.error(res.error || 'Erro ao iniciar busca'); setIsScanning(false); return; }
@@ -982,6 +983,33 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                     {radarSearchOpen && <div className="px-6 pb-6 space-y-4 border-t border-slate-50 pt-4">
                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Origem da Busca</label>
+                            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                              <button
+                                type="button"
+                                onClick={() => setRadarSource('google')}
+                                className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                                  radarSource === 'google'
+                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                                    : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                              >
+                                🗺️ Google Maps
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRadarSource('instagram')}
+                                className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                                  radarSource === 'instagram'
+                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                                    : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                              >
+                                📸 Instagram
+                              </button>
+                            </div>
+                         </div>
+                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nicho / Categoria</label>
                             <input
                               type="text"
@@ -1152,7 +1180,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                               {isScanning && (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[9px] font-black uppercase tracking-wider animate-pulse">
                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                                  Varrendo Google Maps
+                                  {radarSource === 'instagram' ? 'Varrendo Instagram' : 'Varrendo Google Maps'}
                                 </span>
                               )}
                             </div>
@@ -1332,13 +1360,21 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                          <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-slate-700 hover:text-[#25D366] transition-colors flex items-center gap-1">
                                            <Smartphone size={10} /> {lead.phone || 'Sem Telefone'}
                                          </a>
-                                         <div className="flex items-center gap-1">
-                                            {[1,2,3,4,5].map(i => (
-                                              <Star key={i} size={9} className={i <= Math.round(lead.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 fill-slate-200'} />
-                                            ))}
-                                            <span className="text-[10px] font-black text-slate-500 ml-1">{lead.rating}</span>
-                                         </div>
-                                         <span className="text-[10px] text-slate-400">{lead.user_rating_count} avaliações</span>
+                                         {lead.place_id?.startsWith('ig_') ? (
+                                           <span className="text-[10px] text-pink-500 font-bold flex items-center gap-1">
+                                             📸 Perfil Instagram
+                                           </span>
+                                         ) : (
+                                           <>
+                                             <div className="flex items-center gap-1">
+                                                {[1,2,3,4,5].map(i => (
+                                                  <Star key={i} size={9} className={i <= Math.round(lead.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 fill-slate-200'} />
+                                                ))}
+                                                <span className="text-[10px] font-black text-slate-500 ml-1">{lead.rating}</span>
+                                             </div>
+                                             <span className="text-[10px] text-slate-400">{lead.user_rating_count} avaliações</span>
+                                           </>
+                                         )}
                                          {lead.website && (
                                            <a href={lead.website} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:text-primary-600 flex items-center gap-0.5 truncate max-w-[140px]">
                                              <Globe size={9} /> Site
