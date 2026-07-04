@@ -321,4 +321,27 @@ export class EvolutionApiService {
       return false;
     }
   }
+
+  static async whatsappExists(instanceName: string, number: string): Promise<boolean> {
+    const api = getApi();
+    try {
+      const cleanNumber = number.replace(/\D/g, '');
+      const { data } = await api.post(`/chat/whatsappExists/${instanceName}`, {
+        numbers: [cleanNumber]
+      });
+      if (Array.isArray(data) && data[0]) {
+        return data[0].exists === true;
+      }
+      if (data && typeof data === 'object') {
+        if (Array.isArray(data)) {
+          return data[0]?.exists === true || data[0]?.exists === 'exists';
+        }
+        return (data as any).exists === true || (data as any).exists === 'exists';
+      }
+      return false;
+    } catch (error: any) {
+      console.warn(`[EvolutionAPI] whatsappExists failed for ${number}:`, error.response?.data || error.message);
+      return true; // Fallback tolerante em caso de erro da API ou falta de suporte
+    }
+  }
 }

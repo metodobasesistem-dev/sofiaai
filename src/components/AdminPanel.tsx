@@ -96,6 +96,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [radarContext, setRadarContext] = useState('');
   const [radarLimit, setRadarLimit] = useState(10);
   const [radarSource, setRadarSource] = useState<'google' | 'instagram'>('google');
+  const [validatingLeadId, setValidatingLeadId] = useState<string | null>(null);
   const [radarLeads, setRadarLeads] = useState<any[]>([]);
   const [radarStatusFilter, setRadarStatusFilter] = useState<string>('todos');
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -641,6 +642,32 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       }
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  const validateWhatsApp = async (leadId: string) => {
+    setValidatingLeadId(leadId);
+    try {
+      const response = await standardFetch(`/api/v2/radar/leads/${leadId}/validate-phone`, {
+        method: 'POST'
+      });
+      const res = await response.json();
+      if (res.success) {
+        if (res.exists) {
+          toast.success(res.message || 'WhatsApp ativo!');
+        } else {
+          toast.error(res.message || 'Número não possui WhatsApp.');
+        }
+        setRadarLeads(prev => prev.map(lead => 
+          lead.id === leadId ? { ...lead, whatsapp_exists: res.exists } : lead
+        ));
+      } else {
+        toast.error(res.error || 'Erro ao validar WhatsApp');
+      }
+    } catch (err: any) {
+      toast.error('Erro na conexão para validação');
+    } finally {
+      setValidatingLeadId(null);
     }
   };
 
@@ -1288,7 +1315,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                   <th className="px-4 py-4">Estabelecimento</th>
                                   <th className="px-4 py-4">Contato & Rating</th>
                                   <th className="px-4 py-4 text-center">Score</th>
-                                  <th className="px-4 py-4">Abordagem IA</th>
+                                  <th className="px-4 py-4 text-center">Ações de Contato</th>
                                   <th className="px-4 py-4">Status</th>
                                   <th className="px-4 py-4 text-right">Ações</th>
                                 </tr>
@@ -1411,34 +1438,38 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                       </div>
                                    </td>
 
-                                   {/* Abordagem IA */}
+                                   {/* Ações de Contato */}
                                    <td className="px-4 py-4">
-                                      <div className="max-w-[240px] flex flex-col gap-2">
-                                         <p className="text-[10px] text-slate-500 font-medium italic line-clamp-2">
-                                            {lead.review_summary || 'Resumo indisponível'}
-                                         </p>
+                                      <div className="flex flex-col gap-2 items-center justify-center min-w-[180px]">
+                                         {/* Validação de WhatsApp */}
+                                         {lead.whatsapp_exists === true ? (
+                                           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider w-full justify-center">
+                                             ✅ WhatsApp Ativo
+                                           </span>
+                                         ) : lead.whatsapp_exists === false ? (
+                                           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-[10px] font-black uppercase tracking-wider w-full justify-center">
+                                             ❌ Sem WhatsApp
+                                           </span>
+                                         ) : (
+                                           <button
+                                             onClick={() => validateWhatsApp(lead.id)}
+                                             disabled={validatingLeadId === lead.id}
+                                             className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold transition-all border border-slate-200/60 disabled:opacity-50"
+                                           >
+                                             🔍 {validatingLeadId === lead.id ? 'Validando...' : 'Validar WhatsApp'}
+                                           </button>
+                                         )}
+
+                                         {/* Enviar Mensagem */}
                                          {lead.phone && (
                                             <button
                                               onClick={() => openSendModal(lead)}
                                               disabled={sendingLeadId === lead.id}
-                                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#128C7E] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#128C7E] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                               <MessageSquare size={10} /> {sendingLeadId === lead.id ? 'Enviando...' : 'Enviar Abordagem'}
+                                               <MessageSquare size={11} /> {sendingLeadId === lead.id ? 'Enviando...' : 'Enviar Mensagem'}
                                             </button>
                                          )}
-                                         {/* Notas manuais */}
-                                         <textarea
-                                           autoComplete="off"
-                                           placeholder="Observações..."
-                                           rows={2}
-                                           className="w-full px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] text-slate-600 outline-none focus:border-primary-300 resize-none transition-all"
-                                           defaultValue={lead.notes || ''}
-                                           onBlur={(e) => {
-                                             if (e.target.value !== (lead.notes || '')) {
-                                               updateLeadNotes(lead.id, e.target.value);
-                                             }
-                                           }}
-                                         />
                                       </div>
                                    </td>
 

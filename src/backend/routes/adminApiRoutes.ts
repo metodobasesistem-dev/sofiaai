@@ -13,6 +13,7 @@ import { parseProviderError } from '../providers/providerErrors.js';
 import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
 import { generateAIResponse } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+import { EvolutionApiService } from '../services/evolutionApiService.js';
 
 const router = Router();
 
@@ -1151,6 +1152,50 @@ router.delete('/leads/:id', async (req: AuthenticatedRequest, res: Response) => 
     if (error) throw error;
     res.json({ success: true });
   } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v2/admin/leads/:id/validate-phone - Validar número no WhatsApp
+router.post('/leads/:id/validate-phone', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const adminId = req.userId;
+    const { data: lead } = await supabase.from('leads_radar').select('*').eq('id', req.params.id).single();
+    if (!lead) return res.status(404).json({ success: false, error: 'Lead não encontrado' });
+    if (!lead.phone) return res.status(400).json({ success: false, error: 'Lead sem telefone' });
+
+    const provider = await WhatsAppProviderFactory.getProvider(adminId);
+    if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão WhatsApp ativa' });
+
+    const instanceName = `wppai_${adminId.substring(0, 8)}`;
+    const statusInfo = await provider.getStatus(instanceName);
+    if (statusInfo.status !== 'connected') {
+      return res.status(400).json({ success: false, error: 'WhatsApp não está conectado' });
+    }
+
+    const cleanNumber = lead.phone.replace(/\D/g, '');
+    const isEvolution = provider.constructor.name.includes('Evolution');
+
+    let exists = true;
+    if (isEvolution) {
+      exists = await EvolutionApiService.whatsappExists(instanceName, cleanNumber);
+    }
+
+    // Persistir o resultado no banco de dados
+    const { error: updateErr } = await supabase
+      .from('leads_radar')
+      .update({ whatsapp_exists: exists, updated_at: new Date().toISOString() })
+      .eq('id', lead.id);
+
+    if (updateErr) throw updateErr;
+
+    if (exists) {
+      res.json({ success: true, exists: true, message: 'Número de WhatsApp ativo!' });
+    } else {
+      res.json({ success: true, exists: false, message: 'Número NÃO possui WhatsApp ativo!' });
+    }
+  } catch (err: any) {
+    console.error('[LeadRadar] Erro ao validar telefone:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
