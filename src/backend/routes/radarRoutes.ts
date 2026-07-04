@@ -604,15 +604,20 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
     if (templateName && provider.sendTemplate) {
       const senderName = await fetchSenderFirstName(userId!);
 
-      // Em vez de injetar a mensagem gerada pela IA, enviamos o texto exato do template
-      // mapeando: {{1}} = nome do estabelecimento, {{2}} = nome do remetente
+      let parameters = [];
+      if (req.body.templateParams && Array.isArray(req.body.templateParams)) {
+        parameters = req.body.templateParams.map((val: string) => ({ type: 'text', text: val }));
+      } else {
+        parameters = [
+          { type: 'text', text: lead.contact_name || shortenEstablishmentName(lead.name || 'Cliente') },
+          { type: 'text', text: senderName }
+        ];
+      }
+
       const components = [
         {
           type: 'body',
-          parameters: [
-            { type: 'text', text: lead.contact_name || shortenEstablishmentName(lead.name || 'Cliente') },
-            { type: 'text', text: senderName }
-          ]
+          parameters: parameters
         }
       ];
       const bodyText = await fetchTemplateBodyText(userId!, templateName);

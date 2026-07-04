@@ -120,6 +120,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [sendModalTemplates, setSendModalTemplates] = useState<MetaTemplate[]>([]);
   const [loadingSendTemplates, setLoadingSendTemplates] = useState(false);
   const [sendMode, setSendMode] = useState<'text' | 'template'>('text');
+  const [templateParams, setTemplateParams] = useState<string[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSessions: 0,
@@ -349,6 +350,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     setSendModalLead(lead);
     setSendModalTemplate('');
     setCustomMessage('');
+    setTemplateParams([]);
     setLoadingSendTemplates(true);
     try {
       const templates = await listMetaTemplates('APPROVED');
@@ -375,6 +377,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         if (sendModalTemplate) {
           body.templateName = sendModalTemplate;
           body.templateLanguage = 'pt_BR';
+          body.templateParams = templateParams;
         }
       } else {
         body.customMessage = customMessage;
@@ -793,6 +796,17 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   }, [initialView]);
 
   useEffect(() => {
+    if (user?.id) {
+      supabase.from('profiles').select('name, nome_completo').eq('id', user.id).maybeSingle()
+        .then(({ data }) => {
+          const oauthName = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
+          const fullName = (data as any)?.nome_completo || (data as any)?.name || oauthName || null;
+          setSenderName(fullName ? fullName.trim().split(/\s+/)[0] : null);
+        });
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
     if (isAutopilotModalOpen) {
       setLoadingTemplates(true);
       listMetaTemplates('APPROVED')
@@ -802,25 +816,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
-      // Busca o nome real do remetente para exibir no preview.
-      // Prioridade: nome_completo (Configurações) → name (profiles) → user_metadata (Google OAuth)
-      if (user?.id) {
-        supabase.from('profiles').select('name, nome_completo').eq('id', user.id).maybeSingle()
-          .then(({ data }) => {
-            // Fallback final: metadados do Google OAuth já disponíveis no objeto user
-            const oauthName = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
-            const fullName = (data as any)?.nome_completo || (data as any)?.name || oauthName || null;
-            setSenderName(fullName ? fullName.trim().split(/\s+/)[0] : null);
-          });
-      }
     } else {
       setMetaTemplates([]);
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
-      setSenderName(null);
     }
-  }, [isAutopilotModalOpen, user?.id]);
+  }, [isAutopilotModalOpen]);
 
   // Carrega credenciais Meta quando seleciona usuário. Lê do profile (novas colunas)
   // com fallback para tenant_secrets (legacy) caso o admin ainda não tenha migrado.
@@ -3139,26 +3141,99 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                 {/* Conteúdo Dinâmico */}
                 {sendMode === 'template' ? (
-                  <div className="flex flex-col gap-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Template Aprovado pela Meta</label>
-                    {loadingSendTemplates ? (
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <div className="w-4 h-4 border-2 border-primary-300 border-t-transparent rounded-full animate-spin" />
-                        Carregando templates...
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Template Aprovado pela Meta</label>
+                      {loadingSendTemplates ? (
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <div className="w-4 h-4 border-2 border-primary-300 border-t-transparent rounded-full animate-spin" />
+                          Carregando templates...
+                        </div>
+                      ) : sendModalTemplates.length === 0 ? (
+                        <p className="text-xs text-red-400">Nenhum template aprovado encontrado.</p>
+                      ) : (
+                        <select
+                          value={sendModalTemplate}
+                          onChange={e => {
+                            const tName = e.target.value;
+                            setSendModalTemplate(tName);
+                            
+                            // Computar parâmetros padrão
+                            const t = sendModalTemplates.find(x => x.name === tName);
+                            const body = t?.components.find((c: any) => c.type === 'BODY')?.text || '';
+                            const matches = [...body.matchAll(/\{\{(\d+)\}\}/g)];
+                            const indexes = matches.map(m => parseInt(m[1], 10));
+                            const maxIndex = indexes.length > 0 ? Math.max(...indexes) : 0;
+                            
+                            const defaults = Array(maxIndex).fill('');
+                            if (maxIndex >= 1) {
+                              const rawLeadName = sendModalLead?.name || '';
+                              defaults[0] = sendModalLead?.contact_name || rawLeadName.split(/\s*[|–-]\s*/)[0].trim().substring(0, 40) || rawLeadName;
+                            }
+                            if (maxIndex >= 2) {
+                              defaults[1] = senderName || '';
+                            }
+                            setTemplateParams(defaults);
+                          }}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 outline-none focus:border-primary-300 font-bold"
+                        >
+                          <option value="">Selecione um template...</option>
+                          {sendModalTemplates.map(t => (
+                            <option key={t.name} value={t.name}>{t.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Inputs de variáveis do template */}
+                    {sendModalTemplate && templateParams.length > 0 && (
+                      <div className="flex flex-col gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Variáveis do Template</span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {templateParams.map((val, idx) => (
+                            <div key={idx} className="flex flex-col gap-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider px-1">
+                                Variável {'{{' + (idx + 1) + '}}'}
+                              </label>
+                              <input
+                                type="text"
+                                value={val}
+                                onChange={e => {
+                                  const newVal = e.target.value;
+                                  setTemplateParams(prev => {
+                                    const next = [...prev];
+                                    next[idx] = newVal;
+                                    return next;
+                                  });
+                                }}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:border-primary-400 font-bold shadow-sm"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ) : sendModalTemplates.length === 0 ? (
-                      <p className="text-xs text-red-400">Nenhum template aprovado encontrado.</p>
-                    ) : (
-                      <select
-                        value={sendModalTemplate}
-                        onChange={e => setSendModalTemplate(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 outline-none focus:border-primary-300"
-                      >
-                        <option value="">Selecione um template...</option>
-                        {sendModalTemplates.map(t => (
-                          <option key={t.name} value={t.name}>{t.name}</option>
-                        ))}
-                      </select>
+                    )}
+
+                    {/* Pré-visualização do Template */}
+                    {sendModalTemplate && (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Pré-visualização da Mensagem</label>
+                        <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                          {(() => {
+                            const t = sendModalTemplates.find(x => x.name === sendModalTemplate);
+                            if (!t) return <span className="text-slate-400 italic">Template não encontrado...</span>;
+                            const body = t.components.find((c: any) => c.type === 'BODY')?.text || '';
+                            if (!body) return <span className="text-slate-400 italic">Template sem corpo de texto.</span>;
+                            
+                            let preview = body;
+                            templateParams.forEach((val, idx) => {
+                              const placeholder = new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g');
+                              preview = preview.replace(placeholder, val || `{{${idx + 1}}}`);
+                            });
+                            return preview;
+                          })()}
+                        </div>
+                      </div>
                     )}
                   </div>
                 ) : (

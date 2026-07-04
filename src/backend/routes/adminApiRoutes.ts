@@ -1122,10 +1122,18 @@ router.post('/leads/:id/send', async (req: AuthenticatedRequest, res: Response) 
 
     // 4. Envia via template (Meta) ou texto (Evolution/UazAPI)
     if (templateName && provider.sendTemplate) {
-      const components = lead.personalized_message ? [{
-        type: 'body',
-        parameters: [{ type: 'text', text: lead.personalized_message }]
-      }] : [];
+      let components = [];
+      if (req.body.templateParams && Array.isArray(req.body.templateParams)) {
+        components = [{
+          type: 'body',
+          parameters: req.body.templateParams.map((val: string) => ({ type: 'text', text: val }))
+        }];
+      } else {
+        components = lead.personalized_message ? [{
+          type: 'body',
+          parameters: [{ type: 'text', text: lead.personalized_message }]
+        }] : [];
+      }
       await provider.sendTemplate(adminId, jid, templateName, templateLanguage, components);
     } else {
       const msg = customMessage || lead.personalized_message;
