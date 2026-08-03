@@ -157,13 +157,10 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
           setPairingCode(null);
           setWebhookOk(data.webhookOk !== false);
           stopPolling();
-        } else if (data.status === 'connecting' && data.qr) {
-          // Só mostra o spinner de "conectando" se tiver um QR Code chegando
-          updateStatus('waiting', data.qr);
-          startQrPolling(uid);
         } else {
-          // 'connecting' sem QR ou 'disconnected' → mostra o botão de Gerar QR Code
-          // Só atualiza se não estivermos em processo de conexão iniciado pelo usuário
+          // 'connecting' ou 'disconnected' → backend já limpou QR expirado.
+          // Mostramos o botão "Gerar QR Code", mas APENAS se o usuário não
+          // tiver iniciado uma conexão manualmente (para não sobrescrever o estado atual).
           if (statusRef.current !== 'connecting' && statusRef.current !== 'waiting') {
             updateStatus('disconnected', null);
           }
@@ -173,12 +170,12 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
       }
     };
 
+    // Checa apenas uma vez ao montar — depois, atualizações chegam via Realtime e startQrPolling.
+    // Não há safetyPoll contínuo pois ele causava conflito durante o escaneamento do QR.
     fetchCurrentStatus();
-    const safetyPoll = setInterval(fetchCurrentStatus, 8000);
 
     return () => {
       stopPolling();
-      clearInterval(safetyPoll);
       if (realtimeRef.current) {
         supabase.removeChannel(realtimeRef.current);
         realtimeRef.current = null;

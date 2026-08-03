@@ -461,39 +461,26 @@ class WhatsAppService {
 
       const status = await provider.getStatus(instanceName);
       
-      let dbStatus = 'disconnected';
-      if (status.status === 'connected') dbStatus = 'connected';
-      else if (status.status === 'connecting' || status.status === 'qrcode') dbStatus = 'connecting';
-
-      const qr = status.status === 'qrcode' ? status.qrcode : undefined;
-      
-      // IMPORTANTE: Não gravamos no banco durante o polling normal.
-      // Isso evita o loop: poll → updateProfileStatus → Realtime → startQrPolling → novo QR (invalida o anterior).
-      // O banco só é atualizado via:
-      //   1. Webhooks da Evolution (onQRCodeUpdated, onConnected, onDisconnected)
-      //   2. Ao iniciar uma sessão (createSession)
-      //   3. Ao desconectar (logout)
-      
-      // Se conectou, atualizamos o banco para limpar o QR
-      if (dbStatus === 'connected') {
+      // Caso 1: Conectado — atualiza banco e retorna
+      if (status.status === 'connected') {
         await this.updateProfileStatus(userId, { status: 'connected' });
+        return { status: 'connected', webhookOk: true };
       }
-      
-      // Se ainda está "connecting" sem QR novo da Evolution,
-      // retornamos o QR salvo no banco (pode ainda ser válido para escaneamento)
-      let finalQr = qr;
-      if (dbStatus === 'connecting' && !finalQr) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('whatsapp_qr')
-          .eq('id', userId)
-          .single();
-        if (profile?.whatsapp_qr) {
-          finalQr = profile.whatsapp_qr;
-        }
+
+      // Caso 2: Evolution retornou um QR Code fresco (raro no polling, mas pode acontecer)
+      if (status.status === 'qrcode' && status.qrcode) {
+        await this.updateProfileStatus(userId, { status: 'connecting', qr: status.qrcode });
+        return { status: 'connecting', qr: status.qrcode, webhookOk: true };
       }
-      
-      return { status: dbStatus, qr: finalQr, webhookOk: true };
+
+      // Caso 3: Evolution diz "connecting" mas SEM QR Code = QR expirou.
+      // NÃO retornamos o QR do banco pois ele também está expirado.
+      // Limpamos o QR do banco e retornamos 'disconnected' para o frontend
+      // mostrar o botão "Gerar QR Code" e o usuário pedir um novo.
+      console.log(`[WhatsAppService] Instance ${instanceName} is connecting without QR — clearing stale QR from DB.`);
+      await supabase.from('profiles').update({ whatsapp_qr: null }).eq('id', userId);
+      return { status: 'disconnected', webhookOk: true };
+
     } catch (error) {
       return { status: 'disconnected', webhookOk: false };
     }
