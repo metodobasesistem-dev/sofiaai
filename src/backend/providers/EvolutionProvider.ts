@@ -40,8 +40,6 @@ export class EvolutionProvider implements IWhatsAppProvider {
     } catch (error: any) {
       if (error.response?.status === 403 || error.response?.status === 400 || error.response?.status === 409) {
         await this.setWebhook(instanceId).catch(() => {});
-        // Se a instância já existe, forçamos a conexão para gerar o QR code inicial
-        await this.api.get(`/instance/connect/${instanceId}`).catch(() => {});
         return;
       }
       throw error;
@@ -80,7 +78,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     await this.api.delete(`/instance/delete/${instanceId}`).catch(() => {});
   }
 
-  async getStatus(instanceId: string): Promise<WhatsAppStatus> {
+  async getStatus(instanceId: string, forceQRCode: boolean = false): Promise<WhatsAppStatus> {
     try {
       const { data } = await this.api.get(`/instance/connectionState/${instanceId}`);
       const state = data.instance.state;
@@ -90,8 +88,19 @@ export class EvolutionProvider implements IWhatsAppProvider {
       }
       
       if (state === 'connecting' || state === 'close' || state === 'refused') {
-        // NÃO DEVEMOS fazer GET /instance/connect aqui para evitar Loop de QR Code.
-        // A geração do QR Code é feita via connect() e os updates via webhook.
+        if (forceQRCode) {
+          try {
+            const { data: qrData } = await this.api.get(`/instance/connect/${instanceId}`);
+            if (qrData && qrData.base64) {
+              return { 
+                status: 'qrcode', 
+                qrcode: qrData.base64.startsWith('data:') ? qrData.base64 : `data:image/png;base64,${qrData.base64}` 
+              };
+            }
+          } catch (e) {}
+        }
+        // NÃO DEVEMOS fazer GET /instance/connect repetidamente para evitar Loop de QR Code.
+        // A geração do QR Code inicial é feita se forceQRCode for true (na criação da sessão), e os updates via webhook.
         return { status: 'connecting' };
       }
       

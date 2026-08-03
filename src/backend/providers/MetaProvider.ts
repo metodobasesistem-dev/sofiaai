@@ -96,7 +96,7 @@ export class MetaProvider implements IWhatsAppProvider {
     console.log(`[MetaProvider] Disconnected (cache cleared) for tenant: ${this.resolveTenantId(instanceId)}`);
   }
 
-  async getStatus(instanceId: string): Promise<WhatsAppStatus> {
+  async getStatus(instanceId: string, forceQRCode?: boolean): Promise<WhatsAppStatus> {
     try {
       const { api, creds } = await this.getClient(instanceId);
       await api.get(`/${creds.phoneId}?fields=verified_name`);

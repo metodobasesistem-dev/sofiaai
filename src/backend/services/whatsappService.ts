@@ -425,7 +425,7 @@ class WhatsAppService {
       const provider = await WhatsAppProviderFactory.getProvider(userId);
       await provider.connect(instanceName, {});
       
-      const status = await provider.getStatus(instanceName);
+      const status = await provider.getStatus(instanceName, true);
       if (status.status === 'qrcode' && status.qrcode) {
         await this.updateProfileStatus(userId, { status: 'connecting', qr: status.qrcode });
         return status.qrcode;

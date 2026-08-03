@@ -9,7 +9,7 @@ export class UazApiProvider implements IWhatsAppProvider {
     throw new Error('UazApiProvider: Method not implemented.');
   }
 
-  async getStatus(): Promise<WhatsAppStatus> {
+  async getStatus(instanceId?: string, forceQRCode?: boolean): Promise<WhatsAppStatus> {
     throw new Error('UazApiProvider: Method not implemented.');
   }
 

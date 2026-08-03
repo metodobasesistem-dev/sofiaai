@@ -52,7 +52,7 @@ export interface IWhatsAppProvider {
   /**
    * Checks current connection status
    */
-  getStatus(instanceId: string): Promise<WhatsAppStatus>;
+  getStatus(instanceId: string, forceQRCode?: boolean): Promise<WhatsAppStatus>;
 
   /**
    * Sends a simple text message
