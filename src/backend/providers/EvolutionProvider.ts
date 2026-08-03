@@ -40,6 +40,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
     } catch (error: any) {
       if (error.response?.status === 403 || error.response?.status === 400 || error.response?.status === 409) {
         await this.setWebhook(instanceId).catch(() => {});
+        // Se a instância já existe, forçamos a conexão para gerar o QR code inicial
+        await this.api.get(`/instance/connect/${instanceId}`).catch(() => {});
         return;
       }
       throw error;
@@ -88,16 +90,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
       }
       
       if (state === 'connecting' || state === 'close' || state === 'refused') {
-        // Se estiver desconectado/conectando, tentamos pegar o QR Code
-        try {
-          const { data: qrData } = await this.api.get(`/instance/connect/${instanceId}`);
-          if (qrData && qrData.base64) {
-            return { 
-              status: 'qrcode', 
-              qrcode: qrData.base64.startsWith('data:') ? qrData.base64 : `data:image/png;base64,${qrData.base64}` 
-            };
-          }
-        } catch (e) {}
+        // NÃO DEVEMOS fazer GET /instance/connect aqui para evitar Loop de QR Code.
+        // A geração do QR Code é feita via connect() e os updates via webhook.
         return { status: 'connecting' };
       }
       
