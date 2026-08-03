@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { type UserProfile, getAdminStats, listAdminUsers, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch, listMetaTemplates, type MetaTemplate, getMetaStatus } from '../services/supabaseService';
+import { type UserProfile, getAdminStats, listAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, resetAdminUserWhatsApp, getAdminUserActivity, getGlobalSettings, updateGlobalSettings, getAdminFinanceStats, getAdminActivity, getTenantSecret, saveTenantSecret, testMetaConnection, saveAdminMetaCredentials, disconnectAdminMeta, type MetaPhoneInfo, standardFetch, listMetaTemplates, type MetaTemplate, getMetaStatus } from '../services/supabaseService';
 import MetaSetupHelpModal from './MetaSetupHelpModal';
 import WhatsAppDiagnosticModal from './WhatsAppDiagnosticModal';
 import AdminTemplatesTab from './AdminTemplatesTab';
@@ -132,6 +132,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   // Modal & Action states
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isNewTenantModalOpen, setIsNewTenantModalOpen] = useState(false);
+  const [newTenantData, setNewTenantData] = useState({ name: '', email: '', password: '', plano: 'Starter' });
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [userActivity, setUserActivity] = useState<any[]>([]);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -776,6 +779,32 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       toast.error('Erro ao salvar: ' + error.message);
     } finally {
       setIsActionLoading(false);
+    }
+  };
+
+  const handleCreateTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTenantData.email || !newTenantData.password) {
+      toast.error('Email e senha são obrigatórios.');
+      return;
+    }
+    
+    setIsCreatingTenant(true);
+    try {
+      await createAdminUser({
+        email: newTenantData.email,
+        password: newTenantData.password,
+        name: newTenantData.name,
+        plano: newTenantData.plano
+      });
+      toast.success('Inquilino criado com sucesso!');
+      setIsNewTenantModalOpen(false);
+      setNewTenantData({ name: '', email: '', password: '', plano: 'Starter' });
+      fetchData();
+    } catch (error: any) {
+      toast.error('Erro ao criar inquilino: ' + error.message);
+    } finally {
+      setIsCreatingTenant(false);
     }
   };
 
@@ -1830,6 +1859,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                       >
                         <RefreshCw size={16} />
                         Sincronizar WPP
+                      </button>
+                      <button
+                        onClick={() => setIsNewTenantModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-3.5 bg-primary-600 text-white rounded-2xl text-sm font-bold hover:bg-primary-700 transition-all whitespace-nowrap shadow-sm shadow-primary-200"
+                      >
+                        <Users size={16} />
+                        Novo Inquilino
                       </button>
                    </div>
                 </div>
@@ -3275,6 +3311,118 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                   )}
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Novo Inquilino Modal */}
+      <AnimatePresence>
+        {isNewTenantModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => !isCreatingTenant && setIsNewTenantModalOpen(false)}
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100"
+            >
+              <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600">
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800">Novo Inquilino</h3>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Cadastrar manualmente</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => !isCreatingTenant && setIsNewTenantModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateTenant} className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Nome da Empresa</label>
+                  <input
+                    type="text"
+                    required
+                    value={newTenantData.name}
+                    onChange={e => setNewTenantData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nome da empresa ou cliente"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={newTenantData.email}
+                    onChange={e => setNewTenantData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="email@exemplo.com"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Senha Provisória</label>
+                  <input
+                    type="text"
+                    required
+                    value={newTenantData.password}
+                    onChange={e => setNewTenantData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Senha de acesso"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Plano Inicial</label>
+                  <select
+                    value={newTenantData.plano}
+                    onChange={e => setNewTenantData(prev => ({ ...prev, plano: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
+                  >
+                    <option value="Starter">Starter</option>
+                    <option value="Pro">Pro</option>
+                    <option value="Elite">Elite</option>
+                  </select>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => !isCreatingTenant && setIsNewTenantModalOpen(false)}
+                    className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingTenant}
+                    className="flex-1 py-3.5 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isCreatingTenant ? (
+                      <><div className="w-3.5 h-3.5 border-2 border-white/50 border-t-white rounded-full animate-spin" /> Criando...</>
+                    ) : (
+                      <><Save size={14} /> Cadastrar</>
+                    )}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

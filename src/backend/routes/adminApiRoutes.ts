@@ -160,6 +160,52 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── POST /api/v2/admin/users ─────────────────────────────────────────────
+router.post('/users', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { email, password, name, role, plano } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email e senha são obrigatórios.' });
+    }
+
+    // 1. Create user in Supabase Auth, confirmed immediately
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: name || email.split('@')[0] }
+    });
+
+    if (authError) throw authError;
+
+    const userId = authData.user.id;
+
+    const profilePayload = {
+      id: userId,
+      email,
+      name: name || email.split('@')[0],
+      role: role || 'client',
+      plano: plano || 'Trial',
+      whatsapp_status: 'disconnected'
+    };
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(profilePayload);
+      
+    if (profileError) {
+      console.warn('[AdminAPI] Profile upsert error:', profileError.message);
+      // Don't throw, auth user is already created, profile might be created by trigger
+    }
+
+    res.json({ success: true, data: { id: userId, email, name: profilePayload.name } });
+  } catch (err: any) {
+    console.error('[AdminAPI] Create User Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── PATCH /api/v2/admin/users/:id ────────────────────────────────────────
 // SEC-06: Whitelist de campos para permitir alterações de plano e cargo por administradores
 const ADMIN_USER_PATCH_ALLOWED_FIELDS = [
