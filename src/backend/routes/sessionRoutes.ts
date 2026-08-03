@@ -10,12 +10,15 @@ router.use((req, res, next) => {
   next();
 });
 
-router.post('/create',     requireAuth, sessionController.createSession);
+router.post('/create',       requireAuth, sessionController.createSession);
 router.get('/status/:userId', requireAuth, sessionController.getStatus);
+router.get('/status',         requireAuth, sessionController.getStatus);
 router.get('/restore/:userId', requireAuth, sessionController.restoreSession);
-router.post('/send',       requireAuth, sessionController.sendMessage);
-router.post('/disconnect', requireAuth, sessionController.disconnectSession);
-router.post('/delete',     requireAuth, sessionController.deleteSession);
+router.post('/send',          requireAuth, sessionController.sendMessage);
+router.post('/disconnect',    requireAuth, sessionController.disconnectSession);
+router.post('/delete',        requireAuth, sessionController.deleteSession);
+router.post('/delete-message', requireAuth, sessionController.deleteMessage);
+router.post('/react',          requireAuth, sessionController.reactToMessage);
 router.get('/health', (req, res) => res.json({ status: 'ok', message: 'Session router is active' }));
 
 export default router;

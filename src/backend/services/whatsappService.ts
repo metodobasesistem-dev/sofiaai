@@ -465,24 +465,35 @@ class WhatsAppService {
       if (status.status === 'connected') dbStatus = 'connected';
       else if (status.status === 'connecting' || status.status === 'qrcode') dbStatus = 'connecting';
 
-      let qr = status.status === 'qrcode' ? status.qrcode : undefined;
+      const qr = status.status === 'qrcode' ? status.qrcode : undefined;
       
-      // Se a instância está "connecting" mas sem QR na resposta da Evolution,
-      // tenta buscar o QR salvo no banco (gerado anteriormente e ainda válido)
-      if (dbStatus === 'connecting' && !qr) {
+      // IMPORTANTE: Não gravamos no banco durante o polling normal.
+      // Isso evita o loop: poll → updateProfileStatus → Realtime → startQrPolling → novo QR (invalida o anterior).
+      // O banco só é atualizado via:
+      //   1. Webhooks da Evolution (onQRCodeUpdated, onConnected, onDisconnected)
+      //   2. Ao iniciar uma sessão (createSession)
+      //   3. Ao desconectar (logout)
+      
+      // Se conectou, atualizamos o banco para limpar o QR
+      if (dbStatus === 'connected') {
+        await this.updateProfileStatus(userId, { status: 'connected' });
+      }
+      
+      // Se ainda está "connecting" sem QR novo da Evolution,
+      // retornamos o QR salvo no banco (pode ainda ser válido para escaneamento)
+      let finalQr = qr;
+      if (dbStatus === 'connecting' && !finalQr) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('whatsapp_qr')
           .eq('id', userId)
           .single();
         if (profile?.whatsapp_qr) {
-          qr = profile.whatsapp_qr;
+          finalQr = profile.whatsapp_qr;
         }
       }
       
-      await this.updateProfileStatus(userId, { status: dbStatus, qr });
-      
-      return { status: dbStatus, qr, webhookOk: true };
+      return { status: dbStatus, qr: finalQr, webhookOk: true };
     } catch (error) {
       return { status: 'disconnected', webhookOk: false };
     }

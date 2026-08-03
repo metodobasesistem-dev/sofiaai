@@ -66,14 +66,15 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
   };
 
   // ─── Poll backend while waiting for QR scan ───────────────────────────────
+  // IMPORTANTE: Este poll SÓ verifica se o WhatsApp foi conectado.
+  // Não atualiza o QR Code - atualizações de QR vêm apenas via Supabase Realtime (webhook Evolution).
   const startQrPolling = (uid: string) => {
     stopPolling();
     pollRef.current = setInterval(async () => {
       try {
-        const res = await standardFetch(`/api/sessions/restore/${uid}`);
+        const res = await standardFetch(`/api/sessions/status`);
         if (!res.ok) return;
         const data = await res.json();
-
 
         if (data.status === 'connected') {
           updateStatus('connected', null);
@@ -83,7 +84,7 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
           toast.success('WhatsApp Conectado com Sucesso! 🎉');
         }
       } catch { /* noop */ }
-    }, 4000);
+    }, 5000);
   };
 
   // ─── Supabase Realtime subscription ───────────────────────────────────────
