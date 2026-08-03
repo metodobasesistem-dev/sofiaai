@@ -115,7 +115,7 @@ export default function Finance() {
   };
 
   const fetchContacts = async () => {
-    const { data } = await supabase.from('contacts').select('id, name, pushname').order('name').limit(500);
+    const { data } = await supabase.from('contacts').select('id, nome, telefone').order('nome').limit(500);
     if (data) setContacts(data);
   };
 

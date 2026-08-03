@@ -215,9 +215,9 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         supabase.from('contacts').select('*', { count: 'exact', head: true })
           .eq('user_id', user.id).gte('data_criacao', startDate),
         supabase.from('contacts').select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id).eq('status_funil', 'Qualificado').gte('updated_at', startDate),
+          .eq('user_id', user.id).eq('status_funil', 'Qualificado').gte('data_criacao', startDate),
         supabase.from('contacts').select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id).eq('status_funil', 'Resolvido').gte('updated_at', startDate),
+          .eq('user_id', user.id).eq('status_funil', 'Resolvido').gte('data_criacao', startDate),
       ]);
 
       const newLeads = newLeadsRes.count ?? 0;
