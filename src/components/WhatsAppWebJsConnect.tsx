@@ -120,12 +120,8 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
              if (newQr) {
                updateStatus('waiting', newQr);
                startQrPolling(uid);
-             } else if (statusRef.current === 'disconnected' || statusRef.current === 'waiting') {
-               // Se não tem QR e o status mudou, mostramos o carregamento (exceto se já estivermos conectado)
-               if (statusRef.current !== 'connected') {
-                updateStatus('connecting', null);
-               }
              }
+             // Se não tem QR, não interrompemos a UI – pode ser apenas um ping intermediário
           } else if (newStatus === 'disconnected') {
             if (statusRef.current === 'connected') {
               updateStatus('disconnected', null);
@@ -155,20 +151,21 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
         if (!res.ok) return;
         const data = await res.json();
 
-
         if (data.status === 'connected') {
           updateStatus('connected', null);
           setPairingCode(null);
           setWebhookOk(data.webhookOk !== false);
           stopPolling();
-        } else if (data.status === 'connecting') {
-          updateStatus('connecting', null);
+        } else if (data.status === 'connecting' && data.qr) {
+          // Só mostra o spinner de "conectando" se tiver um QR Code chegando
+          updateStatus('waiting', data.qr);
           startQrPolling(uid);
-        } else if (data.status === 'disconnected') {
-           if (statusRef.current === 'connected') {
-             updateStatus('disconnected', null);
-             setPairingCode(null);
-           }
+        } else {
+          // 'connecting' sem QR ou 'disconnected' → mostra o botão de Gerar QR Code
+          // Só atualiza se não estivermos em processo de conexão iniciado pelo usuário
+          if (statusRef.current !== 'connecting' && statusRef.current !== 'waiting') {
+            updateStatus('disconnected', null);
+          }
         }
       } catch (err) {
         console.error('[WhatsAppConnect] Status sync error:', err);

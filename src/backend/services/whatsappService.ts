@@ -465,7 +465,21 @@ class WhatsAppService {
       if (status.status === 'connected') dbStatus = 'connected';
       else if (status.status === 'connecting' || status.status === 'qrcode') dbStatus = 'connecting';
 
-      const qr = status.status === 'qrcode' ? status.qrcode : undefined;
+      let qr = status.status === 'qrcode' ? status.qrcode : undefined;
+      
+      // Se a instância está "connecting" mas sem QR na resposta da Evolution,
+      // tenta buscar o QR salvo no banco (gerado anteriormente e ainda válido)
+      if (dbStatus === 'connecting' && !qr) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('whatsapp_qr')
+          .eq('id', userId)
+          .single();
+        if (profile?.whatsapp_qr) {
+          qr = profile.whatsapp_qr;
+        }
+      }
+      
       await this.updateProfileStatus(userId, { status: dbStatus, qr });
       
       return { status: dbStatus, qr, webhookOk: true };
