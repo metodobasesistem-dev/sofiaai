@@ -1372,7 +1372,7 @@ export const getRecentActivities = async (passedUserId?: string) => {
     supabase.from('contacts')
       .select('*')
       .eq('user_id', userId)
-      .order('data_criacao', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(5),
     supabase.from('appointments')
       .select('*')
@@ -1386,10 +1386,10 @@ export const getRecentActivities = async (passedUserId?: string) => {
     ...(contacts.data || []).map(c => ({
       type: 'contact',
       title: 'Novo Lead',
-      description: `${c.nome} entrou em contato`,
-      time: c.data_criacao,
-      name: c.nome,
-      phone: c.telefone
+      description: `${c.contact_name || c.display_phone || 'Desconhecido'} entrou em contato`,
+      time: c.updated_at || c.last_message_time,
+      name: c.contact_name || c.display_phone,
+      phone: c.display_phone || c.remote_jid
     })),
     ...(appointments.data || []).map(a => ({
       type: 'appointment',
@@ -1411,7 +1411,7 @@ export const getGlobalRecentActivities = async () => {
   const [contacts, appointments] = await Promise.all([
     supabase.from('contacts')
       .select('*')
-      .order('data_criacao', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(10),
     supabase.from('appointments')
       .select('*')
@@ -1424,10 +1424,10 @@ export const getGlobalRecentActivities = async () => {
     ...(contacts.data || []).map(c => ({
       type: 'contact',
       title: 'Novo Lead (Global)',
-      description: `${c.nome} entrou em contato`,
-      time: c.data_criacao,
-      name: c.nome,
-      phone: c.telefone
+      description: `${c.contact_name || c.display_phone || 'Desconhecido'} entrou em contato`,
+      time: c.updated_at || c.last_message_time,
+      name: c.contact_name || c.display_phone,
+      phone: c.display_phone || c.remote_jid
     })),
     ...(appointments.data || []).map(a => ({
       type: 'appointment',
