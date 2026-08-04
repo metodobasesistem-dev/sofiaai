@@ -419,7 +419,8 @@ class WhatsAppService {
     if (await this.isTrialExpired(userId)) {
       throw new Error('Seu período de teste expirou. Assine um plano para conectar seu WhatsApp.');
     }
-    const instanceName = `wppai_${userId.substring(0, 8)}`;
+    const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+    const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
     console.log(`[WhatsAppService] Starting WhatsApp session via Provider: ${instanceName}`);
     try {
       const provider = await WhatsAppProviderFactory.getProvider(userId);
@@ -446,7 +447,8 @@ class WhatsAppService {
 
   async getSessionStatus(userId: string): Promise<WhatsAppStatusResponse> {
     try {
-      const instanceName = `wppai_${userId.substring(0, 8)}`;
+      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+      const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       const provider = await WhatsAppProviderFactory.getProvider(userId);
 
       // Check for trial expiration
