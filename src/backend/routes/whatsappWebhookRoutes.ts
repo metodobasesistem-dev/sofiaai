@@ -83,11 +83,31 @@ router.post('/webhook', async (req, res) => {
 
   try {
     // 1. Resolve o usuário pelo whatsapp_instance_id (selecionando whatsapp_organizacao e whatsapp_provider_config)
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
       .select('id, whatsapp_organizacao, whatsapp_provider_config')
       .eq('whatsapp_instance_id', instanceName)
-      .single();
+      .maybeSingle();
+
+    // Fallback: se não achou pelo whatsapp_instance_id exato, busca pelo prefixo do userId no nome da instância (ex: wppai_5ffbe01b -> 5ffbe01b%)
+    if (!profile && instanceName.startsWith('wppai_')) {
+      const prefix = instanceName.replace('wppai_', '');
+      const { data: fallbackProfile } = await supabase
+        .from('profiles')
+        .select('id, whatsapp_organizacao, whatsapp_provider_config')
+        .ilike('id', `${prefix}%`)
+        .maybeSingle();
+
+      if (fallbackProfile) {
+        profile = fallbackProfile;
+        // Auto-repara o whatsapp_instance_id no perfil para que futuras buscas funcionem direto
+        await supabase
+          .from('profiles')
+          .update({ whatsapp_instance_id: instanceName })
+          .eq('id', profile.id);
+        console.log(`[Webhook] 🔧 Auto-repaired whatsapp_instance_id "${instanceName}" for user ${profile.id}`);
+      }
+    }
 
     if (!profile) {
       console.warn(`[Webhook] ⚠️ No profile found for instanceName: "${instanceName}". Webhook ignored.`);
