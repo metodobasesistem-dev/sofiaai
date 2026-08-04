@@ -401,13 +401,13 @@ class WhatsAppService {
 
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: userId,
           whatsapp_status: data.status,
           ...(data.qr ? { whatsapp_qr: data.qr } : (data.status === 'connected' || data.status === 'disconnected' ? { whatsapp_qr: null } : {})),
           whatsapp_instance_id: instanceName,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
+        });
 
       if (error) console.error(`[WhatsAppService] Error updating profile:`, error.message);
     } catch (error) {
