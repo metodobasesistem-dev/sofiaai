@@ -618,16 +618,7 @@ router.post('/validate-numbers', async (req: AuthenticatedRequest, res: Response
 
     const instanceName = profile?.whatsapp_instance_id || `wppai_${userId.slice(0, 8)}`;
 
-    const results = await Promise.all(
-      numbers.map(async (num: string) => {
-        const cleanNumber = String(num).replace(/\D/g, '');
-        if (!cleanNumber || cleanNumber.length < 8) {
-          return { number: num, cleanNumber, exists: false, valid: false };
-        }
-        const exists = await EvolutionApiService.whatsappExists(instanceName, cleanNumber);
-        return { number: num, cleanNumber, exists, valid: exists };
-      })
-    );
+    const results = await EvolutionApiService.checkWhatsappNumbers(instanceName, numbers);
 
     const validCount = results.filter(r => r.exists).length;
     const invalidCount = results.filter(r => !r.exists).length;

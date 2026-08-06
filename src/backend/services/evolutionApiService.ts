@@ -322,26 +322,37 @@ export class EvolutionApiService {
     }
   }
 
-  static async whatsappExists(instanceName: string, number: string): Promise<boolean> {
+  static async checkWhatsappNumbers(instanceName: string, numbers: string[]): Promise<Array<{ number: string; cleanNumber: string; exists: boolean; jid?: string }>> {
     const api = getApi();
+    const cleanList = numbers.map(n => String(n).replace(/\D/g, '')).filter(Boolean);
+    if (cleanList.length === 0) return [];
+
     try {
-      const cleanNumber = number.replace(/\D/g, '');
-      const { data } = await api.post(`/chat/whatsappExists/${instanceName}`, {
-        numbers: [cleanNumber]
+      const { data } = await api.post(`/chat/whatsappNumbers/${instanceName}`, {
+        numbers: cleanList
       });
-      if (Array.isArray(data) && data[0]) {
-        return data[0].exists === true;
+
+      if (Array.isArray(data)) {
+        return cleanList.map(num => {
+          const found = data.find((item: any) => {
+            const itemNum = item.number || (item.jid ? item.jid.split('@')[0] : '');
+            return itemNum === num || num.endsWith(itemNum) || itemNum.endsWith(num);
+          });
+          const exists = found ? (found.exists === true || found.exists === 'exists') : false;
+          return { number: num, cleanNumber: num, exists, jid: found?.jid };
+        });
       }
-      if (data && typeof data === 'object') {
-        if (Array.isArray(data)) {
-          return data[0]?.exists === true || data[0]?.exists === 'exists';
-        }
-        return (data as any).exists === true || (data as any).exists === 'exists';
-      }
-      return false;
+      return cleanList.map(num => ({ number: num, cleanNumber: num, exists: false }));
     } catch (error: any) {
-      console.warn(`[EvolutionAPI] whatsappExists failed for ${number}:`, error.response?.data || error.message);
-      return true; // Fallback tolerante em caso de erro da API ou falta de suporte
+      console.warn(`[EvolutionAPI] checkWhatsappNumbers failed:`, error.response?.data || error.message);
+      return cleanList.map(num => ({ number: num, cleanNumber: num, exists: false }));
     }
+  }
+
+  static async whatsappExists(instanceName: string, number: string): Promise<boolean> {
+    const cleanNumber = number.replace(/\D/g, '');
+    if (!cleanNumber || cleanNumber.length < 8) return false;
+    const results = await EvolutionApiService.checkWhatsappNumbers(instanceName, [cleanNumber]);
+    return results[0]?.exists || false;
   }
 }
