@@ -82,21 +82,42 @@ router.post('/webhook', async (req, res) => {
   }
 
   try {
-    // 1. Resolve o usuário pelo whatsapp_instance_id (selecionando whatsapp_organizacao e whatsapp_provider_config)
-    let { data: profile } = await supabase
+    // 1. Resolve o usuário pelo whatsapp_instance_id
+    let profile: any = null;
+    let { data: pData, error: pErr } = await supabase
       .from('profiles')
       .select('id, whatsapp_organizacao, whatsapp_provider_config')
       .eq('whatsapp_instance_id', instanceName)
       .maybeSingle();
 
+    if (pErr && pErr.code === '42703') {
+      const { data: fallbackNoConfig } = await supabase
+        .from('profiles')
+        .select('id, whatsapp_organizacao')
+        .eq('whatsapp_instance_id', instanceName)
+        .maybeSingle();
+      profile = fallbackNoConfig;
+    } else {
+      profile = pData;
+    }
+
     // Fallback: se não achou pelo whatsapp_instance_id exato, busca pelo prefixo do userId no nome da instância (ex: wppai_5ffbe01b -> 5ffbe01b%)
     if (!profile && instanceName.startsWith('wppai_')) {
       const prefix = instanceName.replace('wppai_', '');
-      const { data: fallbackProfile } = await supabase
+      let { data: fallbackProfile, error: fbErr } = await supabase
         .from('profiles')
         .select('id, whatsapp_organizacao, whatsapp_provider_config')
         .ilike('id', `${prefix}%`)
         .maybeSingle();
+
+      if (fbErr && fbErr.code === '42703') {
+        const { data: fbNoConfig } = await supabase
+          .from('profiles')
+          .select('id, whatsapp_organizacao')
+          .ilike('id', `${prefix}%`)
+          .maybeSingle();
+        fallbackProfile = fbNoConfig;
+      }
 
       if (fallbackProfile) {
         profile = fallbackProfile;
