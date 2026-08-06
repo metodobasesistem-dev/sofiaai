@@ -75,7 +75,7 @@ export default function NotificationBell({ user, onTabChange }: Props) {
 
         supabase
           .from('contacts')
-          .select('id, name, pushname, telefone, data_criacao')
+          .select('id, nome, telefone, data_criacao')
           .eq('user_id', user.id)
           .gte('data_criacao', yesterday)
           .order('data_criacao', { ascending: false })
@@ -135,7 +135,7 @@ export default function NotificationBell({ user, onTabChange }: Props) {
             id: `lead-${c.id}`,
             type: 'lead',
             title: 'Novo Lead',
-            body: c.name || c.pushname || c.telefone || 'Desconhecido',
+            body: c.nome || c.telefone || 'Desconhecido',
             time: c.data_criacao,
           });
         }
