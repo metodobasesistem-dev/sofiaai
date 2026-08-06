@@ -594,6 +594,13 @@ router.post('/:id/cancel', async (req: AuthenticatedRequest, res: Response) => {
       return res.json({ success: false, message: 'Nenhum job ativo para cancelar.' });
     }
 
+    job.cancelRequested = true;
+    res.json({ success: true, message: 'Cancelamento solicitado.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** POST /validate-numbers — Valida uma lista de números na Evolution API */
 router.post('/validate-numbers', async (req: AuthenticatedRequest, res: Response) => {
   try {
