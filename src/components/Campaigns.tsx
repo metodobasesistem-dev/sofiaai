@@ -87,6 +87,8 @@ export default function Campaigns() {
     selectedFunnelStatus: '',
     manualList: '',
     uploadedContacts: [] as any[],
+    messageType: 'custom' as 'custom' | 'template',
+    customText: '',
     templateId: '',
     templateName: '',
     templateLanguage: 'pt_BR',
@@ -291,7 +293,7 @@ export default function Campaigns() {
     }
   };
 
-  const handleEditCampaign = (campaign: Campaign) => {
+  const handleEditCampaign = (campaign: any) => {
     setEditingCampaignId(campaign.id);
     setCampaignData({
       name: campaign.name,
@@ -300,8 +302,12 @@ export default function Campaigns() {
       selectedFunnelStatus: campaign.selected_funnel_status || '',
       manualList: campaign.manual_list || '',
       uploadedContacts: campaign.uploaded_contacts || [],
+      messageType: campaign.message_type || (campaign.custom_text ? 'custom' : 'template'),
+      customText: campaign.custom_text || '',
       templateId: campaign.template_id || '',
       templateName: campaign.template_name || '',
+      templateLanguage: campaign.template_language || 'pt_BR',
+      isMetaTemplate: false,
       variables: campaign.variables || {}
     });
     setCurrentStep(1);
@@ -661,197 +667,242 @@ export default function Campaigns() {
       case 2:
         return (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-            {userProvider === 'meta_official' && (
-              <div className="flex p-1 bg-slate-100 rounded-2xl">
-                <button
-                  onClick={() => setTemplateSource('internal')}
-                  className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${
-                    templateSource === 'internal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  Modelos Internos
-                </button>
-                <button
-                  onClick={() => {
-                    setTemplateSource('meta');
-                    if (metaTemplates.length === 0) fetchMetaTemplates();
-                  }}
-                  className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 ${
-                    templateSource === 'meta' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  Modelos Meta API
-                  <ShieldCheck size={14} className={templateSource === 'meta' ? 'text-primary-500' : ''} />
-                </button>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                {templateSource === 'internal' ? 'Selecione o Modelo Interno' : 'Selecione o Modelo da Meta'}
-              </label>
-              <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                {templateSource === 'internal' ? (
-                  templates.length === 0 ? (
-                    <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-                      <p className="text-sm font-bold text-slate-400">Nenhum modelo cadastrado.</p>
-                      <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Vá em "Gerenciar Modelos" primeiro.</p>
-                    </div>
-                  ) : templates.map(template => (
-                    <button
-                      key={template.id}
-                      onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: false, templateLanguage: 'pt_BR', variables: {}})}
-                      className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
-                        campaignData.templateId === template.id
-                          ? 'border-primary-500 bg-primary-50/30'
-                          : 'border-slate-50 bg-white hover:border-slate-100'
-                      }`}
-                    >
-                      <div>
-                        <p className="text-sm font-black text-slate-900">{template.name}</p>
-                        <div className="flex items-center gap-3">
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
-                           <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</p>
-                        </div>
-                      </div>
-                      {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
-                    </button>
-                  ))
-                ) : (
-                  isFetchingMeta ? (
-                    <div className="p-10 flex flex-col items-center justify-center gap-4">
-                      <Loader2 size={32} className="text-primary-500 animate-spin" />
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Buscando na Meta...</p>
-                    </div>
-                  ) : metaTemplates.length === 0 ? (
-                    <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-                      <p className="text-sm font-bold text-slate-400">Nenhum template aprovado na Meta.</p>
-                      <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Verifique seu Gerenciador de WhatsApp.</p>
-                    </div>
-                  ) : metaTemplates.map(template => {
-                    // Extract variable count from body components
-                    const body = template.components?.find((c: any) => c.type === 'BODY')?.text || '';
-                    const varCount = (body.match(/\{\{\d+\}\}/g) || []).length;
-
-                    return (
-                      <button
-                        key={template.id}
-                        onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: true, templateLanguage: template.language || 'pt_BR', variables: {}})}
-                        className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
-                          campaignData.templateId === template.id
-                            ? 'border-primary-500 bg-primary-50/30'
-                            : 'border-slate-50 bg-white hover:border-slate-100'
-                        }`}
-                      >
-                        <div>
-                          <p className="text-sm font-black text-slate-900">{template.name}</p>
-                          <div className="flex items-center gap-3">
-                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
-                             <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                             <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-                               <ShieldCheck size={10} /> {template.status}
-                             </p>
-                             <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{varCount} Variáveis</p>
-                          </div>
-                        </div>
-                        {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+            {/* Seletor de Tipo de Mensagem: Texto Livre vs Modelo */}
+            <div className="flex p-1 bg-slate-100 rounded-2xl">
+              <button
+                onClick={() => setCampaignData({...campaignData, messageType: 'custom'})}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  campaignData.messageType === 'custom' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Sparkles size={16} className={campaignData.messageType === 'custom' ? 'text-primary-500' : ''} />
+                Mensagem Personalizada
+              </button>
+              <button
+                onClick={() => setCampaignData({...campaignData, messageType: 'template'})}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  campaignData.messageType === 'template' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Layout size={16} className={campaignData.messageType === 'template' ? 'text-primary-500' : ''} />
+                Usar Modelo Registrado
+              </button>
             </div>
 
-            {campaignData.templateId && (
-              (() => {
-                let varCount = 0;
-                if (templateSource === 'internal') {
-                  const selectedTemplate = templates.find(t => t.id === campaignData.templateId);
-                  varCount = selectedTemplate?.variables_count || 0;
-                } else {
-                  const selectedTemplate = metaTemplates.find(t => t.id === campaignData.templateId);
-                  const body = selectedTemplate?.components?.find((c: any) => c.type === 'BODY')?.text || '';
-                  varCount = (body.match(/\{\{\d+\}\}/g) || []).length;
-                }
-
-                if (varCount === 0) return null;
-                
-                return (
-                  <div className="p-4 bg-slate-900 rounded-2xl space-y-3 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
-                    <div className="flex items-center gap-2 text-white">
-                       <Sparkles className="text-amber-400" size={18} />
-                       <h4 className="text-sm font-black">Personalização da Mensagem</h4>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {Array.from({ length: varCount }).map((_, i) => (
-                        <div key={i} className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variável {"{{"}{i+1}{"}}"}</label>
-                          <select
-                            value={campaignData.variables[`var${i+1}`] || ''}
-                            onChange={e => setCampaignData({
-                              ...campaignData, 
-                              variables: { ...campaignData.variables, [`var${i+1}`]: e.target.value }
-                            })}
-                            className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary-500 outline-none transition-all font-bold"
-                          >
-                            <option value="">Selecione o campo do contato...</option>
-                            {contactFields.map(field => (
-                              <option key={field.id} value={field.id}>{field.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()
-            )}
-
-            {campaignData.templateId && (
-              <div className="p-3 md:p-4 border border-slate-100 rounded-2xl bg-slate-50 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Send className="text-slate-500" size={16} />
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Enviar Mensagem de Teste</label>
-                  </div>
-                  {isTestSending && (
-                    <span className="flex items-center gap-1 text-[10px] font-black uppercase text-amber-500">
-                      <Loader2 size={10} className="animate-spin" /> Enviando...
+            {campaignData.messageType === 'custom' ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                      Conteúdo da Mensagem (Texto Livre)
+                    </label>
+                    <span className="text-[10px] font-bold text-slate-400">
+                      {campaignData.customText.length} caracteres
                     </span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="tel"
-                    placeholder="Ex: 5511999999999"
-                    value={testPhone}
-                    onChange={e => setTestPhone(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        sendCampaignTestMessage();
-                      }
-                    }}
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:border-primary-500 outline-none transition-all font-bold"
+                  </div>
+
+                  <textarea
+                    value={campaignData.customText}
+                    onChange={e => setCampaignData({...campaignData, customText: e.target.value, templateName: 'Mensagem Personalizada'})}
+                    placeholder="Digite sua mensagem aqui... Ex: Olá {nome}! Tudo bem? Vi que você tem interesse nos nossos serviços..."
+                    className="w-full h-36 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-primary-500 font-medium text-sm text-slate-800 resize-none transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      sendCampaignTestMessage();
-                    }}
-                    disabled={isTestSending}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {isTestSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                    Enviar Teste
-                  </button>
+
+                  {/* Variáveis e Emojis rápidos */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Inserir:</span>
+                    <button
+                      type="button"
+                      onClick={() => setCampaignData({...campaignData, customText: campaignData.customText + ' {nome}'})}
+                      className="px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-lg text-xs font-bold transition-all border border-primary-100 flex items-center gap-1"
+                    >
+                      <span>{'{nome}'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCampaignData({...campaignData, customText: campaignData.customText + ' {telefone}'})}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                    >
+                      <span>{'{telefone}'}</span>
+                    </button>
+
+                    <span className="text-slate-200">|</span>
+
+                    {['😊', '👋', '✅', '📌', '👉', '🔥'].map(emoji => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setCampaignData({...campaignData, customText: campaignData.customText + ' ' + emoji})}
+                        className="px-2 py-0.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm transition-all border border-slate-100"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Pré-visualização balão do WhatsApp */}
+                {campaignData.customText.trim() && (
+                  <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-2">
+                    <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1">
+                      <Send size={12} /> Pré-visualização da Mensagem no WhatsApp
+                    </p>
+                    <div className="bg-emerald-100/70 p-3 rounded-2xl text-xs font-medium text-slate-800 max-w-sm border border-emerald-200 shadow-sm leading-relaxed whitespace-pre-wrap">
+                      {campaignData.customText}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Modo Modelo Registrado */
+              <div className="space-y-4">
+                {userProvider === 'meta_official' && (
+                  <div className="flex p-1 bg-slate-100 rounded-2xl">
+                    <button
+                      onClick={() => setTemplateSource('internal')}
+                      className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${
+                        templateSource === 'internal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      Modelos Internos
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTemplateSource('meta');
+                        if (metaTemplates.length === 0) fetchMetaTemplates();
+                      }}
+                      className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 ${
+                        templateSource === 'meta' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      Modelos Meta API
+                      <ShieldCheck size={14} className={templateSource === 'meta' ? 'text-primary-500' : ''} />
+                    </button>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                    {templateSource === 'internal' ? 'Selecione o Modelo Interno' : 'Selecione o Modelo da Meta'}
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                    {templateSource === 'internal' ? (
+                      templates.length === 0 ? (
+                        <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                          <p className="text-sm font-bold text-slate-400">Nenhum modelo cadastrado.</p>
+                          <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Vá em "Gerenciar Modelos" primeiro.</p>
+                        </div>
+                      ) : templates.map(template => (
+                        <button
+                          key={template.id}
+                          onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: false, templateLanguage: 'pt_BR', variables: {}})}
+                          className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
+                            campaignData.templateId === template.id
+                              ? 'border-primary-500 bg-primary-50/30'
+                              : 'border-slate-50 bg-white hover:border-slate-100'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-sm font-black text-slate-900">{template.name}</p>
+                            <div className="flex items-center gap-3">
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
+                               <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</p>
+                            </div>
+                          </div>
+                          {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
+                        </button>
+                      ))
+                    ) : (
+                      isFetchingMeta ? (
+                        <div className="p-10 flex flex-col items-center justify-center gap-4">
+                          <Loader2 size={32} className="text-primary-500 animate-spin" />
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Buscando na Meta...</p>
+                        </div>
+                      ) : metaTemplates.length === 0 ? (
+                        <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                          <p className="text-sm font-bold text-slate-400">Nenhum template aprovado na Meta.</p>
+                          <p className="text-[10px] text-slate-300 uppercase tracking-widest mt-1">Verifique seu Gerenciador de WhatsApp.</p>
+                        </div>
+                      ) : metaTemplates.map(template => {
+                        const body = template.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                        const varCount = (body.match(/\{\{\d+\}\}/g) || []).length;
+
+                        return (
+                          <button
+                            key={template.id}
+                            onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: true, templateLanguage: template.language || 'pt_BR', variables: {}})}
+                            className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
+                              campaignData.templateId === template.id
+                                ? 'border-primary-500 bg-primary-50/30'
+                                : 'border-slate-50 bg-white hover:border-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-sm font-black text-slate-900">{template.name}</p>
+                              <div className="flex items-center gap-3">
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
+                                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                 <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                                   <ShieldCheck size={10} /> {template.status}
+                                 </p>
+                                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{varCount} Variáveis</p>
+                              </div>
+                            </div>
+                            {campaignData.templateId === template.id && <CheckCircle2 className="text-primary-500" size={18} />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {campaignData.templateId && (
+                  (() => {
+                    let varCount = 0;
+                    if (templateSource === 'internal') {
+                      const selectedTemplate = templates.find(t => t.id === campaignData.templateId);
+                      varCount = selectedTemplate?.variables_count || 0;
+                    } else {
+                      const selectedTemplate = metaTemplates.find(t => t.id === campaignData.templateId);
+                      const body = selectedTemplate?.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                      varCount = (body.match(/\{\{\d+\}\}/g) || []).length;
+                    }
+
+                    if (varCount === 0) return null;
+                    
+                    return (
+                      <div className="p-4 bg-slate-900 rounded-2xl space-y-3 animate-in zoom-in-95 duration-300 shadow-xl border border-white/5">
+                        <div className="flex items-center gap-2 text-white">
+                           <Sparkles className="text-amber-400" size={18} />
+                           <h4 className="text-sm font-black">Personalização da Mensagem</h4>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {Array.from({ length: varCount }).map((_, i) => (
+                            <div key={i} className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variável {"{{"}{i+1}{"}}"}</label>
+                              <select
+                                value={campaignData.variables[`var${i+1}`] || ''}
+                                onChange={e => setCampaignData({
+                                  ...campaignData, 
+                                  variables: { ...campaignData.variables, [`var${i+1}`]: e.target.value }
+                                })}
+                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary-500 outline-none transition-all font-bold"
+                              >
+                                <option value="">Selecione o campo do contato...</option>
+                                {contactFields.map(field => (
+                                  <option key={field.id} value={field.id}>{field.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
             )}
 
@@ -863,9 +914,14 @@ export default function Campaigns() {
                 Voltar
               </button>
               <button 
-                disabled={!campaignData.templateId}
-                onClick={() => setCurrentStep(3)}
-                className="flex-1 py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl"
+                disabled={campaignData.messageType === 'custom' ? !campaignData.customText.trim() : !campaignData.templateId}
+                onClick={() => {
+                  if (campaignData.messageType === 'custom' && !campaignData.name) {
+                    setCampaignData({...campaignData, name: 'Disparo Manual'});
+                  }
+                  setCurrentStep(3);
+                }}
+                className="flex-1 py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl disabled:opacity-50 disabled:grayscale"
               >
                 Revisar Disparo
                 <Zap size={18} className="text-amber-400" />
@@ -967,9 +1023,11 @@ export default function Campaigns() {
 
                     const campaignPayload = {
                       tenant_id: user.id,
-                      name: campaignData.name,
-                      template_name: campaignData.templateName,
-                      template_id: campaignData.templateId,
+                      name: campaignData.name || (campaignData.messageType === 'custom' ? 'Mensagem Direta' : 'Nova Campanha'),
+                      template_name: campaignData.messageType === 'custom' ? 'Mensagem Personalizada' : campaignData.templateName,
+                      template_id: campaignData.templateId || null,
+                      message_type: campaignData.messageType,
+                      custom_text: campaignData.messageType === 'custom' ? campaignData.customText : null,
                       target_type: campaignData.targetType,
                       selected_labels: campaignData.targetType === 'labels' ? campaignData.selectedLabels[0] : null,
                       selected_funnel_status: campaignData.targetType === 'funnel' ? campaignData.selectedFunnelStatus : null,
@@ -1042,13 +1100,17 @@ export default function Campaigns() {
               setEditingCampaignId(null);
               setCampaignData({ 
                 name: '', 
-                targetType: 'all', 
+                targetType: 'manual', 
                 selectedLabels: [], 
                 selectedFunnelStatus: '', 
                 manualList: '',
                 uploadedContacts: [],
+                messageType: 'custom',
+                customText: '',
                 templateId: '', 
                 templateName: '', 
+                templateLanguage: 'pt_BR',
+                isMetaTemplate: false,
                 variables: {} 
               });
               setCurrentStep(1);

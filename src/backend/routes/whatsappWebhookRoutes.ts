@@ -96,7 +96,7 @@ router.post('/webhook', async (req, res) => {
         .select('id, whatsapp_organizacao')
         .eq('whatsapp_instance_id', instanceName)
         .maybeSingle();
-      profile = fallbackNoConfig;
+      profile = fallbackNoConfig ? { ...fallbackNoConfig, whatsapp_provider_config: null } : null;
     } else {
       profile = pData;
     }
@@ -116,7 +116,7 @@ router.post('/webhook', async (req, res) => {
           .select('id, whatsapp_organizacao')
           .ilike('id', `${prefix}%`)
           .maybeSingle();
-        fallbackProfile = fbNoConfig;
+        fallbackProfile = fbNoConfig ? { ...fbNoConfig, whatsapp_provider_config: null } : null;
       }
 
       if (fallbackProfile) {

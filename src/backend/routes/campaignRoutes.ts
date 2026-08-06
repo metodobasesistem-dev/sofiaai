@@ -165,7 +165,9 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
       name: (profile as any)?.name,
     };
 
-    if (!isMetaOfficial && campaign.template_id) {
+    if (campaign.message_type === 'custom' || campaign.custom_text) {
+      templateBody = campaign.custom_text || '';
+    } else if (!isMetaOfficial && campaign.template_id) {
       const { data: tplData } = await supabase
         .from('message_templates')
         .select('body')
@@ -216,7 +218,7 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
       let sendError = '';
 
       try {
-        if (isMetaOfficial) {
+        if (isMetaOfficial && campaign.message_type !== 'custom') {
           const result = await whatsappService.sendTemplate(
             userId,
             phone,
@@ -230,6 +232,14 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
         } else {
           if (!templateBody) throw new Error('Corpo da mensagem vazio.');
           let finalMessage = templateBody;
+
+          // Substitui variáveis {nome}, {telefone} se existirem no texto customizado
+          const contactName = contact.nome || contact.name || 'Cliente';
+          finalMessage = finalMessage
+            .replace(/\{nome\}/gi, contactName)
+            .replace(/\{telefone\}/gi, phone);
+
+          // Substitui {{1}}, {{2}}, etc.
           mappedVars.forEach((val, idx) => {
             finalMessage = finalMessage.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), String(val));
           });
