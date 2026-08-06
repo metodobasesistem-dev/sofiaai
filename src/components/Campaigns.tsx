@@ -71,6 +71,49 @@ export default function Campaigns() {
   const [showContactsList, setShowContactsList] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
+  const [isValidatingNumbers, setIsValidatingNumbers] = useState(false);
+  const [validationResults, setValidationResults] = useState<{ validCount: number; invalidCount: number; results: any[] } | null>(null);
+
+  const validateManualNumbers = async () => {
+    const rawNumbers = (campaignData.manualList || '').split('\n').map(n => n.trim()).filter(Boolean);
+    if (rawNumbers.length === 0) {
+      return toast.error('Insira ao menos um número de telefone na lista.');
+    }
+
+    setIsValidatingNumbers(true);
+    setValidationResults(null);
+    try {
+      const response = await standardFetch('/api/v2/campaigns/validate-numbers', {
+        method: 'POST',
+        body: JSON.stringify({ numbers: rawNumbers })
+      });
+      const res = await response.json();
+      if (res.success) {
+        setValidationResults(res);
+        if (res.invalidCount === 0) {
+          toast.success(`Todos os ${res.validCount} números possuem WhatsApp ativo!`);
+        } else {
+          toast.warning(`Validação concluída: ${res.validCount} válidos e ${res.invalidCount} sem WhatsApp.`);
+        }
+      } else {
+        toast.error(res.error || 'Erro ao validar números.');
+      }
+    } catch (err: any) {
+      toast.error('Erro ao validar números: ' + err.message);
+    } finally {
+      setIsValidatingNumbers(false);
+    }
+  };
+
+  const removeInvalidNumbers = () => {
+    if (!validationResults) return;
+    const validNumbers = validationResults.results
+      .filter((r: any) => r.exists)
+      .map((r: any) => r.number);
+    setCampaignData({ ...campaignData, manualList: validNumbers.join('\n') });
+    setValidationResults(null);
+    toast.success('Números sem WhatsApp foram removidos da lista!');
+  };
   
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -528,12 +571,60 @@ export default function Campaigns() {
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lista de Números (Um por linha)</p>
                     <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded-lg">Inclua o DDI (Ex: 55)</span>
                   </div>
+
                   <textarea 
                     value={campaignData.manualList}
-                    onChange={e => setCampaignData({...campaignData, manualList: e.target.value})}
+                    onChange={e => {
+                      setCampaignData({...campaignData, manualList: e.target.value});
+                      setValidationResults(null);
+                    }}
                     placeholder="5511999999999&#10;5511888888888"
-                    className="w-full h-40 px-4 py-3 rounded-2xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white font-bold resize-none font-mono"
+                    className="w-full h-36 px-4 py-3 rounded-2xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white font-bold resize-none font-mono"
                   />
+
+                  {/* Botão e Resultado de Validação de WhatsApp */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={validateManualNumbers}
+                      disabled={isValidatingNumbers || !campaignData.manualList.trim()}
+                      className="px-4 py-2.5 bg-white border border-slate-200 hover:border-emerald-500 hover:text-emerald-600 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                      {isValidatingNumbers ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin text-emerald-500" />
+                          <span>Validando no WhatsApp...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck size={14} className="text-emerald-500" />
+                          <span>Validar Se Números Têm WhatsApp</span>
+                        </>
+                      )}
+                    </button>
+
+                    {validationResults && (
+                      <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm text-xs font-bold">
+                        <span className="text-emerald-600 flex items-center gap-1">
+                          <CheckCircle2 size={14} /> {validationResults.validCount} Válidos
+                        </span>
+                        {validationResults.invalidCount > 0 && (
+                          <>
+                            <span className="text-red-500 flex items-center gap-1">
+                              <XCircle size={14} /> {validationResults.invalidCount} Inválidos
+                            </span>
+                            <button
+                              type="button"
+                              onClick={removeInvalidNumbers}
+                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border border-red-100"
+                            >
+                              Remover Inválidos
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               )}
 

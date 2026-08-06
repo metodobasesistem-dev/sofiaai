@@ -6,6 +6,7 @@ import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { whatsappService } from '../services/whatsappService.js';
+import { EvolutionApiService } from '../services/evolutionApiService.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -593,9 +594,45 @@ router.post('/:id/cancel', async (req: AuthenticatedRequest, res: Response) => {
       return res.json({ success: false, message: 'Nenhum job ativo para cancelar.' });
     }
 
-    job.cancelRequested = true;
-    res.json({ success: true, message: 'Cancelamento solicitado.' });
+/** POST /validate-numbers — Valida uma lista de números na Evolution API */
+router.post('/validate-numbers', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { numbers } = req.body;
+    if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
+      return res.status(400).json({ success: false, error: 'Lista de números é obrigatória' });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('whatsapp_instance_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const instanceName = profile?.whatsapp_instance_id || `wppai_${userId.slice(0, 8)}`;
+
+    const results = await Promise.all(
+      numbers.map(async (num: string) => {
+        const cleanNumber = String(num).replace(/\D/g, '');
+        if (!cleanNumber || cleanNumber.length < 8) {
+          return { number: num, cleanNumber, exists: false, valid: false };
+        }
+        const exists = await EvolutionApiService.whatsappExists(instanceName, cleanNumber);
+        return { number: num, cleanNumber, exists, valid: exists };
+      })
+    );
+
+    const validCount = results.filter(r => r.exists).length;
+    const invalidCount = results.filter(r => !r.exists).length;
+
+    res.json({
+      success: true,
+      validCount,
+      invalidCount,
+      results
+    });
   } catch (err: any) {
+    console.error('[Campaigns] Error validating numbers:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
