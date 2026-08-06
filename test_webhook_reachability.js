@@ -1,9 +1,13 @@
 import axios from 'axios';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
 async function testWebhook() {
   console.log('Sending mock webhook...');
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET || '';
+  const webhookUrl = `https://baseai.natandesouza.com.br/api/whatsapp/evolution/webhook?token=${secret}`;
   try {
-     const res = await axios.post('https://baseai.natandesouza.com.br/api/whatsapp/evolution/webhook', {
+     const res = await axios.post(webhookUrl, {
          event: 'MESSAGES_UPSERT',
          instance: 'wppai_6524ad04',
          data: {
