@@ -2237,13 +2237,13 @@ tudo que tiver no 'intent'.`,
         type: 'function',
         function: {
           name: 'transfer_to_human',
-          description: 'Transfere o atendimento para um agente humano. Use quando: (1) o cliente pedir explicitamente para falar com humano, (2) o cliente estiver irritado ou frustrado, (3) a solicitação estiver completamente fora do seu escopo, (4) após 3 tentativas sem conseguir resolver.',
+          description: 'Transfere o atendimento para um agente humano. Use quando: (1) o cliente pedir explicitamente para falar com humano, (2) o cliente estiver irritado ou frustrado, (3) a solicitação estiver completamente fora do seu escopo, (4) após 3 tentativas sem conseguir resolver, ou (5) você coletou dados de onboarding (nome/email) com sucesso e um humano precisa intervir.',
           parameters: {
             type: 'object',
             properties: {
               reason: {
                 type: 'string',
-                enum: ['solicitacao_cliente', 'cliente_frustrado', 'fora_de_escopo', 'nao_resolvido'],
+                enum: ['solicitacao_cliente', 'cliente_frustrado', 'fora_de_escopo', 'nao_resolvido', 'coleta_dados_concluida'],
                 description: 'Motivo da transferência'
               },
               message: {
