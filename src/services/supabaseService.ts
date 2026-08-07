@@ -321,7 +321,13 @@ const mapAgents = (data: any[]): Agent[] =>
     response_delay: a.response_delay,
     ecommerce_api_url: a.ecommerce_api_url,
     ecommerce_api_type: a.ecommerce_api_type,
-    ecommerce_api_use_nlp: a.ecommerce_api_use_nlp
+    ecommerce_api_use_nlp: a.ecommerce_api_use_nlp,
+    tone_of_voice: a.tone_of_voice,
+    forbidden_topics: a.forbidden_topics,
+    conversation_examples: a.conversation_examples,
+    training_mode: a.training_mode,
+    whatsapp_provider: a.whatsapp_provider,
+    whatsapp_provider_config: a.whatsapp_provider_config
   }));
 
 export const listAgents = async (): Promise<Agent[]> => {
