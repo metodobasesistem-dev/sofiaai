@@ -73,6 +73,48 @@ export default function Campaigns() {
   const [isTestSending, setIsTestSending] = useState(false);
   const [isValidatingNumbers, setIsValidatingNumbers] = useState(false);
   const [validationResults, setValidationResults] = useState<{ validCount: number; invalidCount: number; results: any[] } | null>(null);
+  const [isCheckingContact, setIsCheckingContact] = useState(false);
+  const [contactCheckResult, setContactCheckResult] = useState<{ found: boolean; name?: string; status?: string } | null>(null);
+
+  const validateSingleContact = async () => {
+    if (!campaignData.singleContact.telefone) return;
+    
+    setIsCheckingContact(true);
+    setContactCheckResult(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const cleanPhone = campaignData.singleContact.telefone.replace(/\D/g, '');
+      const last8 = cleanPhone.slice(-8);
+      
+      if (!last8) {
+        toast.error('Telefone inválido para busca.');
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('nome, status_funil')
+        .eq('user_id', user.id)
+        .like('telefone', `%${last8}`)
+        .maybeSingle();
+        
+      if (error && error.code !== 'PGRST116') throw error; // Ignorar erro de 0 rows
+      
+      if (data) {
+        setContactCheckResult({ found: true, name: data.nome, status: data.status_funil });
+        toast.warning('Atenção: Contato já existe na sua base!');
+      } else {
+        setContactCheckResult({ found: false });
+        toast.success('Contato inédito na base!');
+      }
+    } catch (err: any) {
+      toast.error('Erro ao buscar contato: ' + err.message);
+    } finally {
+      setIsCheckingContact(false);
+    }
+  };
 
   const validateManualNumbers = async () => {
     const rawNumbers = (campaignData.manualList || '').split('\n').map(n => n.trim()).filter(Boolean);
@@ -525,16 +567,38 @@ export default function Campaigns() {
                       value={campaignData.singleContact.nome}
                       onChange={e => setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, nome: e.target.value}})}
                     />
-                    <input 
-                      type="text" 
-                      placeholder="Telefone com DDI"
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-primary-500 text-sm font-bold font-mono"
-                      value={campaignData.singleContact.telefone}
-                      onChange={e => setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, telefone: e.target.value}})}
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Telefone com DDI"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-primary-500 text-sm font-bold font-mono"
+                        value={campaignData.singleContact.telefone}
+                        onChange={e => {
+                          setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, telefone: e.target.value}});
+                          setContactCheckResult(null);
+                        }}
+                      />
+                      <button
+                        className="px-3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+                        onClick={validateSingleContact}
+                        disabled={isCheckingContact || !campaignData.singleContact.telefone}
+                      >
+                        {isCheckingContact ? '...' : 'Validar'}
+                      </button>
+                    </div>
                   </div>
                   
-                  <div className="pt-2 border-t border-slate-200 space-y-3">
+                  {contactCheckResult && (
+                    <div className={`p-3 mt-3 rounded-lg text-xs font-bold ${contactCheckResult.found ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}>
+                      {contactCheckResult.found ? (
+                        <>⚠️ Contato já existente: {contactCheckResult.name} (Status: {contactCheckResult.status || 'N/A'})</>
+                      ) : (
+                        <>✅ Contato inédito! Pode seguir com o envio.</>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="pt-2 mt-3 border-t border-slate-200 space-y-3">
                     <label 
                       className="flex items-center gap-2 cursor-pointer group"
                       onClick={() => setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, linkToCampaign: !campaignData.singleContact.linkToCampaign}})}
