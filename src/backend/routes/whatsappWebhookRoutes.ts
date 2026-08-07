@@ -399,7 +399,7 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
 
     for (const update of updates) {
       const msgId = update?.key?.id || update?.id;
-      const rawStatus = (update?.update?.status || update?.status || '').toUpperCase();
+      const rawStatus = String(update?.update?.status ?? update?.status ?? '').toUpperCase();
       
       if (!msgId || !rawStatus) continue;
 
@@ -410,10 +410,15 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       // Mapeamento de status da Evolution para o nosso banco
       const statusMap: Record<string, string> = {
         'PENDING':       'pending',
+        '1':             'pending',
         'SERVER_ACK':    'sent',
+        '2':             'sent',
         'DELIVERY_ACK':  'delivered',
+        '3':             'delivered',
         'READ':          'read',
-        'PLAYED':        'read'  // áudio ouvido = lido
+        '4':             'read',
+        'PLAYED':        'read',
+        '5':             'read'
       };
 
       const mappedStatus = statusMap[rawStatus];
