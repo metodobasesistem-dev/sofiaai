@@ -125,11 +125,12 @@ export default function Campaigns() {
 
   const [campaignData, setCampaignData] = useState({
     name: '',
-    targetType: 'all' as 'all' | 'labels' | 'funnel' | 'manual' | 'upload',
+    targetType: 'all' as 'all' | 'labels' | 'funnel' | 'manual' | 'upload' | 'single_contact',
     selectedLabels: [] as string[],
     selectedFunnelStatus: '',
     manualList: '',
     uploadedContacts: [] as any[],
+    singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
     messageType: 'custom' as 'custom' | 'template',
     customText: '',
     templateId: '',
@@ -486,7 +487,8 @@ export default function Campaigns() {
                   { id: 'labels', label: 'Etiquetas', icon: <Filter size={18} /> },
                   { id: 'funnel', label: 'Funil', icon: <Layers size={18} /> },
                   { id: 'manual', label: 'Manual', icon: <ClipboardList size={18} /> },
-                  { id: 'upload', label: 'Planilha', icon: <Upload size={18} /> }
+                  { id: 'upload', label: 'Planilha', icon: <Upload size={18} /> },
+                  { id: 'single_contact', label: 'Contato Único', icon: <Zap size={18} /> }
                 ].map(type => (
                   <button
                     key={type.id}
@@ -505,6 +507,77 @@ export default function Campaigns() {
             </div>
 
             <AnimatePresence mode="wait">
+              {campaignData.targetType === 'single_contact' && (
+                <motion.div 
+                  key="single_contact"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100"
+                >
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalhes do Contato</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input 
+                      type="text" 
+                      placeholder="Nome do contato"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-primary-500 text-sm font-bold"
+                      value={campaignData.singleContact.nome}
+                      onChange={e => setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, nome: e.target.value}})}
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Telefone com DDI"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-primary-500 text-sm font-bold font-mono"
+                      value={campaignData.singleContact.telefone}
+                      onChange={e => setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, telefone: e.target.value}})}
+                    />
+                  </div>
+                  
+                  <div className="pt-2 border-t border-slate-200 space-y-3">
+                    <label 
+                      className="flex items-center gap-2 cursor-pointer group"
+                      onClick={() => setCampaignData({...campaignData, singleContact: {...campaignData.singleContact, linkToCampaign: !campaignData.singleContact.linkToCampaign}})}
+                    >
+                      <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${
+                        campaignData.singleContact.linkToCampaign ? 'bg-primary-500 border-primary-500 text-white' : 'bg-white border-slate-300 group-hover:border-primary-400'
+                      }`}>
+                        {campaignData.singleContact.linkToCampaign && <CheckCircle2 size={14} />}
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">Vincular a uma campanha existente?</span>
+                    </label>
+
+                    {campaignData.singleContact.linkToCampaign && (
+                      <select
+                        value={campaignData.singleContact.linkedCampaignId}
+                        onChange={e => {
+                          const id = e.target.value;
+                          const camp = campaigns.find(c => c.id === id);
+                          if (camp) {
+                            setCampaignData({
+                              ...campaignData,
+                              singleContact: { ...campaignData.singleContact, linkedCampaignId: id },
+                              messageType: camp.message_type || (camp.custom_text ? 'custom' : 'template'),
+                              templateId: camp.template_id || '',
+                              templateName: camp.template_name || '',
+                              customText: camp.custom_text || '',
+                              variables: camp.variables || {}
+                            });
+                          } else {
+                            setCampaignData({...campaignData, singleContact: { ...campaignData.singleContact, linkedCampaignId: id }});
+                          }
+                        }}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 outline-none transition-all text-sm bg-white font-bold"
+                      >
+                        <option value="">Selecione a campanha...</option>
+                        {campaigns.map(c => (
+                          <option key={c.id} value={c.id}>{c.name} ({new Date(c.created_at).toLocaleDateString('pt-BR')})</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
               {campaignData.targetType === 'labels' && (
                 <motion.div 
                   key="labels"
@@ -1106,6 +1179,33 @@ export default function Campaigns() {
                          telefone: (c.telefone || c.number || '').replace(/\D/g, ''),
                          nome: c.nome || c.name || 'Lead Planilha'
                       }));
+                    } else if (campaignData.targetType === 'single_contact') {
+                      const res = await standardFetch('/api/v2/campaigns/send-single', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          linkedCampaignId: campaignData.singleContact.linkToCampaign ? campaignData.singleContact.linkedCampaignId : null,
+                          newCampaignData: campaignData.singleContact.linkToCampaign ? null : {
+                            name: campaignData.name || (campaignData.messageType === 'custom' ? 'Mensagem Direta' : 'Nova Campanha'),
+                            messageType: campaignData.messageType,
+                            templateId: campaignData.templateId,
+                            templateName: campaignData.templateName,
+                            customText: campaignData.customText,
+                            variables: campaignData.variables
+                          },
+                          contact: {
+                            nome: campaignData.singleContact.nome,
+                            telefone: campaignData.singleContact.telefone
+                          }
+                        })
+                      });
+                      const result = await res.json();
+                      if (!result.success) throw new Error(result.error);
+                      toast.success('Mensagem enviada com sucesso!');
+                      setIsModalOpen(false);
+                      setEditingCampaignId(null);
+                      fetchCampaigns();
+                      setIsSaving(false);
+                      return; // Sai do fluxo normal de criação
                     } else {
                       finalContacts = allContacts || [];
                     }

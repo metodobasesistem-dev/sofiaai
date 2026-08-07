@@ -405,6 +405,201 @@ router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+/** POST /send-single — Envia mensagem para um contato isolado, registrando-o no CRM se necessário e opcionalmente vinculando a uma campanha */
+router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { linkedCampaignId, newCampaignData, contact } = req.body;
+    
+    if (!contact || !contact.telefone) {
+      return res.status(400).json({ success: false, error: 'Contato e telefone são obrigatórios' });
+    }
+
+    const phoneRaw = contact.telefone.replace(/\D/g, '');
+    const phone = normalizePhone(phoneRaw);
+    
+    // 1. Garante que o contato existe no CRM (contacts)
+    let contactId = '';
+    const { data: existingContact } = await supabase
+      .from('contacts')
+      .select('id, nome, telefone')
+      .eq('user_id', userId)
+      .eq('telefone', phoneRaw)
+      .maybeSingle();
+
+    if (existingContact) {
+      contactId = existingContact.id;
+    } else {
+      const { data: newContact, error: insertErr } = await supabase
+        .from('contacts')
+        .insert({
+          user_id: userId,
+          nome: contact.nome || 'Lead Isolado',
+          telefone: phoneRaw,
+          status_funil: 'Novo Lead',
+        })
+        .select('id')
+        .single();
+      
+      if (insertErr) throw new Error('Erro ao criar contato: ' + insertErr.message);
+      contactId = newContact.id;
+    }
+
+    // 2. Resolve Campaign Data (linkada ou nova)
+    let campaignId = linkedCampaignId;
+    let campaignInfo: any = null;
+
+    if (linkedCampaignId) {
+      // Usa uma existente
+      const { data: camp, error: campErr } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', linkedCampaignId)
+        .eq('tenant_id', userId)
+        .single();
+      if (campErr) throw new Error('Campanha vinculada não encontrada.');
+      campaignInfo = camp;
+    } else if (newCampaignData) {
+      // Cria uma nova campanha para esse envio isolado
+      const payload = {
+        tenant_id: userId,
+        name: newCampaignData.name || 'Contato Único',
+        template_name: newCampaignData.templateName || 'Mensagem Personalizada',
+        template_id: newCampaignData.templateId || null,
+        message_type: newCampaignData.messageType || 'custom',
+        custom_text: newCampaignData.customText || null,
+        target_type: 'single_contact',
+        variables: newCampaignData.variables || {},
+        status: 'completed', // Já marca como completed pois vamos enviar agora
+        total_contacts: 1,
+        sent_count: 0,
+        error_count: 0
+      };
+      
+      const { data: newCamp, error: createCampErr } = await supabase
+        .from('campaigns')
+        .insert(payload)
+        .select()
+        .single();
+      
+      if (createCampErr) throw new Error('Erro ao criar campanha isolada: ' + createCampErr.message);
+      campaignId = newCamp.id;
+      campaignInfo = newCamp;
+    } else {
+      return res.status(400).json({ success: false, error: 'É necessário fornecer linkedCampaignId ou newCampaignData' });
+    }
+
+    // 3. Resolve variáveis e envia a mensagem
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('whatsapp_provider, nome_completo, full_name, name')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const isMetaOfficial = (profile as any)?.whatsapp_provider === 'meta_official';
+    const sender = {
+      nome_completo: (profile as any)?.nome_completo,
+      full_name: (profile as any)?.full_name,
+      name: (profile as any)?.name,
+    };
+
+    // Monta o contato falso para a resolução de variáveis, mesclando com o BD se necessário
+    const contactObj = {
+      id: contactId,
+      nome: contact.nome || (existingContact?.nome) || '',
+      telefone: phoneRaw,
+      name: contact.nome || (existingContact?.nome) || '',
+      phone: phoneRaw
+    };
+
+    const variables = campaignInfo.variables || {};
+    const mappedVars = Object.entries(variables as Record<string, string>)
+      .sort((a, b) => parseInt(a[0].replace('var', ''), 10) - parseInt(b[0].replace('var', ''), 10))
+      .map(([, field]) => getContactFieldValue(contactObj, field as string, sender));
+
+    let sendSuccess = false;
+    let sendError = '';
+
+    try {
+      if (isMetaOfficial && campaignInfo.message_type !== 'custom') {
+        const result = await whatsappService.sendTemplate(
+          userId,
+          phone,
+          campaignInfo.template_name,
+          'pt_BR',
+          [{ type: 'body', parameters: mappedVars.map(v => ({ type: 'text', text: v })) }],
+          undefined
+        );
+        if (!result.success) throw new Error(result.error || 'Erro ao enviar template');
+        sendSuccess = true;
+      } else {
+        let templateBody = campaignInfo.custom_text || '';
+        if (!templateBody && !isMetaOfficial && campaignInfo.template_id) {
+          const { data: tplData } = await supabase
+            .from('message_templates')
+            .select('body')
+            .eq('id', campaignInfo.template_id)
+            .maybeSingle();
+          templateBody = (tplData as any)?.body || '';
+        }
+        if (!templateBody) throw new Error('Corpo da mensagem vazio.');
+        
+        let finalMessage = templateBody
+          .replace(/\{nome\}/gi, contactObj.nome)
+          .replace(/\{telefone\}/gi, phone);
+
+        mappedVars.forEach((val, idx) => {
+          finalMessage = finalMessage.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, 'g'), String(val));
+        });
+
+        const result = await whatsappService.sendMessage(userId, phone, finalMessage);
+        if (!result.success) throw new Error(result.error || 'Erro ao enviar mensagem');
+        sendSuccess = true;
+      }
+    } catch (sendErr: any) {
+      sendSuccess = false;
+      sendError = sendErr.message || 'Erro desconhecido';
+    }
+
+    // 4. Registra no log e atualiza contadores
+    await supabase.from('campaign_logs').insert({
+      campaign_id: campaignId,
+      contact_id: contactId,
+      status: sendSuccess ? 'sent' : 'error',
+      error_message: sendSuccess ? null : sendError
+    });
+
+    if (linkedCampaignId) {
+      // Se era linkada, incrementa os contadores lendo o valor atual
+      const { data: currentCamp } = await supabase.from('campaigns').select('total_contacts, sent_count, error_count').eq('id', campaignId).single();
+      const newTotal = (currentCamp?.total_contacts || 0) + 1;
+      const newSent = (currentCamp?.sent_count || 0) + (sendSuccess ? 1 : 0);
+      const newError = (currentCamp?.error_count || 0) + (sendSuccess ? 0 : 1);
+      
+      await supabase.from('campaigns').update({
+        total_contacts: newTotal,
+        sent_count: newSent,
+        error_count: newError
+      }).eq('id', campaignId);
+    } else {
+      // Se era nova, atualiza os contadores base
+      await supabase.from('campaigns').update({
+        sent_count: sendSuccess ? 1 : 0,
+        error_count: sendSuccess ? 0 : 1
+      }).eq('id', campaignId);
+    }
+
+    if (sendSuccess) {
+      res.json({ success: true, message: 'Enviado com sucesso.' });
+    } else {
+      res.status(400).json({ success: false, error: sendError });
+    }
+  } catch (err: any) {
+    console.error('[Campaigns] Erro no send-single:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** POST / — create a new campaign */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
