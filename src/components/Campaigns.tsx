@@ -352,6 +352,7 @@ export default function Campaigns() {
       templateName: campaign.template_name || '',
       templateLanguage: campaign.template_language || 'pt_BR',
       isMetaTemplate: false,
+      singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
       variables: campaign.variables || {}
     });
     setCurrentStep(1);
@@ -1302,6 +1303,7 @@ export default function Campaigns() {
                 templateName: '', 
                 templateLanguage: 'pt_BR',
                 isMetaTemplate: false,
+                singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
                 variables: {} 
               });
               setCurrentStep(1);
