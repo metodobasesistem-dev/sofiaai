@@ -404,8 +404,11 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       if (!msgId || !rawStatus) continue;
 
       // Só processa mensagens enviadas por nós (fromMe)
-      const fromMe = update?.key?.fromMe === true;
-      if (!fromMe) continue;
+      const fromMe = update?.key?.fromMe === true || update?.key?.fromMe === 'true';
+      if (!fromMe) {
+        console.log(`[Webhook-Status] Ignored ${msgId}: fromMe is false/undefined`);
+        continue;
+      }
 
       // Mapeamento de status da Evolution para o nosso banco
       const statusMap: Record<string, string> = {
@@ -422,19 +425,38 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       };
 
       const mappedStatus = statusMap[rawStatus];
-      if (!mappedStatus) continue;
+      if (!mappedStatus) {
+        console.log(`[Webhook-Status] Ignored ${msgId}: unmapped rawStatus='${rawStatus}'`);
+        continue;
+      }
 
       // Hierarquia de progressao — eventos podem chegar fora de ordem.
       // pending=0, sent=1, delivered=2, read=3. Nunca regredir.
       const RANK: Record<string, number> = { pending: 0, sent: 1, delivered: 2, read: 3 };
-      const { data: current } = await supabase
+      let { data: current } = await supabase
         .from('messages')
         .select('status, thread_id')
         .eq('whatsapp_id', msgId)
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (!current) continue; // MENSAGEM NAO ENCONTRADA
+      // [FIX] Race condition: O webhook de update pode chegar antes do upsert persistir no banco.
+      if (!current) {
+        console.log(`[Webhook-Status] Message ${msgId} not found. Retrying in 1.5s to prevent race condition...`);
+        await new Promise(r => setTimeout(r, 1500));
+        const { data: retryCurrent } = await supabase
+          .from('messages')
+          .select('status, thread_id')
+          .eq('whatsapp_id', msgId)
+          .eq('user_id', userId)
+          .maybeSingle();
+        current = retryCurrent;
+      }
+
+      if (!current) {
+        console.log(`[Webhook-Status] Ignored ${msgId}: message not found in DB even after retry.`);
+        continue;
+      }
 
       const currentRank = RANK[current.status as string] ?? -1;
       const newRank = RANK[mappedStatus] ?? -1;
