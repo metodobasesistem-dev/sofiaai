@@ -429,26 +429,27 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       const RANK: Record<string, number> = { pending: 0, sent: 1, delivered: 2, read: 3 };
       const { data: current } = await supabase
         .from('messages')
-        .select('status')
+        .select('status, thread_id')
         .eq('whatsapp_id', msgId)
         .eq('user_id', userId)
         .maybeSingle();
 
-      const currentRank = RANK[current?.status as string] ?? -1;
+      if (!current) continue; // MENSAGEM NAO ENCONTRADA
+
+      const currentRank = RANK[current.status as string] ?? -1;
       const newRank = RANK[mappedStatus] ?? -1;
 
-      if (newRank <= currentRank) {
-        console.log(`[Webhook] ⏭️ Ignored regressive status: ${msgId} ${current?.status} → ${mappedStatus}`);
-        continue;
+      if (newRank > currentRank) {
+        // [FIX] Incluímos o thread_id no update para forçar o PostgreSQL a incluí-lo no WAL.
+        // Sem isso, o Supabase Realtime (que escuta por thread_id=eq.X) ignora o evento de UPDATE.
+        await supabase
+          .from('messages')
+          .update({ status: mappedStatus, thread_id: current.thread_id })
+          .eq('whatsapp_id', msgId)
+          .eq('user_id', userId);
       }
 
       console.log(`[Webhook] 📬 Status update: ${msgId} → ${mappedStatus}`);
-
-      await supabase
-        .from('messages')
-        .update({ status: mappedStatus })
-        .eq('whatsapp_id', msgId)
-        .eq('user_id', userId);
     }
   } catch (err) {
     console.error('[Webhook] Error processing message status update:', err);

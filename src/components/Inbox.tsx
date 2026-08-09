@@ -2289,9 +2289,13 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'messages', filter: `thread_id=eq.${selectedThreadId}` },
           (payload) => {
-            // Atualiza a mensagem existente (ex: status sending → sent)
+            // [FIX] Atualiza APENAS os campos enviados pelo Supabase Realtime
+            // (Se REPLICA IDENTITY = DEFAULT, payload.new só traz id e os campos alterados, como status)
+            // Se passarmos tudo para formatMsg, a mensagem perderia o 'text' e a 'data'!
             setMessages(prev => prev.map(m =>
-              m.id === payload.new.id ? { ...m, ...formatMsg(payload.new) } : m
+              m.id === payload.new.id 
+                ? { ...m, status: payload.new.status || m.status } 
+                : m
             ));
           }
         )
