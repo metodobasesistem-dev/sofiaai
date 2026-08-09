@@ -401,7 +401,10 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       const msgId = update?.key?.id || update?.id;
       const rawStatus = String(update?.update?.status ?? update?.status ?? '').toUpperCase();
       
-      if (!msgId || !rawStatus) continue;
+      if (!msgId || !rawStatus) {
+        console.log(`[Webhook-Status] SKIPPED: missing msgId or rawStatus. Payload:`, JSON.stringify(update));
+        continue;
+      }
 
       // Só processa mensagens enviadas por nós (fromMe)
       const fromMe = update?.key?.fromMe === true || update?.key?.fromMe === 'true';
