@@ -398,7 +398,7 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
     const updates = Array.isArray(data) ? data : [data];
 
     for (const update of updates) {
-      const msgId = update?.key?.id || update?.id;
+      const msgId = update?.key?.id || update?.keyId || update?.id;
       const rawStatus = String(update?.update?.status ?? update?.status ?? '').toUpperCase();
       
       if (!msgId || !rawStatus) {
@@ -407,7 +407,7 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
       }
 
       // Só processa mensagens enviadas por nós (fromMe)
-      const fromMe = update?.key?.fromMe === true || update?.key?.fromMe === 'true';
+      const fromMe = update?.key?.fromMe === true || update?.key?.fromMe === 'true' || update?.fromMe === true || update?.fromMe === 'true';
       if (!fromMe) {
         console.log(`[Webhook-Status] Ignored ${msgId}: fromMe is false/undefined`);
         continue;
