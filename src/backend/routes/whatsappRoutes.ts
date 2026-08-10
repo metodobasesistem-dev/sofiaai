@@ -126,4 +126,43 @@ router.post('/threads/refresh-photo', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/whatsapp/threads/backfill-photos
+ *
+ * A sincronização automática de foto só dispara quando chega uma NOVA
+ * mensagem inbound do contato — conversas antigas/importadas que nunca
+ * receberam mensagem depois desse gatilho ficam com iniciais para sempre.
+ * Esta rota enfileira o sync (via BullMQ, mesmo worker rate-limited de
+ * /threads/refresh-photo) para todas as threads do usuário que nunca
+ * tiveram sequer uma tentativa de busca (profile_picture_updated_at nulo).
+ * Não sobrescreve threads já tentadas — essas respeitam o TTL normal do
+ * worker para não martelar a Evolution API à toa.
+ */
+router.post('/threads/backfill-photos', async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId!;
+
+  try {
+    const { data: threads, error } = await supabase
+      .from('threads')
+      .select('id, remote_jid')
+      .eq('user_id', userId)
+      .is('profile_picture_updated_at', null);
+
+    if (error) throw error;
+
+    for (const t of threads || []) {
+      await whatsappService.enqueueProfilePictureSync({
+        userId,
+        threadId: t.id,
+        remoteJid: t.remote_jid
+      });
+    }
+
+    res.json({ success: true, enqueued: threads?.length || 0 });
+  } catch (err: any) {
+    console.error('[PhotoBackfill] Erro:', err);
+    res.status(500).json({ error: 'Erro ao enfileirar sincronização de fotos' });
+  }
+});
+
 export default router;
