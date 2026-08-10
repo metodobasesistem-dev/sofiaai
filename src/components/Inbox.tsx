@@ -698,38 +698,38 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
 };
 
 const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, now: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, now, onClick, onDelete }) => (
-  <div 
+  <div
     onClick={onClick}
-    className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
+    className={`p-2.5 flex items-center gap-2.5 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
       ${active ? 'bg-slate-50/80 border-l-2 border-emerald-500' : 'hover:bg-slate-50/50 border-l-2 border-transparent'}`}
   >
     <div className="relative shrink-0">
-      <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="lg" threadId={thread.id} />
+      <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="md" threadId={thread.id} />
       {thread.status === 'ia' && (
-        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-primary-500 border-2 border-white rounded-full z-10" />
+        <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-500 border-2 border-white rounded-full z-10" />
       )}
     </div>
 
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-1">
-        <h4 className={`text-[15px] truncate flex items-center gap-2
+      <div className="flex items-center justify-between mb-0.5">
+        <h4 className={`text-[13px] truncate flex items-center gap-1.5
           ${(thread.unreadCount ?? 0) > 0 ? "font-black text-slate-900" : "font-medium text-slate-600"}`}>
           {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
-          {thread.is_client && <Star size={12} className="fill-amber-500 text-amber-500 shrink-0" />}
-          {thread.priority === 'urgent' && <span className="text-xs" title="Urgente">🔥</span>}
-          {thread.priority === 'high' && <span className="text-xs" title="Alta">🔴</span>}
+          {thread.is_client && <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />}
+          {thread.priority === 'urgent' && <span className="text-[11px]" title="Urgente">🔥</span>}
+          {thread.priority === 'high' && <span className="text-[11px]" title="Alta">🔴</span>}
           {showWindow && <WindowCountdown lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt} variant="badge" />}
         </h4>
-        <div className="flex items-center gap-2">
-          <button 
+        <div className="flex items-center gap-1.5">
+          <button
             onClick={(e) => {
               e.stopPropagation();
               onDelete(e);
             }}
-            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
             title="Excluir conversa"
           >
-            <Trash size={12} />
+            <Trash size={11} />
           </button>
           <PendingReplyPill
             lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt}
@@ -737,39 +737,39 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
             show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && (thread.unreadCount ?? 0) > 0}
           />
           <span className={(thread.unreadCount ?? 0) > 0
-            ? "text-[11px] font-bold text-emerald-500"
-            : "text-[11px] font-medium text-slate-400"}>
+            ? "text-[10px] font-bold text-emerald-500"
+            : "text-[10px] font-medium text-slate-400"}>
             {thread.time}
           </span>
         </div>
       </div>
-      
-      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-        <span className="text-[10px] text-slate-400 font-mono truncate">
+
+      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+        <span className="text-[9px] text-slate-400 font-mono truncate">
           {thread.remoteJid.split('@')[0]}
         </span>
         {thread.labels && thread.labels.slice(0, 2).map((lbl, i) => (
-          <span key={i} className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 border border-primary-100 shrink-0 leading-none">
+          <span key={i} className="text-[8px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 border border-primary-100 shrink-0 leading-none">
             {lbl}
           </span>
         ))}
         {thread.labels && thread.labels.length > 2 && (
-          <span className="text-[9px] font-bold text-slate-400 shrink-0">+{thread.labels.length - 2}</span>
+          <span className="text-[8px] font-bold text-slate-400 shrink-0">+{thread.labels.length - 2}</span>
         )}
       </div>
 
       <div className="flex items-center justify-between">
-        <p className={(thread.unreadCount ?? 0) > 0 
-          ? "text-[13px] truncate leading-tight flex-1 mr-2 font-bold text-slate-900" 
-          : "text-[13px] truncate leading-tight flex-1 mr-2 font-normal text-slate-500"}>
+        <p className={(thread.unreadCount ?? 0) > 0
+          ? "text-[12px] truncate leading-tight flex-1 mr-2 font-bold text-slate-900"
+          : "text-[12px] truncate leading-tight flex-1 mr-2 font-normal text-slate-500"}>
           {thread.lastMessage || 'Inicie uma conversa'}
         </p>
         {(thread as any).isTyping ? (
-          <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
+          <span className="text-[9px] text-emerald-500 font-bold animate-pulse shrink-0">
             Digitando...
           </span>
         ) : (thread.unreadCount ?? 0) > 0 && (
-          <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm">
+          <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
             {thread.unreadCount}
           </span>
         )}
