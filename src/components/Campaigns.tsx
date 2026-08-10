@@ -1657,9 +1657,9 @@ export default function Campaigns() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden"
+              className="bg-white w-full max-w-xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
             >
-              <div className="p-4 md:p-5 border-b border-slate-50 bg-slate-50/50">
+              <div className="p-4 md:p-5 border-b border-slate-50 bg-slate-50/50 shrink-0">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-white text-primary-600 rounded-xl shadow-sm">
@@ -1692,7 +1692,7 @@ export default function Campaigns() {
                 </div>
               </div>
 
-              <div className="p-4 md:p-6">
+              <div className="p-4 md:p-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                  {renderWizard()}
               </div>
             </motion.div>
