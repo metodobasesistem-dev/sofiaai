@@ -53,7 +53,8 @@ import {
   TrendingDown,
   DollarSign,
   Image as ImageIcon,
-  MessageSquarePlus
+  MessageSquarePlus,
+  Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
