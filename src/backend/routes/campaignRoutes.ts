@@ -166,7 +166,7 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
       name: (profile as any)?.name,
     };
 
-    if (campaign.message_type === 'custom' || campaign.custom_text) {
+    if (campaign.message_type === 'custom') {
       templateBody = campaign.custom_text || '';
     } else if (!isMetaOfficial && campaign.template_id) {
       const { data: tplData } = await supabase
@@ -534,8 +534,10 @@ router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => 
         if (!result.success) throw new Error(result.error || 'Erro ao enviar template');
         sendSuccess = true;
       } else {
-        let templateBody = campaignInfo.custom_text || '';
-        if (!templateBody && !isMetaOfficial && campaignInfo.template_id) {
+        let templateBody = '';
+        if (campaignInfo.message_type === 'custom') {
+          templateBody = campaignInfo.custom_text || '';
+        } else if (!isMetaOfficial && campaignInfo.template_id) {
           const { data: tplData } = await supabase
             .from('message_templates')
             .select('body')
