@@ -511,16 +511,18 @@ export default function Campaigns() {
       case 1:
         return (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome da Campanha</label>
-              <input 
-                type="text" 
-                placeholder="Ex: Promoção de Verão 2024"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 transition-all font-bold"
-                value={campaignData.name}
-                onChange={e => setCampaignData({...campaignData, name: e.target.value})}
-              />
-            </div>
+            {!(campaignData.targetType === 'single_contact' && campaignData.singleContact.linkToCampaign) && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome da Campanha</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Promoção de Verão 2024"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/5 transition-all font-bold"
+                  value={campaignData.name}
+                  onChange={e => setCampaignData({...campaignData, name: e.target.value})}
+                />
+              </div>
+            )}
 
             <div className="space-y-4">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Quem deve receber?</label>
@@ -884,7 +886,15 @@ export default function Campaigns() {
             </AnimatePresence>
 
             <button 
-              disabled={!campaignData.name}
+              disabled={(() => {
+                if (campaignData.targetType === 'single_contact') {
+                  if (!campaignData.singleContact.telefone) return true;
+                  if (campaignData.singleContact.linkToCampaign && !campaignData.singleContact.linkedCampaignId) return true;
+                  if (!campaignData.singleContact.linkToCampaign && !campaignData.name) return true;
+                  return false;
+                }
+                return !campaignData.name;
+              })()}
               onClick={() => setCurrentStep(2)}
               className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl disabled:opacity-50 disabled:grayscale"
             >
