@@ -1010,7 +1010,22 @@ export default function Campaigns() {
                       <Send size={12} /> Pré-visualização da Mensagem no WhatsApp
                     </p>
                     <div className="bg-emerald-100/70 p-3 rounded-2xl text-xs font-medium text-slate-800 max-w-sm border border-emerald-200 shadow-sm leading-relaxed whitespace-pre-wrap">
-                      {campaignData.customText}
+                      {(() => {
+                        let sampleName = 'João';
+                        let samplePhone = '5511999999999';
+                        
+                        if (campaignData.targetType === 'upload' && campaignData.uploadedContacts?.length > 0) {
+                          sampleName = campaignData.uploadedContacts[0].nome || campaignData.uploadedContacts[0].name || sampleName;
+                          samplePhone = campaignData.uploadedContacts[0].telefone || samplePhone;
+                        } else if (campaignData.singleContact?.nome) {
+                          sampleName = campaignData.singleContact.nome;
+                          samplePhone = campaignData.singleContact.telefone || samplePhone;
+                        }
+                        
+                        return campaignData.customText
+                          .replace(/\{nome\}/gi, sampleName)
+                          .replace(/\{telefone\}/gi, samplePhone);
+                      })()}
                     </div>
                   </div>
                 )}
