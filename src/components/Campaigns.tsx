@@ -157,7 +157,14 @@ export default function Campaigns() {
     toast.success('Números sem WhatsApp foram removidos da lista!');
   };
   
-  const [newTemplate, setNewTemplate] = useState({
+  const [newTemplate, setNewTemplate] = useState<{
+    id?: string;
+    name: string;
+    category: string;
+    variables_count: number;
+    language: string;
+    body: string;
+  }>({
     name: '',
     category: 'MARKETING',
     variables_count: 0,
@@ -1713,7 +1720,10 @@ export default function Campaigns() {
            <div className="flex items-center justify-between">
               <h2 className="text-xl font-black text-slate-900">Modelos Cadastrados</h2>
               <button 
-                onClick={() => setIsTemplateModalOpen(true)}
+                onClick={() => {
+                  setNewTemplate({ name: '', category: 'MARKETING', variables_count: 0, language: 'pt_BR', body: '' });
+                  setIsTemplateModalOpen(true);
+                }}
                 className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
               >
                 <Plus size={16} /> Novo Modelo
@@ -1735,8 +1745,18 @@ export default function Campaigns() {
                       <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
                          <Layout size={20} />
                       </div>
-                      <button 
-                        onClick={async () => {
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={() => {
+                            setNewTemplate(template);
+                            setIsTemplateModalOpen(true);
+                          }}
+                          className="p-2 text-slate-200 hover:text-primary-500 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                           <Edit2 size={18} />
+                        </button>
+                        <button 
+                          onClick={async () => {
                           if (confirm('Deseja excluir este modelo?')) {
                             await supabase.from('message_templates').delete().eq('id', template.id);
                             fetchTemplates();
@@ -1822,7 +1842,7 @@ export default function Campaigns() {
               className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden p-10 space-y-8"
             >
               <div>
-                <h2 className="text-2xl font-black text-slate-900">Novo Modelo</h2>
+                <h2 className="text-2xl font-black text-slate-900">{newTemplate.id ? 'Editar Modelo' : 'Novo Modelo'}</h2>
                 <p className="text-sm text-slate-400">Cadastre o nome exato do modelo aprovado na Meta.</p>
               </div>
 
@@ -1914,18 +1934,28 @@ export default function Campaigns() {
                       const { data: { user } } = await supabase.auth.getUser();
                       if (!user) throw new Error('Usuário não autenticado');
 
-                      const { error: insertErr } = await supabase.from('message_templates').insert({
-                        name: newTemplate.name,
-                        category: newTemplate.category,
-                        variables_count: newTemplate.variables_count,
-                        language: newTemplate.language,
-                        body: newTemplate.body,
-                        tenant_id: user.id
-                      });
+                      if (newTemplate.id) {
+                        const { error: updateErr } = await supabase.from('message_templates').update({
+                          name: newTemplate.name,
+                          category: newTemplate.category,
+                          variables_count: newTemplate.variables_count,
+                          language: newTemplate.language,
+                          body: newTemplate.body
+                        }).eq('id', newTemplate.id);
+                        if (updateErr) throw updateErr;
+                      } else {
+                        const { error: insertErr } = await supabase.from('message_templates').insert({
+                          name: newTemplate.name,
+                          category: newTemplate.category,
+                          variables_count: newTemplate.variables_count,
+                          language: newTemplate.language,
+                          body: newTemplate.body,
+                          tenant_id: user.id
+                        });
+                        if (insertErr) throw insertErr;
+                      }
 
-                      if (insertErr) throw insertErr;
-
-                      toast.success('Modelo cadastrado com sucesso!');
+                      toast.success(newTemplate.id ? 'Modelo atualizado com sucesso!' : 'Modelo cadastrado com sucesso!');
                       setIsTemplateModalOpen(false);
                       setNewTemplate({ name: '', category: 'MARKETING', variables_count: 0, language: 'pt_BR', body: '' });
                       fetchTemplates();
