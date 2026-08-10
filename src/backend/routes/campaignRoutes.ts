@@ -433,6 +433,7 @@ router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => 
       const { data: newContact, error: insertErr } = await supabase
         .from('contacts')
         .insert({
+          id: `${userId}_${phoneRaw}`,
           user_id: userId,
           nome: contact.nome || 'Lead Isolado',
           telefone: phoneRaw,
