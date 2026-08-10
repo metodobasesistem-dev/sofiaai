@@ -668,7 +668,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
   <div 
     onClick={onClick}
     className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
-      ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+      ${active ? 'bg-slate-50/80 border-l-2 border-emerald-500' : 'hover:bg-slate-50/50 border-l-2 border-transparent'}`}
   >
     <div className="relative shrink-0">
       <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="lg" threadId={thread.id} />
@@ -3714,66 +3714,67 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             </div>
           </div>
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Pesquisar..." 
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] placeholder-slate-400 focus:bg-white focus:border-primary-300 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Pesquisar nome, telefone..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-[13px] placeholder-slate-400 focus:bg-white focus:border-primary-300 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+              />
+            </div>
+            <button
+              onClick={() => setIsFilterOpen(v => !v)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold transition-all flex-shrink-0
+                ${isFilterOpen
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200'
+                  : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-200/50'}`}
+            >
+              <Filter size={14} />
+              Filtrar
+              {(filterStatus !== 'Ativos' || filterSub !== 'Todos' || filterBadge !== null) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5" />
+              )}
+            </button>
           </div>
 
-          {/* Filtros — botão compacto com painel colapsável */}
+          {/* Filtros — active filters summary */}
           <div ref={filterPanelRef}>
-            {/* Trigger row */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsFilterOpen(v => !v)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex-shrink-0
-                  ${isFilterOpen
-                    ? 'bg-primary-600 text-white border-primary-600 shadow-md shadow-primary-200'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-              >
-                <Filter size={12} />
-                Filtros
-                {(filterStatus !== 'Ativos' || filterSub !== 'Todos' || filterBadge !== null) && (
-                  <span className={`w-1.5 h-1.5 rounded-full ${isFilterOpen ? 'bg-white' : 'bg-primary-500'}`} />
-                )}
-                <ChevronDown size={12} className={`transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Active filter pills (summary, read-only) */}
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
-                {filterStatus !== 'Ativos' && (
-                  <span className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1">
-                    {filterStatus}
-                    <button onClick={() => { setFilterStatus('Ativos'); setFilterBadge(null); }} className="hover:text-primary-900 ml-0.5">×</button>
-                  </span>
-                )}
-                {filterSub !== 'Todos' && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
-                    filterSub === 'Em Suporte' ? 'bg-amber-100 text-amber-700' : filterSub === 'Clientes' ? 'bg-emerald-100 text-emerald-700' : 'bg-primary-100 text-primary-700'
-                  }`}>
-                    {filterSub}
-                    <button onClick={() => setFilterSub('Todos')} className="hover:opacity-80 ml-0.5">×</button>
-                  </span>
-                )}
-                {filterBadge === 'sem_resposta' && (
-                  <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1">
-                    Sem resposta
-                    <button onClick={() => setFilterBadge(null)} className="hover:text-red-900 ml-0.5">×</button>
-                  </span>
-                )}
-                {filterBadge === 'follow_up' && (
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1">
-                    Follow-up
-                    <button onClick={() => setFilterBadge(null)} className="hover:text-amber-900 ml-0.5">×</button>
-                  </span>
-                )}
+            {(filterStatus !== 'Ativos' || filterSub !== 'Todos' || filterBadge !== null) && (
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Filtros Ativos:</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
+                  {filterStatus !== 'Ativos' && (
+                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full text-[10px] font-bold whitespace-nowrap flex items-center gap-1">
+                      {filterStatus}
+                      <button onClick={() => { setFilterStatus('Ativos'); setFilterBadge(null); }} className="hover:text-emerald-800 ml-0.5">×</button>
+                    </span>
+                  )}
+                  {filterSub !== 'Todos' && (
+                    <span className={`px-2.5 py-1 border rounded-full text-[10px] font-bold whitespace-nowrap flex items-center gap-1 ${
+                      filterSub === 'Em Suporte' ? 'bg-amber-50 text-amber-600 border-amber-200' : filterSub === 'Clientes' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-primary-50 text-primary-600 border-primary-200'
+                    }`}>
+                      {filterSub}
+                      <button onClick={() => setFilterSub('Todos')} className="hover:opacity-80 ml-0.5">×</button>
+                    </span>
+                  )}
+                  {filterBadge === 'sem_resposta' && (
+                    <span className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded-full text-[10px] font-bold whitespace-nowrap flex items-center gap-1">
+                      Sem resposta
+                      <button onClick={() => setFilterBadge(null)} className="hover:text-red-900 ml-0.5">×</button>
+                    </span>
+                  )}
+                  {filterBadge === 'follow_up' && (
+                    <span className="px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-full text-[10px] font-bold whitespace-nowrap flex items-center gap-1">
+                      Follow-up
+                      <button onClick={() => setFilterBadge(null)} className="hover:text-amber-900 ml-0.5">×</button>
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Dropdown panel */}
             <AnimatePresence>
@@ -4581,19 +4582,51 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             {/* Soft decorative background pattern */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
             
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mb-6 shadow-xl shadow-primary-500/10 border border-slate-100/50">
-                <MessageCircle size={56} className="text-primary-500/80" />
+            <div className="relative z-10 flex flex-col items-center max-w-2xl w-full">
+              {/* Avatar with Glow */}
+              <div className="w-24 h-24 rounded-[2rem] bg-white flex items-center justify-center mb-8 shadow-xl shadow-primary-500/10 border border-slate-100 overflow-hidden relative">
+                <div className="absolute inset-0 bg-gradient-to-tr from-primary-50 to-transparent"></div>
+                <img src="/sofiamini.png" alt="Sofia" className="w-16 h-16 object-cover relative z-10 drop-shadow-sm" />
               </div>
-              <h3 className="text-[22px] font-bold text-slate-800 mb-3 tracking-tight">Sua Caixa de Entrada</h3>
-              <p className="max-w-sm text-[14px] text-slate-500 leading-relaxed">
-                Selecione uma conversa na lista ao lado para visualizar as mensagens e gerenciar o atendimento de forma centralizada.
+              
+              <h3 className="text-[28px] font-black text-slate-800 mb-4 tracking-tight">Atendimento em tempo real</h3>
+              <p className="text-[15px] text-slate-500 leading-relaxed mb-12 max-w-lg mx-auto">
+                Selecione uma conversa ao lado para visualizar as mensagens, gerenciar o contato e acionar a IA.
               </p>
-              <div className="mt-10 flex gap-4">
-                 <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200/60 shadow-sm text-[12px] font-semibold text-slate-500 flex items-center gap-2">
-                    <Bot size={16} className="text-primary-500" /> IA Ativa
+
+              {/* Data Cards */}
+              <div className="flex gap-4 md:gap-6 justify-center w-full mb-12 flex-wrap">
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm shadow-slate-200/50 flex flex-col items-center justify-center min-w-[140px]">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mb-3">
+                    <MessageCircle size={20} />
+                  </div>
+                  <span className="text-3xl font-black text-slate-800 mb-1">{threads.length}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conversas</span>
+                </div>
+
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm shadow-slate-200/50 flex flex-col items-center justify-center min-w-[140px]">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-3">
+                    <MessageSquare size={20} />
+                  </div>
+                  <span className="text-3xl font-black text-slate-800 mb-1">{threads.filter(t => (t.unreadCount ?? 0) > 0).length}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Não Lidos</span>
+                </div>
+
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm shadow-slate-200/50 flex flex-col items-center justify-center min-w-[140px]">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-3">
+                    <Activity size={20} />
+                  </div>
+                  <span className="text-3xl font-black text-slate-800 mb-1">{followUpCount}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Follow-up</span>
+                </div>
+              </div>
+
+              {/* Bottom Tags */}
+              <div className="flex flex-wrap justify-center gap-3">
+                 <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200 shadow-sm text-[12px] font-bold text-slate-500 flex items-center gap-2 transition-all hover:border-primary-200 hover:text-primary-600">
+                    <Bot size={16} className="text-primary-500" /> IA Recepcionista Ativa
                  </div>
-                 <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200/60 shadow-sm text-[12px] font-semibold text-slate-500 flex items-center gap-2">
+                 <div className="px-5 py-2.5 bg-white rounded-full border border-slate-200 shadow-sm text-[12px] font-bold text-slate-500 flex items-center gap-2 transition-all hover:border-emerald-200 hover:text-emerald-600">
                     <Users size={16} className="text-emerald-500" /> CRM Integrado
                  </div>
               </div>

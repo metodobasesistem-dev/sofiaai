@@ -81,17 +81,11 @@ const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSu
       onClick={onClick}
       className={`flex items-center p-2 rounded-xl cursor-pointer transition-all duration-300 group relative
         ${active
-          ? 'bg-primary text-white shadow-lg shadow-primary/20'
-          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group-active:scale-95'
+          ? 'bg-primary-50 text-primary-600 border-l-4 border-primary-500 rounded-l-sm'
+          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group-active:scale-95 border-l-4 border-transparent'
         }`}
     >
-      {active && (
-        <motion.div
-          layoutId="activeTab"
-          className="absolute inset-y-2 -left-1 w-1 bg-white rounded-r-full"
-        />
-      )}
-      <div className={`${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>
+      <div className={`${active ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
         {icon}
       </div>
       {!collapsed && (
@@ -471,12 +465,12 @@ export default function Layout({
             onClick={() => { onTabChange('onboarding'); setMobileMenuOpen(false); }}
             className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all group relative
               ${activeTab === 'onboarding'
-                ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-primary-50 text-primary-600 border-l-4 border-primary-500 rounded-l-sm'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-l-4 border-transparent'
               }`}
           >
             <div className={`w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-all
-              ${activeTab === 'onboarding' ? 'text-white' : 'text-slate-500 group-hover:text-primary'}`}>
+              ${activeTab === 'onboarding' ? 'text-primary-600' : 'text-slate-400 group-hover:text-primary-600'}`}>
               <Rocket size={16} />
             </div>
             {!collapsed && (
@@ -527,10 +521,10 @@ export default function Layout({
                         <div
                           key={sub.id}
                           onClick={() => handleTabClick(sub.id)}
-                          className={`flex items-center p-1.5 rounded-lg cursor-pointer text-xs transition-all
+                          className={`flex items-center p-1.5 cursor-pointer text-xs transition-all
                             ${activeTab === sub.id
-                              ? 'text-primary font-semibold bg-primary-light/50'
-                              : 'text-slate-400 hover:text-slate-800 hover:bg-slate-50'
+                              ? 'text-primary-600 font-semibold bg-primary-50 border-l-2 border-primary-500 rounded-r-lg rounded-l-sm'
+                              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-l-2 border-transparent rounded-lg'
                             }`}
                         >
                           <span className="mr-2 opacity-70">{sub.icon}</span>
