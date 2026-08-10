@@ -967,6 +967,39 @@ export default function Campaigns() {
                         {emoji}
                       </button>
                     ))}
+                    <div className="ml-auto">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!campaignData.customText.trim()) return toast.error('Digite uma mensagem primeiro');
+                          const modelName = window.prompt('Digite um nome para salvar este modelo (ex: Campanha Dia das Mães):');
+                          if (!modelName) return;
+                          
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (!user) return;
+                            
+                            const { error } = await supabase.from('message_templates').insert({
+                              name: modelName,
+                              category: 'MARKETING',
+                              variables_count: 0,
+                              language: 'pt_BR',
+                              body: campaignData.customText,
+                              tenant_id: user.id
+                            });
+                            
+                            if (error) throw error;
+                            toast.success('Modelo salvo com sucesso! Vá na aba "Usar Modelo Registrado".');
+                            fetchTemplates();
+                          } catch (err: any) {
+                            toast.error('Erro ao salvar modelo: ' + err.message);
+                          }
+                        }}
+                        className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-bold transition-all border border-emerald-100 flex items-center gap-1 shadow-sm"
+                      >
+                        <FileText size={14} /> Salvar como Modelo
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1754,12 +1787,43 @@ export default function Campaigns() {
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Corpo da Mensagem (Para Evolution/Uazapi)</label>
                     <textarea 
-                      placeholder="Olá {{1}}, temos uma novidade..."
+                      placeholder="Olá {nome}, temos uma novidade..."
                       rows={4}
                       className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-primary-500 font-bold resize-none custom-scrollbar"
                       value={newTemplate.body}
                       onChange={e => setNewTemplate({...newTemplate, body: e.target.value})}
                     />
+                    {/* Variáveis e Emojis rápidos */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Inserir:</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewTemplate({...newTemplate, body: newTemplate.body + ' {nome}'})}
+                        className="px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-lg text-xs font-bold transition-all border border-primary-100 flex items-center gap-1"
+                      >
+                        <span>{'{nome}'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewTemplate({...newTemplate, body: newTemplate.body + ' {telefone}'})}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                      >
+                        <span>{'{telefone}'}</span>
+                      </button>
+
+                      <span className="text-slate-200">|</span>
+
+                      {['😊', '👋', '✅', '📌', '👉', '🔥'].map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setNewTemplate({...newTemplate, body: newTemplate.body + ' ' + emoji})}
+                          className="px-2 py-0.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm transition-all border border-slate-100"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                  </div>
               </div>
 
