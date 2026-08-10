@@ -413,6 +413,32 @@ export default function Campaigns() {
     fetchCampaigns();
     fetchTemplates();
     fetchUserProfile();
+
+    if (localStorage.getItem('openNewCampaign') === 'true') {
+      localStorage.removeItem('openNewCampaign');
+      // Set to tab campaigns, open modal, etc
+      setActiveTab('campaigns');
+      setCampaignData({
+        name: '',
+        targetType: 'all',
+        selectedLabels: [],
+        selectedFunnelStatus: '',
+        manualList: '',
+        uploadedContacts: [],
+        singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
+        messageType: 'custom',
+        customText: '',
+        templateId: '',
+        templateName: '',
+        templateLanguage: 'pt_BR',
+        isMetaTemplate: false,
+        variables: {}
+      });
+      setCurrentStep(1);
+      setShowContactsList(false);
+      setEditingCampaignId(null);
+      setIsModalOpen(true);
+    }
   }, []);
 
   // Clean up polling interval on unmount

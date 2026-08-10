@@ -52,7 +52,8 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  Image as ImageIcon
+  Image as ImageIcon,
+  MessageSquarePlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -1434,7 +1435,7 @@ const FollowUpModal: React.FC<{
   );
 };
 
-export default function Inbox({ user, role, isFullscreen, initialTab }: { user: SupabaseUser | null, role: string | null, isFullscreen?: boolean, initialTab?: 'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance' }) {
+export default function Inbox({ user, role, isFullscreen, initialTab, onTabChange }: { user: SupabaseUser | null, role: string | null, isFullscreen?: boolean, initialTab?: 'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance', onTabChange?: (tab: string, subTab?: string) => void }) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -3681,6 +3682,18 @@ export default function Inbox({ user, role, isFullscreen, initialTab }: { user: 
               Conversas
             </h2>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  if (onTabChange) {
+                    localStorage.setItem('openNewCampaign', 'true');
+                    onTabChange('campaigns');
+                  }
+                }}
+                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                title="Nova Campanha"
+              >
+                <MessageSquarePlus size={14} />
+              </button>
               {!isFullscreen && (
                 <button
                   onClick={() => window.open('/?fullscreen=true', '_blank')}
