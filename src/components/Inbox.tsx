@@ -282,6 +282,38 @@ const WindowCountdown: React.FC<{
   );
 };
 
+// Selo "aguardando resposta humana" na lista de conversas.
+// Mesma semântica de semRespostaCount (~linha 3515): ticket aberto + atendimento humano +
+// mensagem não lida do cliente = cliente esperando resposta. Diferente do WindowCountdown
+// (que mede a janela de 24h do Meta fechando): aqui é só tempo decorrido, informativo.
+function formatElapsedSinceInbound(lastInboundMs: number, nowMs: number): string {
+  const elapsedMs = Math.max(0, nowMs - lastInboundMs);
+  const minutes = Math.floor(elapsedMs / 60000);
+  if (minutes < 1) return 'AGORA';
+  if (minutes < 60) return `${minutes}MIN`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const rem = minutes % 60;
+    return rem ? `${hours}H ${rem}MIN` : `${hours}H`;
+  }
+  return '1D+';
+}
+
+const PendingReplyPill: React.FC<{ lastInboundAt?: number; now: number; show: boolean }> =
+  ({ lastInboundAt, now, show }) => {
+    if (!show || !lastInboundAt) return null;
+    const label = formatElapsedSinceInbound(lastInboundAt, now);
+    return (
+      <span
+        title={`Aguardando resposta humana há ${label}`}
+        className="flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-50 text-amber-600 border-amber-200 shrink-0"
+      >
+        <Clock size={9} />
+        {label}
+      </span>
+    );
+  };
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const formatDateHeader = (dateStr: string) => {
   const date = new Date(dateStr);
@@ -665,7 +697,7 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
   );
 };
 
-const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, onClick, onDelete }) => (
+const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, now: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, now, onClick, onDelete }) => (
   <div 
     onClick={onClick}
     className={`p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
@@ -699,8 +731,13 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
           >
             <Trash size={12} />
           </button>
-          <span className={(thread.unreadCount ?? 0) > 0 
-            ? "text-[11px] font-bold text-emerald-500" 
+          <PendingReplyPill
+            lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt}
+            now={now}
+            show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && (thread.unreadCount ?? 0) > 0}
+          />
+          <span className={(thread.unreadCount ?? 0) > 0
+            ? "text-[11px] font-bold text-emerald-500"
             : "text-[11px] font-medium text-slate-400"}>
             {thread.time}
           </span>
@@ -3511,6 +3548,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Tick compartilhado (30s) para o selo "aguardando resposta" (PendingReplyPill) de
+  // todas as linhas da lista — um único interval em vez de um por linha.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(i);
+  }, []);
+
   // Contadores para badges
   const semRespostaCount = useMemo(() => threads.filter(t =>
     t.ticketStatus !== 'resolved' && t.status === 'human' && (t.unreadCount || 0) > 0
@@ -3940,6 +3985,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 // Para o thread ativo, usa o cálculo com fallback de mensagens em memória
                 // (mesmo que o painel direito usa). Evita badge "24H ⚠" obsoleta.
                 lastInboundAtOverride={selectedThreadId === thread.id ? activeThreadLastInbound : undefined}
+                now={now}
                 onClick={() => setSelectedThreadId(thread.id)}
                 onDelete={() => handleDeleteThread(thread)}
               />
