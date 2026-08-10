@@ -1767,6 +1767,7 @@ export default function Campaigns() {
                       >
                          <Trash2 size={18} />
                       </button>
+                      </div>
                    </div>
                    <h3 className="font-black text-slate-900 mb-1 truncate">{template.name}</h3>
                    <div className="flex items-center gap-3">
