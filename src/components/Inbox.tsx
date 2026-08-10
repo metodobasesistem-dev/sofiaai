@@ -54,7 +54,8 @@ import {
   DollarSign,
   Image as ImageIcon,
   MessageSquarePlus,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -1494,6 +1495,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [agents, setAgents] = useState<{ id: string; nome: string; company_name?: string }[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isSyncingPhotos, setIsSyncingPhotos] = useState(false);
   const [contacts, setContacts] = useState<any[]>([]);
   const contactsRef = useRef<any[]>([]);
   
@@ -3310,6 +3312,31 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     }
   };
 
+  // Sincroniza fotos de perfil de conversas antigas que nunca dispararam o
+  // gatilho automático (que só roda quando chega uma NOVA mensagem inbound).
+  const handleBackfillPhotos = async () => {
+    setIsSyncingPhotos(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const response = await fetch('/api/whatsapp/threads/backfill-photos', {
+        method: 'POST',
+        headers: session ? { 'Authorization': `Bearer ${session.access_token}` } : {}
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Falha ao sincronizar fotos');
+
+      if (data.enqueued > 0) {
+        toast.success(`Sincronizando fotos de ${data.enqueued} conversa(s)... elas aparecem aos poucos.`);
+      } else {
+        toast('Todas as conversas já foram verificadas — nada pendente.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao sincronizar fotos');
+    } finally {
+      setIsSyncingPhotos(false);
+    }
+  };
+
   const handleDeleteThread = async (thread: Thread) => {
     if (!window.confirm(`Excluir conversa com ${thread.name}?`)) return;
 
@@ -3739,6 +3766,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 title="Nova Campanha"
               >
                 <MessageSquarePlus size={14} />
+              </button>
+              <button
+                onClick={handleBackfillPhotos}
+                disabled={isSyncingPhotos}
+                className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all disabled:opacity-50"
+                title="Sincronizar fotos de perfil pendentes"
+              >
+                <RefreshCw size={14} className={isSyncingPhotos ? 'animate-spin' : ''} />
               </button>
               {!isFullscreen && (
                 <button
