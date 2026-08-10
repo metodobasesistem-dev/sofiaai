@@ -437,7 +437,7 @@ router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => 
           user_id: userId,
           nome: contact.nome || 'Lead Isolado',
           telefone: phoneRaw,
-          status_funil: 'Novo Lead',
+          status_funil: 'Lead',
         })
         .select('id')
         .single();
