@@ -1209,7 +1209,7 @@ export default function Campaigns() {
       case 3:
         return (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-             <div className="p-5 bg-slate-900 rounded-3xl text-white space-y-4 relative overflow-hidden">
+              <div className="p-5 bg-slate-900 rounded-3xl text-white space-y-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-6 opacity-10"><BarChart3 size={80} /></div>
                 
                 <div>
@@ -1228,6 +1228,32 @@ export default function Campaigns() {
                    </div>
                 </div>
              </div>
+
+             {campaignData.messageType === 'custom' && campaignData.customText.trim() && (
+               <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-2">
+                 <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1">
+                   <Send size={12} /> Mensagem Final
+                 </p>
+                 <div className="bg-emerald-100/70 p-3 rounded-2xl text-xs font-medium text-slate-800 border border-emerald-200 shadow-sm leading-relaxed whitespace-pre-wrap">
+                   {(() => {
+                     let sampleName = 'João';
+                     let samplePhone = '5511999999999';
+                     
+                     if (campaignData.targetType === 'upload' && campaignData.uploadedContacts?.length > 0) {
+                       sampleName = campaignData.uploadedContacts[0].nome || campaignData.uploadedContacts[0].name || sampleName;
+                       samplePhone = campaignData.uploadedContacts[0].telefone || samplePhone;
+                     } else if (campaignData.singleContact?.nome) {
+                       sampleName = campaignData.singleContact.nome;
+                       samplePhone = campaignData.singleContact.telefone || samplePhone;
+                     }
+                     
+                     return campaignData.customText
+                       .replace(/\{nome\}/gi, sampleName)
+                       .replace(/\{telefone\}/gi, samplePhone);
+                   })()}
+                 </div>
+               </div>
+             )}
 
              <div className="p-4 md:p-5 border border-slate-100 rounded-3xl bg-slate-50 space-y-4">
                 <div className="flex items-center gap-3 text-slate-600">
