@@ -74,7 +74,7 @@ export default function Campaigns() {
   const [isValidatingNumbers, setIsValidatingNumbers] = useState(false);
   const [validationResults, setValidationResults] = useState<{ validCount: number; invalidCount: number; results: any[] } | null>(null);
   const [isCheckingContact, setIsCheckingContact] = useState(false);
-  const [contactCheckResult, setContactCheckResult] = useState<{ found: boolean; name?: string; status?: string } | null>(null);
+  const [contactCheckResult, setContactCheckResult] = useState<{ found: boolean; name?: string; status?: string; hasWhatsapp?: boolean } | null>(null);
 
   const validateSingleContact = async () => {
     if (!campaignData.singleContact.telefone) return;
@@ -102,12 +102,33 @@ export default function Campaigns() {
         
       if (error && error.code !== 'PGRST116') throw error; // Ignorar erro de 0 rows
       
-      if (data) {
-        setContactCheckResult({ found: true, name: data.nome, status: data.status_funil });
-        toast.warning('Atenção: Contato já existe na sua base!');
+      const isAlreadyInBase = !!data;
+      const baseResult = isAlreadyInBase 
+        ? { found: true, name: data.nome, status: data.status_funil }
+        : { found: false };
+
+      let hasWhatsapp = false;
+      try {
+        const response = await standardFetch('/api/v2/campaigns/validate-numbers', {
+          method: 'POST',
+          body: JSON.stringify({ numbers: [cleanPhone] })
+        });
+        const res = await response.json();
+        if (res.success && res.results && res.results.length > 0) {
+          hasWhatsapp = res.results[0].exists;
+        }
+      } catch (waErr) {
+        console.error('Erro ao validar WhatsApp:', waErr);
+      }
+
+      setContactCheckResult({ ...baseResult, hasWhatsapp });
+
+      if (!hasWhatsapp) {
+        toast.error('Atenção: Este número NÃO possui WhatsApp ativo!');
+      } else if (isAlreadyInBase) {
+        toast.warning('Atenção: Contato já existe na sua base (WhatsApp Válido).');
       } else {
-        setContactCheckResult({ found: false });
-        toast.success('Contato inédito na base!');
+        toast.success('Contato inédito na base e com WhatsApp ativo!');
       }
     } catch (err: any) {
       toast.error('Erro ao buscar contato: ' + err.message);
@@ -624,11 +645,13 @@ export default function Campaigns() {
                   </div>
                   
                   {contactCheckResult && (
-                    <div className={`p-3 mt-3 rounded-lg text-xs font-bold ${contactCheckResult.found ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}>
-                      {contactCheckResult.found ? (
+                    <div className={`p-3 mt-3 rounded-lg text-xs font-bold ${!contactCheckResult.hasWhatsapp ? 'bg-red-50 text-red-900 border border-red-200' : contactCheckResult.found ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}>
+                      {!contactCheckResult.hasWhatsapp ? (
+                        <>❌ O número informado NÃO possui WhatsApp ativo.</>
+                      ) : contactCheckResult.found ? (
                         <>⚠️ Contato já existente: {contactCheckResult.name} (Status: {contactCheckResult.status || 'N/A'})</>
                       ) : (
-                        <>✅ Contato inédito! Pode seguir com o envio.</>
+                        <>✅ Contato inédito com WhatsApp ativo! Pode seguir com o envio.</>
                       )}
                     </div>
                   )}
