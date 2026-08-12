@@ -378,10 +378,23 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
         await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, `[Documento recebido: ${fileName || 'arquivo'}]`, contactName, cleanPhone, messageId, false, undefined, undefined, threadAgentId);
       }
     }
-  } catch (err) {
-    console.error(`[Webhook] Failed to process media message ${messageId}:`, err);
-    // Fallback persist without media URL if failed
-    await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid);
+  } catch (err: any) {
+    console.error(`[Webhook] Failed to process media message ${messageId}:`, err?.message || err);
+
+    // Fallback: persiste sem a mídia para a mensagem ao menos aparecer no chat.
+    // Precisa do próprio try/catch — antes, uma falha aqui escapava do handler
+    // e derrubava o processamento do webhook inteiro. E não adianta tentar de
+    // novo quando a falha foi chave duplicada: a mensagem já está no banco.
+    if (err?.code === '23505' || /duplicate key value/i.test(err?.message || '')) {
+      console.log(`[Webhook] 🛡️ Mídia ${messageId} já persistida. Nada a fazer.`);
+      return;
+    }
+
+    try {
+      await agentService.persistMessage(threadId, userId, body, direction, messageId, contactName, from, cleanPhone, isExternal ? 'Atendente' : undefined, undefined, undefined, type, undefined, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid);
+    } catch (fallbackErr: any) {
+      console.error(`[Webhook] ❌ Fallback persist também falhou para ${messageId}:`, fallbackErr?.message || fallbackErr);
+    }
   }
 }
 

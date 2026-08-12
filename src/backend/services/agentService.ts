@@ -7,6 +7,7 @@ import { googleCalendarService } from './googleCalendarService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
+import { randomUUID } from 'crypto';
 
 /**
  * Normaliza timestamp para ISO string.
@@ -624,7 +625,12 @@ export class AgentService {
 
     // ── FASE 3: Montagem dos payloads para a RPC ──
     const messagePayload = {
-      id:                  messageId,
+      // PK própria por linha. Usar o id do WhatsApp aqui colide entre tenants:
+      // quando os dois lados da conversa são clientes do sistema, a mesma
+      // mensagem precisa existir duas vezes — uma por tenant — e a PK global
+      // barrava a segunda com 23505, fazendo o tenant perder a mensagem.
+      // A idempotência real vem do UNIQUE (whatsapp_id, user_id).
+      id:                  randomUUID(),
       user_id:             userId,
       thread_id:           threadId,
       text:                text,
@@ -712,6 +718,17 @@ export class AgentService {
 
       console.log(`[AgentService] ✅ Escrita atômica concluída: ${messageId}`);
     } catch (err: any) {
+      // Chave duplicada = a mensagem JÁ está persistida, que é justamente o
+      // estado desejado. Isso acontece quando o webhook é reentregue ou quando
+      // duas entregas simultâneas correm (a trava do Redis falha aberta se o
+      // Redis estiver instável). O ON CONFLICT da RPC mira em
+      // (whatsapp_id, user_id) e não cobre a PK 'id', então a duplicata chega
+      // aqui como erro — mas não há nada a corrigir nem a retentar.
+      if (err?.code === '23505' || /duplicate key value/i.test(err?.message || '')) {
+        console.log(`[AgentService] 🛡️ Mensagem ${messageId} já persistida (entrega duplicada). Ignorando.`);
+        return;
+      }
+
       console.error(
         `[AgentService] ❌ FALHA NA ESCRITA ATÔMICA — msgId: ${messageId} | thread: ${threadId} | err:`,
         err?.message || err
