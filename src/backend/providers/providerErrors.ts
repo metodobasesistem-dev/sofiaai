@@ -22,12 +22,49 @@ export interface ProviderErrorInfo {
   isAuthError: boolean;
   /** Destinatário inválido / sem WhatsApp */
   isRecipientInvalid: boolean;
+  /**
+   * A instância do WhatsApp perdeu a conexão com o servidor (socket caído).
+   * Retentar em segundos é inútil: o socket só volta após reconexão da instância.
+   * Deve falhar rápido e disparar alerta de instância fora do ar.
+   */
+  isConnectionClosed: boolean;
   raw?: any;
 }
 
 const META_CODE_24H_WINDOW = 131047;
 const META_CODE_RECIPIENT_INVALID = 131026;
 const META_CODE_AUTH = 190;
+
+/**
+ * A Evolution API devolve o motivo real aninhado em `response.message` (array),
+ * enquanto `error` traz só o genérico "Bad Request". Sem achatar essa estrutura
+ * o log fica com "Bad Request" e a causa verdadeira se perde.
+ */
+function flattenProviderMessage(data: any): string {
+  const parts: string[] = [];
+  const visit = (v: any, depth = 0) => {
+    if (!v || depth > 4) return;
+    if (typeof v === 'string') { parts.push(v); return; }
+    if (Array.isArray(v)) { v.forEach(item => visit(item, depth + 1)); return; }
+    if (typeof v === 'object') {
+      visit(v.message, depth + 1);
+      visit(v.response, depth + 1);
+      visit(v.error, depth + 1);
+    }
+  };
+  visit(data);
+  const unique = [...new Set(parts.map(p => p.trim()).filter(Boolean))];
+  return unique.length ? unique.join(' — ') : JSON.stringify(data);
+}
+
+const CONNECTION_CLOSED_PATTERN =
+  /connection\s*closed|connection\s*lost|connection\s*terminated|not\s*connected|socket\s*(is\s*)?closed|instance\s*(not\s*connected|disconnected|close)|econnreset|econnrefused|etimedout|socket hang up/i;
+
+function detectConnectionClosed(message: string, err: any): boolean {
+  if (CONNECTION_CLOSED_PATTERN.test(message)) return true;
+  const code = err?.code;
+  return code === 'ECONNRESET' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'EPIPE';
+}
 
 /**
  * Persists the last Meta error to profiles.meta_last_error for admin visibility.
@@ -66,6 +103,7 @@ export function parseProviderError(err: any): ProviderErrorInfo {
       is24hWindowClosed: code === META_CODE_24H_WINDOW,
       isAuthError: code === META_CODE_AUTH,
       isRecipientInvalid: code === META_CODE_RECIPIENT_INVALID,
+      isConnectionClosed: false,
       raw: metaError,
     };
   }
@@ -73,28 +111,30 @@ export function parseProviderError(err: any): ProviderErrorInfo {
   // Evolution API shape: err.response.data.{message, error, status}
   const evoData = err?.response?.data;
   if (evoData && (evoData.message || evoData.error)) {
+    const message = flattenProviderMessage(evoData);
     return {
       provider: 'evolution',
       code: evoData.status || err?.response?.status,
-      message: typeof evoData.message === 'string'
-        ? evoData.message
-        : (typeof evoData.error === 'string' ? evoData.error : JSON.stringify(evoData)),
+      message,
       is24hWindowClosed: false,
       isAuthError: err?.response?.status === 401 || err?.response?.status === 403,
       isRecipientInvalid: false,
+      isConnectionClosed: detectConnectionClosed(message, err),
       raw: evoData,
     };
   }
 
   // Fallback: axios error sem body estruturado, ou Error nativo
   const status = err?.response?.status;
+  const message = err?.message || 'Unknown provider error';
   return {
     provider: 'unknown',
     code: status,
-    message: err?.message || 'Unknown provider error',
+    message,
     is24hWindowClosed: false,
     isAuthError: status === 401 || status === 403,
     isRecipientInvalid: false,
+    isConnectionClosed: detectConnectionClosed(message, err),
     raw: err?.response?.data,
   };
 }

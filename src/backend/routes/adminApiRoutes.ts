@@ -439,7 +439,7 @@ router.get('/users/:id/diagnostic', async (req: AuthenticatedRequest, res: Respo
       supabase.from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', targetUserId)
-        .in('status', ['failed', 'failed_24h_window']),
+        .in('status', ['failed', 'failed_24h_window', 'failed_disconnected', 'failed_unknown']),
       supabase.from('provider_audit_log')
         .select('action, performed_at, details, performed_by')
         .eq('target_user_id', targetUserId)
