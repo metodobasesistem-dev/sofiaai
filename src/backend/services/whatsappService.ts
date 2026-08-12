@@ -1391,7 +1391,10 @@ class WhatsAppService {
         // Modo Humano: notificar operador pois é ele quem precisa responder
         // 🚀 DEDUPLICAÇÃO ATÔMICA: Garante que só enviamos 1 push por ID de mensagem do WhatsApp
         // Independente se é New Lead ou mensagem comum
-        const wasFirstId = await redisService.markAsProcessed(`push_notified:${messageId}`, 3600);
+        // Chave por tenant: o mesmo id de mensagem pode pertencer a dois tenants
+        // quando ambos os lados da conversa são clientes, e sem isso só o primeiro
+        // operador receberia a notificação.
+        const wasFirstId = await redisService.markAsProcessed(`push_notified:${userId}:${messageId}`, 3600);
         
         // 🛡️ Camada Extra: Deduplicação por conteúdo (evita spam se o ID falhar ou mudar)
         const bodyHash = Buffer.from(`${userId}:${from}:${finalBody.substring(0, 100)}`).toString('base64');
