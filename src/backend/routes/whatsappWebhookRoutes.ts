@@ -73,10 +73,14 @@ router.post('/webhook', async (req, res) => {
                   body.message?.key?.id || 
                   body.id;
 
+  // A chave PRECISA incluir a instância: quando os dois lados de uma conversa são
+  // instâncias do sistema (o contato de um tenant também é cliente nosso), o mesmo
+  // id de mensagem chega em dois webhooks distintos. Com chave global, o primeiro
+  // tenant processava e o segundo perdia a mensagem silenciosamente.
   if (eventId && (event === 'messages.upsert' || event === 'MESSAGES_UPSERT')) {
-    const isNew = await (whatsappService as any).markEventAsProcessed(`webhook:${eventId}`, 300); // 5 min lock
+    const isNew = await (whatsappService as any).markEventAsProcessed(`webhook:${instanceName}:${eventId}`, 300); // 5 min lock
     if (!isNew) {
-      console.log(`[Webhook] 🛡️ Skipping duplicate webhook event: ${eventId}`);
+      console.log(`[Webhook] 🛡️ Skipping duplicate webhook event: ${eventId} (instance ${instanceName})`);
       return res.status(200).send('OK');
     }
   }

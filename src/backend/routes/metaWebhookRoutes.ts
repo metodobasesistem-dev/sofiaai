@@ -511,12 +511,14 @@ async function handleMetaMessages(userId: string, phoneNumberId: string, value: 
     return;
   }
 
-  // Idempotency: prevent duplicate processing on Meta retries
+  // Idempotency: prevent duplicate processing on Meta retries.
+  // A chave inclui o tenant — o mesmo id de mensagem pode ser entregue a dois
+  // tenants quando ambos os lados da conversa são clientes do sistema.
   const eventId = message.id;
   if (eventId) {
-    const isNew = await (whatsappService as any).markEventAsProcessed(`meta-webhook:${eventId}`, 300);
+    const isNew = await (whatsappService as any).markEventAsProcessed(`meta-webhook:${userId}:${eventId}`, 300);
     if (!isNew) {
-      console.log(`[MetaWebhook] 🛡️ Duplicate event ${eventId}, skipping`);
+      console.log(`[MetaWebhook] 🛡️ Duplicate event ${eventId} for tenant ${userId}, skipping`);
       return;
     }
   }
