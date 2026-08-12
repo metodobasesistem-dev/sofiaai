@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { agentService } from '../services/agentService.js';
+import { agentService, logToDB } from '../services/agentService.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
@@ -413,8 +413,16 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
         continue;
       }
 
-      // Mapeamento de status da Evolution para o nosso banco
+      // Mapeamento de status da Evolution (enum WAMessageStatus do Baileys) para o nosso banco.
+      // ERROR=0 significa que o WhatsApp REJEITOU a mensagem: o POST para a Evolution
+      // respondeu 200 com um id (o Baileys gera o id localmente), mas a transmissão
+      // falhou depois. Sem mapear isso a mensagem ficava eternamente em 'sent' —
+      // um tracinho no painel — e ninguém percebia que o lead não recebeu.
       const statusMap: Record<string, string> = {
+        'ERROR':         'failed',
+        'SERVER_ERROR':  'failed',
+        'FAILED':        'failed',
+        '0':             'failed',
         'PENDING':       'pending',
         '1':             'pending',
         'SERVER_ACK':    'sent',
@@ -461,17 +469,36 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
         continue;
       }
 
+      // [FIX] Incluímos o thread_id no update para forçar o PostgreSQL a incluí-lo no WAL.
+      // Sem isso, o Supabase Realtime (que escuta por thread_id=eq.X) ignora o evento de UPDATE.
+      const applyStatus = (status: string) => supabase
+        .from('messages')
+        .update({ status, thread_id: current!.thread_id })
+        .eq('whatsapp_id', msgId)
+        .eq('user_id', userId);
+
+      if (mappedStatus === 'failed') {
+        // Falha não entra na hierarquia de progressão: ela vem DEPOIS do 'sent' e
+        // precisa sobrescrevê-lo. Só não regride o que já chegou ao destino —
+        // se o aparelho confirmou entrega ou leitura, um ERROR tardio é ruído.
+        if (current.status === 'delivered' || current.status === 'read') {
+          console.log(`[Webhook-Status] Ignored ERROR for ${msgId}: já estava '${current.status}'`);
+          continue;
+        }
+
+        await applyStatus('failed');
+        console.warn(`[Webhook] ❌ WhatsApp rejeitou ${msgId} (rawStatus='${rawStatus}') — o contato NÃO recebeu`);
+        await logToDB(userId, 'error', 'message-rejected',
+          `WhatsApp rejeitou a mensagem ${msgId} — o contato não recebeu`,
+          { msgId, rawStatus, previousStatus: current.status, threadId: current.thread_id });
+        continue;
+      }
+
       const currentRank = RANK[current.status as string] ?? -1;
       const newRank = RANK[mappedStatus] ?? -1;
 
       if (newRank > currentRank) {
-        // [FIX] Incluímos o thread_id no update para forçar o PostgreSQL a incluí-lo no WAL.
-        // Sem isso, o Supabase Realtime (que escuta por thread_id=eq.X) ignora o evento de UPDATE.
-        await supabase
-          .from('messages')
-          .update({ status: mappedStatus, thread_id: current.thread_id })
-          .eq('whatsapp_id', msgId)
-          .eq('user_id', userId);
+        await applyStatus(mappedStatus);
       }
 
       console.log(`[Webhook] 📬 Status update: ${msgId} → ${mappedStatus}`);
