@@ -90,6 +90,23 @@ class WhatsAppService {
     this.setupWorker(workerConn);
     this.setupFollowUpWorker(followUpWConn);
     this.setupPhotoSyncWorker(photoSyncWConn);
+    this.setupStuckMessageSweep();
+  }
+
+  /**
+   * Resolve mensagens órfãs em 'sending' (processo morto no meio do envio).
+   * Roda no boot — pega o que ficou preso pelo restart — e a cada 5 minutos.
+   */
+  private setupStuckMessageSweep() {
+    setTimeout(() => {
+      this.sweepStuckMessages().catch(e =>
+        console.error('[StuckSweep] ❌ Boot sweep failed:', e?.message || e));
+    }, 30_000);
+
+    setInterval(() => {
+      this.sweepStuckMessages().catch(e =>
+        console.error('[StuckSweep] ❌ Periodic sweep failed:', e?.message || e));
+    }, 5 * 60_000);
   }
 
   private setupWorker(connection: any) {
@@ -677,8 +694,10 @@ class WhatsAppService {
           break;
         } catch (err: any) {
           const errInfo = parseProviderError(err);
-          // Erros permanentes não devem ser retentados
-          if (errInfo.is24hWindowClosed || errInfo.isAuthError || attempt === sendDelays.length) {
+          // Erros permanentes não devem ser retentados.
+          // Socket caído também não: reconectar leva minutos, não segundos —
+          // insistir só prende o lead esperando por ~75s antes de falhar igual.
+          if (errInfo.is24hWindowClosed || errInfo.isAuthError || errInfo.isConnectionClosed || attempt === sendDelays.length) {
             throw err;
           }
           const delay = sendDelays[attempt];
@@ -747,7 +766,9 @@ class WhatsAppService {
     } catch (err: any) {
       // API falhou — marca a mensagem temporária como 'failed'
       const info = parseProviderError(err);
-      const failureStatus = info.is24hWindowClosed ? 'failed_24h_window' : 'failed';
+      const failureStatus = info.is24hWindowClosed
+        ? 'failed_24h_window'
+        : info.isConnectionClosed ? 'failed_disconnected' : 'failed';
       console.error(`[WhatsAppService] ❌ sendMessage to ${to} (${info.provider}): ${info.message}`);
       if (info.is24hWindowClosed) {
         console.warn(`[WhatsAppService] ⚠️ Meta 24h window closed for ${to}. Use an approved template to re-engage.`);
@@ -755,12 +776,97 @@ class WhatsAppService {
       if (info.isAuthError) {
         console.error(`[WhatsAppService] 🔑 Auth error — credentials may be invalid/expired for user ${userId}.`);
       }
-      await supabase.from('messages').update({ status: failureStatus }).eq('id', tempId);
+      if (info.isConnectionClosed) {
+        console.error(`[WhatsAppService] 🔌 Instance ${instanceName} appears disconnected — message not delivered.`);
+        await this.flagInstanceDisconnected(userId, instanceName, info.message);
+      }
+      // A linha temporária foi inserida com id=tempUUID (tempId vive em whatsapp_id).
+      // Filtrar por tempId aqui não casava nenhuma linha e a mensagem ficava presa
+      // em 'sending' para sempre, aparecendo como "enviando" no painel.
+      await supabase.from('messages').update({ status: failureStatus }).eq('id', tempUUID);
       await logToDB(userId, 'error', 'send-message', info.message, info.raw || err);
       recordMetaError(userId, info, supabase);
       return { success: false, error: info.message, errorInfo: info };
     }
 
+  }
+
+  /**
+   * Marca a instância como desconectada quando o provider acusa socket caído.
+   * Faz o painel refletir o estado real e deixa rastro em sys_logs para alerta.
+   * Nunca lança: registrar o incidente não pode mascarar a falha original.
+   */
+  private async flagInstanceDisconnected(userId: string, instanceName: string, reason: string): Promise<void> {
+    try {
+      await supabase
+        .from('profiles')
+        .update({ whatsapp_status: 'disconnected' })
+        .eq('id', userId);
+
+      await logToDB(userId, 'error', 'instance-health',
+        `Instância ${instanceName} desconectada — envio bloqueado`, { reason, instanceName });
+    } catch (e: any) {
+      console.warn('[WhatsAppService] ⚠️ Failed to flag instance as disconnected:', e?.message || e);
+    }
+  }
+
+  /**
+   * Varre mensagens presas em 'sending' e resolve o estado real de cada uma.
+   *
+   * Uma mensagem só fica nesse estado se o processo morreu entre o pre-persist e
+   * a resposta do provider (deploy, restart, crash). O envio em si já falha para
+   * 'failed' sozinho — este job existe para os casos em que ninguém chegou a
+   * escrever o desfecho, evitando relógio eterno no painel.
+   *
+   * Não reenvia: sem confirmação do provider não dá para saber se a mensagem
+   * saiu, e reenviar às cegas duplicaria mensagem na conversa do lead.
+   */
+  async sweepStuckMessages(olderThanMs: number = 5 * 60 * 1000): Promise<number> {
+    const cutoff = Date.now() - olderThanMs;
+
+    try {
+      const { data: stuck, error } = await supabase
+        .from('messages')
+        .select('id, user_id, thread_id, text, timestamp, whatsapp_id')
+        .eq('status', 'sending')
+        .lt('timestamp', cutoff)
+        .limit(200);
+
+      if (error) {
+        console.warn('[StuckSweep] ⚠️ Query failed:', error.message);
+        return 0;
+      }
+      if (!stuck?.length) return 0;
+
+      const ids = stuck.map(m => m.id);
+      const { error: upErr } = await supabase
+        .from('messages')
+        .update({ status: 'failed_unknown' })
+        .in('id', ids);
+
+      if (upErr) {
+        console.warn('[StuckSweep] ⚠️ Update failed:', upErr.message);
+        return 0;
+      }
+
+      console.warn(`[StuckSweep] 🧹 ${stuck.length} mensagem(ns) presa(s) em 'sending' marcada(s) como falha`);
+
+      // Um log por tenant — o operador precisa saber que houve mensagem não entregue
+      const byUser = new Map<string, number>();
+      for (const m of stuck) {
+        if (m.user_id) byUser.set(m.user_id, (byUser.get(m.user_id) || 0) + 1);
+      }
+      for (const [uid, count] of byUser) {
+        await logToDB(uid, 'warning', 'stuck-sweep',
+          `${count} mensagem(ns) presa(s) em envio foram marcadas como falha`,
+          { count, sample: stuck.filter(m => m.user_id === uid).slice(0, 5).map(m => ({ id: m.id, text: (m.text || '').slice(0, 80) })) });
+      }
+
+      return stuck.length;
+    } catch (e: any) {
+      console.error('[StuckSweep] ❌ Sweep failed:', e?.message || e);
+      return 0;
+    }
   }
 
 
@@ -1376,9 +1482,23 @@ class WhatsAppService {
         // Envia cada parte da mensagem sequencialmente (Picado)
         for (let i = 0; i < messageParts.length; i++) {
           const part = messageParts[i];
-          
-          await this.sendMessage(userId, from, part, agentData?.nome || 'Sofia', 'IA');
-          
+
+          const sendResult = await this.sendMessage(userId, from, part, agentData?.nome || 'Sofia', 'IA');
+
+          // Aborta as partes restantes se uma falhar: enviar a parte 3 sem a 2
+          // entrega uma conversa sem sentido ao lead ("Boa tarde!" seguido de
+          // "Você já revende?" sem a apresentação no meio).
+          if (!sendResult?.success) {
+            const remaining = messageParts.length - (i + 1);
+            console.error(`[WhatsAppService] ⛔ Parte ${i + 1}/${messageParts.length} falhou (${sendResult?.error || 'erro desconhecido'}). Abortando ${remaining} parte(s) restante(s).`);
+            if (remaining > 0) {
+              await logToDB(userId, 'error', 'ai-reply',
+                `Resposta da IA entregue parcialmente para ${displayPhone}: ${i} de ${messageParts.length} parte(s)`,
+                { sent: i, total: messageParts.length, aborted: remaining, error: sendResult?.error, pending: messageParts.slice(i) });
+            }
+            break;
+          }
+
           // Se houver mais partes, calcula um delay dinâmico (simulação de tempo de digitação)
           if (i < messageParts.length - 1) {
             const nextPart = messageParts[i + 1];

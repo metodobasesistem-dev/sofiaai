@@ -461,11 +461,20 @@ interface Message {
   reaction?: string;
   quoted_id?: string;
   quoted_text?: string;
-  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'sending';
+  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'sending'
+         | 'failed' | 'failed_24h_window' | 'failed_disconnected' | 'failed_unknown';
   is_starred?: boolean;
   whatsapp_id?: string;
   contact_jid?: string;
 }
+
+/** Motivo da falha, exibido no tooltip do indicador "não enviada". */
+const FAILURE_LABELS: Record<string, string> = {
+  failed: 'Falha no envio — o contato não recebeu',
+  failed_24h_window: 'Fora da janela de 24h do WhatsApp — é preciso usar um template aprovado',
+  failed_disconnected: 'A instância do WhatsApp estava desconectada — reconecte e reenvie',
+  failed_unknown: 'O envio foi interrompido e não pôde ser confirmado — verifique antes de reenviar',
+};
 
 
 
@@ -1152,7 +1161,9 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
           </div>
         )}
 
-        <div className={`flex items-center gap-1 mt-1 text-[10px] opacity-50 justify-end ${!isLead && !isRevoked ? 'text-[#075e54]' : 'text-slate-400'}`}>
+        {/* Falha de envio precisa saltar aos olhos: opacity do pai afeta toda a
+            subárvore, então não pode ficar em 50% quando a mensagem não saiu. */}
+        <div className={`flex items-center gap-1 mt-1 text-[10px] justify-end ${String((message as any).status || '').startsWith('failed') ? 'opacity-100' : 'opacity-50'} ${!isLead && !isRevoked ? 'text-[#075e54]' : 'text-slate-400'}`}>
           {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
           {message.time}
           {!isLead && !isPrivate && !isRevoked && (
@@ -1163,6 +1174,11 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
                 <CheckCheck size={14} className="ml-1 text-slate-400" />
               ) : (message as any).status === 'sent' ? (
                 <Check size={14} className="ml-1 text-slate-400" />
+              ) : String((message as any).status || '').startsWith('failed') ? (
+                <span className="ml-1 inline-flex items-center gap-0.5 text-red-500" title={FAILURE_LABELS[(message as any).status] || 'Falha no envio — o contato não recebeu'}>
+                  <AlertCircle size={12} />
+                  <span className="text-[10px] font-medium">não enviada</span>
+                </span>
               ) : (
                 <Clock size={10} className="ml-1 text-slate-400" />
               )}
