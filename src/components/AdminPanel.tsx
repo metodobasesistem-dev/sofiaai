@@ -1556,8 +1556,12 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                               </div>
                                             </div>
                                             <div className="space-y-1">
-                                              <p className="text-sm font-black text-slate-800 uppercase tracking-widest animate-pulse">Varrendo o Google Maps...</p>
-                                              <p className="text-xs text-slate-400 font-medium">Buscando e analisando estabelecimentos locais. Pode levar de 1 a 2 minutos.</p>
+                                              <p className="text-sm font-black text-slate-800 uppercase tracking-widest animate-pulse">
+                                                {radarSource === 'instagram' ? 'Varrendo o Instagram...' : 'Varrendo o Google Maps...'}
+                                              </p>
+                                              <p className="text-xs text-slate-400 font-medium">
+                                                {radarSource === 'instagram' ? 'Buscando e analisando perfis na rede social. Pode levar de 1 a 2 minutos.' : 'Buscando e analisando estabelecimentos locais. Pode levar de 1 a 2 minutos.'}
+                                              </p>
                                             </div>
                                          </div>
                                        ) : (
