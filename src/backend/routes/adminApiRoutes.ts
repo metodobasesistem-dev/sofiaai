@@ -775,74 +775,147 @@ async function runLeadScanBackground(params: {
   const { niche, city, zip, limit, context, apifyToken, campaignId, source = 'google' } = params;
 
   if (source === 'instagram') {
-    const query = `${niche} em ${city}`.trim();
-    console.log(`[LeadRadar][BG] Iniciando busca Apify Instagram: "${query}" com limite de ${limit} leads.`);
+    // ── Mapa de hashtags por nicho ────────────────────────────────────────
+    function buildHashtagsForNiche(nicheRaw: string, cityRaw: string): string[] {
+      const n = nicheRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const c = cityRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
 
-    let rawProfiles: any[] = [];
-    try {
-      const apifyResponse = await axios.post(
-        `https://api.apify.com/v2/acts/apify~instagram-search-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
-        { search: query, searchType: "user", searchLimit: limit * 3 },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 300000 }
-      );
-      rawProfiles = apifyResponse.data || [];
-    } catch (apifyErr: any) {
-      console.warn('[LeadRadar][BG] Erro Apify Instagram:', apifyErr.response?.data || apifyErr.message);
-      return;
+      const maps: Record<string, string[]> = {
+        medico:       [`medico${c}`, 'clinicamedica', `dr${c}`, 'medicobrasileiro', 'consultoriomedico'],
+        clinica:      [`clinica${c}`, 'clinicamedica', 'saudeintegral', `saude${c}`, 'clinicadesaude'],
+        dentista:     [`dentista${c}`, 'odontologia', 'clinicaodontologica', `odonto${c}`, 'sorriso'],
+        odontologo:   [`odontologo${c}`, 'odontologia', `dentista${c}`, 'clinicadental', 'odontologiaestetica'],
+        psicologo:    [`psicologo${c}`, 'psicologia', 'saudementaldobrasil', `terapia${c}`, 'psicoterapia'],
+        psiquiatra:   [`psiquiatra${c}`, 'psiquiatria', 'saudemental', 'psiquiatriabrasileira', 'tratamentopsiquiatrico'],
+        nutricionista:[`nutricionista${c}`, 'nutricao', 'alimentacaosaudavel', `dieta${c}`, 'emagrecimento'],
+        fisioterapeuta:[`fisioterapeuta${c}`, 'fisioterapia', `reabilitacao${c}`, 'clinicafisio', 'fisioterapeutabrasileira'],
+        dermatologista:[`dermatologista${c}`, 'dermatologia', `pelecuidados${c}`, 'esteticafacial', 'dermatologiabrasileira'],
+        oftalmologista:[`oftalmologista${c}`, 'oftalmologia', 'saudeocular', `visao${c}`, 'clinicaoftalmo'],
+        cardiologista: [`cardiologista${c}`, 'cardiologia', 'coracao', `saudecardiaca${c}`, 'cardiologiabrasileira'],
+        ortopedista:  [`ortopedista${c}`, 'ortopedia', `ortopedista${c}`, 'traumatologia', 'cirurgiaortopedica'],
+        pediatra:     [`pediatra${c}`, 'pediatria', `saudeinfantil${c}`, 'pediatrabrasileiro', 'clinicapediatrica'],
+        ginecologista:[`ginecologista${c}`, 'ginecologia', `obstetricia${c}`, 'saudefeminina', 'clinicaginecologica'],
+        urologista:   [`urologista${c}`, 'urologia', 'saudemasculina', `urologista${c}`, 'clinicaurologica'],
+        proctologista:[`proctologista${c}`, 'proctologia', 'colo', 'cirurgiacolorretal', 'colonoscopia'],
+        endocrinologista:[`endocrinologista${c}`, 'endocrinologia', 'diabetes', 'tireoide', 'hormonios'],
+        neurologista: [`neurologista${c}`, 'neurologia', 'neurociencia', `cerebrosaude${c}`, 'clinicaneurologica'],
+        otorrino:     [`otorrino${c}`, 'otorrinolaringologia', 'ouvido', 'garganta', 'nariz'],
+        estetica:     [`estetica${c}`, 'clinicaestetica', 'esteticaavancada', `beleza${c}`, 'esteticacorporal'],
+        farmacia:     [`farmacia${c}`, 'farmaceutico', 'medicamentos', 'saude', 'farmaciabrasileira'],
+        enfermeiro:   [`enfermeiro${c}`, 'enfermagem', 'saudeemcasa', 'enfermagembrasileira', 'cuidadosdesaude'],
+      };
+
+      for (const [key, hashtags] of Object.entries(maps)) {
+        if (n.includes(key)) return hashtags;
+      }
+      const cleanNiche = n.replace(/\s+/g, '');
+      return [`${cleanNiche}${c}`, cleanNiche, `saude${c}`, `clinica${c}`, 'profissionaisdesaude'];
     }
 
-    console.log(`[LeadRadar][BG] ${rawProfiles.length} perfis brutos recebidos do Instagram.`);
+    // ── Extrator de telefone robusto ─────────────────────────────────────
+    function extractPhone(profile: any): string {
+      const bio = profile.biography || profile.bio || '';
+      const website = profile.externalLink || profile.external_url || profile.website || '';
+      const bioLinks = profile.bioLinks || [];
+
+      if (profile.publicPhoneNumber) return profile.publicPhoneNumber;
+
+      const allLinks = [website, ...bioLinks.map((l: any) => l?.url || l)].join(' ');
+      const waMatch = allLinks.match(/(?:wa\.me|api\.whatsapp\.com\/(?:send|message)\/?[?&]phone=|whatsapp\.com\/send\?phone=)\+?(\d{7,15})/i);
+      if (waMatch?.[1]) return waMatch[1];
+
+      const bioClean = bio.replace(/\s/g, '');
+      const brCellMatch = bioClean.match(/(?:\+?55)?(\d{2})9(\d{8})/);
+      if (brCellMatch) return `55${brCellMatch[1]}9${brCellMatch[2]}`;
+      const brFixMatch = bioClean.match(/(?:\+?55)?(\d{2})([2-8]\d{7})/);
+      if (brFixMatch) return `55${brFixMatch[1]}${brFixMatch[2]}`;
+
+      const genericMatch = bio.replace(/[\s().\-+]/g, '').match(/\d{8,13}/);
+      if (genericMatch) return genericMatch[0];
+
+      return '';
+    }
+
+    // ── Normaliza e valida número BR ─────────────────────────────────────
+    function normalizeAndValidateBR(rawPhone: string): string | null {
+      const digits = rawPhone.replace(/\D/g, '');
+      const withoutDDI = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+      if (withoutDDI.length === 11 || withoutDDI.length === 10) return withoutDDI;
+      return null;
+    }
+
+    const hashtags = buildHashtagsForNiche(niche, city);
+    console.log(`[LeadRadar][BG] Iniciando busca Instagram (hashtag-scraper) para: ${hashtags.map(h => '#' + h).join(', ')}`);
+
+    const postsPerHashtag = Math.ceil((limit * 5) / hashtags.length);
+
+    const scrapeResults = await Promise.allSettled(
+      hashtags.map(tag =>
+        axios.post(
+          `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
+          { hashtags: [tag], resultsLimit: postsPerHashtag },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 300000 }
+        ).then(r => r.data || [])
+         .catch((err: any) => {
+           console.warn(`[LeadRadar][BG] Falha no hashtag #${tag}:`, err.response?.data?.error || err.message);
+           return [];
+         })
+      )
+    );
+
+    const seenUsernames = new Set<string>();
+    const rawProfiles: any[] = [];
+    for (const result of scrapeResults) {
+      if (result.status !== 'fulfilled') continue;
+      for (const post of result.value) {
+        const authorUsername = post.ownerUsername || post.owner?.username || post.username || '';
+        if (!authorUsername || seenUsernames.has(authorUsername)) continue;
+        seenUsernames.add(authorUsername);
+        rawProfiles.push({
+          username: authorUsername,
+          displayName: post.ownerFullName || post.owner?.fullName || post.fullName || authorUsername,
+          biography: post.ownerBiography || post.owner?.biography || post.biography || '',
+          publicPhoneNumber: post.ownerPublicPhoneNumber || post.owner?.publicPhoneNumber || '',
+          publicEmail: post.ownerPublicEmail || post.owner?.publicEmail || post.email || null,
+          externalLink: post.ownerExternalUrl || post.owner?.externalUrl || post.externalLink || '',
+          bioLinks: post.owner?.bioLinks || post.bioLinks || [],
+          followerCount: post.ownerFollowersCount || post.owner?.followersCount || post.followersCount || 0,
+          isVerified: post.ownerIsVerified || post.owner?.verified || false,
+        });
+      }
+    }
+
+    console.log(`[LeadRadar][BG] ${rawProfiles.length} perfis únicos agregados de ${hashtags.length} hashtags.`);
     const leadsProcessados = [];
 
     for (const profile of rawProfiles) {
       if (leadsProcessados.length >= limit) break;
 
-      let phone = profile.publicPhoneNumber || '';
+      const rawPhone = extractPhone(profile);
+      if (!rawPhone) continue;
+
+      const normalized = normalizeAndValidateBR(rawPhone);
+      if (!normalized) continue;
+
       const biography = profile.biography || '';
       const website = profile.externalLink || '';
       const username = profile.username || '';
-      const displayName = profile.displayName || profile.username || 'Sem nome';
+      const displayName = profile.displayName || username || 'Sem nome';
       const email = profile.publicEmail || null;
 
-      // 1. Tenta decodificar o link de WhatsApp (ex: wa.me ou api.whatsapp.com)
-      if (!phone && website) {
-        const waMatch = website.match(/(?:wa\.me|api\.whatsapp\.com\/send\?phone=)(\d+)/i);
-        if (waMatch && waMatch[1]) {
-          phone = waMatch[1];
-        }
-      }
-
-      // 2. Busca número brasileiro formatado ou limpo na biografia
-      if (!phone && biography) {
-        const phoneMatch = biography.replace(/\D/g, '').match(/(?:55)?(?:\d{2})?9\d{8}/);
-        if (phoneMatch && phoneMatch[0]) {
-          phone = phoneMatch[0];
-        }
-      }
-
-      // Descartar perfis que não possuem número de contato/WhatsApp, garantindo leads úteis
-      if (!phone) continue;
-
-      const digitsOnly = phone.replace(/\D/g, '');
-      const normalized = digitsOnly.startsWith('55') && digitsOnly.length > 11 ? digitsOnly.slice(2) : digitsOnly;
-      if (normalized.length !== 11 || normalized[2] !== '9') continue; // número celular celular válido (DDD + 9 + 8 dígitos)
-
-      // Calcular Score de Dor / Oportunidade de Growth
       let pain_score = 1;
       let opportunity_score = 0;
 
       if (profile.followerCount && profile.followerCount < 1000) pain_score += 2;
       else if (profile.followerCount && profile.followerCount < 5000) pain_score += 1;
-
       if (!website) pain_score += 2;
-
       if (profile.isVerified) opportunity_score += 2;
       if (profile.followerCount && profile.followerCount > 10000) opportunity_score += 1;
 
       let reviewSummary = 'Sem resumo';
       try {
         const aiContextStr = context ? `\nContexto: ${context}` : '';
-        const aiPrompt = `Você é um Estratégico Especialista em Vendas. Sua missão é analisar este perfil comercial do Instagram e identificar possíveis pontos de dor ou oportunidades de melhoria.\n\nDados do Perfil:\nNome: ${displayName}\nUsername: @${username}\nSeguidores: ${profile.followerCount || 'Não informado'}\nBiografia: ${biography || 'Não informado'}\nSite: ${website || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"..."}`;
+        const aiPrompt = `Você é um Estratégico Especialista em Vendas. Analise este perfil profissional do Instagram e identifique pontos de dor ou oportunidades de melhoria.\n\nPerfil:\nNome: ${displayName}\nUsername: @${username}\nSeguidores: ${profile.followerCount || 'Não informado'}\nBiografia: ${biography || 'Não informado'}\nSite: ${website || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"..."}`;
         const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: 'Gere a análise.' }]);
         const aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
         reviewSummary = aiJson.observacao_ia || reviewSummary;
@@ -856,7 +929,7 @@ async function runLeadScanBackground(params: {
           website: website || null,
           review_summary: reviewSummary,
           instagram: `https://instagram.com/${username}`,
-          email: email,
+          email,
           pain_score,
           opportunity_score,
           place_id: `ig_${username}`,
