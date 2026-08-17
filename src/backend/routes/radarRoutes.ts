@@ -167,121 +167,23 @@ async function runLeadScanBackground(params: {
   const { niche, city, zip, limit, context, apifyToken, campaignId, source = 'google' } = params;
 
   if (source === 'instagram') {
-    // ── Mapa de hashtags por nicho ────────────────────────────────────────
-    // Gera até 5 hashtags específicas para o nicho informado pelo usuário,
-    // combinando termos profissionais com sufixo de cidade quando possível.
-    function buildHashtagsForNiche(nicheRaw: string, cityRaw: string): string[] {
-      const n = nicheRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const c = cityRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+    const query = `${niche} ${city}`.trim();
+    console.log(`[LeadRadar][BG] Iniciando busca Apify Instagram (search-scraper/user): "${query}" com limite de ${limit} leads.`);
 
-      const maps: Record<string, string[]> = {
-        medico:       [`medico${c}`, 'clinicamedica', `dr${c}`, 'medicobrasileiro', 'consultoriomedico'],
-        clinica:      [`clinica${c}`, 'clinicamedica', 'saudeintegral', `saude${c}`, 'clinicadesaude'],
-        dentista:     [`dentista${c}`, 'odontologia', 'clinicaodontologica', `odonto${c}`, 'sorriso'],
-        odontologo:   [`odontologo${c}`, 'odontologia', `dentista${c}`, 'clinicadental', 'odontologiaestetica'],
-        psicologo:    [`psicologo${c}`, 'psicologia', 'saudementaldobrasil', `terapia${c}`, 'psicoterapia'],
-        psiquiatra:   [`psiquiatra${c}`, 'psiquiatria', 'saudemental', `psiquiatriabrasileira`, 'tratamentopsiquiatrico'],
-        nutricionista:[`nutricionista${c}`, 'nutricao', 'alimentacaosaudavel', `dieta${c}`, 'emagrecimento'],
-        fisioterapeuta:[`fisioterapeuta${c}`, 'fisioterapia', `reabilitacao${c}`, 'clinicafisio', 'fisioterapeutabrasileira'],
-        dermatologista:[`dermatologista${c}`, 'dermatologia', `pelecuidados${c}`, 'esteticafacial', 'dermatologiabrasileira'],
-        oftalmologista:[`oftalmologista${c}`, 'oftalmologia', 'saúdeocular', `visao${c}`, 'clinicaoftalmo'],
-        cardiologista: [`cardiologista${c}`, 'cardiologia', 'coracao', `saudecardiaca${c}`, 'cardiologiabrasileira'],
-        ortopedista:  [`ortopedista${c}`, 'ortopedia', `ortopedista${c}`, 'traumatologia', 'cirurgiaortopedica'],
-        pediatra:     [`pediatra${c}`, 'pediatria', `saúdeinfantil${c}`, 'pediatrabrasileiro', 'clinicapediatrica'],
-        ginecologista:[`ginecologista${c}`, 'ginecologia', `obstetricia${c}`, 'saudefeminina', 'clinicaginecologica'],
-        urologista:   [`urologista${c}`, 'urologia', 'saudemasculina', `urologista${c}`, 'clinicaurologica'],
-        proctologista:[`proctologista${c}`, 'proctologia', 'colo', 'cirurgiacolorretal', 'colonoscopia'],
-        endocrinologista:[`endocrinologista${c}`, 'endocrinologia', 'diabetes', 'tireoide', 'hormonios'],
-        neurologista: [`neurologista${c}`, 'neurologia', 'neurociencia', `cerebrosaude${c}`, 'clinicaneurologica'],
-        otorrino:     [`otorrino${c}`, 'otorrinolaringologia', 'ouvido', 'garganta', 'nariz'],
-        estetica:     [`estetica${c}`, 'clinicaestetica', 'esteticaavancada', `beleza${c}`, 'esteticacorporal'],
-        farmacia:     [`farmacia${c}`, 'farmaceutico', 'medicamentos', 'saude', 'farmaciabrasileira'],
-        enfermeiro:   [`enfermeiro${c}`, 'enfermagem', 'saudeemcasa', `enfermagembrasileira`, 'cuidadosdesaude'],
-      };
-
-      // Tenta match exato, depois parcial
-      for (const [key, hashtags] of Object.entries(maps)) {
-        if (n.includes(key)) return hashtags;
-      }
-
-      // Fallback genérico: usa o próprio nicho + cidade
-      const cleanNiche = n.replace(/\s+/g, '');
-      return [`${cleanNiche}${c}`, cleanNiche, `saude${c}`, `clinica${c}`, `profissionaisdesaude`];
+    let rawProfiles: any[] = [];
+    try {
+      const apifyResponse = await axios.post(
+        `https://api.apify.com/v2/acts/apify~instagram-search-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
+        { search: query, searchType: "user", searchLimit: limit * 3 },
+        { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
+      );
+      rawProfiles = apifyResponse.data || [];
+    } catch (apifyErr: any) {
+      console.warn('[LeadRadar][BG] Erro Apify Instagram:', apifyErr.response?.data || apifyErr.message);
+      return;
     }
 
-    // ── Extrator de telefone robusto ─────────────────────────────────────
-    function extractPhone(profile: any): string {
-      const bio = profile.biography || profile.bio || '';
-      const website = profile.externalLink || profile.external_url || profile.website || '';
-      const bioLinks = profile.bioLinks || [];
-
-      // 1. Número público direto do perfil
-      if (profile.publicPhoneNumber) return profile.publicPhoneNumber;
-
-      // 2. Links wa.me / api.whatsapp.com / whatsapp.com no website ou bioLinks
-      const allLinks = [website, ...bioLinks.map((l: any) => l?.url || l)].join(' ');
-      const waMatch = allLinks.match(/(?:wa\.me|api\.whatsapp\.com\/(?:send|message)\/?[?&]phone=|whatsapp\.com\/send\?phone=)\+?(\d{7,15})/i);
-      if (waMatch?.[1]) return waMatch[1];
-
-      // 3. Número BR formatado na bio (celular ou fixo)
-      //    Padrões: +55 11 98765-4321 | (11) 9xxxx-xxxx | 11-98765-4321 | 11987654321
-      const bioClean = bio.replace(/\s/g, '');
-      const brCellMatch = bioClean.match(/(?:\+?55)?(\d{2})9(\d{8})/);
-      if (brCellMatch) return `55${brCellMatch[1]}9${brCellMatch[2]}`;
-      const brFixMatch = bioClean.match(/(?:\+?55)?(\d{2})([2-8]\d{7})/);
-      if (brFixMatch) return `55${brFixMatch[1]}${brFixMatch[2]}`;
-
-      // 4. Qualquer sequência de dígitos razoável (8-13 dígitos) na bio
-      const genericMatch = bio.replace(/[\s().\-+]/g, '').match(/\d{8,13}/);
-      if (genericMatch) return genericMatch[0];
-
-      return '';
-    }
-
-    // ── Normaliza e valida número BR ─────────────────────────────────────
-    function normalizeAndValidateBR(rawPhone: string): string | null {
-      const digits = rawPhone.replace(/\D/g, '');
-      // Remove DDI 55 se presente e sobrar 10 ou 11 dígitos
-      const withoutDDI = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
-      // Aceita celular (11 dígitos: DDD + 9 + 8) ou fixo (10 dígitos: DDD + 8)
-      if (withoutDDI.length === 11 || withoutDDI.length === 10) return withoutDDI;
-      return null;
-    }
-
-    const hashtags = buildHashtagsForNiche(niche, city);
-    console.log(`[LeadRadar][BG] Iniciando busca Instagram (search-scraper/hashtag) para: ${hashtags.map(h => '#' + h).join(', ')}`);
-
-    // ── Busca sequencial por hashtags ────────────────────────────────────
-    // Usamos instagram-search-scraper com searchType:"hashtag" — ele retorna
-    // PERFIS completos (com biography, publicPhoneNumber, externalUrl) de quem
-    // postou com aquela hashtag. Diferente do hashtag-scraper que retorna posts
-    // sem dados do autor.
-    const profilesPerTag = Math.ceil((limit * 4) / hashtags.length);
-    const seenUsernames = new Set<string>();
-    const rawProfiles: any[] = [];
-
-    for (const tag of hashtags) {
-      if (rawProfiles.length >= limit * 3) break; // já temos material suficiente
-      try {
-        const { data: tagResults } = await axios.post(
-          `https://api.apify.com/v2/acts/apify~instagram-search-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
-          { search: tag, searchType: 'hashtag', searchLimit: profilesPerTag },
-          { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
-        );
-        const profiles: any[] = tagResults || [];
-        console.log(`[LeadRadar][BG] #${tag}: ${profiles.length} perfis recebidos.`);
-        for (const p of profiles) {
-          const uname = p.username || p.ownerUsername || '';
-          if (!uname || seenUsernames.has(uname)) continue;
-          seenUsernames.add(uname);
-          rawProfiles.push(p);
-        }
-      } catch (tagErr: any) {
-        console.warn(`[LeadRadar][BG] Falha na hashtag #${tag}:`, tagErr.response?.data?.error || tagErr.message);
-      }
-    }
-
-    console.log(`[LeadRadar][BG] ${rawProfiles.length} perfis únicos agregados de ${hashtags.length} hashtags.`);
+    console.log(`[LeadRadar][BG] ${rawProfiles.length} perfis brutos recebidos do Instagram.`);
     const leadsProcessados = [];
 
     for (const profile of rawProfiles) {
