@@ -74,64 +74,77 @@ export default function Campaigns() {
   const [isValidatingNumbers, setIsValidatingNumbers] = useState(false);
   const [validationResults, setValidationResults] = useState<{ validCount: number; invalidCount: number; results: any[] } | null>(null);
   const [isCheckingContact, setIsCheckingContact] = useState(false);
-  const [contactCheckResult, setContactCheckResult] = useState<{ found: boolean; name?: string; status?: string; hasWhatsapp?: boolean } | null>(null);
+  const [contactCheckResult, setContactCheckResult] = useState<{ found: boolean; name?: string; status?: string; hasWhatsapp?: boolean; waCheckFailed?: boolean } | null>(null);
 
   const validateSingleContact = async () => {
-    if (!campaignData.singleContact.telefone) return;
-    
+    const rawPhone = campaignData.singleContact.telefone?.trim();
+    if (!rawPhone) return;
+
     setIsCheckingContact(true);
     setContactCheckResult(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      
-      const cleanPhone = campaignData.singleContact.telefone.replace(/\D/g, '');
-      const last8 = cleanPhone.slice(-8);
-      
-      if (!last8) {
-        toast.error('Telefone inválido para busca.');
+
+      const cleanPhone = rawPhone.replace(/\D/g, '');
+      if (cleanPhone.length < 8) {
+        toast.error('Telefone inválido — informe pelo menos 8 dígitos.');
         return;
       }
-      
-      const { data, error } = await supabase
+      const last8 = cleanPhone.slice(-8);
+
+      // ── 1. Verifica duplicata na base de contatos ─────────────────────
+      // Usa .limit(1) para evitar PGRST116 quando há múltiplos matches.
+      const { data: contactRows, error: contactErr } = await supabase
         .from('contacts')
         .select('nome, status_funil')
         .eq('user_id', user.id)
         .like('telefone', `%${last8}`)
-        .maybeSingle();
-        
-      if (error && error.code !== 'PGRST116') throw error; // Ignorar erro de 0 rows
-      
-      const isAlreadyInBase = !!data;
-      const baseResult = isAlreadyInBase 
-        ? { found: true, name: data.nome, status: data.status_funil }
+        .limit(1);
+
+      if (contactErr) throw contactErr;
+
+      const foundContact = contactRows?.[0] ?? null;
+      const isAlreadyInBase = !!foundContact;
+      const baseResult = isAlreadyInBase
+        ? { found: true, name: foundContact.nome, status: foundContact.status_funil }
         : { found: false };
 
+      // ── 2. Valida WhatsApp via Evolution API ──────────────────────────
       let hasWhatsapp = false;
+      let waCheckFailed = false;
       try {
         const response = await standardFetch('/api/v2/campaigns/validate-numbers', {
           method: 'POST',
           body: JSON.stringify({ numbers: [cleanPhone] })
         });
         const res = await response.json();
-        if (res.success && res.results && res.results.length > 0) {
-          hasWhatsapp = res.results[0].exists;
+        if (res.success && Array.isArray(res.results) && res.results.length > 0) {
+          hasWhatsapp = !!res.results[0].exists;
+        } else if (!res.success) {
+          // Backend retornou erro (instância offline, etc)
+          waCheckFailed = true;
+          console.warn('[validateSingleContact] WA check backend error:', res.error);
         }
       } catch (waErr) {
-        console.error('Erro ao validar WhatsApp:', waErr);
+        waCheckFailed = true;
+        console.error('[validateSingleContact] WA check network error:', waErr);
       }
 
-      setContactCheckResult({ ...baseResult, hasWhatsapp });
+      setContactCheckResult({ ...baseResult, hasWhatsapp, waCheckFailed });
 
-      if (!hasWhatsapp) {
-        toast.error('Atenção: Este número NÃO possui WhatsApp ativo!');
+      if (waCheckFailed) {
+        toast.warning('Não foi possível verificar o WhatsApp (instância desconectada?). Apenas a base de dados foi verificada.');
+      } else if (!hasWhatsapp) {
+        toast.error('❌ Este número NÃO possui WhatsApp ativo.');
       } else if (isAlreadyInBase) {
-        toast.warning('Atenção: Contato já existe na sua base (WhatsApp Válido).');
+        toast.warning('⚠️ Contato já existe na sua base! (WhatsApp válido, mas pode gerar duplicata)');
       } else {
-        toast.success('Contato inédito na base e com WhatsApp ativo!');
+        toast.success('✅ Contato inédito e com WhatsApp ativo! Pode prosseguir.');
       }
     } catch (err: any) {
-      toast.error('Erro ao buscar contato: ' + err.message);
+      console.error('[validateSingleContact] Unexpected error:', err);
+      toast.error('Erro ao validar contato: ' + (err.message || 'Tente novamente'));
     } finally {
       setIsCheckingContact(false);
     }
@@ -645,11 +658,28 @@ export default function Campaigns() {
                   </div>
                   
                   {contactCheckResult && (
-                    <div className={`p-3 mt-3 rounded-lg text-xs font-bold ${!contactCheckResult.hasWhatsapp ? 'bg-red-50 text-red-900 border border-red-200' : contactCheckResult.found ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}>
-                      {!contactCheckResult.hasWhatsapp ? (
+                    <div className={`p-3 mt-3 rounded-lg text-xs font-bold ${
+                      contactCheckResult.waCheckFailed
+                        ? 'bg-yellow-50 text-yellow-900 border border-yellow-200'
+                        : !contactCheckResult.hasWhatsapp
+                          ? 'bg-red-50 text-red-900 border border-red-200'
+                          : contactCheckResult.found
+                            ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                            : 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                    }`}>
+                      {contactCheckResult.waCheckFailed ? (
+                        <div className="space-y-1">
+                          <p>⚠️ WhatsApp não pôde ser verificado (instância desconectada ou indisponível).</p>
+                          {contactCheckResult.found ? (
+                            <p>📋 Na base: <strong>{contactCheckResult.name}</strong> (Status: {contactCheckResult.status || 'N/A'}) — contato <strong>já existe</strong>.</p>
+                          ) : (
+                            <p>📋 Contato <strong>não encontrado</strong> na sua base de dados.</p>
+                          )}
+                        </div>
+                      ) : !contactCheckResult.hasWhatsapp ? (
                         <>❌ O número informado NÃO possui WhatsApp ativo.</>
                       ) : contactCheckResult.found ? (
-                        <>⚠️ Contato já existente: {contactCheckResult.name} (Status: {contactCheckResult.status || 'N/A'})</>
+                        <>⚠️ Contato já existente: <strong>{contactCheckResult.name}</strong> (Status: {contactCheckResult.status || 'N/A'}) — pode gerar envio duplicado!</>
                       ) : (
                         <>✅ Contato inédito com WhatsApp ativo! Pode seguir com o envio.</>
                       )}
