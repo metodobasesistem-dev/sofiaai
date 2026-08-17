@@ -249,48 +249,35 @@ async function runLeadScanBackground(params: {
     }
 
     const hashtags = buildHashtagsForNiche(niche, city);
-    console.log(`[LeadRadar][BG] Iniciando busca Instagram (hashtag-scraper) para: ${hashtags.map(h => '#' + h).join(', ')}`);
+    console.log(`[LeadRadar][BG] Iniciando busca Instagram (search-scraper/hashtag) para: ${hashtags.map(h => '#' + h).join(', ')}`);
 
-    // ── Busca paralela por até 5 hashtags ───────────────────────────────
-    // Cada hashtag busca postsPerPage posts; deduplicamos por username depois.
-    const postsPerHashtag = Math.ceil((limit * 5) / hashtags.length);
-
-    const scrapeResults = await Promise.allSettled(
-      hashtags.map(tag =>
-        axios.post(
-          `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
-          { hashtags: [tag], resultsLimit: postsPerHashtag },
-          { headers: { 'Content-Type': 'application/json' }, timeout: 300000 }
-        ).then(r => r.data || [])
-         .catch((err: any) => {
-           console.warn(`[LeadRadar][BG] Falha no hashtag #${tag}:`, err.response?.data?.error || err.message);
-           return [];
-         })
-      )
-    );
-
-    // Agrega e deduplica perfis por username
+    // ── Busca sequencial por hashtags ────────────────────────────────────
+    // Usamos instagram-search-scraper com searchType:"hashtag" — ele retorna
+    // PERFIS completos (com biography, publicPhoneNumber, externalUrl) de quem
+    // postou com aquela hashtag. Diferente do hashtag-scraper que retorna posts
+    // sem dados do autor.
+    const profilesPerTag = Math.ceil((limit * 4) / hashtags.length);
     const seenUsernames = new Set<string>();
     const rawProfiles: any[] = [];
-    for (const result of scrapeResults) {
-      if (result.status !== 'fulfilled') continue;
-      for (const post of result.value) {
-        // O hashtag-scraper retorna posts; o perfil do autor vem em post.ownerUsername / post.owner
-        const authorUsername = post.ownerUsername || post.owner?.username || post.username || '';
-        if (!authorUsername || seenUsernames.has(authorUsername)) continue;
-        seenUsernames.add(authorUsername);
-        // Normaliza campos para formato comum
-        rawProfiles.push({
-          username: authorUsername,
-          displayName: post.ownerFullName || post.owner?.fullName || post.fullName || authorUsername,
-          biography: post.ownerBiography || post.owner?.biography || post.biography || '',
-          publicPhoneNumber: post.ownerPublicPhoneNumber || post.owner?.publicPhoneNumber || '',
-          publicEmail: post.ownerPublicEmail || post.owner?.publicEmail || post.email || null,
-          externalLink: post.ownerExternalUrl || post.owner?.externalUrl || post.externalLink || '',
-          bioLinks: post.owner?.bioLinks || post.bioLinks || [],
-          followerCount: post.ownerFollowersCount || post.owner?.followersCount || post.followersCount || 0,
-          isVerified: post.ownerIsVerified || post.owner?.verified || false,
-        });
+
+    for (const tag of hashtags) {
+      if (rawProfiles.length >= limit * 3) break; // já temos material suficiente
+      try {
+        const { data: tagResults } = await axios.post(
+          `https://api.apify.com/v2/acts/apify~instagram-search-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
+          { search: tag, searchType: 'hashtag', searchLimit: profilesPerTag },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
+        );
+        const profiles: any[] = tagResults || [];
+        console.log(`[LeadRadar][BG] #${tag}: ${profiles.length} perfis recebidos.`);
+        for (const p of profiles) {
+          const uname = p.username || p.ownerUsername || '';
+          if (!uname || seenUsernames.has(uname)) continue;
+          seenUsernames.add(uname);
+          rawProfiles.push(p);
+        }
+      } catch (tagErr: any) {
+        console.warn(`[LeadRadar][BG] Falha na hashtag #${tag}:`, tagErr.response?.data?.error || tagErr.message);
       }
     }
 
