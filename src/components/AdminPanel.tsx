@@ -350,24 +350,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   };
 
   const openSendModal = async (lead: any) => {
-    setSendModalLead(lead);
-    setSendModalTemplate('');
-    setCustomMessage('');
-    setTemplateParams([]);
-    setLoadingSendTemplates(true);
-    try {
-      const templates = await listMetaTemplates('APPROVED');
-      setSendModalTemplates(templates);
-      if (globalSettings.whatsapp_provider === 'meta_official' && templates.length > 0) {
-        setSendMode('template');
-      } else {
-        setSendMode('text');
-      }
-    } catch {
-      setSendModalTemplates([]);
-      setSendMode('text');
-    } finally {
-      setLoadingSendTemplates(false);
+    localStorage.setItem('openNewCampaign', 'true');
+    localStorage.setItem('prefillCampaignTargetType', 'single_contact');
+    localStorage.setItem('prefillCampaignContactName', lead.name || '');
+    localStorage.setItem('prefillCampaignContactPhone', lead.phone || '');
+    
+    if (onTabChange) {
+      onTabChange('campaigns');
     }
   };
 

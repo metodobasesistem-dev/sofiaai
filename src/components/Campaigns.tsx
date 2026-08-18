@@ -450,16 +450,25 @@ export default function Campaigns() {
 
     if (localStorage.getItem('openNewCampaign') === 'true') {
       localStorage.removeItem('openNewCampaign');
+      
+      const prefillName = localStorage.getItem('prefillCampaignContactName') || '';
+      const prefillPhone = localStorage.getItem('prefillCampaignContactPhone') || '';
+      const prefillTargetType = localStorage.getItem('prefillCampaignTargetType') || 'all';
+      
+      localStorage.removeItem('prefillCampaignContactName');
+      localStorage.removeItem('prefillCampaignContactPhone');
+      localStorage.removeItem('prefillCampaignTargetType');
+
       // Set to tab campaigns, open modal, etc
       setActiveTab('campaigns');
       setCampaignData({
         name: '',
-        targetType: 'all',
+        targetType: prefillTargetType as any,
         selectedLabels: [],
         selectedFunnelStatus: '',
         manualList: '',
         uploadedContacts: [],
-        singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
+        singleContact: { nome: prefillName, telefone: prefillPhone, linkToCampaign: false, linkedCampaignId: '' },
         messageType: 'custom',
         customText: '',
         templateId: '',
