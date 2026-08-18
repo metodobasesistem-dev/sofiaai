@@ -609,6 +609,13 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     }
   };
 
+  /** Desiste da exclusão e devolve o admin para a tela de edição de onde veio. */
+  const cancelDeleteUser = () => {
+    setDeleteModalOpen(false);
+    setDeleteConfirmText('');
+    if (selectedUser) setIsEditModalOpen(true);
+  };
+
   /**
    * Exclusão definitiva do inquilino. Só roda com a palavra EXCLUIR digitada —
    * o backend revalida, então o botão desabilitado não é a única barreira.
@@ -2851,6 +2858,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                    <button
                     onClick={() => {
                       setDeleteConfirmText('');
+                      // Fecha a edição: a confirmação de exclusão fica sozinha na tela.
+                      // selectedUser continua setado — é dele que o modal se alimenta.
+                      setIsEditModalOpen(false);
                       setDeleteModalOpen(true);
                     }}
                     disabled={isActionLoading}
@@ -3142,10 +3152,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       {/* Exclusão definitiva — trava por digitação para não apagar um inquilino sem querer */}
       <AnimatePresence>
         {deleteModalOpen && selectedUser && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div
               className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
-              onClick={() => !isDeletingUser && setDeleteModalOpen(false)}
+              onClick={() => !isDeletingUser && cancelDeleteUser()}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -3202,7 +3212,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
               <div className="p-6 bg-slate-50 flex gap-3">
                 <button
-                  onClick={() => setDeleteModalOpen(false)}
+                  onClick={cancelDeleteUser}
                   disabled={isDeletingUser}
                   className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all disabled:opacity-50"
                 >
