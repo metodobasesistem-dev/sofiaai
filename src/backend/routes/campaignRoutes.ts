@@ -419,13 +419,19 @@ router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => 
     const phone = normalizePhone(phoneRaw);
     
     // 1. Garante que o contato existe no CRM (contacts)
+    // IMPORTANTE: sempre usar o telefone NORMALIZADO (com 55) no id e na coluna.
+    // O agentService grava contatos como {userId}_{normalizePhone(phone)}; se aqui
+    // usássemos o número cru, o mesmo lead viraria duas linhas em contacts quando
+    // ele respondesse — e apareceria duplicado nas notificações e no CRM.
     let contactId = '';
-    const { data: existingContact } = await supabase
+    const { data: existingContacts } = await supabase
       .from('contacts')
       .select('id, nome, telefone')
       .eq('user_id', userId)
-      .eq('telefone', phoneRaw)
-      .maybeSingle();
+      .in('telefone', Array.from(new Set([phone, phoneRaw])))
+      .limit(1);
+
+    const existingContact = existingContacts?.[0];
 
     if (existingContact) {
       contactId = existingContact.id;
@@ -433,10 +439,10 @@ router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => 
       const { data: newContact, error: insertErr } = await supabase
         .from('contacts')
         .insert({
-          id: `${userId}_${phoneRaw}`,
+          id: `${userId}_${phone}`,
           user_id: userId,
           nome: contact.nome || 'Lead Isolado',
-          telefone: phoneRaw,
+          telefone: phone,
           status_funil: 'Lead',
         })
         .select('id')

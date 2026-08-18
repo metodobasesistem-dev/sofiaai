@@ -674,7 +674,11 @@ export class AgentService {
       // Janela de 24h Meta: atualizado atomicamente no RPC para mensagens inbound.
       // Para mensagens outbound o campo fica ausente (null no JSONB) e o RPC
       // preserva o valor existente via COALESCE.
-      ...(direction === 'inbound' ? { last_inbound_at: tsToIso(timestamp) } : {})
+      // first_inbound_at: o RPC só grava se ainda estiver NULL — é o marco de
+      // "o lead falou pela primeira vez", gatilho da notificação de Novo Lead.
+      ...(direction === 'inbound'
+        ? { last_inbound_at: tsToIso(timestamp), first_inbound_at: tsToIso(timestamp) }
+        : {})
     };
 
     const contactPayload = {
