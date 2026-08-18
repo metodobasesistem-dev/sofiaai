@@ -37,7 +37,8 @@ import {
   Calendar,
   Trash2,
   Send,
-  Mail
+  Mail,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
@@ -146,6 +147,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [metaTestResult, setMetaTestResult] = useState<{ ok: boolean; phone?: MetaPhoneInfo; error?: string } | null>(null);
   const [metaHelpOpen, setMetaHelpOpen] = useState(false);
   const [diagnosticOpen, setDiagnosticOpen] = useState(false);
+  // Exclusão definitiva: exige digitar EXCLUIR para não apagar um inquilino sem querer
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const [globalSettings, setGlobalSettings] = useState<any>({
     openai_api_key: '',
@@ -601,6 +606,37 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       }
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  /**
+   * Exclusão definitiva do inquilino. Só roda com a palavra EXCLUIR digitada —
+   * o backend revalida, então o botão desabilitado não é a única barreira.
+   */
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    if (deleteConfirmText.trim().toUpperCase() !== 'EXCLUIR') return;
+
+    try {
+      setIsDeletingUser(true);
+      const { deleted, errors } = await deleteAdminUser(selectedUser.id, deleteConfirmText.trim().toUpperCase());
+
+      const totalLinhas = Object.values(deleted).reduce((a, b) => a + b, 0);
+      if (errors.length) {
+        toast.error(`Usuário excluído com ${errors.length} aviso(s): ${errors[0]}`);
+      } else {
+        toast.success(`${selectedUser.email} excluído — ${totalLinhas} registros removidos`);
+      }
+
+      setDeleteModalOpen(false);
+      setDeleteConfirmText('');
+      setIsEditModalOpen(false);
+      setSelectedUser(null);
+      fetchData();
+    } catch (e: any) {
+      toast.error('Erro ao excluir: ' + e.message);
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -2813,19 +2849,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                      <Activity size={16} /> Diagnóstico Completo
                    </button>
                    <button
-                    onClick={async () => {
-                      if (!window.confirm(`Tem certeza que deseja excluir permanentemente o usuário ${selectedUser.email}? Esta ação não pode ser desfeita.`)) return;
-                      try {
-                        setIsActionLoading(true);
-                        await deleteAdminUser(selectedUser.id);
-                        toast.success('Usuário excluído com sucesso!');
-                        setIsEditModalOpen(false);
-                        fetchData();
-                      } catch (e: any) {
-                        toast.error('Erro ao excluir: ' + e.message);
-                      } finally {
-                        setIsActionLoading(false);
-                      }
+                    onClick={() => {
+                      setDeleteConfirmText('');
+                      setDeleteModalOpen(true);
                     }}
                     disabled={isActionLoading}
                     className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 transition-all active:scale-95 border border-red-100"
@@ -3112,6 +3138,96 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         targetUserId={selectedUser?.id || null}
         targetUserEmail={selectedUser?.email}
       />
+
+      {/* Exclusão definitiva — trava por digitação para não apagar um inquilino sem querer */}
+      <AnimatePresence>
+        {deleteModalOpen && selectedUser && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
+              onClick={() => !isDeletingUser && setDeleteModalOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-8 pb-6">
+                <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mb-5">
+                  <AlertTriangle size={26} className="text-red-600" />
+                </div>
+
+                <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">
+                  Excluir inquilino permanentemente
+                </h3>
+                <p className="text-[13px] text-slate-500 font-medium leading-relaxed">
+                  Você está prestes a apagar <span className="font-bold text-slate-700">{selectedUser.email}</span> e
+                  tudo que pertence a esse inquilino. <span className="font-bold text-red-600">Não há como desfazer.</span>
+                </p>
+
+                <div className="mt-5 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                    O que será apagado
+                  </p>
+                  <ul className="text-[12px] text-slate-600 font-medium space-y-1 list-disc list-inside">
+                    <li>Conversas, mensagens, contatos e agendamentos</li>
+                    <li>Agentes de IA, base de conhecimento e campanhas</li>
+                    <li>Áudios e mídias enviadas no chat</li>
+                    <li>A sessão e a instância do WhatsApp</li>
+                    <li>O acesso (login) do usuário</li>
+                  </ul>
+                </div>
+
+                <label className="block mt-6">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Digite <span className="text-red-600">EXCLUIR</span> para confirmar
+                  </span>
+                  <input
+                    autoFocus
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && deleteConfirmText.trim().toUpperCase() === 'EXCLUIR') {
+                        (e.target as HTMLInputElement).blur();
+                        handleDeleteUser();
+                      }
+                    }}
+                    placeholder="EXCLUIR"
+                    disabled={isDeletingUser}
+                    className="mt-2 w-full px-4 py-4 bg-white border-2 border-slate-200 rounded-2xl text-sm font-black tracking-widest uppercase text-slate-900 placeholder:text-slate-300 placeholder:font-medium placeholder:tracking-normal focus:border-red-400 focus:ring-4 focus:ring-red-500/10 outline-none transition-all disabled:opacity-50"
+                  />
+                </label>
+              </div>
+
+              <div className="p-6 bg-slate-50 flex gap-3">
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  disabled={isDeletingUser}
+                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  disabled={isDeletingUser || deleteConfirmText.trim().toUpperCase() !== 'EXCLUIR'}
+                  className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-red-700 transition-all active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:active:scale-100"
+                >
+                  {isDeletingUser ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" /> Excluindo…
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} /> Excluir tudo
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Send Modal - envio individual de lead */}
       <AnimatePresence>
