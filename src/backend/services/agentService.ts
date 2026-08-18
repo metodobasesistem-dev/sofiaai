@@ -2331,15 +2331,28 @@ tudo que tiver no 'intent'.`,
       // Só sobrescreve a URL se conseguimos uma nova OU se for force refresh.
       // Isso evita que uma resposta null temporária da Evolution API apague
       // uma URL válida já armazenada.
+      //
+      // ATENÇÃO: nunca incluir 'photo_url' aqui. Essa coluna existe só em
+      // 'profiles' — em threads/contacts o PostgREST rejeita o UPDATE INTEIRO
+      // com 42703, e como o erro era ignorado nenhuma foto era gravada.
       if (photoUrl !== null || force) {
         updateData.profile_picture_url = photoUrl;
-        updateData.photo_url = photoUrl;
       }
 
-      await Promise.all([
+      const [threadRes, contactRes] = await Promise.all([
         supabase.from('threads').update(updateData).eq('id', threadId),
         supabase.from('contacts').update(updateData).eq('id', contactId)
       ]);
+
+      // Falha de escrita aqui é silenciosa por natureza (ninguém consome o
+      // retorno) — logar é o que transforma "as fotos sumiram" em algo
+      // diagnosticável.
+      if (threadRes.error) {
+        console.error(`[AgentService] ❌ Falha ao gravar foto na thread ${threadId}:`, threadRes.error.message);
+      }
+      if (contactRes.error) {
+        console.error(`[AgentService] ❌ Falha ao gravar foto no contato ${contactId}:`, contactRes.error.message);
+      }
     } catch (err) {
       console.error('[AgentService] Error syncing profile picture:', err);
     }
