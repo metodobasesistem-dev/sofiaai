@@ -757,6 +757,18 @@ class WhatsAppService {
 
       console.log(`[WhatsAppService] ✅ Message sent and persisted: ${msgId}`);
 
+      // 4.5 [FOTO] O sync automático do webhook só dispara em mensagem inbound
+      // (if (!fromMe)), então conversas que NÓS iniciamos — prospecção, campanha,
+      // envio manual — nunca buscavam a foto do contato. Enfileira aqui também;
+      // o jobId por thread deduplica e o TTL do worker evita martelar a API.
+      this.enqueueProfilePictureSync({
+        userId,
+        threadId,
+        remoteJid: to.includes('@') ? to : `${cleanTo}@s.whatsapp.net`
+      }).catch(() => {
+        // Foto é opcional — nunca pode derrubar o envio
+      });
+
       // 5. Agenda follow-up
       if (senderName !== 'IA (FOLLOW-UP)') {
         await this.scheduleFollowUp(userId, to, 0);

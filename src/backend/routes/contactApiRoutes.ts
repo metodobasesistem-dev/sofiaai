@@ -8,6 +8,7 @@ import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { cacheWrap, invalidateCache, cacheKey, TTL } from '../lib/redisCache.js';
+import { getThreadId } from '../lib/phoneHelper.js';
 
 const router = Router();
 
@@ -110,13 +111,27 @@ router.get('/profile-picture/:phone', async (req: AuthenticatedRequest, res: Res
     const { agentService } = await import('../services/agentService.js');
     const remoteJid = `${phone}@s.whatsapp.net`;
     
-    // Tentamos buscar a threadId para esse contato
-    const { data: thread } = await supabase
+    // Resolve a thread pelo id exato ({userId}_{telefone normalizado}).
+    // O ilike '%phone%' + maybeSingle anterior estourava (PGRST116) sempre que
+    // dois números do tenant casavam pelo sufixo — e a foto nunca vinha.
+    const threadId = getThreadId(userId, phone);
+    let { data: thread } = await supabase
       .from('threads')
       .select('id')
-      .eq('user_id', userId)
-      .ilike('remote_jid', `%${phone}%`)
+      .eq('id', threadId)
       .maybeSingle();
+
+    // Fallback para threads antigas cujo id não segue o formato normalizado.
+    // limit(1) em vez de maybeSingle: múltiplos matches não podem virar erro.
+    if (!thread) {
+      const { data: fuzzy } = await supabase
+        .from('threads')
+        .select('id')
+        .eq('user_id', userId)
+        .ilike('remote_jid', `%${phone}%`)
+        .limit(1);
+      thread = fuzzy?.[0] || null;
+    }
 
     if (thread) {
       // Sincroniza em background
