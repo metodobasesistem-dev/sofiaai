@@ -14,6 +14,7 @@ import { logProviderAudit, maskedMetaPayload } from '../lib/providerAudit.js';
 import { generateAIResponse } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { EvolutionApiService } from '../services/evolutionApiService.js';
+import { runInstagramLeadScan } from '../services/instagramLeadSearch.js';
 
 const router = Router();
 
@@ -951,112 +952,9 @@ async function runLeadScanBackground(params: {
   const { niche, city, zip, limit, context, apifyToken, campaignId, source = 'google' } = params;
 
   if (source === 'instagram') {
-    const query = `${niche} ${city}`.trim();
-    console.log(`[LeadRadar][BG] Iniciando busca Apify Instagram (search-scraper/user): "${query}" com limite de ${limit} leads.`);
-
-    let rawProfiles: any[] = [];
-    try {
-      const apifyResponse = await axios.post(
-        `https://api.apify.com/v2/acts/apify~instagram-search-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
-        { search: query, searchType: "user", searchLimit: limit * 3 },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
-      );
-      rawProfiles = apifyResponse.data || [];
-    } catch (apifyErr: any) {
-      console.warn('[LeadRadar][BG] Erro Apify Instagram:', apifyErr.response?.data || apifyErr.message);
-      return;
-    }
-
-    console.log(`[LeadRadar][BG] ${rawProfiles.length} perfis brutos recebidos do Instagram.`);
-        const leadsProcessados = [];
-
-    // ── Extratores de telefone ───────────────────────────────────────────
-    function extractPhone(profile: any): string {
-      const bio = profile.biography || profile.bio || '';
-      const website = profile.externalUrl || profile.externalLink || profile.website || '';
-      const bioLinks = profile.externalUrls || profile.bioLinks || [];
-
-      if (profile.publicPhoneNumber) return profile.publicPhoneNumber;
-
-      const allLinks = [website, ...(Array.isArray(bioLinks) ? bioLinks.map((l: any) => l?.url || l) : [])].join(' ');
-      const waMatch = allLinks.match(/(?:wa\.me|api\.whatsapp\.com\/(?:send|message)\/?[?&]phone=|whatsapp\.com\/send\?phone=)\+?(\d{7,15})/i);
-      if (waMatch?.[1]) return waMatch[1];
-
-      const bioClean = bio.replace(/\s/g, '');
-      const brCellMatch = bioClean.match(/(?:\+?55)?(\d{2})9(\d{8})/);
-      if (brCellMatch) return `55${brCellMatch[1]}9${brCellMatch[2]}`;
-      const brFixMatch = bioClean.match(/(?:\+?55)?(\d{2})([2-8]\d{7})/);
-      if (brFixMatch) return `55${brFixMatch[1]}${brFixMatch[2]}`;
-
-      const genericMatch = bio.replace(/[\s().\-+]/g, '').match(/\d{8,13}/);
-      if (genericMatch) return genericMatch[0];
-
-      return '';
-    }
-
-    function normalizeAndValidateBR(rawPhone: string): string | null {
-      const digits = rawPhone.replace(/\D/g, '');
-      const withoutDDI = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
-      if (withoutDDI.length === 11 || withoutDDI.length === 10) return withoutDDI;
-      return null;
-    }
-
-    for (const profile of rawProfiles) {
-      if (leadsProcessados.length >= limit) break;
-
-      const rawPhone = extractPhone(profile);
-      if (!rawPhone) continue;
-
-      const normalized = normalizeAndValidateBR(rawPhone);
-      if (!normalized) continue;
-
-      const biography = profile.biography || '';
-      const website = profile.externalUrl || profile.externalLink || '';
-      const username = profile.username || '';
-      const displayName = profile.fullName || profile.displayName || username || 'Sem nome';
-      const email = profile.publicEmail || profile.businessEmail || null;
-
-      let pain_score = 1;
-      let opportunity_score = 0;
-
-      const followers = profile.followersCount || profile.followerCount || 0;
-      if (followers > 0 && followers < 1000) pain_score += 2;
-      else if (followers > 0 && followers < 5000) pain_score += 1;
-      if (!website) pain_score += 2;
-      if (profile.isVerified) opportunity_score += 2;
-      if (followers > 10000) opportunity_score += 1;
-
-      let reviewSummary = 'Sem resumo';
-      try {
-        const aiContextStr = context ? `\nContexto: ${context}` : '';
-        const aiPrompt = `Você é um Estratégico Especialista em Vendas. Analise este perfil profissional do Instagram e identifique pontos de dor ou oportunidades de melhoria.\n\nPerfil:\nNome: ${displayName}\nUsername: @${username}\nSeguidores: ${followers || 'Não informado'}\nBiografia: ${biography || 'Não informado'}\nSite: ${website || 'Não possui'}\nScore de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\nRetorne estritamente JSON:\n{"observacao_ia":"..."}`;
-        const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: 'Gere a análise.' }]);
-        const aiJson = JSON.parse(aiRes.text.replace(/```json/g, '').replace(/```/g, '').trim());
-        reviewSummary = aiJson.observacao_ia || reviewSummary;
-      } catch { /* IA falhou — segue sem mensagem */ }
-
-      const { data: savedLead, error: upsertErr } = await supabase
-        .from('leads_radar')
-        .upsert({
-          name: displayName,
-          phone: normalized,
-          website: website || null,
-          review_summary: reviewSummary,
-          instagram: `https://instagram.com/${username}`,
-          email,
-          pain_score,
-          opportunity_score,
-          place_id: `ig_${username}`,
-          niche,
-          city,
-          status: 'novo',
-          campaign_id: campaignId || null
-        }, { onConflict: 'place_id' })
-        .select().single();
-
-      if (!upsertErr) leadsProcessados.push(savedLead);
-    }
-    console.log(`[LeadRadar][BG] ✅ ${leadsProcessados.length} leads do Instagram salvos.`);
+    // Mesma varredura usada em radarRoutes — a lógica mora no serviço para
+    // que uma correção não precise ser aplicada duas vezes.
+    await runInstagramLeadScan({ niche, city, limit, context, apifyToken, campaignId });
   } else {
     // ─────────────────────────────────────────────────────────────────────────
     // GOOGLE MAPS FLOW
