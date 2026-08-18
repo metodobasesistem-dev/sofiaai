@@ -522,6 +522,182 @@ router.get('/users/:id/activity', async (req: AuthenticatedRequest, res: Respons
   }
 });
 
+// ─── DELETE /api/v2/admin/users/:id ───────────────────────────────────────
+// Exclusão definitiva de um inquilino e de TUDO que pertence a ele.
+//
+// Exige `{ confirm: "EXCLUIR" }` no corpo — a mesma palavra que a UI pede ao
+// admin. A validação é repetida aqui porque a rota é destrutiva e não pode
+// depender só do front.
+//
+// A ordem importa: sessão do WhatsApp → arquivos → linhas filhas → linhas do
+// tenant → profile → usuário do Auth. Cada passo é tolerante a falha e
+// registrado no resumo: um erro numa tabela não pode deixar o usuário
+// meio-apagado e sem relatório do que sobrou.
+
+/** Tabelas que guardam dados do inquilino, agrupadas pela coluna de dono. */
+const USER_DATA_TABLES: Record<string, string[]> = {
+  // Ordem: filhas antes das pais (messages antes de threads etc.)
+  user_id: [
+    'messages', 'threads', 'contacts', 'appointments', 'availability',
+    'professionals', 'agents', 'agent_knowledge', 'agent_secrets',
+    'ai_interaction_logs', 'channels', 'labels', 'quick_replies',
+    'lead_campaigns', 'sys_logs', 'template_quality_history',
+    'template_send_log', 'template_status_cache', 'sofia_messages',
+  ],
+  // sofia_messages aparece nos dois grupos de propósito: tem user_id e
+  // tenant_id, e nem toda linha preenche os dois.
+  tenant_id: ['campaigns', 'message_templates', 'sofia_memory', 'sofia_messages'],
+  company_id: ['diagnostics', 'leo_leads', 'leo_config', 'leo_campanhas', 'leo_insta_gatilhos'],
+};
+
+router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const targetUserId = req.params.id;
+  const adminId = req.userId;
+  const confirm = String(req.body?.confirm ?? '').trim().toUpperCase();
+
+  if (confirm !== 'EXCLUIR') {
+    return res.status(400).json({
+      success: false,
+      error: 'Confirmação inválida. Envie { confirm: "EXCLUIR" } para excluir permanentemente.'
+    });
+  }
+
+  if (targetUserId === adminId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Você não pode excluir a própria conta por aqui.'
+    });
+  }
+
+  const deleted: Record<string, number> = {};
+  const errors: string[] = [];
+
+  const wipe = async (table: string, column: string, value: string) => {
+    const { count, error } = await supabase
+      .from(table)
+      .delete({ count: 'exact' })
+      .eq(column, value);
+    if (error) {
+      // Tabela ausente neste ambiente não é falha: só não há o que apagar.
+      if (error.code === '42P01' || error.code === 'PGRST205') return;
+      errors.push(`${table}: ${error.message}`);
+      return;
+    }
+    if (count) deleted[table] = (deleted[table] || 0) + count;
+  };
+
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, whatsapp_instance_id')
+      .eq('id', targetUserId)
+      .maybeSingle();
+
+    console.log(`[AdminAPI] 🗑️ Exclusão total do usuário ${profile?.email || targetUserId} solicitada por ${adminId}`);
+
+    // 1. Derruba a sessão do WhatsApp e remove a instância no provider.
+    //    Feito antes de apagar o profile — o logout precisa ler as credenciais.
+    try {
+      const { whatsappService } = await import('../services/whatsappService.js');
+      await whatsappService.logout(targetUserId);
+    } catch (e: any) {
+      errors.push(`whatsapp_logout: ${e?.message || e}`);
+    }
+
+    // 2. Arquivos de mídia/áudio do chat (bucket chat-audios, pasta {userId}/)
+    try {
+      const { data: files } = await supabase.storage.from('chat-audios').list(targetUserId, { limit: 1000 });
+      if (files?.length) {
+        const paths = files.map(f => `${targetUserId}/${f.name}`);
+        const { error: rmErr } = await supabase.storage.from('chat-audios').remove(paths);
+        if (rmErr) errors.push(`storage: ${rmErr.message}`);
+        else deleted['storage_files'] = paths.length;
+      }
+    } catch (e: any) {
+      errors.push(`storage: ${e?.message || e}`);
+    }
+
+    // 3. Filhas que só se ligam ao tenant indiretamente, apagadas ANTES das pais.
+    //    campaign_logs -> campaigns.id
+    const { data: camps } = await supabase.from('campaigns').select('id').eq('tenant_id', targetUserId);
+    if (camps?.length) {
+      const { count, error } = await supabase
+        .from('campaign_logs')
+        .delete({ count: 'exact' })
+        .in('campaign_id', camps.map(c => c.id));
+      if (error) errors.push(`campaign_logs: ${error.message}`);
+      else if (count) deleted['campaign_logs'] = count;
+    }
+
+    //    leo_instagram_interacoes -> leo_leads.id
+    const { data: leoLeads } = await supabase.from('leo_leads').select('id').eq('company_id', targetUserId);
+    if (leoLeads?.length) {
+      const { count, error } = await supabase
+        .from('leo_instagram_interacoes')
+        .delete({ count: 'exact' })
+        .in('lead_id', leoLeads.map(l => l.id));
+      if (error) errors.push(`leo_instagram_interacoes: ${error.message}`);
+      else if (count) deleted['leo_instagram_interacoes'] = count;
+    }
+
+    // 4. Tabelas com coluna de dono direta
+    for (const [column, tables] of Object.entries(USER_DATA_TABLES)) {
+      for (const table of tables) {
+        await wipe(table, column, targetUserId);
+      }
+    }
+
+    // 5. Histórico de auditoria de provider e chat legado do n8n
+    await wipe('provider_audit_log', 'target_user_id', targetUserId);
+    try {
+      const { count, error } = await supabase
+        .from('n8n_chat_histories')
+        .delete({ count: 'exact' })
+        .like('session_id', `${targetUserId}%`);
+      if (error && error.code !== '42P01') errors.push(`n8n_chat_histories: ${error.message}`);
+      else if (count) deleted['n8n_chat_histories'] = count;
+    } catch { /* tabela legada pode não existir */ }
+
+    // 6. Profile. Em tese o CASCADE do auth.users faria isso, mas apagamos
+    //    explicitamente para que a falha apareça no relatório se houver.
+    const { error: profErr } = await supabase.from('profiles').delete().eq('id', targetUserId);
+    if (profErr) errors.push(`profiles: ${profErr.message}`);
+    else deleted['profiles'] = 1;
+
+    // 7. Usuário do Supabase Auth — último passo, para que uma falha anterior
+    //    não deixe credenciais válidas apontando para dados já apagados.
+    const { error: authErr } = await supabase.auth.admin.deleteUser(targetUserId);
+    if (authErr) {
+      errors.push(`auth: ${authErr.message}`);
+    } else {
+      deleted['auth_user'] = 1;
+    }
+
+    // 8. Caches do Redis
+    try {
+      const { invalidateCache, cacheKey } = await import('../lib/redisCache.js');
+      await Promise.all([
+        invalidateCache(cacheKey.profile(targetUserId)).catch(() => {}),
+        invalidateCache(cacheKey.contacts(targetUserId)).catch(() => {}),
+      ]);
+    } catch { /* cache é best-effort */ }
+
+    const totalLinhas = Object.values(deleted).reduce((a, b) => a + b, 0);
+    console.log(`[AdminAPI] ✅ Usuário ${profile?.email || targetUserId} excluído — ${totalLinhas} registros removidos${errors.length ? ` (${errors.length} avisos)` : ''}`);
+
+    res.json({
+      success: errors.length === 0,
+      email: profile?.email || null,
+      deleted,
+      errors,
+      ...(errors.length ? { error: `Exclusão concluída com ${errors.length} falha(s): ${errors.join(' | ')}` } : {})
+    });
+  } catch (err: any) {
+    console.error('[AdminAPI] Delete User Error:', err.message);
+    res.status(500).json({ success: false, error: err.message, deleted, errors });
+  }
+});
+
 // ─── GET /api/v2/admin/settings ──────────────────────────────────────────
 router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
   try {

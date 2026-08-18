@@ -1689,16 +1689,34 @@ export const resetAdminUserWhatsApp = async (userId: string) => {
   if (!result.success) throw new Error(result.error);
 };
 
-export const deleteAdminUser = async (userId: string) => {
+/**
+ * Exclui o inquilino e todos os dados dele. `confirm` precisa ser a palavra
+ * EXCLUIR — o backend revalida, então não adianta pular a digitação aqui.
+ * Retorna o resumo do que foi apagado por tabela.
+ */
+export const deleteAdminUser = async (
+  userId: string,
+  confirm: string
+): Promise<{ deleted: Record<string, number>; errors: string[] }> => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
   const res = await fetch(`/api/v2/admin/users/${userId}`, {
     method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${session.access_token}` }
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ confirm })
   });
+
+  if (res.status === 404) {
+    throw new Error('Rota de exclusão não encontrada no servidor. O backend precisa ser atualizado.');
+  }
+
   const result = await res.json();
-  if (!result.success) throw new Error(result.error);
+  if (!result.success) throw new Error(result.error || 'Falha ao excluir usuário');
+  return { deleted: result.deleted || {}, errors: result.errors || [] };
 };
 
 export const getAdminUserActivity = async (userId: string) => {
