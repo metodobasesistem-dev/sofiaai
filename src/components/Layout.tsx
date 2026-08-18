@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard,
   Inbox,
@@ -127,6 +128,10 @@ export default function Layout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(0);
+  // Ler a URL pelo router (e não por window.location) faz a barra inferior
+  // reagir quando a navegação acontece sem recarregar a página.
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -780,7 +785,7 @@ export default function Layout({
 
       {/* Mobile Bottom Navigation */}
       <div className={`md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 items-center justify-around z-50 px-2
-        ${(activeTab === 'inbox' && (window.location.search.includes('jid') || window.location.hash.includes('jid'))) ? 'hidden' : 'flex'}`}>
+        ${(activeTab === 'inbox' && (searchParams.has('jid') || location.hash.includes('jid'))) ? 'hidden' : 'flex'}`}>
         <button 
           onClick={() => onTabChange('inbox')}
           className={`flex flex-col items-center gap-1 ${activeTab === 'inbox' ? 'text-primary' : 'text-slate-400'}`}
