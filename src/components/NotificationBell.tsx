@@ -73,12 +73,16 @@ export default function NotificationBell({ user, onTabChange }: Props) {
           .order('updated_at', { ascending: false })
           .limit(5),
 
+        // "Novo Lead" = thread cuja PRIMEIRA mensagem inbound chegou nas últimas 24h.
+        // Nunca usar contacts.data_criacao aqui: o contato também é criado quando
+        // SOMOS nós que iniciamos a conversa (prospecção/campanha), e o mesmo
+        // telefone pode ter dois registros em contacts (duplicava a notificação).
         supabase
-          .from('contacts')
-          .select('id, nome, telefone, data_criacao')
+          .from('threads')
+          .select('id, contact_name, display_phone, first_inbound_at')
           .eq('user_id', user.id)
-          .gte('data_criacao', yesterday)
-          .order('data_criacao', { ascending: false })
+          .gte('first_inbound_at', yesterday)
+          .order('first_inbound_at', { ascending: false })
           .limit(5),
 
         supabase
@@ -103,9 +107,28 @@ export default function NotificationBell({ user, onTabChange }: Props) {
         });
       }
 
-      // Unread messages
+      // New leads (calculado antes das mensagens para deduplicar)
+      const leadThreadIds = new Set<string>();
+      if (leadsRes.status === 'fulfilled') {
+        if (leadsRes.value.error) {
+          console.warn('[NotificationBell] Falha ao buscar novos leads:', leadsRes.value.error.message);
+        }
+        for (const t of leadsRes.value.data || []) {
+          leadThreadIds.add(t.id);
+          collected.push({
+            id: `lead-${t.id}`,
+            type: 'lead',
+            title: 'Novo Lead',
+            body: t.contact_name || t.display_phone || 'Desconhecido',
+            time: t.first_inbound_at,
+          });
+        }
+      }
+
+      // Unread messages — pula quem já aparece como "Novo Lead" (mesma thread)
       if (threadsRes.status === 'fulfilled' && threadsRes.value.data) {
         for (const t of threadsRes.value.data) {
+          if (leadThreadIds.has(t.id)) continue;
           collected.push({
             id: `thread-${t.id}`,
             type: 'message',
@@ -124,19 +147,6 @@ export default function NotificationBell({ user, onTabChange }: Props) {
             type: 'appointment',
             title: 'Agendamento Hoje',
             body: `${a.summary || 'Consulta'} com ${a.client_name}${a.time ? ` às ${a.time.slice(0, 5)}` : ''}`,
-          });
-        }
-      }
-
-      // New leads
-      if (leadsRes.status === 'fulfilled' && leadsRes.value.data) {
-        for (const c of leadsRes.value.data) {
-          collected.push({
-            id: `lead-${c.id}`,
-            type: 'lead',
-            title: 'Novo Lead',
-            body: c.nome || c.telefone || 'Desconhecido',
-            time: c.data_criacao,
           });
         }
       }
@@ -179,7 +189,7 @@ export default function NotificationBell({ user, onTabChange }: Props) {
     markOneRead(n.id);
     setIsOpen(false);
     if (n.type === 'message') onTabChange('inbox');
-    else if (n.type === 'lead') onTabChange('contacts');
+    else if (n.type === 'lead') onTabChange('inbox');
     else if (n.type === 'appointment') onTabChange('schedules');
     else if (n.type === 'warning') onTabChange('dashboard');
   };
