@@ -123,8 +123,21 @@ import {
 
 
 
-export default function Settings({ initialSubTab = 'account' }: { initialSubTab?: string }) {
-  const [activeSubTab, setActiveSubTab] = useState(initialSubTab || 'account');
+export default function Settings({
+  initialSubTab = 'account',
+  onSubTabChange,
+}: {
+  initialSubTab?: string;
+  /** Avisa o App para refletir a sub-aba na URL (/settings/ai_config). */
+  onSubTabChange?: (subTab: string) => void;
+}) {
+  const [activeSubTab, setActiveSubTabState] = useState(initialSubTab || 'account');
+
+  // Toda troca de sub-aba passa por aqui para que estado e URL não divirjam.
+  const setActiveSubTab = (subTab: string) => {
+    setActiveSubTabState(subTab);
+    onSubTabChange?.(subTab);
+  };
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isSubscribing, setIsSubscribing] = useState<string | null>(null);
@@ -142,8 +155,10 @@ export default function Settings({ initialSubTab = 'account' }: { initialSubTab?
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
 
+  // Sub-aba vinda da URL (link direto, voltar do navegador). Escreve só no
+  // estado: avisar o App aqui devolveria a navegação que acabou de chegar.
   useEffect(() => {
-    setActiveSubTab(initialSubTab);
+    setActiveSubTabState(initialSubTab);
   }, [initialSubTab]);
 
   // Real-time listener for WhatsApp status

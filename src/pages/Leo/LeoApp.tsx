@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LeoDashboard from './LeoDashboard';
 import LeoLeads from './LeoLeads';
 import LeoCampanhas from './LeoCampanhas';
@@ -6,8 +6,19 @@ import LeoInstagram from './LeoInstagram';
 import LeoConfig from './LeoConfig';
 import LeoPostagens from './LeoPostagens';
 
-export default function LeoApp({ user, role, onTabChange }: any) {
-  const [currentView, setCurrentView] = useState('dashboard');
+export default function LeoApp({ user, role, onTabChange, initialView, onViewChange }: any) {
+  const [currentView, setCurrentView] = useState(initialView || 'dashboard');
+
+  // View vinda da URL (link direto, voltar do navegador)
+  useEffect(() => {
+    if (initialView) setCurrentView(initialView);
+  }, [initialView]);
+
+  // Troca de view por clique — reflete na URL (/leo/leads)
+  const goToView = (view: string) => {
+    setCurrentView(view);
+    onViewChange?.(view);
+  };
 
   const renderView = () => {
     switch (currentView) {
@@ -27,7 +38,7 @@ export default function LeoApp({ user, role, onTabChange }: any) {
         {['dashboard', 'leads', 'campanhas', 'instagram', 'postagens', 'configuracoes'].map((view) => (
           <button
             key={view}
-            onClick={() => setCurrentView(view)}
+            onClick={() => goToView(view)}
             className={`text-sm font-bold capitalize transition-all whitespace-nowrap ${
               currentView === view 
                 ? 'text-amber-600 border-b-2 border-amber-600 pb-4 -mb-4.5' 

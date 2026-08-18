@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { buildPath, parsePath, DEFAULT_TAB } from './routes';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Inbox from './components/Inbox';
@@ -41,8 +43,14 @@ const PageFallback = () => (
 );
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [settingsSubTab, setSettingsSubTab] = useState('account');
+  // A URL é a fonte da verdade da navegação: recarregar a página mantém a
+  // seção, o voltar do navegador funciona e cada tela tem link próprio.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { tab: activeTab, subTab } = parsePath(location.pathname);
+  const settingsSubTab = activeTab === 'settings' ? (subTab || 'account') : 'account';
+
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [plano, setPlano] = useState<string | null>(null);
@@ -53,17 +61,40 @@ export default function App() {
 
   const [isInitializingProfile, setIsInitializingProfile] = useState(false);
 
-  // Check for JID in URL to auto-select Inbox
+  // Deep links que chegam pela query em vez do caminho:
+  //   ?jid= / ?fullscreen= → notificação de push abrindo uma conversa (sw.js)
+  //   connecting_google     → retorno do OAuth do Google
+  // Só age quando o caminho ainda não aponta para a tela certa, para não
+  // brigar com a navegação normal nem com o botão voltar.
+  //
+  // Também normaliza a URL: "/" e caminhos desconhecidos viram a rota real da
+  // seção, e /settings vira /settings/account. Deep link e normalização moram
+  // no mesmo efeito de propósito — separados, os dois disparariam navigate()
+  // no mesmo ciclo e um sobrescreveria o outro.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const path = window.location.pathname;
-    
-    if (params.has('jid') || params.has('fullscreen')) {
-      setActiveTab('inbox');
-    } else if (path.includes('/integrations') || localStorage.getItem('connecting_google') === 'true') {
-      setActiveTab('integrations');
+    const hasInboxDeepLink = searchParams.has('jid') || searchParams.has('fullscreen');
+
+    // 1. Deep link tem prioridade sobre o caminho atual
+    if (hasInboxDeepLink && activeTab !== 'inbox') {
+      navigate({ pathname: buildPath('inbox'), search: location.search }, { replace: true });
+      return;
     }
-  }, []);
+
+    if (
+      !hasInboxDeepLink &&
+      localStorage.getItem('connecting_google') === 'true' &&
+      activeTab !== 'integrations'
+    ) {
+      navigate(buildPath('integrations'), { replace: true });
+      return;
+    }
+
+    // 2. Caminho canônico da seção que está na tela
+    const canonical = buildPath(activeTab, subTab);
+    if (location.pathname !== canonical) {
+      navigate({ pathname: canonical, search: location.search }, { replace: true });
+    }
+  }, [activeTab, subTab, location.pathname, location.search, navigate, searchParams]);
 
   // Check public settings (maintenance/signups)
   const checkSafety = async () => {
@@ -176,14 +207,31 @@ export default function App() {
     window.location.href = '/'; // Força recarregamento total
   };
 
-  const handleTabChange = (tab: string, subTab?: string) => {
-    setActiveTab(tab);
-    if (tab === 'settings' && subTab) {
-      setSettingsSubTab(subTab);
-    } else if (tab === 'settings' && !subTab) {
-      setSettingsSubTab('account');
-    }
-  };
+  /**
+   * Ponto único de navegação. A assinatura é a mesma de antes — os componentes
+   * que chamam onTabChange('settings', 'ai_config') não precisaram mudar —
+   * mas agora ela escreve na URL em vez de num useState.
+   *
+   * A query é descartada ao trocar de seção — ?jid= pertence a uma conversa —
+   * com uma exceção: ao ir PARA o inbox ela é preservada, porque Contatos,
+   * Carteira e Dashboard gravam o ?jid= com history.pushState logo antes de
+   * chamar esta função. Nesses casos a URL do DOM já está à frente do router,
+   * então a leitura tem de ser em window.location.
+   */
+  const handleTabChange = useCallback((tab: string, subTab?: string) => {
+    const search = tab === 'inbox' ? window.location.search : '';
+    navigate({ pathname: buildPath(tab, subTab), search });
+  }, [navigate]);
+
+  /**
+   * Chamado quando a tela troca de aba por dentro (Configurações, Painel Admin,
+   * Leo) para refletir isso na URL. A comparação com o pathname atual evita
+   * empilhar a mesma entrada no histórico quando a troca veio da própria URL.
+   */
+  const handleSubTabChange = useCallback((tab: string, nextSubTab: string) => {
+    const target = buildPath(tab, nextSubTab);
+    if (location.pathname !== target) navigate(target);
+  }, [location.pathname, navigate]);
 
   const { flags = {}, isLoading: flagsLoading } = useFeatureContext();
   const leoEnabled = flags['leo_ai'] === true;
@@ -205,9 +253,29 @@ export default function App() {
       case 'dashboard':
         return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} plano={plano} />;
       case 'admin_hub':
-        return <AdminPanel key={activeTab} initialView="hub" onTabChange={handleTabChange} role={role} user={user} />;
+        // Os cards do hub abrem abas do painel: a URL vira /admin/:tab para
+        // que o F5 não devolva o admin ao hub.
+        return (
+          <AdminPanel
+            key={activeTab}
+            initialView="hub"
+            onTabChange={handleTabChange}
+            onSubTabChange={(t) => handleSubTabChange('admin', t)}
+            role={role}
+            user={user}
+          />
+        );
       case 'admin':
-        return <AdminPanel key={activeTab} onTabChange={handleTabChange} role={role} user={user} />;
+        return (
+          <AdminPanel
+            key={activeTab}
+            initialTab={subTab as any}
+            onTabChange={handleTabChange}
+            onSubTabChange={(t) => handleSubTabChange('admin', t)}
+            role={role}
+            user={user}
+          />
+        );
       case 'lead_radar':
         return <AdminPanel key={activeTab} initialTab="lead_radar" onTabChange={handleTabChange} role={role} user={user} />;
       case 'sofia_config':
@@ -243,10 +311,23 @@ export default function App() {
       case 'integrations':
         return <Integrations user={user} role={role} />;
       case 'settings':
-        return <Settings initialSubTab={settingsSubTab} />;
+        return (
+          <Settings
+            initialSubTab={settingsSubTab}
+            onSubTabChange={(t) => handleSubTabChange('settings', t)}
+          />
+        );
       case 'leo':
         if (role !== 'admin' && !leoEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
-        return <LeoApp user={user} role={role} onTabChange={handleTabChange} />;
+        return (
+          <LeoApp
+            user={user}
+            role={role}
+            onTabChange={handleTabChange}
+            initialView={subTab}
+            onViewChange={(v: string) => handleSubTabChange('leo', v)}
+          />
+        );
       case 'campaigns':
         return <Campaigns />;
       case 'quick_replies':
@@ -277,7 +358,7 @@ export default function App() {
         <MaintenancePage />
       ) : (
         <NotificationProvider user={user}>
-          {window.location.search.includes('fullscreen=true') && activeTab === 'inbox' ? (
+          {searchParams.get('fullscreen') === 'true' && activeTab === 'inbox' ? (
             <div className="w-screen h-screen bg-white">
               <Inbox user={user} role={role} isFullscreen={true} />
             </div>

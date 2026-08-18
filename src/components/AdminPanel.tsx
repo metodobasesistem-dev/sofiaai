@@ -69,13 +69,22 @@ interface AdminPanelProps {
   initialView?: 'hub' | 'standard';
   initialTab?: AdminTab;
   onTabChange?: (tab: string) => void;
+  /** Avisa o App para refletir a aba do painel na URL (/admin/users). */
+  onSubTabChange?: (tab: AdminTab) => void;
   role?: string | null;
   user?: User | null;
 }
 
-export default function AdminPanel({ initialView = 'standard', initialTab, onTabChange, role, user }: AdminPanelProps) {
+export default function AdminPanel({ initialView = 'standard', initialTab, onTabChange, onSubTabChange, role, user }: AdminPanelProps) {
   const [currentView, setCurrentView] = useState<'hub' | 'standard'>(initialView);
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'overview');
+  const [activeTabState, setActiveTabState] = useState<AdminTab>(initialTab || 'overview');
+  const activeTab = activeTabState;
+
+  // Toda troca de aba passa por aqui para que estado e URL não divirjam.
+  const setActiveTab = (tab: AdminTab) => {
+    setActiveTabState(tab);
+    onSubTabChange?.(tab);
+  };
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
@@ -844,9 +853,11 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
     fetchData();
   }, []);
 
+  // Aba vinda da URL (link direto, voltar do navegador). Escreve só no estado:
+  // avisar o App aqui devolveria a navegação que acabou de chegar.
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      setActiveTabState(initialTab);
     }
   }, [initialTab]);
 
