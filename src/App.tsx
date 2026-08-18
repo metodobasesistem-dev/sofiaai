@@ -72,11 +72,18 @@ export default function App() {
   // no mesmo efeito de propósito — separados, os dois disparariam navigate()
   // no mesmo ciclo e um sobrescreveria o outro.
   useEffect(() => {
+    // O Supabase devolve a sessão do OAuth no HASH da URL (#access_token=…)
+    // e a consome via detectSessionInUrl. Enquanto ela estiver lá nenhuma
+    // navegação pode acontecer: navigate() reescreve a URL sem o hash, o
+    // token se perde e o login cai de volta na tela inicial. O próprio
+    // Supabase limpa o hash ao terminar, e o efeito roda de novo.
+    if (/access_token|refresh_token|error_description/.test(location.hash)) return;
+
     const hasInboxDeepLink = searchParams.has('jid') || searchParams.has('fullscreen');
 
     // 1. Deep link tem prioridade sobre o caminho atual
     if (hasInboxDeepLink && activeTab !== 'inbox') {
-      navigate({ pathname: buildPath('inbox'), search: location.search }, { replace: true });
+      navigate({ pathname: buildPath('inbox'), search: location.search, hash: location.hash }, { replace: true });
       return;
     }
 
@@ -85,16 +92,16 @@ export default function App() {
       localStorage.getItem('connecting_google') === 'true' &&
       activeTab !== 'integrations'
     ) {
-      navigate(buildPath('integrations'), { replace: true });
+      navigate({ pathname: buildPath('integrations'), hash: location.hash }, { replace: true });
       return;
     }
 
     // 2. Caminho canônico da seção que está na tela
     const canonical = buildPath(activeTab, subTab);
     if (location.pathname !== canonical) {
-      navigate({ pathname: canonical, search: location.search }, { replace: true });
+      navigate({ pathname: canonical, search: location.search, hash: location.hash }, { replace: true });
     }
-  }, [activeTab, subTab, location.pathname, location.search, navigate, searchParams]);
+  }, [activeTab, subTab, location.pathname, location.search, location.hash, navigate, searchParams]);
 
   // Check public settings (maintenance/signups)
   const checkSafety = async () => {
