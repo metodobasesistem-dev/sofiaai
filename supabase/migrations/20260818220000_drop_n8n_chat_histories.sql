@@ -1,0 +1,21 @@
+-- Remove a tabela n8n_chat_histories.
+--
+-- MOTIVO: alerta de segurança do Supabase (rls_disabled_in_public +
+-- sensitive_columns_exposed). Auditoria com a chave anônima — a mesma que
+-- qualquer pessoa extrai do bundle do frontend — mostrou que esta era a ÚNICA
+-- das 37 tabelas da API que devolvia dados sem autenticação: 440 linhas,
+-- legíveis, editáveis e apagáveis por qualquer um com a URL do projeto.
+--
+-- O conteúdo é dado pessoal de terceiros — o session_id guarda o telefone do
+-- contato e a coluna message, o texto da conversa:
+--   session_id: 5532xxxxxxxxx@s.whatsapp.net
+--   message:    {"type":"human","content":"Bom dia"}
+--
+-- A tabela é resíduo de um fluxo do n8n que não está mais em uso (confirmado
+-- pelo dono do produto) e nenhum código do sistema lê ou escreve nela. Ligar
+-- RLS deixaria o dado parado no banco sem finalidade; apagar resolve o alerta
+-- e elimina a retenção indevida.
+--
+-- IRREVERSÍVEL: as 440 linhas são perdidas. Exporte antes se quiser guardá-las.
+
+DROP TABLE IF EXISTS public.n8n_chat_histories;
