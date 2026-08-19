@@ -648,16 +648,8 @@ router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => 
       }
     }
 
-    // 5. Histórico de auditoria de provider e chat legado do n8n
+    // 5. Histórico de auditoria de provider
     await wipe('provider_audit_log', 'target_user_id', targetUserId);
-    try {
-      const { count, error } = await supabase
-        .from('n8n_chat_histories')
-        .delete({ count: 'exact' })
-        .like('session_id', `${targetUserId}%`);
-      if (error && error.code !== '42P01') errors.push(`n8n_chat_histories: ${error.message}`);
-      else if (count) deleted['n8n_chat_histories'] = count;
-    } catch { /* tabela legada pode não existir */ }
 
     // 6. Profile. Em tese o CASCADE do auth.users faria isso, mas apagamos
     //    explicitamente para que a falha apareça no relatório se houver.
