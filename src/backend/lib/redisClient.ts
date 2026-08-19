@@ -20,9 +20,15 @@ function createClient(): Redis {
   // com "Stream isn't writeable", e o mesmo acontecia a cada reconexão. Com a
   // fila ligada o comando espera o socket ficar pronto, que é o comportamento
   // da conexão do BullMQ — a única das três que nunca deu esse erro.
+  // enableOfflineQueue sozinho troca um problema por outro: o comando deixa de
+  // estourar na hora, mas com maxRetriesPerRequest null ele espera PARA SEMPRE
+  // se o Redis estiver fora — e cache travaria a requisição que o chamou.
+  // commandTimeout + limite de retries dão o meio-termo: espera o socket ficar
+  // pronto numa reconexão curta, desiste rápido quando o Redis está fora.
   const comum = {
     lazyConnect: true,
-    maxRetriesPerRequest: null,
+    maxRetriesPerRequest: 2,
+    commandTimeout: 2000,
     enableOfflineQueue: true,
     retryStrategy: (times: number) => Math.min(times * 200, 5000),
   };
