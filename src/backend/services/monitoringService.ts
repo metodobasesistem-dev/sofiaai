@@ -152,7 +152,10 @@ export class MonitoringService {
       const redisInfo = await redisService.getRedisInfo();
       const queueMetrics = await redisService.getQueueMetrics(['reminder_queue', 'follow_up_queue', 'whatsapp_outbound']);
       
-      await this.recordHeartbeat('redis', redisInfo.status === 'connected' ? 'healthy' : 'error', {
+      // Uma janela de fail-open é degradação real: a deduplicação de webhook
+      // esteve desligada e pode ter havido processamento em duplicidade.
+      const dedupeDegradado = (redisInfo as any).dedupe?.degraded === true;
+      await this.recordHeartbeat('redis', redisInfo.status === 'connected' && !dedupeDegradado ? 'healthy' : 'error', {
         ...redisInfo,
         queues: queueMetrics,
         timestamp: new Date().toISOString()

@@ -19,6 +19,68 @@ console.log(`[RedisService] Init with ${redisHost}:${redisPort}...`);
 let redis: any = null;
 let connectionFailed = false;
 
+/**
+ * Rastreio do fail-open da deduplicação.
+ *
+ * markAsProcessed retorna `true` quando o Redis não responde — de propósito,
+ * para não engolir a mensagem. O efeito colateral é que a deduplicação de
+ * webhook deixa de existir naquela janela: se a Evolution reentregar o mesmo
+ * evento, a IA responde duas vezes. Sem registro, isso vira um mistério
+ * ("por que o cliente recebeu a mesma resposta?") sem nenhuma pista no log.
+ */
+const degradado = {
+  desde: null as number | null,
+  ignorados: 0,
+  ultimoLog: 0,
+};
+
+const LOG_INTERVALO_MS = 30_000;
+
+function registrarFailOpen(motivo: string) {
+  const agora = Date.now();
+  if (degradado.desde === null) {
+    degradado.desde = agora;
+    degradado.ignorados = 0;
+    degradado.ultimoLog = 0;
+  }
+  degradado.ignorados++;
+
+  // Throttle: um webhook movimentado geraria milhares de linhas iguais
+  if (agora - degradado.ultimoLog >= LOG_INTERVALO_MS) {
+    degradado.ultimoLog = agora;
+    const segundos = Math.round((agora - degradado.desde) / 1000);
+    console.warn(
+      `[RedisService] ⚠️ DEDUPLICAÇÃO DESLIGADA há ${segundos}s (${motivo}) — ` +
+      `${degradado.ignorados} verificação(ões) liberada(s) sem checagem. ` +
+      `Risco de mensagem processada em duplicidade nesta janela.`
+    );
+  }
+}
+
+function registrarRecuperacao() {
+  if (degradado.desde === null) return;
+  const segundos = Math.round((Date.now() - degradado.desde) / 1000);
+  const total = degradado.ignorados;
+  degradado.desde = null;
+  degradado.ignorados = 0;
+  degradado.ultimoLog = 0;
+  if (total > 0) {
+    console.warn(
+      `[RedisService] ✅ Deduplicação restabelecida após ${segundos}s — ` +
+      `${total} verificação(ões) passaram sem checagem nesse período.`
+    );
+  }
+}
+
+/** Estado do fail-open, para o heartbeat de monitoramento. */
+export function getDedupeDegradation() {
+  return {
+    degraded: degradado.desde !== null,
+    since: degradado.desde ? new Date(degradado.desde).toISOString() : null,
+    unchecked: degradado.ignorados,
+  };
+}
+
 // Initialize Redis with a safety wrapper
 async function getRedisClient() {
   if (redis) return redis;
@@ -30,7 +92,11 @@ async function getRedisClient() {
       password: redisPassword,
       username: redisUsername,
       lazyConnect: true,
-      maxRetriesPerRequest: null,
+      // Limite de retries + timeout: sem eles, enableOfflineQueue faria o
+      // comando esperar indefinidamente com o Redis fora, travando o
+      // processamento do webhook — pior do que o fail-open que ele substitui.
+      maxRetriesPerRequest: 2,
+      commandTimeout: 2000,
       // enableOfflineQueue: true — com a fila desligada, todo comando emitido
       // antes de o socket ficar pronto (boot e reconexões) morria com
       // "Stream isn't writeable". Aqui isso não era só ruído: markAsProcessed
@@ -116,14 +182,24 @@ export const redisService = {
    * Idempotência: Verifica se uma mensagem já foi processada recentemente
    */
   async markAsProcessed(messageId: string, ttl = 3600): Promise<boolean> {
-    if (connectionFailed) return true;
+    // Todo caminho que retorna true sem consultar o Redis é um fail-open:
+    // libera o processamento sem saber se já aconteceu antes.
+    if (connectionFailed) {
+      registrarFailOpen('conexão indisponível');
+      return true;
+    }
     try {
       const client = await getRedisClient();
-      if (!client) return true; // Se o Redis falhar, processamos para não perder a msg
+      if (!client) {
+        registrarFailOpen('cliente não inicializado');
+        return true; // Se o Redis falhar, processamos para não perder a msg
+      }
       const key = `processed:${messageId}`;
       const result = await client.set(key, '1', 'NX', 'EX', ttl);
+      registrarRecuperacao();
       return result === 'OK';
-    } catch (e) {
+    } catch (e: any) {
+      registrarFailOpen(e?.message || 'erro no comando');
       return true;
     }
   },
@@ -222,14 +298,19 @@ export const redisService = {
   },
 
   async getRedisInfo() {
+    // dedupe entra no heartbeat 'redis' (sys_health) para que uma janela sem
+    // deduplicação fique registrada no painel, e não só no log do container.
+    const dedupe = getDedupeDegradation();
     const client = await getRedisClient();
-    if (!client) return { status: 'disconnected' };
+    if (!client) return { status: 'disconnected', dedupe };
     try {
       const info = await client.info('memory');
       const usedMemory = info.match(/used_memory_human:(.*)/)?.[1] || 'unknown';
-      return { status: 'connected', usedMemory };
+      // O ciclo de diagnóstico fecha a janela mesmo sem tráfego de mensagens
+      registrarRecuperacao();
+      return { status: 'connected', usedMemory, dedupe };
     } catch (e) {
-      return { status: 'error', message: (e as any).message };
+      return { status: 'error', message: (e as any).message, dedupe };
     }
   },
 
