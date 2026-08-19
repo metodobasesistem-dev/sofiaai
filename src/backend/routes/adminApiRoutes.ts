@@ -648,8 +648,11 @@ router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => 
       }
     }
 
-    // 5. Histórico de auditoria de provider
+    // 5. Auditoria de provider e assinaturas de push. O FK de
+    //    push_subscriptions já tem ON DELETE CASCADE, mas apagar aqui deixa a
+    //    contagem correta no relatório devolvido ao admin.
     await wipe('provider_audit_log', 'target_user_id', targetUserId);
+    await wipe('push_subscriptions', 'user_id', targetUserId);
 
     // 6. Profile. Em tese o CASCADE do auth.users faria isso, mas apagamos
     //    explicitamente para que a falha apareça no relatório se houver.

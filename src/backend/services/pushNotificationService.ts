@@ -70,10 +70,13 @@ export class PushNotificationService {
 
   private static async removeInvalidSubscription(subscription: any) {
     try {
+      // Compara pelo endpoint, não pelo objeto inteiro: o eq('subscription', obj)
+      // exigia igualdade byte a byte do JSONB (ordem das chaves inclusive) e
+      // nunca casava — assinaturas mortas ficavam acumulando no banco.
       await supabase
         .from('push_subscriptions')
         .delete()
-        .eq('subscription', subscription);
+        .contains('subscription', { endpoint: subscription.endpoint });
       console.log('[PushService] Removed invalid subscription from DB');
     } catch (err) {
       console.error('[PushService] Error removing invalid sub:', err);
@@ -116,7 +119,10 @@ export class PushNotificationService {
           subscription: subscription
         });
 
-      if (error) throw error;
+      // 23505 = o índice único por endpoint pegou uma corrida (duas abas
+      // assinando ao mesmo tempo). O estado final é o desejado: já existe
+      // assinatura para este dispositivo.
+      if (error && error.code !== '23505') throw error;
       return { success: true };
     } catch (err: any) {
       console.error('[PushService] Error saving sub:', err.message);

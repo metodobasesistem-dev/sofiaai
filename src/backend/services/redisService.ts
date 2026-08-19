@@ -31,13 +31,24 @@ async function getRedisClient() {
       username: redisUsername,
       lazyConnect: true,
       maxRetriesPerRequest: null,
-      enableOfflineQueue: false,
+      // enableOfflineQueue: true — com a fila desligada, todo comando emitido
+      // antes de o socket ficar pronto (boot e reconexões) morria com
+      // "Stream isn't writeable". Aqui isso não era só ruído: markAsProcessed
+      // falha ABERTO (retorna true), então cada janela dessas desligava a
+      // deduplicação de webhook e podia gerar resposta da IA em duplicidade.
+      enableOfflineQueue: true,
       retryStrategy: (times) => Math.min(times * 50, 2000)
     });
     
     redis.on('connect', () => {
       connectionFailed = false;
       console.log('[RedisService] ✅ Connected');
+    });
+
+    // Sem isto, um erro no boot deixava o serviço preso em degradado: todas as
+    // operações viravam no-op mesmo depois de a conexão se estabelecer.
+    redis.on('ready', () => {
+      connectionFailed = false;
     });
 
     // Suprimir erros de conexão para não travar o processo principal
