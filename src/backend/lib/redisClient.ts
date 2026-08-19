@@ -9,20 +9,35 @@ const REDIS_URL = process.env.REDIS_URL;
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
+const REDIS_USERNAME = process.env.REDIS_USERNAME || 'default';
 
 let client: Redis | null = null;
 let connectionFailed = false;
 
 function createClient(): Redis {
+  // enableOfflineQueue: true — com lazyConnect, o primeiro comando é o que
+  // dispara a conexão; com a fila offline desligada ele era rejeitado na hora
+  // com "Stream isn't writeable", e o mesmo acontecia a cada reconexão. Com a
+  // fila ligada o comando espera o socket ficar pronto, que é o comportamento
+  // da conexão do BullMQ — a única das três que nunca deu esse erro.
+  const comum = {
+    lazyConnect: true,
+    maxRetriesPerRequest: null,
+    enableOfflineQueue: true,
+    retryStrategy: (times: number) => Math.min(times * 200, 5000),
+  };
+
   const opts = REDIS_URL
-    ? { lazyConnect: true, enableOfflineQueue: false }
+    ? comum
     : {
+        ...comum,
         host: REDIS_HOST,
         port: REDIS_PORT,
+        // username faltava aqui e existe nos outros dois clientes; em Redis
+        // com ACL a autenticação só por senha depende do servidor assumir
+        // 'default'.
+        username: REDIS_USERNAME,
         password: REDIS_PASSWORD || undefined,
-        lazyConnect: true,
-        maxRetriesPerRequest: null,
-        enableOfflineQueue: false,
       };
 
   const r = REDIS_URL
@@ -39,6 +54,13 @@ function createClient(): Redis {
       console.warn('[Redis] ⚠️  Connection error (will retry):', err.message);
       connectionFailed = true;
     }
+  });
+
+  // 'ready' também zera o flag: sem isso, um erro no boot deixava o cliente
+  // preso em modo degradado (todo rGet/rSet virava no-op) mesmo depois de a
+  // conexão se estabelecer.
+  r.on('ready', () => {
+    connectionFailed = false;
   });
 
   r.on('reconnecting', () => console.log('[Redis] Reconnecting...'));
