@@ -1123,7 +1123,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                             <input
                               type="text"
                               autoComplete="off"
-                              placeholder="Ex: Clínicas, Dentistas..."
+                              placeholder="Ex: Restaurantes, Advogados, Academias..."
                               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
                               value={radarNiche}
                               onChange={(e) => setRadarNiche(e.target.value)}

@@ -21,7 +21,7 @@ router.use(requireAuth as any);
 /**
  * Encurta o nome de um estabelecimento para uso em variáveis de template WhatsApp.
  * Pega só a primeira parte antes de "|", "–" ou "-", e limita a 40 caracteres.
- * Ex: "Instituto Life Sense | Clínica Multidisciplinar em Muriaé" → "Instituto Life Sense"
+ * Ex: "Estúdio Alpha | Consultoria e Projetos em Muriaé" → "Estúdio Alpha"
  */
 function shortenEstablishmentName(name: string): string {
   if (!name) return name;

@@ -886,8 +886,8 @@ Cliente: Vocês têm horário amanhã às 14h?
 [Você chama a tool de disponibilidade ANTES de responder]
 Você: Deixa eu confirmar pra você... [após a tool] Sim! 14h está disponível. Posso reservar pra você?
 
-Cliente: O remédio tal funciona pra dor de cabeça?
-Você: Sobre medicação especificamente eu não tenho como te orientar — isso é coisa de profissional. Mas se você quiser, posso agendar uma avaliação com nosso especialista. Topa?
+Cliente: [pergunta técnica que exige um especialista]
+Você: Sobre isso especificamente eu não tenho como te orientar — é assunto para um profissional. Mas se quiser, posso agendar uma avaliação com nosso especialista. Topa?
 `;
 
     // 3.B: Dados ricos do contato para personalizar a abordagem
@@ -1601,7 +1601,7 @@ ${customExamples}`;
       // 2. Save in Local DB
       // Tenta com todos os campos primeiro; se falhar por coluna inexistente,
       // retenta com o payload mínimo (resiliência a migrações pendentes).
-      const tipoConsulta = args.tipo || null; // 'presencial' | 'online' | null
+      const modalidade = args.tipo || null; // 'presencial' | 'online' | null
       const fullPayload: Record<string, any> = {
         user_id:          userId,
         data:             args.date,
@@ -1614,7 +1614,7 @@ ${customExamples}`;
         professional_name:selectedProf?.name,
         google_event_id:  googleEventId,
         agent_id:         agentData.id,
-        tipo_consulta:    tipoConsulta,
+        tipo_consulta:    modalidade, // coluna legada: guarda presencial/online
         summary:          `Agendado com ${selectedProf?.name || 'IA'}`
       };
 
@@ -1659,7 +1659,7 @@ ${customExamples}`;
         success: true,
         id: newDoc.id,
         professional: selectedProf?.name || null,
-        tipo: tipoConsulta,
+        tipo: modalidade,
         google_synced: !!googleEventId,
         message: `Agendamento confirmado para ${args.clientName} em ${args.date} às ${normalizedTime} com ${selectedProf?.name || 'a equipe'}.`
       };
@@ -1995,8 +1995,8 @@ ${customExamples}`;
       {
         type: 'function',
         function: {
-          name: 'reagendar_consulta',
-          description: 'Move o agendamento confirmado mais recente do cliente para nova data/horário. USE quando o cliente pedir REMARCAR/REAGENDAR uma consulta existente (NÃO use para novos agendamentos). Sempre verifique disponibilidade do NOVO horário via verificar_disponibilidade antes de chamar.',
+          name: 'reagendar_agendamento',
+          description: 'Move o agendamento confirmado mais recente do cliente para nova data/horário. USE quando o cliente pedir REMARCAR/REAGENDAR um agendamento existente (NÃO use para novos agendamentos). Sempre verifique disponibilidade do NOVO horário via verificar_disponibilidade antes de chamar.',
           parameters: {
             type: 'object',
             properties: {
@@ -2079,12 +2079,12 @@ Sua ÚNICA função: processar agendamentos usando as 3 tools disponíveis.
 # TOOLS DISPONÍVEIS
 - verificar_disponibilidade(date YYYY-MM-DD, professional_name?) — consultar slots livres
 - confirmar_agendamento(date, time, clientName, professional_name?, tipo?) — efetivar NOVO agendamento
-- reagendar_consulta(date, time, professional_name?) — mover consulta existente para outro dia/horário
-- cancelar_agendamento() — cancelar consulta existente
+- reagendar_agendamento(date, time, professional_name?) — mover agendamento existente para outro dia/horário
+- cancelar_agendamento() — cancelar agendamento existente
 
 # QUANDO USAR CADA TOOL
 - Cliente quer NOVO agendamento → confirmar_agendamento (após verificar_disponibilidade)
-- Cliente quer MUDAR data/horário de consulta já marcada → reagendar_consulta (após verificar_disponibilidade do novo horário)
+- Cliente quer MUDAR data/horário de agendamento já marcado → reagendar_agendamento (após verificar_disponibilidade do novo horário)
 - Cliente quer CANCELAR sem remarcar → cancelar_agendamento
 
 # PROFISSIONAIS DESTA EMPRESA
@@ -2142,7 +2142,7 @@ Decida e execute a próxima ação usando as tools. Após executar, responda ao 
                   await supabase.from('threads').update({ lead_name: args.clientName }).eq('id', threadId);
                 }
               }
-            } else if (name === 'reagendar_consulta') {
+            } else if (name === 'reagendar_agendamento') {
               result = await this.handleRescheduleAppointment(userId, threadId, contactName, args, agentData, professionals);
               if (result?.success) {
                 bookingOccurred = true;
@@ -2209,7 +2209,7 @@ USE SEMPRE QUE o cliente:
 - perguntar sobre horários disponíveis ('tem horário?', 'quais dias estão livres?')
 - pedir um dia/horário específico ('tem amanhã às 10h?')
 - confirmar um agendamento ('pode agendar', 'pode confirmar')
-- pedir para cancelar uma consulta
+- pedir para cancelar um agendamento
 
 PASSE EM 'intent' a descrição completa do que o cliente quer, incluindo TODAS
 as informações relevantes que já foram trocadas na conversa: data, horário,
@@ -2218,7 +2218,7 @@ nome do cliente (se já informado), modalidade (presencial/online).
 EXEMPLOS de intent:
 - "Cliente quer verificar horários disponíveis no dia 28/05"
 - "Cliente Natan Vilela quer confirmar agendamento dia 28/05 às 10h"
-- "Cliente quer cancelar a consulta marcada"
+- "Cliente quer cancelar o agendamento marcado"
 
 O módulo de agendamento processa o pedido com tools especializadas e retorna
 uma resposta pronta. NÃO PERGUNTE ao cliente dados que ele já forneceu — passe

@@ -1525,7 +1525,7 @@ export const getUpcomingAppointments = async () => {
     id: a.id,
     type: 'appointment',
     title: 'Agendamento Confirmado',
-    description: `${a.summary || 'Consulta'} com ${a.client_name}`,
+    description: `${a.summary || 'Agendamento'} com ${a.client_name}`,
     date: a.data,
     time: a.time,
     name: a.client_name,

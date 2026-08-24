@@ -1404,7 +1404,7 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
                           rows={3}
                           value={formData.forbidden_topics || ''}
                           onChange={e => setFormData({ ...formData, forbidden_topics: e.target.value })}
-                          placeholder={'Ex:\nDiagnóstico médico\nConselhos jurídicos\nPolítica'}
+                          placeholder={'Ex:\nAssuntos fora do meu serviço\nOpinião técnica de especialista\nPolítica'}
                           className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all text-sm resize-none font-mono"
                         />
                         <p className="mt-2 text-[10px] text-gray-400 italic">
