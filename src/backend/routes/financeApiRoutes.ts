@@ -8,6 +8,7 @@
 import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
+import { resumoCarteira } from '../lib/carteira.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -67,6 +68,85 @@ export function cobraNesteMes(ficha: any, competencia: string): boolean {
   }
   return true; // mensal
 }
+
+// ─── GET /api/v2/finance/resumo ───────────────────────────────────────────
+// Tudo que a tela de Gestão Financeira precisa num round trip: o caixa (vem
+// dos lançamentos) e a carteira (vem das fichas dos clientes).
+router.get('/resumo', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const competencia = inicioDoMes(req.query?.competencia as string | undefined);
+
+  try {
+    const [lancRes, fichasRes] = await Promise.all([
+      supabase
+        .from('financial_transactions')
+        .select('valor, tipo, status, data_pagamento')
+        .eq('user_id', userId),
+      supabase
+        .from('client_profiles')
+        .select('mensalidade, ciclo, status_contrato, cliente_desde, encerrado_em')
+        .eq('user_id', userId),
+    ]);
+
+    if (lancRes.error) throw lancRes.error;
+    if (fichasRes.error) throw fichasRes.error;
+
+    const lancamentos = lancRes.data || [];
+    const mes = new Date(`${competencia}T12:00:00`);
+
+    const doMes = (data: string) => {
+      const d = new Date(`${data}T12:00:00`);
+      return d.getFullYear() === mes.getFullYear() && d.getMonth() === mes.getMonth();
+    };
+
+    const soma = (filtro: (l: any) => boolean) =>
+      lancamentos.filter(filtro).reduce((acc, l) => acc + Number(l.valor || 0), 0);
+
+    // Caixa acumulado: só o que foi de fato pago entra no saldo.
+    const receitaTotal = soma(l => l.tipo === 'entrada' && l.status === 'pago');
+    const despesaTotal = soma(l => l.tipo === 'saida' && l.status === 'pago');
+
+    // Mês corrente
+    const recebidoMes = soma(l => l.tipo === 'entrada' && l.status === 'pago' && doMes(l.data_pagamento));
+    const aReceberMes = soma(l => l.tipo === 'entrada' && l.status === 'pendente' && doMes(l.data_pagamento));
+    const despesaMes = soma(l => l.tipo === 'saida' && l.status === 'pago' && doMes(l.data_pagamento));
+
+    // Mês anterior, para a comparação dos indicadores
+    const anterior = new Date(mes.getFullYear(), mes.getMonth() - 1, 1);
+    const doMesAnterior = (data: string) => {
+      const d = new Date(`${data}T12:00:00`);
+      return d.getFullYear() === anterior.getFullYear() && d.getMonth() === anterior.getMonth();
+    };
+    const recebidoMesAnterior = soma(l => l.tipo === 'entrada' && l.status === 'pago' && doMesAnterior(l.data_pagamento));
+    const despesaMesAnterior = soma(l => l.tipo === 'saida' && l.status === 'pago' && doMesAnterior(l.data_pagamento));
+
+    const arredonda = (n: number) => Math.round(n * 100) / 100;
+    const carteira = resumoCarteira(fichasRes.data || []);
+
+    res.json({
+      success: true,
+      competencia,
+      caixa: {
+        receita_total: arredonda(receitaTotal),
+        despesa_total: arredonda(despesaTotal),
+        saldo: arredonda(receitaTotal - despesaTotal),
+      },
+      mes: {
+        recebido: arredonda(recebidoMes),
+        a_receber: arredonda(aReceberMes),
+        previsto: arredonda(recebidoMes + aReceberMes),
+        despesas: arredonda(despesaMes),
+        recebido_mes_anterior: arredonda(recebidoMesAnterior),
+        despesas_mes_anterior: arredonda(despesaMesAnterior),
+      },
+      carteira,
+    });
+  } catch (err: any) {
+    console.error('[FinanceAPI] resumo:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // ─── POST /api/v2/finance/gerar-mensalidades ──────────────────────────────
 // Cria os lançamentos previstos do mês para os clientes ativos.
