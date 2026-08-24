@@ -60,6 +60,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { promoteToClient, demoteClient } from '../services/supabaseService';
+import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -115,16 +116,6 @@ interface Thread {
   lastInboundAt?: number;
 }
 
-const FUNIL_COMPAT: Record<string, string> = {
-  'Lead': 'novo_lead',
-  'Qualificado': 'qualificado',
-  'Agendado': 'agendamento',
-  'Resolvido': 'cliente',
-};
-function normFunil(s?: string | null): string {
-  if (!s) return 'novo_lead';
-  return FUNIL_COMPAT[s] ?? s;
-}
 
 // ── Meta 24h Window ────────────────────────────────────────────────────────────
 // Apos 24h sem mensagem do cliente, o Meta rejeita mensagens livres (131047) e
@@ -1693,7 +1684,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
 
     return {
       name: contact?.nome || fallbackName,
-      funilStatus: normFunil(contact?.status_funil)
+      funilStatus: idDaEtapa(contact?.status_funil)
     };
   };
 
@@ -1990,7 +1981,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               updatedAt: d.updated_at || new Date().toISOString(),
               lastMessageTime: d.last_message_time ? new Date(d.last_message_time).getTime() : 0,
               ticketStatus: d.ticket_status || 'open',
-              funilStatus: normFunil(contact?.status_funil),
+              funilStatus: idDaEtapa(contact?.status_funil),
               is_client: contact?.is_client || false,
               priority: contact?.priority,
               profilePictureUrl: d.profile_picture_url,
@@ -2176,7 +2167,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   return { 
                     ...t, 
                     name: payload.new.nome || t.name,
-                    funilStatus: normFunil(payload.new.status_funil) || t.funilStatus,
+                    funilStatus: idDaEtapa(payload.new.status_funil) || t.funilStatus,
                     is_client: payload.new.is_client ?? t.is_client
                   };
                 }
@@ -2546,19 +2537,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             )}
             <div className="mt-4 flex items-center justify-center gap-2">
               <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
-                ${{
-                  novo_lead:      'bg-slate-50 text-slate-600 border-slate-200',
-                  primeiro_atend: 'bg-blue-50 text-blue-600 border-blue-100',
-                  sem_resposta:   'bg-amber-50 text-amber-600 border-amber-100',
-                  qualificado:    'bg-violet-50 text-violet-600 border-violet-100',
-                  agendamento:    'bg-indigo-50 text-indigo-600 border-indigo-100',
-                  cliente:        'bg-emerald-50 text-emerald-600 border-emerald-100',
-                }[activeThread.funilStatus as string] || 'bg-slate-50 text-slate-500 border-slate-100'}`}>
-                {{
-                  novo_lead: 'Novo Lead', primeiro_atend: 'Primeiro Atend.',
-                  sem_resposta: 'Sem Resposta', qualificado: 'Qualificado',
-                  agendamento: 'Agendamento', cliente: 'Cliente',
-                }[activeThread.funilStatus as string] || activeThread.funilStatus || 'Novo Lead'}
+                ${etapaPorId(activeThread.funilStatus).bg} ${etapaPorId(activeThread.funilStatus).text} ${etapaPorId(activeThread.funilStatus).border}`}>
+                {etapaPorId(activeThread.funilStatus).label}
               </span>
               {activeThread.is_client && (
                 <span className="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
@@ -2617,24 +2597,67 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             <div className="space-y-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Etapa no Kanban</label>
-                <select
-                  value={activeThread.funilStatus || 'novo_lead'}
-                  onChange={async (e) => {
-                    const val = e.target.value;
-                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                    await supabase.from('contacts').update({ status_funil: val }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, funilStatus: val } : t));
-                    toast.success(`Etapa alterada`);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
-                >
-                  <option value="novo_lead">Novo Lead</option>
-                  <option value="primeiro_atend">Primeiro Atend.</option>
-                  <option value="sem_resposta">Sem Resposta</option>
-                  <option value="qualificado">Qualificado</option>
-                  <option value="agendamento">Agendamento</option>
-                  <option value="cliente">Cliente</option>
-                </select>
+                {/* Cada etapa com a cor que tem no quadro. Um <select> nativo
+                    não permite colorir cada opção de forma confiável entre
+                    navegadores, então a lista é montada à mão. */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {ETAPAS_FUNIL.map(etapa => {
+                    const ehClienteEtapa = etapa.valorBanco === null;
+                    const ativa = ehClienteEtapa
+                      ? activeThread.is_client === true
+                      : activeThread.is_client !== true && idDaEtapa(activeThread.funilStatus) === etapa.id;
+
+                    return (
+                      <button
+                        key={etapa.id}
+                        onClick={async () => {
+                          if (ativa) return;
+                          const contactId = activeThread.contactId;
+                          try {
+                            if (ehClienteEtapa) {
+                              if (!contactId) throw new Error('Contato ainda não sincronizado');
+                              await promoteToClient(contactId);
+                              setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: true } : t));
+                              toast.success('Promovido a Cliente ⭐', { description: 'A ficha está em Clientes.' });
+                              return;
+                            }
+
+                            // Saindo de Cliente de volta para uma etapa do funil
+                            if (activeThread.is_client && contactId) {
+                              await demoteClient(contactId);
+                            }
+
+                            const valor = valorBancoDaEtapa(etapa.id);
+                            const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                            const query = supabase.from('contacts').update({ status_funil: valor });
+                            // Antes gravava o id da coluna ('novo_lead'), que o CHECK
+                            // recusa, e o erro não era conferido: a etapa parecia
+                            // mudar na tela e voltava no reload.
+                            const { error } = contactId
+                              ? await query.eq('id', contactId)
+                              : await query.ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                            if (error) throw error;
+
+                            setThreads(prev => prev.map(t => t.id === activeThread.id
+                              ? { ...t, funilStatus: etapa.id, is_client: false }
+                              : t));
+                            toast.success(`Etapa: ${etapa.label}`);
+                          } catch (err: any) {
+                            toast.error('Erro ao mudar etapa: ' + err.message);
+                          }
+                        }}
+                        title={etapa.desc}
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all text-left
+                          ${ativa
+                            ? `${etapa.bg} ${etapa.border} ${etapa.text}`
+                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${etapa.dot}`} />
+                        <span className="truncate">{etapa.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
@@ -4064,19 +4087,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                     {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
                     {activeThread.is_client && <Star size={14} className="fill-amber-500 text-amber-500" />}
                     <span className={`hidden md:inline px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm
-                      ${{
-                        novo_lead:      'bg-slate-50 text-slate-600 border-slate-200',
-                        primeiro_atend: 'bg-blue-50 text-blue-600 border-blue-100',
-                        sem_resposta:   'bg-amber-50 text-amber-600 border-amber-100',
-                        qualificado:    'bg-violet-50 text-violet-600 border-violet-100',
-                        agendamento:    'bg-indigo-50 text-indigo-600 border-indigo-100',
-                        cliente:        'bg-emerald-50 text-emerald-600 border-emerald-100',
-                      }[activeThread.funilStatus as string] || 'bg-slate-50 text-slate-500 border-slate-100'}`}>
-                      {{
-                        novo_lead: 'Novo Lead', primeiro_atend: 'Primeiro Atend.',
-                        sem_resposta: 'Sem Resposta', qualificado: 'Qualificado',
-                        agendamento: 'Agendamento', cliente: 'Cliente',
-                      }[activeThread.funilStatus as string] || activeThread.funilStatus || 'Novo Lead'}
+                      ${etapaPorId(activeThread.funilStatus).bg} ${etapaPorId(activeThread.funilStatus).text} ${etapaPorId(activeThread.funilStatus).border}`}>
+                      {etapaPorId(activeThread.funilStatus).label}
                     </span>
                   </h3>
                   <div className="flex items-center gap-1.5">
