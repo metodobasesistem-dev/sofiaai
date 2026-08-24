@@ -10,11 +10,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, Users, Phone, Mail, Instagram, Globe, Loader2, X, RefreshCw,
-  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet,
+  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet, Plus,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  listClients, getClient, updateClient, demoteClient,
+  listClients, getClient, updateClient, demoteClient, createClient,
   type ClientRecord, type ClientProfile, type ClientsSummary,
 } from '../services/supabaseService';
 import { toast } from 'sonner';
@@ -276,6 +276,137 @@ function FichaCliente({
   );
 }
 
+// ── Cadastro manual ───────────────────────────────────────────────────────
+
+function NovoClienteModal({ onClose, onCriado }: { onClose: () => void; onCriado: () => void }) {
+  const [form, setForm] = useState<Record<string, any>>({
+    nome: '', telefone: '', email: '', instagram: '', website: '',
+    mensalidade: '', ciclo: 'mensal', status_contrato: 'ativo', observacoes: '',
+  });
+  const [salvando, setSalvando] = useState(false);
+
+  const salvar = async () => {
+    if (!form.nome.trim()) {
+      toast.error('Informe o nome do cliente');
+      return;
+    }
+    try {
+      setSalvando(true);
+      await createClient({
+        ...form,
+        nome: form.nome.trim(),
+        // vazio vira null: "sem valor definido" é diferente de "cobra zero"
+        mensalidade: form.mensalidade === '' ? null : Number(form.mensalidade),
+      } as any);
+      toast.success(`${form.nome} adicionado à carteira`);
+      onCriado();
+      onClose();
+    } catch (e: any) {
+      toast.error('Erro ao cadastrar: ' + e.message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const campo = (label: string, chave: string, icone: React.ReactNode, tipo = 'text', placeholder = '') => (
+    <div>
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-1.5">
+        {icone} {label}
+      </label>
+      <input
+        type={tipo}
+        value={form[chave] ?? ''}
+        placeholder={placeholder}
+        onChange={e => setForm(f => ({ ...f, [chave]: e.target.value }))}
+        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all"
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => !salvando && onClose()} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 20 }}
+        className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-start justify-between shrink-0">
+          <div>
+            <h2 className="text-lg font-black text-slate-900 tracking-tight">Novo cliente</h2>
+            <p className="text-[12px] text-slate-500 font-medium">
+              Entra direto na carteira, sem passar pelos leads.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div className="space-y-4">
+            {campo('Nome *', 'nome', <Users size={11} />, 'text', 'Nome do cliente ou empresa')}
+            {campo('WhatsApp', 'telefone', <Phone size={11} />, 'text', '32999999999')}
+            <p className="text-[11px] text-slate-400 -mt-2">
+              Com o WhatsApp preenchido, o cadastro se junta à conversa já existente desse número.
+            </p>
+            {campo('E-mail', 'email', <Mail size={11} />, 'email', 'cliente@email.com')}
+            <div className="grid grid-cols-2 gap-3">
+              {campo('Instagram', 'instagram', <Instagram size={11} />, 'text', '@perfil')}
+              {campo('Site', 'website', <Globe size={11} />, 'text', 'https://')}
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-2 gap-3">
+              {campo('Mensalidade', 'mensalidade', <Wallet size={11} />, 'number', '0,00')}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Ciclo</label>
+                <select
+                  value={form.ciclo}
+                  onChange={e => setForm(f => ({ ...f, ciclo: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
+                >
+                  {CICLOS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Observações</label>
+              <textarea
+                rows={3}
+                value={form.observacoes}
+                onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all resize-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-slate-50 flex gap-3 shrink-0">
+          <button
+            onClick={onClose}
+            disabled={salvando}
+            className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-500 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={salvar}
+            disabled={salvando || !form.nome.trim()}
+            className="flex-1 py-3.5 bg-primary-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-400"
+          >
+            {salvando ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            Adicionar
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+
 // ── Tela ──────────────────────────────────────────────────────────────────
 
 export default function Clients() {
@@ -284,6 +415,7 @@ export default function Clients() {
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  const [novoAberto, setNovoAberto] = useState(false);
 
   const carregar = async () => {
     try {
@@ -352,6 +484,12 @@ export default function Clients() {
             <RefreshCw size={18} />
           </button>
           <button
+            onClick={() => setNovoAberto(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all active:scale-95 shadow-lg shadow-primary-200"
+          >
+            <Plus size={16} /> Novo cliente
+          </button>
+          <button
             onClick={exportar}
             disabled={clientes.length === 0}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
@@ -400,8 +538,16 @@ export default function Clients() {
             <p className="text-sm mt-1 max-w-sm">
               {busca
                 ? 'Tente outro termo de busca.'
-                : 'Promova um lead a cliente em Contatos ou pelo botão “Marcar como cliente” na conversa.'}
+                : 'Promova um lead a cliente em Leads, pelo botão “Marcar como cliente” na conversa, ou cadastre um agora.'}
             </p>
+            {!busca && (
+              <button
+                onClick={() => setNovoAberto(true)}
+                className="mt-5 flex items-center gap-2 px-5 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all active:scale-95"
+              >
+                <Plus size={16} /> Adicionar cliente
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -468,6 +614,12 @@ export default function Clients() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {novoAberto && (
+          <NovoClienteModal onClose={() => setNovoAberto(false)} onCriado={carregar} />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selecionado && (

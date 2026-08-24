@@ -2251,6 +2251,22 @@ export const listClients = async (): Promise<{ data: ClientRecord[]; summary: Cl
   return { data: result.data || [], summary: result.summary };
 };
 
+/**
+ * Cadastro manual de cliente. Se o telefone já existir na base, o backend
+ * promove o contato existente em vez de criar outro.
+ */
+export const createClient = async (
+  payload: Partial<ClientRecord & ClientProfile> & { nome: string }
+): Promise<{ id: string }> => {
+  const res = await standardFetch('/api/v2/clients', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao cadastrar cliente');
+  return result.data;
+};
+
 export const getClient = async (contactId: string): Promise<ClientRecord> => {
   const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}`);
   const result = await res.json();
