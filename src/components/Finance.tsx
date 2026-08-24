@@ -736,7 +736,9 @@ export default function Finance() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-700">{format(new Date(transaction.data_pagamento), "dd 'de' MMM", { locale: ptBR })}</span>
+                        <span className="text-xs font-bold text-slate-700">{/* T12:00 evita o pulo de um dia: new Date('2026-08-01') é meia-noite
+                              UTC, que no nosso fuso volta para 31/07. */}
+                        {format(new Date(`${transaction.data_pagamento}T12:00:00`), "dd 'de' MMM", { locale: ptBR })}</span>
                         <span className="text-[10px] text-slate-400 font-medium uppercase">{format(new Date(transaction.data_pagamento), "yyyy")}</span>
                       </div>
                     </td>

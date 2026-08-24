@@ -21,6 +21,27 @@ export function inicioDoMes(referencia?: string): string {
 }
 
 /**
+ * Data de vencimento da mensalidade: o mesmo DIA do mês em que o cliente
+ * entrou. Quem começou dia 13 vence todo dia 13 — é a data que ele espera
+ * pagar, e sem isso todas as cobranças caíam no dia 1º.
+ *
+ * Dia 31 em mês de 30 (ou fevereiro) cai no último dia do mês, em vez de
+ * transbordar para o mês seguinte.
+ */
+export function vencimentoNoMes(clienteDesde: string | null, competencia: string): string {
+  const mes = new Date(`${competencia}T12:00:00`);
+  if (!clienteDesde) return competencia;
+
+  const inicio = new Date(`${clienteDesde}T12:00:00`);
+  if (isNaN(inicio.getTime())) return competencia;
+
+  const ultimoDia = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate();
+  const dia = Math.min(inicio.getDate(), ultimoDia);
+
+  return new Date(mes.getFullYear(), mes.getMonth(), dia, 12).toISOString().slice(0, 10);
+}
+
+/**
  * Um cliente gera cobrança neste mês?
  *  - mensal: todo mês
  *  - anual: só no mês de aniversário da entrada
@@ -115,7 +136,7 @@ router.post('/gerar-mensalidades', async (req: AuthenticatedRequest, res: Respon
         valor: Number(ficha.mensalidade),
         tipo: 'entrada',
         status: 'pendente',
-        data_pagamento: competencia,
+        data_pagamento: vencimentoNoMes(ficha.cliente_desde, competencia),
         categoria_id: categoriaId,
         contact_id: cliente.id,
         origem: 'mensalidade',
