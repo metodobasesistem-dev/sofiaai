@@ -1614,7 +1614,7 @@ ${customExamples}`;
         professional_name:selectedProf?.name,
         google_event_id:  googleEventId,
         agent_id:         agentData.id,
-        tipo_consulta:    modalidade, // coluna legada: guarda presencial/online
+        modalidade,
         summary:          `Agendado com ${selectedProf?.name || 'IA'}`
       };
 
