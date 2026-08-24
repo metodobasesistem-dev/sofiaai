@@ -14,6 +14,7 @@ import {
   Info,
   Users,
   Layout,
+  Star,
   Layers,
   BarChart3,
   Sparkles,
@@ -244,11 +245,69 @@ export default function Campaigns() {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch Templates
+  /**
+   * Marca (ou desmarca) o modelo padrão. O banco tem índice único parcial por
+   * tenant, então limpar o anterior antes não é só cortesia: sem isso o
+   * segundo update falharia com 23505.
+   */
+  const definirPadrao = async (template: any) => {
+    const virandoPadrao = !template.is_default;
+    try {
+      if (virandoPadrao) {
+        await supabase
+          .from('message_templates')
+          .update({ is_default: false })
+          .eq('tenant_id', template.tenant_id)
+          .neq('id', template.id);
+      }
+
+      const { error } = await supabase
+        .from('message_templates')
+        .update({ is_default: virandoPadrao })
+        .eq('id', template.id);
+      if (error) throw error;
+
+      toast.success(virandoPadrao ? `"${template.name}" agora é o modelo padrão` : 'Modelo padrão removido');
+      fetchTemplates();
+    } catch (err: any) {
+      toast.error('Erro ao definir padrão: ' + err.message);
+    }
+  };
+
+  /**
+   * Campos de mensagem já com o modelo padrão escolhido, quando existe um.
+   * Sem padrão definido, mantém o comportamento anterior (texto livre).
+   */
+  const camposDeMensagemIniciais = () => {
+    const padrao = templates.find(t => t.is_default);
+    if (!padrao) {
+      return {
+        messageType: 'custom' as const,
+        customText: '',
+        templateId: '',
+        templateName: '',
+        templateLanguage: 'pt_BR',
+        isMetaTemplate: false,
+        variables: {},
+      };
+    }
+    return {
+      messageType: 'template' as const,
+      customText: '',
+      templateId: padrao.id,
+      templateName: padrao.name,
+      templateLanguage: padrao.language || 'pt_BR',
+      isMetaTemplate: false,
+      variables: {},
+    };
+  };
+
   const fetchTemplates = async () => {
     try {
       const { data, error } = await supabase
         .from('message_templates')
         .select('*')
+        .order('is_default', { ascending: false })
         .order('name');
       if (error) throw error;
       setTemplates(data || []);
@@ -469,13 +528,7 @@ export default function Campaigns() {
         manualList: '',
         uploadedContacts: [],
         singleContact: { nome: prefillName, telefone: prefillPhone, linkToCampaign: false, linkedCampaignId: '' },
-        messageType: 'custom',
-        customText: '',
-        templateId: '',
-        templateName: '',
-        templateLanguage: 'pt_BR',
-        isMetaTemplate: false,
-        variables: {}
+        ...camposDeMensagemIniciais()
       });
       setCurrentStep(1);
       setShowContactsList(false);
@@ -1185,7 +1238,10 @@ export default function Campaigns() {
                           }`}
                         >
                           <div>
-                            <p className="text-sm font-black text-slate-900">{template.name}</p>
+                            <p className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                              {template.name}
+                              {template.is_default && <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />}
+                            </p>
                             <div className="flex items-center gap-3">
                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{template.category}</p>
                                <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
@@ -1567,14 +1623,8 @@ export default function Campaigns() {
                 selectedFunnelStatus: '', 
                 manualList: '',
                 uploadedContacts: [],
-                messageType: 'custom',
-                customText: '',
-                templateId: '', 
-                templateName: '', 
-                templateLanguage: 'pt_BR',
-                isMetaTemplate: false,
                 singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
-                variables: {} 
+                ...camposDeMensagemIniciais()
               });
               setCurrentStep(1);
               setShowContactsList(false);
@@ -1834,6 +1884,17 @@ export default function Campaigns() {
                          <Layout size={20} />
                       </div>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => definirPadrao(template)}
+                          title={template.is_default ? 'Deixar de ser o modelo padrão' : 'Usar como modelo padrão nas campanhas'}
+                          className={`p-2 transition-colors ${
+                            template.is_default
+                              ? 'text-amber-500'
+                              : 'text-slate-200 hover:text-amber-500 opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          <Star size={18} className={template.is_default ? 'fill-amber-500' : ''} />
+                        </button>
                         <button 
                           onClick={() => {
                             setNewTemplate(template);
@@ -1858,7 +1919,12 @@ export default function Campaigns() {
                       </div>
                    </div>
                    <h3 className="font-black text-slate-900 mb-1 truncate">{template.name}</h3>
-                   <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-3 flex-wrap">
+                      {template.is_default && (
+                        <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
+                          <Star size={9} className="fill-amber-500 text-amber-500" /> Padrão
+                        </span>
+                      )}
                       <span className="text-[10px] font-black text-primary-600 bg-primary-50 px-2 py-0.5 rounded uppercase tracking-widest">{template.category}</span>
                       <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{template.variables_count} Variáveis</span>
