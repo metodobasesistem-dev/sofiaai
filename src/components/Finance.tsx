@@ -47,6 +47,16 @@ interface Contact {
   telefone?: string;
 }
 
+interface ResumoFinanceiro {
+  competencia: string;
+  caixa: { receita_total: number; despesa_total: number; saldo: number };
+  mes: {
+    recebido: number; a_receber: number; previsto: number; despesas: number;
+    recebido_mes_anterior: number; despesas_mes_anterior: number;
+  };
+  carteira: { ativos: number; mrr: number; ticket_medio: number; ltv_total: number; ltv_medio: number };
+}
+
 interface Category {
   id: string;
   nome: string;
@@ -86,6 +96,10 @@ export default function Finance() {
   };
   const [isSaving, setIsSaving] = useState(false);
   const [gerandoMensalidades, setGerandoMensalidades] = useState(false);
+  // Caixa + carteira num round trip. MRR, ticket médio e LTV vêm das fichas
+  // dos clientes, que esta tela não carrega — e repetir essas contas aqui
+  // faria os números divergirem dos da tela de Clientes.
+  const [resumo, setResumo] = useState<ResumoFinanceiro | null>(null);
   
   // Filter States
   const [filterType, setFilterType] = useState<'all' | 'entrada' | 'saida'>('all');
@@ -107,6 +121,10 @@ export default function Finance() {
     nome: '',
     tipo: 'receita' as 'receita' | 'despesa'
   });
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
 
   // Resumo (Sempre baseado em todos os dados para manter o saldo real)
   const totalReceita = transactions.filter(t => t.tipo === 'entrada' && t.status === 'pago').reduce((acc, t) => acc + Number(t.valor), 0);
@@ -143,6 +161,47 @@ export default function Finance() {
     .filter(t => t.tipo === 'entrada' && t.status === 'pendente' && noMes(t, 0))
     .reduce((acc, t) => acc + Number(t.valor), 0);
 
+  const mesPorExtenso = format(new Date(), "MMMM 'de' yyyy", { locale: ptBR });
+
+  const pctRecebido = (() => {
+    const previsto = resumo?.mes.previsto ?? 0;
+    if (previsto <= 0) return 0;
+    return Math.min(100, Math.round(((resumo?.mes.recebido ?? 0) / previsto) * 100));
+  })();
+
+  const indicadores = [
+    {
+      label: 'Receita recorrente',
+      valor: formatCurrency(resumo?.carteira.mrr ?? 0),
+      nota: 'por mês, contratos ativos',
+      icone: <RefreshCw size={13} />,
+    },
+    {
+      label: 'Ticket médio',
+      valor: formatCurrency(resumo?.carteira.ticket_medio ?? 0),
+      nota: `${resumo?.carteira.ativos ?? 0} cliente(s) ativo(s)`,
+      icone: <TrendingUp size={13} />,
+    },
+    {
+      label: 'LTV acumulado',
+      valor: formatCurrency(resumo?.carteira.ltv_total ?? 0),
+      nota: 'já pago pela carteira',
+      icone: <Wallet size={13} />,
+    },
+    {
+      label: 'LTV médio',
+      valor: formatCurrency(resumo?.carteira.ltv_medio ?? 0),
+      nota: 'por cliente',
+      icone: <UserIcon size={13} />,
+    },
+    {
+      label: 'Recebido no mês',
+      valor: formatCurrency(resumo?.mes.recebido ?? 0),
+      nota: varReceita?.texto,
+      icone: <ArrowUpRight size={13} />,
+    },
+  ];
+
   // Lista Filtrada
   const filteredTransactions = transactions.filter(t => {
     const matchesSearch = t.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -173,7 +232,8 @@ export default function Finance() {
     await Promise.all([
       fetchTransactions(),
       fetchCategories(),
-      fetchContacts()
+      fetchContacts(),
+      fetchResumo()
     ]);
     setLoading(false);
   };
@@ -203,10 +263,22 @@ export default function Finance() {
         });
       }
       fetchTransactions();
+      fetchResumo();
     } catch (e: any) {
       toast.error('Erro ao gerar mensalidades: ' + e.message);
     } finally {
       setGerandoMensalidades(false);
+    }
+  };
+
+  const fetchResumo = async () => {
+    try {
+      const res = await standardFetch('/api/v2/finance/resumo');
+      const r = await res.json();
+      if (r.success) setResumo(r);
+    } catch (e) {
+      // Resumo é complemento: a lista de lançamentos continua de pé sem ele.
+      console.warn('[Finance] resumo indisponível', e);
     }
   };
 
@@ -356,9 +428,6 @@ export default function Finance() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
 
   return (
     <div className="flex-1 h-full bg-slate-50/50 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
@@ -537,121 +606,125 @@ export default function Finance() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Cabeçalho */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-5">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary-500/20">
-              <DollarSign size={22} />
-            </div>
-            Gestão Financeira
-          </h2>
-          <p className="text-slate-500 text-sm font-medium mt-1">Acompanhe a saúde do seu negócio em tempo real.</p>
+          <div className="flex items-center gap-2.5 text-slate-400 mb-1.5">
+            <DollarSign size={15} />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">Financeiro</span>
+          </div>
+          <h2 className="text-[26px] leading-tight font-semibold text-slate-900 tracking-tight">Gestão financeira</h2>
+          <p className="text-slate-500 text-[13px] mt-1">
+            Caixa, carteira e previsão de entrada — {mesPorExtenso}
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={gerarMensalidades}
             disabled={gerandoMensalidades}
             title="Cria os lançamentos pendentes do mês a partir dos clientes ativos"
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50"
           >
-            {gerandoMensalidades ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            {gerandoMensalidades ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             Gerar mensalidades
           </button>
-          <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
-            <Tag size={16} /> Categorias
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
-            <Download size={16} /> Exportar
-          </button>
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl text-xs font-black shadow-lg shadow-primary-500/30 hover:bg-primary-700 transition-all active:scale-95"
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
           >
-            <Plus size={18} /> Novo Lançamento
+            <Tag size={15} /> Categorias
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-[13px] font-semibold hover:bg-primary-700 transition-colors"
+          >
+            <Plus size={16} /> Novo lançamento
           </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group"
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-            <TrendingUp size={80} className="text-emerald-500" />
+      {/* Saldo — o único número em tamanho hero desta tela */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1 bg-slate-900 rounded-2xl p-6 text-white">
+          <div className="flex items-center gap-2 text-slate-400 mb-3">
+            <Wallet size={15} />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">Saldo disponível</span>
           </div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <TrendingUp size={20} />
-            </div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Total</span>
-          </div>
-          <h3 className="text-3xl font-black text-slate-900">{formatCurrency(totalReceita)}</h3>
-          {varReceita && (
-            <div className={`mt-4 flex items-center gap-2 text-[10px] font-bold ${varReceita.positivo ? 'text-emerald-600' : 'text-red-600'}`}>
-              <span className={`px-2 py-0.5 rounded-full ${varReceita.positivo ? 'bg-emerald-50' : 'bg-red-50'}`}>{varReceita.texto}</span>
-            </div>
-          )}
-          {previstoMes > 0 && (
-            <div className="mt-2 text-[10px] font-bold text-amber-600">
-              <span className="px-2 py-0.5 bg-amber-50 rounded-full">{formatCurrency(previstoMes)} a receber este mês</span>
-            </div>
-          )}
-        </motion.div>
+          <p className="text-[44px] leading-none font-semibold tracking-tight">{formatCurrency(saldo)}</p>
+          <p className="text-[12px] text-slate-400 mt-3">
+            {formatCurrency(totalReceita)} recebido · {formatCurrency(totalDespesa)} em despesas
+          </p>
+        </div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group"
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-            <TrendingDown size={80} className="text-red-500" />
-          </div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
-              <TrendingDown size={20} />
+        {/* Previsão do mês — meter: trilha é um passo mais claro da mesma cor
+            do preenchimento, para o estado ser legível na barra inteira. */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/70 p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-1">
+                Previsão de entrada
+              </p>
+              <p className="text-[26px] leading-none font-semibold text-slate-900 tracking-tight">
+                {formatCurrency(resumo?.mes.a_receber ?? 0)}
+                <span className="text-[13px] font-normal text-slate-400 ml-2">ainda a receber</span>
+              </p>
             </div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Despesas Totais</span>
-          </div>
-          <h3 className="text-3xl font-black text-slate-900">{formatCurrency(totalDespesa)}</h3>
-          {varDespesa && (
-            <div className={`mt-4 flex items-center gap-2 text-[10px] font-bold ${varDespesa.positivo ? 'text-red-600' : 'text-emerald-600'}`}>
-              <span className={`px-2 py-0.5 rounded-full ${varDespesa.positivo ? 'bg-red-50' : 'bg-emerald-50'}`}>{varDespesa.texto}</span>
+            <div className="text-right shrink-0">
+              <p className="text-[12px] text-slate-500">
+                {formatCurrency(resumo?.mes.recebido ?? 0)} de {formatCurrency(resumo?.mes.previsto ?? 0)}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{pctRecebido}% do previsto</p>
             </div>
-          )}
-        </motion.div>
+          </div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-slate-900 p-6 rounded-[32px] shadow-2xl shadow-primary-500/10 relative overflow-hidden group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-600/20 to-transparent opacity-50" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-white/10 text-white rounded-xl flex items-center justify-center backdrop-blur-md">
-                <Wallet size={20} />
-              </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo Disponível</span>
-            </div>
-            <h3 className="text-3xl font-black text-white">{formatCurrency(saldo)}</h3>
-            <div className="mt-4 flex items-center gap-2 text-primary-400 text-[10px] font-bold">
-              <span className="px-2 py-0.5 bg-white/10 rounded-full">Atualizado agora</span>
-            </div>
+          <div className="h-2.5 w-full rounded-full bg-emerald-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+              style={{ width: `${pctRecebido}%` }}
+              role="progressbar"
+              aria-valuenow={pctRecebido}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Percentual recebido do previsto no mês"
+            />
           </div>
-        </motion.div>
+
+          <div className="flex items-center gap-5 mt-4 text-[12px]">
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" /> Recebido
+            </span>
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="w-2 h-2 rounded-full bg-emerald-100 border border-emerald-200" /> A receber
+            </span>
+            {(resumo?.mes.despesas ?? 0) > 0 && (
+              <span className="ml-auto text-slate-500">
+                {formatCurrency(resumo?.mes.despesas ?? 0)} em despesas no mês
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Indicadores da carteira */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {indicadores.map(ind => (
+          <div key={ind.label} className="bg-white rounded-xl border border-slate-200/70 px-4 py-3.5">
+            <div className="flex items-center gap-1.5 text-slate-400 mb-1.5">
+              {ind.icone}
+              <span className="text-[11px] font-medium">{ind.label}</span>
+            </div>
+            <p className="text-[19px] font-semibold text-slate-900 tracking-tight">{ind.valor}</p>
+            {ind.nota && <p className="text-[11px] text-slate-400 mt-0.5">{ind.nota}</p>}
+          </div>
+        ))}
+      </div>
+
+
       {/* Main Content */}
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden">
         {/* Filters Bar */}
-        <div className="px-8 py-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/30">
+        <div className="px-6 py-4 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/30">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -695,12 +768,12 @@ export default function Finance() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoria</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-8 py-5"></th>
+                <th className="px-6 py-3 text-[11px] font-medium text-slate-400">Descrição</th>
+                <th className="px-6 py-3 text-[11px] font-medium text-slate-400">Valor</th>
+                <th className="px-6 py-3 text-[11px] font-medium text-slate-400">Categoria</th>
+                <th className="px-6 py-3 text-[11px] font-medium text-slate-400">Data</th>
+                <th className="px-6 py-3 text-[11px] font-medium text-slate-400">Status</th>
+                <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -735,7 +808,7 @@ export default function Finance() {
                     key={transaction.id} 
                     className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group"
                   >
-                    <td className="px-8 py-6">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0
                           ${transaction.tipo === 'entrada' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
@@ -758,18 +831,18 @@ export default function Finance() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-8 py-6">
-                      <span className={`text-[15px] font-black ${transaction.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
+                    <td className="px-6 py-4">
+                      <span className={`text-[14px] font-semibold tabular-nums ${transaction.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
                         {transaction.tipo === 'entrada' ? '+' : '-'} {formatCurrency(transaction.valor)}
                       </span>
                     </td>
-                    <td className="px-8 py-6">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary-400" />
                         <span className="text-xs font-bold text-slate-600">{transaction.categoria_nome || 'Sem categoria'}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6">
+                    <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-slate-700">{/* T12:00 evita o pulo de um dia: new Date('2026-08-01') é meia-noite
                               UTC, que no nosso fuso volta para 31/07. */}
@@ -777,14 +850,14 @@ export default function Finance() {
                         <span className="text-[10px] text-slate-400 font-medium uppercase">{format(new Date(transaction.data_pagamento), "yyyy")}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 rounded-md text-[11px] font-medium capitalize
                         ${transaction.status === 'pago' ? 'bg-emerald-100 text-emerald-700' : 
                           transaction.status === 'pendente' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                         {transaction.status}
                       </span>
                     </td>
-                    <td className="px-8 py-6 text-right relative">
+                    <td className="px-6 py-4 text-right relative">
                       <button 
                         onClick={(e) => abrirMenu(e, transaction.id)}
                         className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"

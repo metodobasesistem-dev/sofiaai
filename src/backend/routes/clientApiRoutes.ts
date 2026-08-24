@@ -15,6 +15,7 @@ import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.
 import { invalidateCache, cacheKey } from '../lib/redisCache.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 import { randomUUID } from 'crypto';
+import { calcularLTV, resumoCarteira } from '../lib/carteira.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -33,48 +34,6 @@ const pick = (source: any, fields: readonly string[]) =>
     Object.entries(source || {}).filter(([k]) => fields.includes(k))
   );
 
-/**
- * LTV realizado — quanto o cliente JÁ pagou desde que entrou na carteira.
- *
- * É o número histórico, não uma projeção: projetar exigiria uma taxa de
- * cancelamento que o sistema ainda não tem histórico para calcular.
- *
- * O período vai de cliente_desde até hoje, ou até encerrado_em quando o
- * contrato acabou — senão um cliente que saiu continuaria "faturando" para
- * sempre no relatório.
- *
- * Períodos são contados FECHADOS: quem entrou há 45 dias pagou 1 mensalidade,
- * não 1,5. Contar fração transformaria o LTV numa estimativa, e a graça dele
- * aqui é ser o valor que de fato entrou.
- */
-export function calcularLTV(profile: any): { ltv: number; meses: number } {
-  if (!profile) return { ltv: 0, meses: 0 };
-
-  const valor = Number(profile.mensalidade) || 0;
-  const inicio = profile.cliente_desde ? new Date(profile.cliente_desde) : null;
-  if (!valor || !inicio || isNaN(inicio.getTime())) return { ltv: 0, meses: 0 };
-
-  const fim = profile.encerrado_em ? new Date(profile.encerrado_em) : new Date();
-  if (isNaN(fim.getTime()) || fim < inicio) return { ltv: 0, meses: 0 };
-
-  const meses =
-    (fim.getFullYear() - inicio.getFullYear()) * 12 +
-    (fim.getMonth() - inicio.getMonth()) -
-    (fim.getDate() < inicio.getDate() ? 1 : 0);
-  const mesesCompletos = Math.max(0, meses);
-
-  if (profile.ciclo === 'unico') {
-    // Pagamento único: o LTV é o próprio valor, desde o primeiro dia.
-    return { ltv: valor, meses: mesesCompletos };
-  }
-
-  if (profile.ciclo === 'anual') {
-    const anos = Math.floor(mesesCompletos / 12);
-    return { ltv: valor * anos, meses: mesesCompletos };
-  }
-
-  return { ltv: valor * mesesCompletos, meses: mesesCompletos };
-}
 
 
 // ─── POST /api/v2/clients ─────────────────────────────────────────────────
@@ -199,37 +158,12 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
       return { ...c, profile, ...calcularLTV(profile) };
     });
 
-    // Receita recorrente: só contrato ativo entra, e anual é diluído em 12
-    // para que o número seja comparável mês a mês.
-    const mrr = clientes.reduce((total, c) => {
-      const p = c.profile;
-      if (!p || p.status_contrato !== 'ativo' || !p.mensalidade) return total;
-      const valor = Number(p.mensalidade) || 0;
-      if (p.ciclo === 'anual') return total + valor / 12;
-      if (p.ciclo === 'unico') return total; // pagamento único não é recorrente
-      return total + valor;
-    }, 0);
-
-    const ativos = clientes.filter(c => c.profile?.status_contrato === 'ativo').length;
-
-    // LTV acumulado: soma o que TODA a carteira já pagou, inclusive quem
-    // cancelou — é justamente esse histórico que dá sentido ao número.
-    const ltvTotal = clientes.reduce((soma, c) => soma + (c.ltv || 0), 0);
-    const comLtv = clientes.filter(c => (c.ltv || 0) > 0).length;
+    const metricas = resumoCarteira(clientes.map(c => c.profile));
 
     res.json({
       success: true,
       data: clientes,
-      summary: {
-        total: clientes.length,
-        ativos,
-        mrr: Math.round(mrr * 100) / 100,
-        ticket_medio: ativos > 0 ? Math.round((mrr / ativos) * 100) / 100 : 0,
-        ltv_total: Math.round(ltvTotal * 100) / 100,
-        // Média só entre quem já gerou receita: incluir quem entrou ontem com
-        // zero puxaria o indicador para baixo sem significar nada.
-        ltv_medio: comLtv > 0 ? Math.round((ltvTotal / comLtv) * 100) / 100 : 0,
-      },
+      summary: { total: clientes.length, ...metricas },
     });
   } catch (err: any) {
     console.error('[ClientAPI] GET error:', err.message);
