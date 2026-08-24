@@ -57,6 +57,7 @@ import { notificationService } from './src/backend/services/notificationService.
 import agentApiRoutes from './src/backend/routes/agentApiRoutes.js';
 import contactApiRoutes from './src/backend/routes/contactApiRoutes.js';
 import clientApiRoutes from './src/backend/routes/clientApiRoutes.js';
+import financeApiRoutes from './src/backend/routes/financeApiRoutes.js';
 import profileApiRoutes from './src/backend/routes/profileApiRoutes.js';
 import quickReplyApiRoutes from './src/backend/routes/quickReplyApiRoutes.js';
 import adminApiRoutes from './src/backend/routes/adminApiRoutes.js';
@@ -313,6 +314,7 @@ async function startServer() {
     app.use('/api/v2/agents', agentApiRoutes);
     app.use('/api/v2/contacts', contactApiRoutes);
     app.use('/api/v2/clients', clientApiRoutes);
+    app.use('/api/v2/finance', financeApiRoutes);
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
     app.use('/api/v2/admin', adminLimiter, adminApiRoutes);
