@@ -25,6 +25,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { promoteToClient, type Contact } from '../services/supabaseService';
 // ── Helpers ──
 const formatPhone = (phone: string) => {
   if (!phone) return '—';
@@ -268,7 +269,7 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
   const [contacts, setContacts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'Todos' | 'Lead' | 'Qualificado' | 'Resolvido' | 'Cliente'>('Todos');
+  const [filterStatus, setFilterStatus] = useState<'Todos' | 'Lead' | 'Qualificado' | 'Agendado' | 'Resolvido'>('Todos');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [selectedContact, setSelectedContact] = useState<any | null>(null);
   
@@ -353,12 +354,32 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
     }
   };
 
+  /**
+   * Promove o lead a cliente: ele sai desta lista e passa a viver em Clientes,
+   * com ficha comercial própria. É a mesma ação do botão "Marcar como cliente"
+   * da conversa — a fonte de verdade é contacts.is_client.
+   */
+  const handlePromote = async (e: React.MouseEvent, contact: Contact) => {
+    e.stopPropagation();
+    if (!contact.id) return;
+    try {
+      await promoteToClient(contact.id);
+      setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, is_client: true } : c));
+      toast.success(`${contact.nome} agora é cliente`, { description: 'A ficha está em Clientes.' });
+    } catch (err: any) {
+      toast.error('Erro ao promover: ' + err.message);
+    }
+  };
+
   const filteredContacts = useMemo(() => {
     return contacts.filter(contact => {
+      // Um contato é lead OU cliente, nunca os dois: quem foi promovido sai
+      // desta tela e passa a viver em Clientes, com ficha própria.
+      if (contact.is_client) return false;
+
       const matchSearch = (contact.nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (contact.telefone || '').includes(searchTerm);
-      const matchStatus = filterStatus === 'Todos' || 
-                          (filterStatus === 'Cliente' ? contact.is_client : contact.status_funil === filterStatus);
+      const matchStatus = filterStatus === 'Todos' || contact.status_funil === filterStatus;
       
       let matchDate = true;
       if (dateFilter !== 'all') {
@@ -381,12 +402,17 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
     });
   }, [contacts, searchTerm, filterStatus, dateFilter]);
 
-  const stats = useMemo(() => ({
-    total: contacts.length,
-    leads: contacts.filter(c => c.status_funil === 'Lead').length,
-    clientes: contacts.filter(c => c.is_client).length,
-    resolvidos: contacts.filter(c => c.status_funil === 'Resolvido').length,
-  }), [contacts]);
+  // Só leads: os clientes têm a própria tela e os próprios números.
+  const stats = useMemo(() => {
+    const leads = contacts.filter(c => !c.is_client);
+    return {
+      total: leads.length,
+      leads: leads.filter(c => c.status_funil === 'Lead').length,
+      qualificados: leads.filter(c => c.status_funil === 'Qualificado').length,
+      agendados: leads.filter(c => c.status_funil === 'Agendado').length,
+      resolvidos: leads.filter(c => c.status_funil === 'Resolvido').length,
+    };
+  }, [contacts]);
 
   return (
     <div className="flex-1 h-full bg-slate-50/50 overflow-y-auto p-3 md:p-8 space-y-4 md:space-y-8 animate-in fade-in duration-500">
@@ -397,8 +423,8 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
             <UserPlus size={18} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight leading-tight">Contatos</h1>
-            <p className="text-gray-400 text-[11px] font-medium hidden md:block">Gerencie seus leads e histórico via WhatsApp.</p>
+            <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight leading-tight">Leads</h1>
+            <p className="text-gray-400 text-[11px] font-medium hidden md:block">Quem ainda não é cliente. Ao promover, o contato passa para Clientes.</p>
           </div>
         </div>
 
@@ -483,7 +509,7 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
           {[
             { label: 'Total',     value: stats.total,      color: 'text-slate-800',   dot: 'bg-slate-400',   status: 'Todos'    },
             { label: 'Leads',     value: stats.leads,      color: 'text-primary-700', dot: 'bg-primary-500', status: 'Lead'     },
-            { label: 'Clientes',  value: stats.clientes,   color: 'text-amber-600',   dot: 'bg-amber-500',   status: 'Cliente'  },
+            { label: 'Agendados', value: stats.agendados,  color: 'text-indigo-600',  dot: 'bg-indigo-500',  status: 'Agendado' },
             { label: 'Resolvidos',value: stats.resolvidos, color: 'text-emerald-600', dot: 'bg-emerald-500', status: 'Resolvido'},
           ].map((s, i) => (
             <button
@@ -535,7 +561,7 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
             </div>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-            {(['Todos', 'Lead', 'Qualificado', 'Resolvido', 'Cliente'] as const).map(f => (
+            {(['Todos', 'Lead', 'Qualificado', 'Agendado', 'Resolvido'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f as any)}
@@ -606,13 +632,13 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
                           {contact.ultimaInteracao && <p className="text-[10px] text-slate-400 mt-1">{formatRelative(contact.ultimaInteracao)}</p>}
                         </td>
                         <td className="px-8 py-6 text-center">
-                          {contact.is_client ? (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-100 rounded-full text-[9px] font-black uppercase tracking-wider">
-                              <Star size={10} className="fill-amber-500" /> Cliente
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Lead</span>
-                          )}
+                          <button
+                            onClick={(e) => handlePromote(e, contact)}
+                            title="Promover a cliente"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-wider hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 transition-all"
+                          >
+                            <Star size={10} /> Tornar cliente
+                          </button>
                         </td>
                         <td className="px-8 py-6">
                           <StatusBadge status={contact.status_funil} />

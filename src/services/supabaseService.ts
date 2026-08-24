@@ -95,7 +95,11 @@ export interface Contact {
   userId: string;
   nome: string;
   telefone: string;
-  status_funil: 'Lead' | 'Qualificado' | 'Cliente' | 'Resolvido';
+  email?: string;
+  instagram?: string;
+  website?: string;
+  /** 'Cliente' não existe: quem é cliente tem is_client = true. */
+  status_funil: 'Lead' | 'Qualificado' | 'Agendado' | 'Resolvido';
   data_criacao: string;
   ultimaMensagem?: string;
   ultimaInteracao?: string;
@@ -2200,3 +2204,84 @@ export const getAIStats = async (userId: string): Promise<AIStats | null> => {
 };
 
 // Force redeploy to clear asset cache - Zyreo Update
+
+// ─── Carteira de clientes (CRM do inquilino) ──────────────────────────────
+// Não confundir com a gestão de inquilinos da plataforma (listAdminUsers).
+
+export interface ClientProfile {
+  id?: string;
+  contact_id?: string;
+  mensalidade?: number | null;
+  moeda?: string;
+  ciclo?: 'mensal' | 'anual' | 'unico';
+  cliente_desde?: string;
+  status_contrato?: 'ativo' | 'pausado' | 'cancelado';
+  observacoes?: string | null;
+  custom_fields?: Record<string, any>;
+}
+
+export interface ClientRecord {
+  id: string;
+  nome: string;
+  telefone: string;
+  email?: string | null;
+  instagram?: string | null;
+  website?: string | null;
+  is_client?: boolean;
+  data_criacao?: string;
+  ultima_interacao?: string;
+  ultima_mensagem?: string;
+  total_mensagens?: number;
+  profile_picture_url?: string | null;
+  profile?: ClientProfile | null;
+  appointments?: Array<Record<string, any>>;
+}
+
+export interface ClientsSummary {
+  total: number;
+  ativos: number;
+  mrr: number;
+  ticket_medio: number;
+}
+
+export const listClients = async (): Promise<{ data: ClientRecord[]; summary: ClientsSummary }> => {
+  const res = await standardFetch('/api/v2/clients');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar clientes');
+  return { data: result.data || [], summary: result.summary };
+};
+
+export const getClient = async (contactId: string): Promise<ClientRecord> => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}`);
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar a ficha');
+  return result.data;
+};
+
+export const updateClient = async (contactId: string, payload: Partial<ClientRecord & ClientProfile>) => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao salvar');
+};
+
+/** Promove um lead a cliente: ele sai da lista de leads e ganha ficha. */
+export const promoteToClient = async (contactId: string, profile?: ClientProfile) => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}/promote`, {
+    method: 'POST',
+    body: JSON.stringify(profile || {}),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao promover');
+};
+
+/** Devolve o cliente para a lista de leads (a ficha é preservada). */
+export const demoteClient = async (contactId: string) => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}/demote`, {
+    method: 'POST',
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover da carteira');
+};

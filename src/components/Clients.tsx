@@ -1,550 +1,486 @@
+/**
+ * Clientes — a carteira do inquilino.
+ *
+ * Um contato é LEAD ou CLIENTE, nunca os dois: quem é promovido some da tela
+ * de Contatos e aparece aqui, com a ficha comercial. A promoção é manual.
+ *
+ * Não confundir com a gestão de inquilinos da plataforma (Painel Admin): lá
+ * são as empresas que contratam o sistema, aqui são os clientes de cada uma.
+ */
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, 
-  Download, 
-  User,
-  Phone,
-  Calendar,
-  Loader2,
-  ChevronRight,
-  Clock,
-  MessageSquare,
-  Star,
-  RefreshCw,
-  Trash2,
-  X,
-  Zap,
-  CheckCircle2,
-  Hash,
-  ExternalLink
+import {
+  Search, Users, Phone, Mail, Instagram, Globe, Loader2, X, RefreshCw,
+  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  listContacts, 
-  listContactAppointments,
-  updateContactFunilStatus,
-  deleteContact,
-  listAdminUsers,
-  type Contact,
-  type Appointment,
-  type UserProfile
+import {
+  listClients, getClient, updateClient, demoteClient,
+  type ClientRecord, type ClientProfile, type ClientsSummary,
 } from '../services/supabaseService';
 import { toast } from 'sonner';
-import { User as SupabaseUser } from '@supabase/supabase-js';
 
-// ── Helpers ──
+// ── Helpers ───────────────────────────────────────────────────────────────
 
-const formatPhone = (phone: string) => {
+const formatPhone = (phone?: string | null) => {
   if (!phone) return '—';
   const p = phone.replace(/\D/g, '');
-  if (p.length === 13) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9)}`;
-  if (p.length === 12) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,8)}-${p.slice(8)}`;
-  if (p.length === 11) return `(${p.slice(0,2)}) ${p.slice(2,7)}-${p.slice(7)}`;
+  if (p.length === 13) return `+${p.slice(0, 2)} (${p.slice(2, 4)}) ${p.slice(4, 9)}-${p.slice(9)}`;
+  if (p.length === 12) return `+${p.slice(0, 2)} (${p.slice(2, 4)}) ${p.slice(4, 8)}-${p.slice(8)}`;
+  if (p.length === 11) return `(${p.slice(0, 2)}) ${p.slice(2, 7)}-${p.slice(7)}`;
   return phone;
 };
 
-const formatDate = (date: any): string => {
+const formatDate = (date?: any) => {
   if (!date) return '—';
   const d = new Date(date);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
 };
 
-const formatRelative = (date: any): string => {
-  if (!date) return '—';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return '—';
-
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Agora mesmo';
-  if (mins < 60) return `${mins}min atrás`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h atrás`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return 'Ontem';
-  if (days < 7) return `${days}d atrás`;
-  return formatDate(date);
+const formatMoney = (valor?: number | null, moeda = 'BRL') => {
+  if (valor === null || valor === undefined || valor === '' as any) return '—';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: moeda || 'BRL' }).format(Number(valor));
 };
 
-const getInitials = (name: string) => {
-  if (!name) return '?';
-  const parts = name.trim().split(' ').filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
-
-const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-primary-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500', 'bg-cyan-500', 'bg-primary-500', 'bg-teal-500',
+const CICLOS: Array<{ id: NonNullable<ClientProfile['ciclo']>; label: string }> = [
+  { id: 'mensal', label: 'Mensal' },
+  { id: 'anual', label: 'Anual' },
+  { id: 'unico', label: 'Pagamento único' },
 ];
-const getAvatarColor = (id: string) => AVATAR_COLORS[(id.charCodeAt(0) + id.charCodeAt(1)) % AVATAR_COLORS.length];
 
-const FUNIL_STYLES: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-  Lead:       { label: 'Lead',       className: 'bg-primary-50 text-primary-700 border-primary-200',     icon: <Zap size={10} /> },
-  Qualificado:{ label: 'Qualificado',className: 'bg-green-50 text-green-700 border-green-200',   icon: <CheckCircle2 size={10} /> },
-  Cliente:    { label: 'Cliente',    className: 'bg-amber-50 text-amber-700 border-amber-200',   icon: <Star size={10} /> },
-  Trial:      { label: 'Em Teste',    className: 'bg-blue-50 text-blue-700 border-blue-200',   icon: <Clock size={10} /> },
-  Starter:    { label: 'Plano Starter', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <Zap size={10} /> },
-  Pro:        { label: 'Plano Pro',  className: 'bg-purple-50 text-purple-700 border-purple-200', icon: <Zap size={10} /> },
+const STATUS: Array<{ id: NonNullable<ClientProfile['status_contrato']>; label: string; cor: string }> = [
+  { id: 'ativo', label: 'Ativo', cor: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+  { id: 'pausado', label: 'Pausado', cor: 'bg-amber-50 text-amber-600 border-amber-100' },
+  { id: 'cancelado', label: 'Cancelado', cor: 'bg-slate-100 text-slate-500 border-slate-200' },
+];
+
+const getAvatarColor = (seed: string) => {
+  const cores = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#16a34a', '#0891b2', '#4f46e5'];
+  const i = seed.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return cores[i % cores.length];
 };
 
-const StatusBadge = ({ status, onClick }: { status: string; onClick?: () => void }) => {
-  const s = FUNIL_STYLES[status] || FUNIL_STYLES['Lead'];
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wide transition-all hover:opacity-80 ${s.className}`}
-    >
-      {s.icon} {s.label}
-    </button>
-  );
+const iniciais = (nome: string) => {
+  const partes = (nome || '?').trim().split(/\s+/);
+  return (partes.length >= 2 ? partes[0][0] + partes[1][0] : (nome || '?').slice(0, 2)).toUpperCase();
 };
 
-// ── Side Panel ──
+// ── Ficha lateral ─────────────────────────────────────────────────────────
 
-interface SidePanelProps {
-  contact: any;
+function FichaCliente({
+  contactId,
+  onClose,
+  onChanged,
+}: {
+  contactId: string;
   onClose: () => void;
-  onTabChange?: (tab: string) => void;
-  onStatusChange: (contactId: string, status: any) => void;
-  isAdminMode?: boolean;
-}
-
-const SidePanel = ({ contact, onClose, onTabChange, onStatusChange, isAdminMode }: SidePanelProps) => {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loadingAppts, setLoadingAppts] = useState(true);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
+  onChanged: () => void;
+}) {
+  const [cliente, setCliente] = useState<ClientRecord | null>(null);
+  const [form, setForm] = useState<Record<string, any>>({});
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    if (!contact.telefone || isAdminMode) {
-      setLoadingAppts(false);
-      return;
-    }
-    setLoadingAppts(true);
-    listContactAppointments(contact.telefone)
-      .then(setAppointments)
-      .catch(console.error)
-      .finally(() => setLoadingAppts(false));
-  }, [contact.telefone, isAdminMode]);
+    let ativo = true;
+    setCarregando(true);
+    getClient(contactId)
+      .then(dados => {
+        if (!ativo) return;
+        setCliente(dados);
+        setForm({
+          nome: dados.nome || '',
+          telefone: dados.telefone || '',
+          email: dados.email || '',
+          instagram: dados.instagram || '',
+          website: dados.website || '',
+          mensalidade: dados.profile?.mensalidade ?? '',
+          ciclo: dados.profile?.ciclo || 'mensal',
+          status_contrato: dados.profile?.status_contrato || 'ativo',
+          cliente_desde: dados.profile?.cliente_desde || '',
+          observacoes: dados.profile?.observacoes || '',
+        });
+      })
+      .catch(e => toast.error('Erro ao carregar ficha: ' + e.message))
+      .finally(() => ativo && setCarregando(false));
+    return () => { ativo = false; };
+  }, [contactId]);
 
-  const handleUpdateStatus = async (newStatus: Contact['status_funil']) => {
-    if (!contact.id || updatingStatus || contact.status_funil === newStatus || isAdminMode) return;
-    setUpdatingStatus(true);
+  const salvar = async () => {
     try {
-      await updateContactFunilStatus(contact.id, newStatus);
-      onStatusChange(contact.id, newStatus);
-      toast.success(`Status atualizado para ${newStatus}`);
-    } catch (err) {
-      toast.error('Erro ao atualizar status');
+      setSalvando(true);
+      await updateClient(contactId, {
+        ...form,
+        // input vazio vira null, não 0 — "sem valor definido" é diferente de
+        // "cobra zero", e o card de receita conta os dois de forma diferente.
+        mensalidade: form.mensalidade === '' ? null : Number(form.mensalidade),
+        cliente_desde: form.cliente_desde || undefined,
+      } as any);
+      toast.success('Ficha salva');
+      onChanged();
+    } catch (e: any) {
+      toast.error('Erro ao salvar: ' + e.message);
     } finally {
-      setUpdatingStatus(false);
+      setSalvando(false);
     }
   };
 
-  const openInbox = () => {
-    if (!contact.telefone) return;
-    const jid = `${contact.telefone.replace(/\D/g, '')}@s.whatsapp.net`;
-    const url = new URL(window.location.href);
-    url.searchParams.set('jid', jid);
-    window.history.pushState({}, '', url);
-    if (onTabChange) onTabChange('inbox');
+  const removerDaCarteira = async () => {
+    if (!window.confirm(`Devolver ${cliente?.nome} para a lista de leads? A ficha é preservada.`)) return;
+    try {
+      await demoteClient(contactId);
+      toast.success('Cliente devolvido para os leads');
+      onChanged();
+      onClose();
+    } catch (e: any) {
+      toast.error('Erro: ' + e.message);
+    }
   };
 
-  const color = getAvatarColor(contact.id || contact.telefone || 'default');
+  const campo = (label: string, chave: string, icone: React.ReactNode, tipo = 'text', placeholder = '') => (
+    <div>
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-1.5">
+        {icone} {label}
+      </label>
+      <input
+        type={tipo}
+        value={form[chave] ?? ''}
+        placeholder={placeholder}
+        onChange={e => setForm(f => ({ ...f, [chave]: e.target.value }))}
+        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all"
+      />
+    </div>
+  );
 
   return (
     <motion.div
-      initial={{ x: '100%', opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: '100%', opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="fixed right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl z-40 flex flex-col border-l border-gray-100"
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+      className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col border-l border-slate-200"
     >
-      {/* Header */}
-      <div className="p-6 border-b border-gray-100 flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <div className={`w-14 h-14 rounded-2xl ${color} text-white flex items-center justify-center text-xl font-black shadow-lg`}>
-            {getInitials(contact.nome)}
-          </div>
-          <div>
-            <h3 className="text-lg font-black text-gray-900 leading-tight">{contact.nome}</h3>
-            <p className="text-sm text-gray-500">{contact.email || formatPhone(contact.telefone)}</p>
-            <div className="mt-1.5">
-              <StatusBadge 
-                status={isAdminMode ? (contact.plano || 'Trial') : contact.status_funil} 
-                onClick={isAdminMode ? undefined : () => {
-                  const order: Contact['status_funil'][] = ['Lead', 'Qualificado', 'Cliente'];
-                  const next = order[(order.indexOf(contact.status_funil) + 1) % order.length];
-                  handleUpdateStatus(next);
-                }} 
-              />
-            </div>
-          </div>
+      <div className="p-6 border-b border-slate-100 flex items-start justify-between shrink-0">
+        <div>
+          <h2 className="text-lg font-black text-slate-900 tracking-tight">Ficha do cliente</h2>
+          <p className="text-[12px] text-slate-500 font-medium">
+            {cliente ? `Cliente desde ${formatDate(cliente.profile?.cliente_desde || cliente.data_criacao)}` : 'Carregando…'}
+          </p>
         </div>
-        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
+        <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
           <X size={20} />
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-0 border-b border-gray-100">
-        {[
-          { label: isAdminMode ? 'WhatsApp' : 'Mensagens', value: isAdminMode ? (contact.whatsapp_status === 'connected' ? 'OK' : 'OFF') : (contact.totalMensagens ?? 0), icon: <MessageSquare size={14} /> },
-          { label: isAdminMode ? 'Plano' : 'Agendamentos', value: isAdminMode ? (contact.plano || 'Trial') : appointments.length, icon: isAdminMode ? <Zap size={14} /> : <Calendar size={14} /> },
-          { label: 'Desde', value: formatDate(contact.primeiroContato || contact.data_criacao || contact.created_at), icon: <Clock size={12} /> },
-        ].map((stat, i) => (
-          <div key={i} className="flex flex-col items-center py-4 border-r last:border-r-0 border-gray-100">
-            <span className="text-gray-400 mb-1">{stat.icon}</span>
-            <span className={`text-base font-black ${stat.value === 'OK' ? 'text-emerald-600' : 'text-gray-900'}`}>{stat.value}</span>
-            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">{stat.label}</span>
+      {carregando ? (
+        <div className="flex-1 flex items-center justify-center text-slate-400">
+          <Loader2 size={32} className="animate-spin" />
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="space-y-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contato</p>
+              {campo('Nome', 'nome', <Users size={11} />)}
+              {campo('WhatsApp', 'telefone', <Phone size={11} />, 'text', '5532999999999')}
+              {campo('E-mail', 'email', <Mail size={11} />, 'email', 'cliente@email.com')}
+              {campo('Instagram', 'instagram', <Instagram size={11} />, 'text', '@perfil')}
+              {campo('Site', 'website', <Globe size={11} />, 'text', 'https://')}
+            </div>
+
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-4">Comercial</p>
+              <div className="grid grid-cols-2 gap-3">
+                {campo('Mensalidade', 'mensalidade', <Wallet size={11} />, 'number', '0,00')}
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Ciclo</label>
+                  <select
+                    value={form.ciclo}
+                    onChange={e => setForm(f => ({ ...f, ciclo: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
+                  >
+                    {CICLOS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Situação</label>
+                  <select
+                    value={form.status_contrato}
+                    onChange={e => setForm(f => ({ ...f, status_contrato: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
+                  >
+                    {STATUS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+                {campo('Cliente desde', 'cliente_desde', <Calendar size={11} />, 'date')}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Observações</label>
+                <textarea
+                  rows={4}
+                  value={form.observacoes ?? ''}
+                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            {cliente?.appointments && cliente.appointments.length > 0 && (
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-4 mb-3">
+                  Histórico de agendamentos
+                </p>
+                <div className="space-y-2">
+                  {cliente.appointments.slice(0, 8).map((a: any) => (
+                    <div key={a.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                      <Calendar size={14} className="text-slate-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-bold text-slate-700">
+                          {formatDate(a.data)} {a.time ? `às ${a.time}` : ''}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {a.summary || a.tipo_consulta || 'Sem descrição'}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">{a.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={removerDaCarteira}
+              className="w-full py-3 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200"
+            >
+              <UserMinus size={14} /> Devolver para leads
+            </button>
+          </div>
+
+          <div className="p-6 border-t border-slate-100 shrink-0">
+            <button
+              onClick={salvar}
+              disabled={salvando}
+              className="w-full py-3.5 bg-primary-600 text-white rounded-xl font-black uppercase tracking-widest text-[11px] hover:bg-primary-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {salvando ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              Salvar ficha
+            </button>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
+// ── Tela ──────────────────────────────────────────────────────────────────
+
+export default function Clients() {
+  const [clientes, setClientes] = useState<ClientRecord[]>([]);
+  const [resumo, setResumo] = useState<ClientsSummary>({ total: 0, ativos: 0, mrr: 0, ticket_medio: 0 });
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [selecionado, setSelecionado] = useState<string | null>(null);
+
+  const carregar = async () => {
+    try {
+      setCarregando(true);
+      const { data, summary } = await listClients();
+      setClientes(data);
+      setResumo(summary);
+    } catch (e: any) {
+      toast.error('Erro ao carregar clientes: ' + e.message);
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  useEffect(() => { carregar(); }, []);
+
+  const filtrados = useMemo(() => {
+    const termo = busca.toLowerCase().trim();
+    if (!termo) return clientes;
+    return clientes.filter(c =>
+      (c.nome || '').toLowerCase().includes(termo) ||
+      (c.telefone || '').includes(termo) ||
+      (c.email || '').toLowerCase().includes(termo)
+    );
+  }, [clientes, busca]);
+
+  const exportar = () => {
+    const linhas = [
+      ['Nome', 'WhatsApp', 'E-mail', 'Instagram', 'Site', 'Mensalidade', 'Ciclo', 'Situação', 'Cliente desde'],
+      ...clientes.map(c => [
+        c.nome || '', c.telefone || '', c.email || '', c.instagram || '', c.website || '',
+        c.profile?.mensalidade ?? '', c.profile?.ciclo ?? '', c.profile?.status_contrato ?? '',
+        c.profile?.cliente_desde ?? '',
+      ]),
+    ];
+    const csv = linhas.map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const cards = [
+    { label: 'Clientes', valor: String(resumo.total), icone: <Users size={16} />, cor: 'text-primary-600' },
+    { label: 'Ativos', valor: String(resumo.ativos), icone: <TrendingUp size={16} />, cor: 'text-emerald-600' },
+    { label: 'Receita recorrente', valor: formatMoney(resumo.mrr), icone: <Wallet size={16} />, cor: 'text-violet-600' },
+    { label: 'Ticket médio', valor: formatMoney(resumo.ticket_medio), icone: <TrendingUp size={16} />, cor: 'text-amber-600' },
+  ];
+
+  return (
+    <div className="relative min-h-[600px] space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-primary-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary-200">
+            <Users size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Clientes</h1>
+            <p className="text-slate-500 text-sm">Sua carteira — leads promovidos, com ficha e histórico.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={carregar} className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all" title="Atualizar">
+            <RefreshCw size={18} />
+          </button>
+          <button
+            onClick={exportar}
+            disabled={clientes.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
+          >
+            <Download size={16} className="text-slate-400" /> Exportar
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map(c => (
+          <div key={c.label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div className={`flex items-center gap-2 mb-2 ${c.cor}`}>
+              {c.icone}
+              <span className="text-[10px] font-black uppercase tracking-widest">{c.label}</span>
+            </div>
+            <p className="text-2xl font-black text-slate-900">{c.valor}</p>
           </div>
         ))}
       </div>
 
-      {/* Info */}
-      <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-        {/* Details */}
-        <div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Informações Detalhadas</p>
-          <div className="space-y-2">
-            {[
-              { icon: <User size={13} />, label: 'Email', value: contact.email || '—' },
-              { icon: <Phone size={13} />, label: 'WhatsApp', value: contact.telefone ? formatPhone(contact.telefone) : 'Não configurado' },
-              { icon: <Calendar size={13} />, label: 'Criado em', value: formatDate(contact.data_criacao || contact.created_at) },
-              { icon: <Zap size={13} />, label: 'Status IA', value: contact.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                <span className="flex items-center gap-2 text-xs text-gray-500">
-                  <span className="text-gray-400">{item.icon}</span>
-                  {item.label}
-                </span>
-                <span className="text-xs font-semibold text-gray-900">{item.value}</span>
-              </div>
-            ))}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-50 bg-slate-50/40">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar por nome, WhatsApp ou e-mail…"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
+            />
           </div>
         </div>
 
-        {isAdminMode && contact.trial_ends_at && (
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-             <div className="flex items-center gap-2 text-blue-700 mb-1">
-                <Clock size={16} />
-                <span className="text-xs font-bold uppercase">Período de Teste</span>
-             </div>
-             <p className="text-sm text-blue-900 font-medium">O teste expira em {formatDate(contact.trial_ends_at)}</p>
+        {carregando ? (
+          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+            <Loader2 size={36} className="animate-spin mb-3 text-primary-500" />
+            <p className="font-medium text-sm">Carregando carteira…</p>
+          </div>
+        ) : filtrados.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-slate-400 px-6 text-center">
+            <Users size={40} className="mb-4 opacity-40" />
+            <p className="font-bold text-slate-600">
+              {busca ? 'Nenhum cliente encontrado' : 'Nenhum cliente na carteira ainda'}
+            </p>
+            <p className="text-sm mt-1 max-w-sm">
+              {busca
+                ? 'Tente outro termo de busca.'
+                : 'Promova um lead a cliente em Contatos ou pelo botão “Marcar como cliente” na conversa.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50/60">
+                <tr>
+                  <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                  <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:table-cell">Contato</th>
+                  <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Mensalidade</th>
+                  <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Situação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filtrados.map(c => {
+                  const status = STATUS.find(s => s.id === (c.profile?.status_contrato || 'ativo'))!;
+                  return (
+                    <tr
+                      key={c.id}
+                      onClick={() => setSelecionado(c.id)}
+                      className="hover:bg-slate-50/60 cursor-pointer transition-colors"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[11px] font-black shrink-0 overflow-hidden"
+                            style={{ backgroundColor: getAvatarColor(c.id || c.nome || 'x') }}
+                          >
+                            {c.profile_picture_url
+                              ? <img src={c.profile_picture_url} alt={c.nome} className="w-full h-full object-cover" />
+                              : iniciais(c.nome)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 text-sm truncate">{c.nome || 'Sem nome'}</p>
+                            <p className="text-[11px] text-slate-400">
+                              Desde {formatDate(c.profile?.cliente_desde || c.data_criacao)}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 hidden md:table-cell">
+                        <p className="text-[13px] text-slate-600 font-medium">{formatPhone(c.telefone)}</p>
+                        {c.email && <p className="text-[11px] text-slate-400 truncate max-w-[200px]">{c.email}</p>}
+                      </td>
+                      <td className="px-6 py-4 hidden sm:table-cell">
+                        <p className="text-[13px] font-bold text-slate-700">
+                          {formatMoney(c.profile?.mensalidade, c.profile?.moeda)}
+                        </p>
+                        {c.profile?.ciclo && (
+                          <p className="text-[11px] text-slate-400">
+                            {CICLOS.find(x => x.id === c.profile?.ciclo)?.label}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${status.cor}`}>
+                          {status.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
-      {!isAdminMode && (
-        <div className="p-4 border-t border-gray-100 flex gap-3">
-          <button
-            onClick={openInbox}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-sm shadow-primary-200"
-          >
-            <MessageSquare size={16} /> Abrir Chat
-          </button>
-        </div>
-      )}
-    </motion.div>
-  );
-};
-
-// ── Main Component ──
-
-export default function Clients({ onTabChange, user, role }: { onTabChange?: (tab: string) => void, user: SupabaseUser | null, role: string | null }) {
-  const [contacts, setContacts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedContact, setSelectedContact] = useState<any | null>(null);
-
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      
-      if (role === 'admin') {
-        // Modo Admin: Busca Inquilinos (Tenants)
-        const profiles = await listAdminUsers();
-        const mapped = profiles.map(p => ({
-          ...p,
-          nome: p.nome_completo || p.name || p.full_name || p.email.split('@')[0],
-          telefone: p.notification_phone || '',
-          data_criacao: p.created_at,
-          status_funil: p.plano || 'Trial',
-          whatsapp_status: p.whatsapp_status,
-          is_admin_view: true
-        }));
-        setContacts(mapped);
-      } else {
-        // Modo Cliente: Busca Contatos do WhatsApp
-        const data = await listContacts();
-        const clients = data.filter(c => c.status_funil === 'Cliente');
-        const sorted = clients.sort((a, b) => {
-          const aTime = new Date(a.ultimaInteracao || a.data_criacao || 0).getTime();
-          const bTime = new Date(b.ultimaInteracao || b.data_criacao || 0).getTime();
-          return bTime - aTime;
-        });
-        setContacts(sorted);
-      }
-    } catch (error) {
-      console.error('Failed to fetch clients:', error);
-      toast.error('Erro ao carregar lista de clientes');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchClients(); }, [role]);
-
-  const filteredClients = useMemo(() => 
-    contacts.filter(c => 
-      c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      c.telefone.includes(searchTerm)
-    ), [contacts, searchTerm]);
-
-  const handleDeleteClient = async (e: React.MouseEvent, contact: Contact) => {
-    e.stopPropagation();
-    if (!contact.id) return;
-
-    const confirmed = window.confirm(`Tem certeza que deseja excluir o cliente "${contact.nome}"?`);
-    if (confirmed) {
-      try {
-        await deleteContact(contact.id);
-        setContacts(prev => prev.filter(c => c.id !== contact.id));
-        if (selectedContact?.id === contact.id) setSelectedContact(null);
-        toast.success('Cliente removido com sucesso');
-      } catch (error) {
-        toast.error('Erro ao remover cliente');
-      }
-    }
-  };
-
-  const openInbox = (telefone: string) => {
-    const jid = `${telefone.replace(/\D/g, '')}@c.us`;
-    const url = new URL(window.location.href);
-    url.searchParams.set('jid', jid);
-    window.history.pushState({}, '', url);
-    if (onTabChange) onTabChange('inbox');
-  };
-
-  const handleStatusChange = (contactId: string, newStatus: Contact['status_funil']) => {
-    if (newStatus !== 'Cliente') {
-      setContacts(prev => prev.filter(c => c.id !== contactId));
-      if (selectedContact?.id === contactId) setSelectedContact(null);
-    } else {
-      setContacts(prev => prev.map(c => c.id === contactId ? { ...c, status_funil: newStatus } : c));
-      if (selectedContact?.id === contactId) {
-        setSelectedContact(prev => prev ? { ...prev, status_funil: newStatus } : prev);
-      }
-    }
-  };
-
-  return (
-    <div className="relative min-h-[600px]">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-100">
-                <Star size={24} fill="currentColor" />
-              </div>
-              Minha Carteira (CRM)
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">Gestão de contatos que já converteram ou estão em negociação avançada.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={fetchClients}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
-              title="Atualizar lista"
-            >
-              <RefreshCw size={18} />
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-              <Download size={18} className="text-gray-400" /> Exportar Planilha
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-2 text-amber-600 mb-2">
-              <Star size={16} fill="currentColor" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Total de Clientes</span>
-            </div>
-            <p className="text-3xl font-black text-gray-900">{contacts.length}</p>
-          </div>
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-2 text-primary-600 mb-2">
-              <MessageSquare size={16} />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-primary-500">Conversas Ativas</span>
-            </div>
-            <p className="text-3xl font-black text-gray-900">{contacts.filter(c => c.totalMensagens && c.totalMensagens > 0).length}</p>
-          </div>
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-2 text-green-600 mb-2">
-              <Calendar size={16} />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-green-500">Novos este Mês</span>
-            </div>
-            <p className="text-3xl font-black text-gray-900">
-              {contacts.filter(c => {
-                const d = new Date(c.data_criacao);
-                const now = new Date();
-                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-              }).length}
-            </p>
-          </div>
-        </div>
-
-        {/* Table & Search */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-gray-50 bg-gray-50/30">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Buscar cliente na carteira..." 
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-sm"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-              <Loader2 size={40} className="animate-spin mb-4 text-amber-500" />
-              <p className="font-medium">Carregando carteira (CRM)...</p>
-            </div>
-          ) : filteredClients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center text-amber-200 mb-4">
-                <Star size={32} />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">
-                Sua carteira está crescendo!
-              </h3>
-              <p className="text-gray-500 text-sm max-w-xs">
-                Motive seus leads no CRM para o status "Cliente" e eles aparecerão automaticamente aqui.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 border-b border-gray-100">
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{role === 'admin' ? 'Empresa / Email' : 'Cliente'}</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden md:table-cell">{role === 'admin' ? 'WhatsApp' : 'WhatsApp'}</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">{role === 'admin' ? 'Status' : 'Última Interação'}</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 transition-all">
-                  {filteredClients.map((client) => {
-                    const color = getAvatarColor(client.id || client.telefone);
-                    const isActive = selectedContact?.id === client.id;
-                    return (
-                      <tr 
-                        key={client.id} 
-                        onClick={() => setSelectedContact(client)}
-                        className={`hover:bg-amber-50/20 transition-colors group cursor-pointer ${isActive ? 'bg-amber-50/30' : ''}`}
-                      >
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-xl ${color} text-white flex items-center justify-center text-sm font-black flex-shrink-0 shadow-sm`}>
-                              {getInitials(client.nome)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-gray-900">{client.nome}</p>
-                              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">
-                                {role === 'admin' ? client.email : `Cliente desde ${formatDate(client.data_criacao)}`}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 hidden md:table-cell">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                            <div className={`w-2 h-2 rounded-full ${client.whatsapp_status === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                              {client.whatsapp_status === 'connected' ? 'Conectado' : 'Desconectado'}
-                            </span>
-                            {client.telefone && <span className="ml-2">{formatPhone(client.telefone)}</span>}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 hidden sm:table-cell">
-                          {role === 'admin' ? (
-                            <StatusBadge status={client.plano || 'Trial'} />
-                          ) : (
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <Clock size={13} className="text-gray-400" />
-                              {formatRelative(client.ultimaInteracao || client.data_criacao)}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-5 text-right">
-                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {role !== 'admin' && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); openInbox(client.telefone); }}
-                                className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
-                                title="Conversar"
-                              >
-                                <MessageSquare size={18} />
-                              </button>
-                            )}
-                            {role !== 'admin' && (
-                              <button 
-                                onClick={(e) => handleDeleteClient(e, client)}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                title="Remover"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            )}
-                            {role === 'admin' && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); onTabChange?.('admin'); }}
-                                className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
-                                title="Ver no Painel Admin"
-                              >
-                                <ExternalLink size={18} />
-                              </button>
-                            )}
-                            <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all">
-                              <ChevronRight size={20} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Side Panel Overlay */}
       <AnimatePresence>
-        {selectedContact && (
+        {selecionado && (
           <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedContact(null)}
-              className="fixed inset-0 bg-black/5 backdrop-blur-[1px] z-30"
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSelecionado(null)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"
             />
-            <SidePanel 
-              contact={selectedContact}
-              onClose={() => setSelectedContact(null)}
-              onTabChange={onTabChange}
-              onStatusChange={handleStatusChange}
-              isAdminMode={role === 'admin'}
+            <FichaCliente
+              contactId={selecionado}
+              onClose={() => setSelecionado(null)}
+              onChanged={carregar}
             />
           </>
         )}
