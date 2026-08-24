@@ -13,6 +13,8 @@ import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { invalidateCache, cacheKey } from '../lib/redisCache.js';
+import { normalizePhone } from '../lib/phoneHelper.js';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -30,6 +32,97 @@ const pick = (source: any, fields: readonly string[]) =>
   Object.fromEntries(
     Object.entries(source || {}).filter(([k]) => fields.includes(k))
   );
+
+// ─── POST /api/v2/clients ─────────────────────────────────────────────────
+// Cadastro manual: cria o contato já como cliente, com a ficha.
+//
+// Se o telefone informado já existe na base, o contato existente é promovido
+// e atualizado em vez de duplicado — senão o mesmo número passaria a ter dois
+// registros e a conversa do WhatsApp ficaria ligada ao antigo.
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const nome = String(req.body?.nome || '').trim();
+
+  if (!nome) {
+    return res.status(400).json({ success: false, error: 'O nome é obrigatório.' });
+  }
+
+  try {
+    const telefone = normalizePhone(String(req.body?.telefone || ''));
+    const dadosContato = pick(req.body, CONTACT_FIELDS);
+    const dadosFicha = pick(req.body, PROFILE_FIELDS);
+
+    // 1. Já existe alguém com este telefone?
+    let contactId: string | null = null;
+    if (telefone) {
+      const idPadrao = `${userId}_${telefone}`;
+      const { data: exato } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('id', idPadrao)
+        .maybeSingle();
+
+      if (exato) {
+        contactId = exato.id;
+      } else {
+        // Base antiga pode ter o número gravado sem o 55 ou com o 9 a mais;
+        // os últimos 8 dígitos são a parte estável do número no Brasil.
+        const { data: parecido } = await supabase
+          .from('contacts')
+          .select('id')
+          .eq('user_id', userId)
+          .ilike('telefone', `%${telefone.slice(-8)}`)
+          .limit(1);
+        if (parecido?.length) contactId = parecido[0].id;
+      }
+    }
+
+    // 2. Cria ou atualiza o contato
+    if (contactId) {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ ...dadosContato, nome, is_client: true })
+        .eq('id', contactId)
+        .eq('user_id', userId);
+      if (error) throw error;
+    } else {
+      // Sem telefone o contato não tem como casar com uma conversa: recebe um
+      // id próprio, para não colidir com o padrão {userId}_{telefone}.
+      contactId = telefone ? `${userId}_${telefone}` : `${userId}_manual_${randomUUID()}`;
+      const { error } = await supabase.from('contacts').insert({
+        ...dadosContato,
+        id: contactId,
+        user_id: userId,
+        nome,
+        telefone: telefone || '',
+        status_funil: 'Lead',
+        source: 'manual',
+        is_client: true,
+        data_criacao: new Date().toISOString(),
+        primeiro_contato: new Date().toISOString(),
+        ultima_interacao: new Date().toISOString(),
+        total_mensagens: 0,
+      });
+      if (error) throw error;
+    }
+
+    // 3. Ficha comercial
+    const { error: fichaErr } = await supabase
+      .from('client_profiles')
+      .upsert(
+        { contact_id: contactId, user_id: userId, ...dadosFicha },
+        { onConflict: 'contact_id' }
+      );
+    if (fichaErr) throw fichaErr;
+
+    await invalidateCache(cacheKey.contacts(userId)).catch(() => {});
+    res.json({ success: true, data: { id: contactId } });
+  } catch (err: any) {
+    console.error('[ClientAPI] POST error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // ─── GET /api/v2/clients ──────────────────────────────────────────────────
 // Lista a carteira com a ficha embutida, mais o resumo de receita.
