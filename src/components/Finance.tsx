@@ -62,6 +62,28 @@ export default function Finance() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Posição do menu de ações na tela. O menu é 'fixed' porque o card da
+  // tabela tem overflow-hidden: um dropdown absolute dentro da célula era
+  // cortado na última linha, e as opções sumiam.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  const ALTURA_MENU = 92;  // dois itens + padding
+  const LARGURA_MENU = 144; // w-36
+
+  const abrirMenu = (e: React.MouseEvent<HTMLButtonElement>, id: string) => {
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+      return;
+    }
+    const r = e.currentTarget.getBoundingClientRect();
+    // Sem espaço abaixo, abre para cima em vez de sair da janela
+    const abreParaCima = r.bottom + ALTURA_MENU + 12 > window.innerHeight;
+    setMenuPos({
+      top: abreParaCima ? r.top - ALTURA_MENU - 8 : r.bottom + 8,
+      left: Math.max(12, r.right - LARGURA_MENU),
+    });
+    setOpenMenuId(id);
+  };
   const [isSaving, setIsSaving] = useState(false);
   const [gerandoMensalidades, setGerandoMensalidades] = useState(false);
   
@@ -132,6 +154,19 @@ export default function Finance() {
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  // O menu é posicionado em coordenadas de tela; rolar a página o deixaria
+  // deslocado da linha, então fecha junto.
+  useEffect(() => {
+    if (!openMenuId) return;
+    const fechar = () => setOpenMenuId(null);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    return () => {
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('resize', fechar);
+    };
+  }, [openMenuId]);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -751,7 +786,7 @@ export default function Finance() {
                     </td>
                     <td className="px-8 py-6 text-right relative">
                       <button 
-                        onClick={() => setOpenMenuId(openMenuId === transaction.id ? null : transaction.id)}
+                        onClick={(e) => abrirMenu(e, transaction.id)}
                         className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                       >
                         <MoreVertical size={16} />
@@ -765,7 +800,8 @@ export default function Finance() {
                               initial={{ opacity: 0, scale: 0.95, y: -10 }}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                              className="absolute right-8 top-16 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-[160] overflow-hidden"
+                              style={{ position: 'fixed', top: menuPos?.top ?? 0, left: menuPos?.left ?? 0 }}
+                              className="w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-[160] overflow-hidden"
                             >
                               <button 
                                 onClick={() => handleEditClick(transaction)}
