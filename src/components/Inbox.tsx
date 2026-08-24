@@ -1610,6 +1610,13 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance'>(initialTab || 'conversations');
+
+  // /inbox e /kanban renderizam ESTE mesmo componente na mesma posição da
+  // árvore: o React troca as props sem remontar, então initialTab — lido só no
+  // useState inicial — era ignorado e a tela continuava na aba anterior.
+  useEffect(() => {
+    setActiveTab(initialTab || 'conversations');
+  }, [initialTab]);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
   const [isRecording, setIsRecording] = useState(false);
