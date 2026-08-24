@@ -39,7 +39,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
         { id: 'primeiro_atend', title: 'Primeiro Atend.', desc: 'Em conversa ativa com a equipe',         dot: 'bg-blue-400',    color: 'bg-blue-50',     borderColor: 'border-blue-100',    titleColor: 'text-blue-600' },
         { id: 'sem_resposta',   title: 'Sem Resposta',    desc: 'Aguardando retorno do lead',             dot: 'bg-amber-400',   color: 'bg-amber-50',    borderColor: 'border-amber-100',   titleColor: 'text-amber-600' },
         { id: 'qualificado',    title: 'Qualificado',     desc: 'Interesse confirmado, pronto para agendar', dot: 'bg-violet-400', color: 'bg-violet-50',  borderColor: 'border-violet-100',  titleColor: 'text-violet-600' },
-        { id: 'agendamento',    title: 'Agendamento',     desc: 'Consulta marcada no calendário',         dot: 'bg-indigo-400',  color: 'bg-indigo-50',   borderColor: 'border-indigo-100',  titleColor: 'text-indigo-600' },
+        { id: 'agendamento',    title: 'Agendamento',     desc: 'Compromisso marcado no calendário',         dot: 'bg-indigo-400',  color: 'bg-indigo-50',   borderColor: 'border-indigo-100',  titleColor: 'text-indigo-600' },
         { id: 'cliente',        title: 'Cliente',         desc: 'Conversão concluída',                    dot: 'bg-emerald-400', color: 'bg-emerald-50',  borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
       ]
     : [

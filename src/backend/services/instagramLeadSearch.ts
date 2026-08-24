@@ -60,15 +60,15 @@ export function fallbackSearchTerms(niche: string, city: string): string[] {
   const termos = [
     `${n} ${c}`,
     `${stripAccents(n)} ${stripAccents(c)}`,
-    `clinica ${stripAccents(n)} ${stripAccents(c)}`,
-    `dr ${stripAccents(n)} ${stripAccents(c)}`,
+    // Formatos que qualquer ramo usa, sem assumir segmento
+    `${stripAccents(n)} em ${stripAccents(c)}`,
   ];
   return [...new Set(termos.map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean))];
 }
 
 /**
- * Pede à IA variações do termo: grafia correta com acento, especialidades
- * correlatas e formatos que profissionais de saúde usam no perfil. É uma
+ * Pede à IA variações do termo: grafia correta com acento,
+ * sinônimos e serviços correlatos do ramo buscado — seja ele qual for. É uma
  * chamada por varredura — barata perto do custo de cada run do Apify.
  */
 export async function buildSearchTerms(niche: string, city: string, maxTerms = 5): Promise<string[]> {
@@ -76,11 +76,12 @@ export async function buildSearchTerms(niche: string, city: string, maxTerms = 5
 
   try {
     const prompt =
-      `Gere termos de busca para encontrar perfis de Instagram de profissionais e clínicas ` +
-      `de "${niche}" na cidade de "${city}" (Brasil).\n\n` +
+      `Gere termos de busca para encontrar perfis de Instagram de negócios e ` +
+      `profissionais do ramo "${niche}" na cidade de "${city}" (Brasil).\n\n` +
       `Regras:\n` +
       `- Use a grafia correta, COM acentos, do nicho e da cidade.\n` +
-      `- Inclua especialidades e procedimentos correlatos que esse profissional costuma anunciar.\n` +
+      `- Inclua sinônimos do ramo e os serviços que esse tipo de negócio costuma anunciar.\n` +
+      `- Não presuma um segmento: siga exatamente o ramo informado.\n` +
       `- Cada termo deve ter de 2 a 4 palavras e conter o nome da cidade.\n` +
       `- Nada de hashtags, aspas ou operadores de busca.\n\n` +
       `Retorne estritamente JSON: {"termos":["...","..."]}`;
@@ -162,7 +163,7 @@ export async function searchProfiles(params: {
 
 /**
  * Valida um telefone brasileiro de verdade. Sem isso entram números como
- * 3728732372111 e 3298886833332 — pedaços de CRO, CNPJ e endereço que a
+ * 3728732372111 e 3298886833332 — pedaços de registro profissional, CNPJ e
  * regex genérica da bio captura e que passariam por um teste de comprimento.
  */
 export function normalizeBrazilPhone(raw: string): string | null {
@@ -201,7 +202,7 @@ function linksOf(profile: InstagramProfile): string[] {
 /**
  * Extrai o telefone do perfil. Ordem: link de WhatsApp (mais confiável) → bio.
  *
- * O padrão wa.me/<numero> era o que mais aparecia nos perfis de saúde e era
+ * O padrão wa.me/<numero> é o que mais aparece nos perfis de negócio e era
  * justamente o que a regex antiga não pegava: ela esperava os dígitos colados
  * em "wa.me", sem a barra, então só casava api.whatsapp.com.
  */
@@ -246,20 +247,20 @@ export function hasAggregatorLink(profile: InstagramProfile): boolean {
 // 4. RELEVÂNCIA E SCORES
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Conselhos profissionais da saúde — sinal forte de que o perfil é do ramo. */
-const REGISTROS_SAUDE = /\b(CRO|CRM|CRP|CRN|CREFITO|COREN|CRF|CRMV|CRBM|CREF|RQE)\b[\s\-:]*[A-Z]{0,2}[\s\-]?\d{3,6}/i;
-
-const TERMOS_SAUDE = /(odonto|dentist|ortodont|implante|harmoniza|estétic|estetic|dermato|fisioterap|nutricion|psicólog|psicolog|pediatr|ginecolog|cardiolog|oftalmolog|clínic|clinic|consultóri|consultori|cirurgi|médic|medic|saúde|saude|enfermag|fonoaudiolog|terapeut|biomédic|biomedic|farmac|veterinári|veterinari)/i;
-
-const CATEGORIAS_SAUDE = /(dentist|doctor|medical|health|hospital|clinic|dental|beauty|spa|nutrition|psycholog|physical therap|pharmac|veterinar)/i;
-
 /**
- * Mede o quanto o perfil parece ser um profissional de saúde da cidade
- * buscada. Serve para ordenar e para descartar o que claramente não é do ramo.
+ * Relevância do perfil para a busca — sem nenhum vocabulário de segmento.
+ *
+ * A versão anterior media "parece profissional de saúde?" com listas fixas
+ * (CRO/CRM, odonto, dermato…). Isso servia a um nicho só: para uma busca de
+ * "advogado", "personal trainer" ou "arquiteto", todo perfil bom pontuava
+ * zero e era descartado. Agora os sinais são derivados do que o usuário
+ * pediu — nicho e cidade — mais indícios de que o perfil é um NEGÓCIO, que
+ * valem para qualquer ramo.
  */
-export function healthRelevance(profile: InstagramProfile, niche: string, city: string): {
+export function profileRelevance(profile: InstagramProfile, niche: string, city: string): {
   score: number;
   sinais: string[];
+  doRamo: boolean;
 } {
   const sinais: string[] = [];
   let score = 0;
@@ -268,33 +269,65 @@ export function healthRelevance(profile: InstagramProfile, niche: string, city: 
   const nome = profile.fullName || '';
   const username = profile.username || '';
   const categoria = profile.businessCategoryName || '';
-  const texto = `${nome} ${bio} ${username}`;
+  const texto = stripAccents(`${nome} ${bio} ${username}`.toLowerCase());
 
-  if (REGISTROS_SAUDE.test(bio)) { score += 3; sinais.push('registro profissional'); }
-  if (CATEGORIAS_SAUDE.test(categoria)) { score += 2; sinais.push(`categoria: ${categoria}`); }
-  if (TERMOS_SAUDE.test(texto)) { score += 2; sinais.push('termos da área'); }
+  // Palavras do nicho pedido. Curtas demais ("de", "e") viram ruído e saem.
+  // Compara pelo RADICAL, não pela palavra inteira: o perfil raramente usa a
+  // mesma flexão que o usuário digitou — "arquiteto" precisa casar com
+  // "Arquitetura", "advogado" com "Advogada", "dentista" com "Dentistas".
+  const radical = (w: string) => (w.length >= 6 ? w.slice(0, w.length - 2) : w);
+  const palavrasNicho = stripAccents(niche.toLowerCase())
+    .split(/\s+/)
+    .filter(w => w.length >= 4)
+    .map(radical);
 
-  // Menção à cidade (sem acento, para casar "muriae" com "Muriaé")
+  // 1. O ramo aparece no texto do perfil
+  const acertos = palavrasNicho.filter(w => texto.includes(w));
+  const nichoCompleto = palavrasNicho.length > 0 && acertos.length === palavrasNicho.length;
+  if (acertos.length) {
+    score += nichoCompleto ? 3 : 2;
+    sinais.push(`nicho no perfil (${acertos.join(', ')})`);
+  }
+
+  // 2. A categoria do Instagram é uma autodeclaração de ramo — quando bate com
+  //    o que foi buscado, é o sinal mais confiável que existe no perfil.
+  //    Categoria que NÃO bate não pontua: "Pet Store" não ajuda numa busca por
+  //    advogado, e dar ponto por existir fazia todo negócio empatar.
+  const catNorm = stripAccents(categoria.toLowerCase());
+  const categoriaCasa = Boolean(catNorm) && palavrasNicho.some(w => catNorm.includes(w));
+  if (categoriaCasa) {
+    score += 2;
+    sinais.push(`categoria: ${categoria}`);
+  }
+
+  // Sem nenhum dos dois, é um negócio qualquer que a busca aberta trouxe junto
+  const doRamo = acertos.length > 0 || categoriaCasa;
+
+  // 3. Região pedida
   const cidadeNorm = stripAccents(city.toLowerCase()).trim();
-  if (cidadeNorm && stripAccents(texto.toLowerCase()).includes(cidadeNorm)) {
+  if (cidadeNorm && texto.includes(cidadeNorm)) {
     score += 2;
     sinais.push('cidade no perfil');
   }
 
-  // Nicho pedido aparecendo literalmente
-  const nichoNorm = stripAccents(niche.toLowerCase()).trim();
-  if (nichoNorm && stripAccents(texto.toLowerCase()).includes(nichoNorm)) {
+  // 4. Indícios de que é negócio, e não perfil pessoal. Valem pouco sozinhos:
+  //    servem para desempatar, nunca para qualificar.
+  if (profile.isBusinessAccount) {
     score += 1;
-    sinais.push('nicho no perfil');
+    sinais.push('conta comercial');
+  }
+  if (/\b(agende|agendar|marque|orcament|orçament|atendimento|whatsapp|contato|delivery|pedidos|consultoria)\b/i.test(bio)) {
+    score += 1;
+    sinais.push('chamada para contato');
+  }
+  if (/\b(rua|av\.|avenida|endereco|endereço|unidade|loja)\b/i.test(bio)) {
+    score += 1;
+    sinais.push('endereço na bio');
   }
 
-  if (/^(dr|dra)\.?\s|^(dr|dra)\./i.test(nome) || /^(dr|dra)[._]/i.test(username)) {
-    score += 1;
-    sinais.push('trata-se por Dr/Dra');
-  }
-
-  return { score, sinais };
+  return { score, sinais, doRamo };
 }
+
 
 /** Dor e oportunidade, no mesmo espírito do fluxo do Google Maps. */
 export function scoreProfile(profile: InstagramProfile): { pain_score: number; opportunity_score: number } {
@@ -359,7 +392,7 @@ export async function runInstagramLeadScan(params: {
   // Mais relevantes primeiro: com o teto de `limit`, é quem entra na campanha.
   const candidatos = rawProfiles
     .filter(p => !p.private)
-    .map(p => ({ profile: p, rel: healthRelevance(p, niche, city) }))
+    .map(p => ({ profile: p, rel: profileRelevance(p, niche, city) }))
     .sort((a, b) => b.rel.score - a.rel.score);
 
   console.log(`[InstagramSearch] ${rawProfiles.length} perfis únicos; ${candidatos.length} públicos.`);
@@ -372,9 +405,12 @@ export async function runInstagramLeadScan(params: {
     const phone = extractPhone(profile);
 
     // Com telefone, basta um sinal da área. Sem telefone o lead só vale se o
-    // perfil for claramente do ramo E da região — senão entram clínicas de
+    // perfil for claramente do ramo E da região — senão entram negócios de
     // outras cidades e até de outros países, que a busca aberta traz junto.
-    if (!phone && rel.score < 3) continue;
+    // Sem telefone, o lead só vale se o perfil for reconhecidamente do ramo
+    // buscado (texto ou categoria) — senão a busca aberta enche a campanha de
+    // negócios de outros segmentos que por acaso citam a cidade.
+    if (!phone && !rel.doRamo) continue;
     if (phone && rel.score === 0) continue;
 
     const biography = profile.biography || '';
@@ -398,7 +434,7 @@ export async function runInstagramLeadScan(params: {
         `Categoria: ${profile.businessCategoryName || 'Não informada'}\n` +
         `Seguidores: ${followers || 'Não informado'}\nBiografia: ${biography || 'Não informado'}\n` +
         `Site: ${website || 'Não possui'}\n` +
-        `Sinais da área da saúde: ${rel.sinais.join(', ') || 'nenhum'}\n` +
+        `Sinais de relevância: ${rel.sinais.join(', ') || 'nenhum'}\n` +
         `Score de Dor: ${pain_score}/5\nScore de Oportunidade: ${opportunity_score}/5${aiContextStr}\n\n` +
         `Retorne estritamente JSON:\n{"observacao_ia":"..."}`;
       const aiRes = await generateAIResponse(aiPrompt, [{ role: 'user', content: 'Gere a análise.' }]);

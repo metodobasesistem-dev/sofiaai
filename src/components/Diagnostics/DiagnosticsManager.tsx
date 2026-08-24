@@ -681,7 +681,7 @@ export default function DiagnosticsManager() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Clínica Odonto Riso"
+                    placeholder="Ex: Estúdio Alpha"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
@@ -692,7 +692,7 @@ export default function DiagnosticsManager() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Dentista / Estética"
+                    placeholder="Ex: Arquitetura / Consultoria"
                     value={niche}
                     onChange={(e) => setNiche(e.target.value)}
                     className="w-full px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"

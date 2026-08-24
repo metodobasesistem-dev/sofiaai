@@ -146,7 +146,7 @@ export default function NotificationBell({ user, onTabChange }: Props) {
             id: `appt-${a.id}`,
             type: 'appointment',
             title: 'Agendamento Hoje',
-            body: `${a.summary || 'Consulta'} com ${a.client_name}${a.time ? ` às ${a.time.slice(0, 5)}` : ''}`,
+            body: `${a.summary || 'Agendamento'} com ${a.client_name}${a.time ? ` às ${a.time.slice(0, 5)}` : ''}`,
           });
         }
       }

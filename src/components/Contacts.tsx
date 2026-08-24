@@ -232,7 +232,7 @@ const SidePanel = ({
                        <Calendar size={18} />
                     </div>
                     <div>
-                      <p className="text-xs font-black text-slate-900">{appt.service_name || 'Consulta'}</p>
+                      <p className="text-xs font-black text-slate-900">{appt.service_name || 'Agendamento'}</p>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                         {new Date(appt.date).toLocaleDateString('pt-BR')} às {appt.time}
                       </p>
