@@ -312,7 +312,9 @@ export default function App() {
       case 'contacts':
         return <Contacts onTabChange={handleTabChange} />;
       case 'clients':
-        return <Clients onTabChange={handleTabChange} user={user} role={role} />;
+        // Carteira do inquilino (CRM). A gestão dos inquilinos da plataforma
+        // vive no Painel Admin — são coisas diferentes.
+        return <Clients />;
       case 'meta_templates':
         return <MetaTemplatesAdminPage />;
       case 'integrations':

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Search, Filter, LayoutGrid, Ticket, User, MessageCircle, ArrowRight, Calendar, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { 
   format, 
@@ -47,8 +48,30 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
         { id: 'resolved', title: 'Resolvidos', desc: '', dot: 'bg-emerald-400', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
       ];
 
-  const FUNIL_COMPAT: Record<string, string> = { 'Lead': 'novo_lead', 'Qualificado': 'qualificado', 'Agendado': 'agendamento', 'Resolvido': 'cliente' };
+  // Etapa do funil (banco) ↔ coluna do quadro. 'Cliente' NÃO é etapa de funil:
+  // é a flag contacts.is_client, a mesma que a tela de Clientes usa. Antes
+  // 'Resolvido' era exibido como Cliente, o que fazia a mesma pessoa aparecer
+  // como cliente aqui e como lead na lista de contatos.
+  const FUNIL_COMPAT: Record<string, string> = {
+    'Lead': 'novo_lead',
+    'Qualificado': 'qualificado',
+    'Agendado': 'agendamento',
+    'Resolvido': 'resolvido',
+  };
   const normFunil = (s?: string) => { if (!s) return 'novo_lead'; return FUNIL_COMPAT[s] ?? s; };
+
+  // Coluna → valor aceito pelo CHECK de contacts.status_funil. As colunas
+  // 'primeiro_atend' e 'sem_resposta' não têm equivalente no banco: são
+  // visuais e por isso não gravam etapa (ver nota no handleDrop).
+  const COLUNA_PARA_FUNIL: Record<string, string> = {
+    novo_lead: 'Lead',
+    qualificado: 'Qualificado',
+    agendamento: 'Agendado',
+    resolvido: 'Resolvido',
+  };
+
+  /** A coluna Cliente é alimentada pela flag, não pela etapa. */
+  const cardEhCliente = (t: any) => t.is_client === true;
 
   const getCards = (columnId: string) => {
     return threads.filter(t => {
@@ -58,7 +81,9 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
 
       // 2. Filtro de Modo (Funil vs Ticket)
       const matchMode = viewMode === 'funil'
-        ? normFunil(t.funilStatus) === columnId
+        ? (columnId === 'cliente'
+            ? cardEhCliente(t)
+            : !cardEhCliente(t) && normFunil(t.funilStatus) === columnId)
         : (t.ticketStatus || 'open') === columnId;
       if (!matchMode) return false;
 
@@ -108,45 +133,66 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     if (!card) return;
 
     // Prevent unnecessary updates
-    if (viewMode === 'funil' && card.funilStatus === targetColumnId) return;
+    if (viewMode === 'funil' && targetColumnId === 'cliente' && card.is_client) return;
+    if (viewMode === 'funil' && targetColumnId !== 'cliente' && !card.is_client && card.funilStatus === targetColumnId) return;
     if (viewMode === 'ticket' && card.ticketStatus === targetColumnId) return;
 
-    // Update optimistically
+    // Atualização otimista — 'cliente' mexe na flag, as demais na etapa
     onThreadsChange(prev => prev.map(t => {
-      if (t.id === draggedCardId) {
-        if (viewMode === 'funil') {
-          return { ...t, funilStatus: targetColumnId, ticketStatus: targetColumnId === 'cliente' ? 'resolved' : 'open' };
-        } else {
-          return { ...t, ticketStatus: targetColumnId, funilStatus: targetColumnId === 'resolved' ? 'cliente' : 'novo_lead' };
+      if (t.id !== draggedCardId) return t;
+      if (viewMode === 'funil') {
+        if (targetColumnId === 'cliente') {
+          return { ...t, is_client: true, ticketStatus: 'resolved' };
         }
+        return {
+          ...t,
+          is_client: false,
+          funilStatus: targetColumnId,
+          ticketStatus: targetColumnId === 'resolvido' ? 'resolved' : 'open',
+        };
       }
-      return t;
+      return { ...t, ticketStatus: targetColumnId };
     }));
 
-    // Send to Supabase
+    // Persistência
+    //
+    // Antes gravava o id da COLUNA em contacts.status_funil ('novo_lead',
+    // 'cliente'…), valores que o CHECK da coluna não aceita
+    // (Lead/Qualificado/Agendado/Resolvido) — toda movimentação de card
+    // falhava no banco e voltava ao lugar no reload.
     try {
       if (viewMode === 'funil') {
-        const ticketStatusUpdate = targetColumnId === 'cliente' ? 'resolved' : 'open';
-        if (card.contactId) {
-          await supabase.from('contacts').update({ status_funil: targetColumnId }).eq('id', card.contactId);
+        const contactId = card.contactId;
+
+        if (targetColumnId === 'cliente') {
+          // Vira cliente: sai dos leads e ganha ficha comercial.
+          if (!contactId) throw new Error('Contato ainda não sincronizado');
+          await promoteToClient(contactId);
+          onThreadsChange(prev => prev.map(t => t.id === draggedCardId ? { ...t, is_client: true } : t));
         } else {
-          const cleanPhone = (card.remoteJid || '').split('@')[0].replace(/\D/g, '');
-          await supabase.from('contacts').update({ status_funil: targetColumnId }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+          // Saiu da coluna Cliente: volta a ser lead.
+          if (card.is_client && contactId) {
+            await demoteClient(contactId);
+            onThreadsChange(prev => prev.map(t => t.id === draggedCardId ? { ...t, is_client: false } : t));
+          }
+
+          const etapa = COLUNA_PARA_FUNIL[targetColumnId];
+          if (etapa && contactId) {
+            const { error } = await supabase.from('contacts').update({ status_funil: etapa }).eq('id', contactId);
+            if (error) throw error;
+          }
+          // 'primeiro_atend' e 'sem_resposta' não existem no funil salvo:
+          // o card se move na tela, mas não há etapa correspondente para gravar.
+
+          const ticketStatusUpdate = targetColumnId === 'resolvido' ? 'resolved' : 'open';
+          await supabase.from('threads').update({ ticket_status: ticketStatusUpdate }).eq('id', draggedCardId);
         }
-        await supabase.from('threads').update({ ticket_status: ticketStatusUpdate }).eq('id', draggedCardId);
       } else {
-        const funilStatusUpdate = targetColumnId === 'resolved' ? 'cliente' : 'novo_lead';
         await supabase.from('threads').update({ ticket_status: targetColumnId }).eq('id', draggedCardId);
-        if (card.contactId) {
-          await supabase.from('contacts').update({ status_funil: funilStatusUpdate }).eq('id', card.contactId);
-        } else {
-          const cleanPhone = (card.remoteJid || '').split('@')[0].replace(/\D/g, '');
-          await supabase.from('contacts').update({ status_funil: funilStatusUpdate }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-        }
       }
-      toast.success(`Movido para ${targetColumnId}`);
-    } catch (err) {
-      toast.error('Erro ao mover card');
+      toast.success('Card movido');
+    } catch (err: any) {
+      toast.error('Erro ao mover card: ' + (err?.message || ''));
     }
     setDraggedCardId(null);
   };

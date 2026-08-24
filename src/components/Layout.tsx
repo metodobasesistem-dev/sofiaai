@@ -214,13 +214,13 @@ export default function Layout({
 
   // Auto-expandir os submenus se a aba correspondente estiver ativa
   useEffect(() => {
-    if (['admin', 'sofia_config', 'overview', 'clients', 'meta_templates', 'diagnostics'].includes(activeTab)) {
+    if (['admin', 'sofia_config', 'overview', 'meta_templates', 'diagnostics'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, admin_menu: true }));
     }
     if (['lead_radar'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, prospeccao_menu: true }));
     }
-    if (['inbox', 'kanban', 'contacts'].includes(activeTab)) {
+    if (['inbox', 'kanban', 'contacts', 'clients'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, suporte_menu: true }));
     }
     if (['finance'].includes(activeTab)) {
@@ -250,7 +250,6 @@ export default function Layout({
             { id: 'admin', label: 'Painel Admin', icon: <Shield size={13} /> },
             { id: 'sofia_config', label: 'Configurações Sofia', icon: <Bot size={13} /> },
             { id: 'overview', label: 'Visão Geral', icon: <Activity size={13} /> },
-            { id: 'clients', label: 'Carteira', icon: <Star size={13} /> },
             { id: 'meta_templates', label: 'Templates', icon: <FileText size={13} className="text-violet-500" /> },
             { id: 'diagnostics', label: 'Diagnósticos', icon: <Rocket size={13} className="text-emerald-500" /> },
           ]
@@ -303,7 +302,8 @@ export default function Layout({
               label: 'Atendimento'
             },
             { id: 'kanban', icon: <Layers size={13} />, label: 'Kanban', minPlan: 'Pro' },
-            { id: 'contacts', icon: <Users size={13} />, label: 'Contatos' },
+            { id: 'contacts', icon: <Users size={13} />, label: 'Leads' },
+            { id: 'clients', icon: <Star size={13} />, label: 'Clientes' },
           ]
         }
       ]

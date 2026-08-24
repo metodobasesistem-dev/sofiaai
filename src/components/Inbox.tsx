@@ -59,6 +59,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -2705,10 +2706,22 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 <button
                   onClick={async () => {
                     const newVal = !activeThread.is_client;
-                    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                    await supabase.from('contacts').update({ is_client: newVal }).ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
-                    toast.success(newVal ? 'Marcado como Cliente! ⭐' : 'Etiqueta de Cliente removida.');
+                    // Passa pela API da carteira em vez de escrever direto em
+                    // contacts: promover precisa abrir a ficha comercial junto,
+                    // senão nasce cliente sem ficha na tela de Clientes.
+                    const contactId = activeThread.contactId;
+                    if (!contactId) {
+                      toast.error('Contato ainda não sincronizado. Tente novamente em instantes.');
+                      return;
+                    }
+                    try {
+                      if (newVal) await promoteToClient(contactId);
+                      else await demoteClient(contactId);
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
+                      toast.success(newVal ? 'Promovido a Cliente! ⭐' : 'Devolvido para os leads.');
+                    } catch (err: any) {
+                      toast.error('Erro: ' + err.message);
+                    }
                   }}
                   className={`w-full flex items-center justify-center gap-2 px-3 py-3 rounded-2xl border text-[12px] font-black uppercase tracking-widest transition-all
                     ${activeThread.is_client 
