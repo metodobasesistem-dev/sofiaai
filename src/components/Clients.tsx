@@ -10,11 +10,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, Users, Phone, Mail, Instagram, Globe, Loader2, X, RefreshCw,
-  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet, Plus, Trophy,
+  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet, Plus, Trophy, Trash2, SlidersHorizontal,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   listClients, getClient, updateClient, demoteClient, createClient,
+  listClientFields, createClientField, deleteClientField,
+  type CampoCliente, type TipoCampoCliente,
   type ClientRecord, type ClientProfile, type ClientsSummary,
 } from '../services/supabaseService';
 import { toast } from 'sonner';
@@ -41,6 +43,15 @@ const formatMoney = (valor?: number | null, moeda = 'BRL') => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: moeda || 'BRL' }).format(Number(valor));
 };
 
+const TIPOS_LABEL: Record<TipoCampoCliente, string> = {
+  texto: 'Texto',
+  numero: 'Número',
+  data: 'Data',
+  selecao: 'Escolha única',
+  multi_selecao: 'Escolha múltipla',
+  booleano: 'Sim / Não',
+};
+
 const CICLOS: Array<{ id: NonNullable<ClientProfile['ciclo']>; label: string }> = [
   { id: 'mensal', label: 'Mensal' },
   { id: 'anual', label: 'Anual' },
@@ -64,14 +75,247 @@ const iniciais = (nome: string) => {
   return (partes.length >= 2 ? partes[0][0] + partes[1][0] : (nome || '?').slice(0, 2)).toUpperCase();
 };
 
+// ── Campos personalizados ─────────────────────────────────────────────────
+
+/** Um campo da ficha, renderizado conforme o tipo que o usuário escolheu. */
+function CampoPersonalizado({
+  campo,
+  valor,
+  onChange,
+}: {
+  campo: CampoCliente;
+  valor: any;
+  onChange: (v: any) => void;
+}) {
+  const classeInput =
+    'w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all';
+
+  if (campo.tipo === 'multi_selecao') {
+    const marcados: string[] = Array.isArray(valor) ? valor : [];
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {campo.opcoes.map(opcao => {
+          const ativo = marcados.includes(opcao);
+          return (
+            <button
+              key={opcao}
+              type="button"
+              onClick={() => onChange(ativo ? marcados.filter(o => o !== opcao) : [...marcados, opcao])}
+              className={`px-3 py-1.5 rounded-lg border text-[12px] font-semibold transition-all ${
+                ativo
+                  ? 'bg-primary-50 border-primary-200 text-primary-700'
+                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              {opcao}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (campo.tipo === 'selecao') {
+    return (
+      <select value={valor ?? ''} onChange={e => onChange(e.target.value)} className={classeInput}>
+        <option value="">Não informado</option>
+        {campo.opcoes.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+
+  if (campo.tipo === 'booleano') {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(!valor)}
+        className={`px-3.5 py-2 rounded-xl border text-[12px] font-bold transition-all ${
+          valor
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : 'bg-white border-slate-200 text-slate-400'
+        }`}
+      >
+        {valor ? 'Sim' : 'Não'}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      type={campo.tipo === 'numero' ? 'number' : campo.tipo === 'data' ? 'date' : 'text'}
+      value={valor ?? ''}
+      onChange={e => onChange(campo.tipo === 'numero' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
+      className={classeInput}
+    />
+  );
+}
+
+/** Criação e remoção dos campos do ramo do usuário. */
+function GerenciarCamposModal({
+  campos,
+  onClose,
+  onMudou,
+}: {
+  campos: CampoCliente[];
+  onClose: () => void;
+  onMudou: () => void;
+}) {
+  const [label, setLabel] = useState('');
+  const [tipo, setTipo] = useState<TipoCampoCliente>('texto');
+  const [opcoesTexto, setOpcoesTexto] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const precisaOpcoes = tipo === 'selecao' || tipo === 'multi_selecao';
+
+  const criar = async () => {
+    if (!label.trim()) {
+      toast.error('Dê um nome ao campo');
+      return;
+    }
+    const opcoes = opcoesTexto.split(/[\n,]/).map(o => o.trim()).filter(Boolean);
+    if (precisaOpcoes && opcoes.length === 0) {
+      toast.error('Liste as opções, uma por linha');
+      return;
+    }
+    try {
+      setSalvando(true);
+      await createClientField({ label: label.trim(), tipo, opcoes });
+      toast.success(`Campo "${label.trim()}" criado`);
+      setLabel('');
+      setOpcoesTexto('');
+      setTipo('texto');
+      onMudou();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const remover = async (campo: CampoCliente) => {
+    if (!window.confirm(`Remover o campo "${campo.label}" da ficha? O que já foi preenchido nos clientes continua guardado.`)) return;
+    try {
+      await deleteClientField(campo.id);
+      toast.success('Campo removido');
+      onMudou();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 20 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-start justify-between shrink-0">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Campos da ficha</h2>
+            <p className="text-[12px] text-slate-500">
+              Crie os campos que fazem sentido no seu ramo. Eles aparecem na ficha de todos os clientes.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {campos.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Campos atuais</p>
+              {campos.map(c => (
+                <div key={c.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-slate-700 truncate">{c.label}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {TIPOS_LABEL[c.tipo]}
+                      {c.opcoes?.length ? ` · ${c.opcoes.join(', ')}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => remover(c)}
+                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remover campo"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 pt-4">Novo campo</p>
+
+            <div>
+              <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Nome</label>
+              <input
+                value={label}
+                onChange={e => setLabel(e.target.value)}
+                placeholder="Ex: Plataformas de anúncio"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Tipo</label>
+              <select
+                value={tipo}
+                onChange={e => setTipo(e.target.value as TipoCampoCliente)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
+              >
+                {Object.entries(TIPOS_LABEL).map(([id, nome]) => (
+                  <option key={id} value={id}>{nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {precisaOpcoes && (
+              <div>
+                <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">
+                  Opções — uma por linha
+                </label>
+                <textarea
+                  rows={3}
+                  value={opcoesTexto}
+                  onChange={e => setOpcoesTexto(e.target.value)}
+                  placeholder={'Meta\nGoogle'}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all resize-none"
+                />
+              </div>
+            )}
+
+            <button
+              onClick={criar}
+              disabled={salvando}
+              className="w-full py-2.5 bg-primary-600 text-white rounded-xl text-[13px] font-semibold hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {salvando ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              Adicionar campo
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+
 // ── Ficha lateral ─────────────────────────────────────────────────────────
 
 function FichaCliente({
   contactId,
+  campos,
   onClose,
   onChanged,
 }: {
   contactId: string;
+  campos: CampoCliente[];
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -98,6 +342,7 @@ function FichaCliente({
           status_contrato: dados.profile?.status_contrato || 'ativo',
           cliente_desde: dados.profile?.cliente_desde || '',
           observacoes: dados.profile?.observacoes || '',
+          custom_fields: dados.profile?.custom_fields || {},
         });
       })
       .catch(e => toast.error('Erro ao carregar ficha: ' + e.message))
@@ -244,6 +489,31 @@ function FichaCliente({
                 />
               </div>
             </div>
+
+            {campos.length > 0 && (
+              <div className="space-y-4 pt-2 border-t border-slate-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-4">
+                  Informações do seu ramo
+                </p>
+                {campos.map(campo => (
+                  <div key={campo.id}>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">
+                      {campo.label}
+                    </label>
+                    <CampoPersonalizado
+                      campo={campo}
+                      valor={(form.custom_fields || {})[campo.chave]}
+                      onChange={v =>
+                        setForm(f => ({
+                          ...f,
+                          custom_fields: { ...(f.custom_fields || {}), [campo.chave]: v },
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {cliente?.appointments && cliente.appointments.length > 0 && (
               <div className="pt-2 border-t border-slate-100">
@@ -433,6 +703,8 @@ export default function Clients() {
   const [busca, setBusca] = useState('');
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
+  const [campos, setCampos] = useState<CampoCliente[]>([]);
+  const [camposAberto, setCamposAberto] = useState(false);
 
   const carregar = async () => {
     try {
@@ -447,7 +719,16 @@ export default function Clients() {
     }
   };
 
-  useEffect(() => { carregar(); }, []);
+  const carregarCampos = async () => {
+    try {
+      setCampos(await listClientFields());
+    } catch (e: any) {
+      // Campos personalizados são complemento: a carteira abre sem eles.
+      console.warn('[Clientes] campos personalizados indisponíveis', e?.message);
+    }
+  };
+
+  useEffect(() => { carregar(); carregarCampos(); }, []);
 
   const filtrados = useMemo(() => {
     const termo = busca.toLowerCase().trim();
@@ -501,6 +782,13 @@ export default function Clients() {
         <div className="flex items-center gap-2">
           <button onClick={carregar} className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all" title="Atualizar">
             <RefreshCw size={18} />
+          </button>
+          <button
+            onClick={() => setCamposAberto(true)}
+            title="Criar campos próprios do seu ramo na ficha do cliente"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+          >
+            <SlidersHorizontal size={16} className="text-slate-400" /> Campos da ficha
           </button>
           <button
             onClick={() => setNovoAberto(true)}
@@ -642,6 +930,16 @@ export default function Clients() {
       </div>
 
       <AnimatePresence>
+        {camposAberto && (
+          <GerenciarCamposModal
+            campos={campos}
+            onClose={() => setCamposAberto(false)}
+            onMudou={carregarCampos}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {novoAberto && (
           <NovoClienteModal onClose={() => setNovoAberto(false)} onCriado={carregar} />
         )}
@@ -657,6 +955,7 @@ export default function Clients() {
             />
             <FichaCliente
               contactId={selecionado}
+              campos={campos}
               onClose={() => setSelecionado(null)}
               onChanged={carregar}
             />
