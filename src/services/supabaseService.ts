@@ -2216,6 +2216,7 @@ export interface ClientProfile {
   ciclo?: 'mensal' | 'anual' | 'unico';
   cliente_desde?: string;
   status_contrato?: 'ativo' | 'pausado' | 'cancelado';
+  encerrado_em?: string | null;
   observacoes?: string | null;
   custom_fields?: Record<string, any>;
 }
@@ -2235,6 +2236,10 @@ export interface ClientRecord {
   profile_picture_url?: string | null;
   profile?: ClientProfile | null;
   appointments?: Array<Record<string, any>>;
+  /** LTV realizado: quanto este cliente já pagou até hoje. */
+  ltv?: number;
+  /** Meses completos desde a entrada (ou até o encerramento). */
+  meses?: number;
 }
 
 export interface ClientsSummary {
@@ -2242,6 +2247,10 @@ export interface ClientsSummary {
   ativos: number;
   mrr: number;
   ticket_medio: number;
+  /** Soma do que toda a carteira já pagou, inclusive quem cancelou. */
+  ltv_total: number;
+  /** Média entre os clientes que já geraram receita. */
+  ltv_medio: number;
 }
 
 export const listClients = async (): Promise<{ data: ClientRecord[]; summary: ClientsSummary }> => {

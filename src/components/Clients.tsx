@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, Users, Phone, Mail, Instagram, Globe, Loader2, X, RefreshCw,
-  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet, Plus,
+  Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet, Plus, Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -178,6 +178,23 @@ function FichaCliente({
       ) : (
         <>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* LTV realizado — o que este cliente já pagou. Fica no topo porque
+                é o número que responde "quanto vale essa relação". */}
+            <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-5 text-white shadow-lg shadow-primary-200">
+              <div className="flex items-center gap-2 mb-1 opacity-90">
+                <Trophy size={14} />
+                <span className="text-[10px] font-black uppercase tracking-widest">LTV realizado</span>
+              </div>
+              <p className="text-3xl font-black tracking-tight">{formatMoney(cliente?.ltv || 0)}</p>
+              <p className="text-[11px] font-medium opacity-80 mt-1">
+                {cliente?.meses
+                  ? `${cliente.meses} ${cliente.meses === 1 ? 'mês' : 'meses'} de casa` +
+                    (cliente.profile?.mensalidade ? ` × ${formatMoney(cliente.profile.mensalidade, cliente.profile.moeda)}` : '')
+                  : 'Ainda no primeiro mês'}
+                {cliente?.profile?.encerrado_em ? ` · encerrado em ${formatDate(cliente.profile.encerrado_em)}` : ''}
+              </p>
+            </div>
+
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contato</p>
               {campo('Nome', 'nome', <Users size={11} />)}
@@ -411,7 +428,7 @@ function NovoClienteModal({ onClose, onCriado }: { onClose: () => void; onCriado
 
 export default function Clients() {
   const [clientes, setClientes] = useState<ClientRecord[]>([]);
-  const [resumo, setResumo] = useState<ClientsSummary>({ total: 0, ativos: 0, mrr: 0, ticket_medio: 0 });
+  const [resumo, setResumo] = useState<ClientsSummary>({ total: 0, ativos: 0, mrr: 0, ticket_medio: 0, ltv_total: 0, ltv_medio: 0 });
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
   const [selecionado, setSelecionado] = useState<string | null>(null);
@@ -461,10 +478,12 @@ export default function Clients() {
   };
 
   const cards = [
-    { label: 'Clientes', valor: String(resumo.total), icone: <Users size={16} />, cor: 'text-primary-600' },
-    { label: 'Ativos', valor: String(resumo.ativos), icone: <TrendingUp size={16} />, cor: 'text-emerald-600' },
-    { label: 'Receita recorrente', valor: formatMoney(resumo.mrr), icone: <Wallet size={16} />, cor: 'text-violet-600' },
-    { label: 'Ticket médio', valor: formatMoney(resumo.ticket_medio), icone: <TrendingUp size={16} />, cor: 'text-amber-600' },
+    { label: 'Clientes', valor: String(resumo.total), icone: <Users size={16} />, cor: 'text-primary-600', dica: 'Total na carteira' },
+    { label: 'Ativos', valor: String(resumo.ativos), icone: <TrendingUp size={16} />, cor: 'text-emerald-600', dica: 'Com contrato ativo' },
+    { label: 'Receita recorrente', valor: formatMoney(resumo.mrr), icone: <Wallet size={16} />, cor: 'text-violet-600', dica: 'Por mês, somando só contratos ativos' },
+    { label: 'Ticket médio', valor: formatMoney(resumo.ticket_medio), icone: <TrendingUp size={16} />, cor: 'text-amber-600', dica: 'Receita recorrente dividida pelos ativos' },
+    { label: 'LTV acumulado', valor: formatMoney(resumo.ltv_total), icone: <Trophy size={16} />, cor: 'text-blue-600', dica: 'Quanto a carteira inteira já pagou desde que entrou' },
+    { label: 'LTV médio', valor: formatMoney(resumo.ltv_medio), icone: <Trophy size={16} />, cor: 'text-slate-600', dica: 'Média por cliente que já gerou receita' },
   ];
 
   return (
@@ -499,9 +518,9 @@ export default function Clients() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map(c => (
-          <div key={c.label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+          <div key={c.label} title={c.dica} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
             <div className={`flex items-center gap-2 mb-2 ${c.cor}`}>
               {c.icone}
               <span className="text-[10px] font-black uppercase tracking-widest">{c.label}</span>
@@ -557,6 +576,7 @@ export default function Clients() {
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:table-cell">Contato</th>
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Mensalidade</th>
+                  <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden lg:table-cell">LTV</th>
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Situação</th>
                 </tr>
               </thead>
@@ -600,6 +620,12 @@ export default function Clients() {
                             {CICLOS.find(x => x.id === c.profile?.ciclo)?.label}
                           </p>
                         )}
+                      </td>
+                      <td className="px-6 py-4 hidden lg:table-cell">
+                        <p className="text-[13px] font-bold text-slate-700">{formatMoney(c.ltv)}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {c.meses ? `${c.meses} ${c.meses === 1 ? 'mês' : 'meses'} de casa` : 'primeiro mês'}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${status.cor}`}>
