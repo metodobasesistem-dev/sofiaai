@@ -61,6 +61,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
+import MotivoPerdaModal from './MotivoPerdaModal';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -1626,6 +1627,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
 
   // Estados para edição rápida de nome na barra lateral
   const [isEditingName, setIsEditingName] = useState(false);
+  // Contato a caminho de "Perdido", aguardando o motivo
+  const [perdaPendente, setPerdaPendente] = useState<{ contactId: string; nome?: string } | null>(null);
   const [newName, setNewName] = useState('');
 
   // ─── Lógica de Busca de Fotos em Lote ──────────────────────────────────────────
@@ -2632,6 +2635,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                             // Saindo de Cliente de volta para uma etapa do funil
                             if (activeThread.is_client && contactId) {
                               await demoteClient(contactId);
+                            }
+
+                            // Perdido não é só uma etapa: exige o motivo, que
+                            // é a informação que explica o funil depois.
+                            if (etapa.id === 'perdido') {
+                              if (!contactId) throw new Error('Contato ainda não sincronizado');
+                              setPerdaPendente({ contactId, nome: activeThread.name });
+                              return;
                             }
 
                             const valor = valorBancoDaEtapa(etapa.id);
@@ -5092,6 +5103,22 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         onClose={() => setTemplatesModalOpen(false)}
         to={templatesModalTo}
       />
+
+      <AnimatePresence>
+        {perdaPendente && (
+          <MotivoPerdaModal
+            contactId={perdaPendente.contactId}
+            nomeContato={perdaPendente.nome}
+            onClose={() => setPerdaPendente(null)}
+            onConfirmado={() => {
+              // A rota já gravou etapa, motivo e data; aqui só refletimos na tela.
+              setThreads(prev => prev.map(t => t.id === activeThread?.id
+                ? { ...t, funilStatus: 'perdido', is_client: false }
+                : t));
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

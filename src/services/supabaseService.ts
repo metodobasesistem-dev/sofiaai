@@ -2360,3 +2360,54 @@ export const deleteClientField = async (id: string) => {
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao remover campo');
 };
+
+// ─── Motivos de perda ─────────────────────────────────────────────────────
+
+export interface MotivoPerda {
+  id: string;
+  nome: string;
+  ordem: number;
+}
+
+export const listLossReasons = async (): Promise<MotivoPerda[]> => {
+  const res = await standardFetch('/api/v2/funnel/loss-reasons');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar motivos');
+  return result.data || [];
+};
+
+export const createLossReason = async (nome: string): Promise<MotivoPerda> => {
+  const res = await standardFetch('/api/v2/funnel/loss-reasons', {
+    method: 'POST',
+    body: JSON.stringify({ nome }),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao criar motivo');
+  return result.data;
+};
+
+export const deleteLossReason = async (id: string) => {
+  const res = await standardFetch(`/api/v2/funnel/loss-reasons/${id}`, { method: 'DELETE' });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover motivo');
+};
+
+/** Marca o lead como perdido registrando o porquê. */
+export const markLeadAsLost = async (contactId: string, reasonId?: string | null, note?: string) => {
+  const res = await standardFetch('/api/v2/funnel/mark-lost', {
+    method: 'POST',
+    body: JSON.stringify({ contactId, reasonId: reasonId || null, note: note || null }),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao marcar como perdido');
+};
+
+/** Tira o lead de "Perdido" e limpa o registro da perda. */
+export const reopenLead = async (contactId: string, etapa?: string) => {
+  const res = await standardFetch('/api/v2/funnel/reopen', {
+    method: 'POST',
+    body: JSON.stringify({ contactId, etapa }),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao reabrir o lead');
+};

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Search, Filter, LayoutGrid, Ticket, User, MessageCircle, ArrowRight, Calendar, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { ETAPAS_FUNIL, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
+import MotivoPerdaModal from './MotivoPerdaModal';
 import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { 
@@ -27,6 +28,8 @@ interface KanbanBoardProps {
 export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBoardProps) {
   const [viewMode, setViewMode] = useState<'funil' | 'ticket'>('funil');
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
+  // Card solto na coluna Perdido, aguardando o motivo
+  const [perdaPendente, setPerdaPendente] = useState<{ contactId: string; nome?: string; threadId: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom'>('all');
   const [dateType, setDateType] = useState<'created' | 'updated'>('updated');
@@ -118,6 +121,17 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
     if (viewMode === 'funil' && targetColumnId === 'cliente' && card.is_client) return;
     if (viewMode === 'funil' && targetColumnId !== 'cliente' && !card.is_client && card.funilStatus === targetColumnId) return;
     if (viewMode === 'ticket' && card.ticketStatus === targetColumnId) return;
+
+    // Perdido pede o motivo antes de gravar qualquer coisa: sem isso a
+    // informação que explica o funil se perde no arrastar do card.
+    if (viewMode === 'funil' && targetColumnId === 'perdido') {
+      if (!card.contactId) {
+        toast.error('Contato ainda não sincronizado. Tente novamente em instantes.');
+        return;
+      }
+      setPerdaPendente({ contactId: card.contactId, nome: card.name, threadId: card.id });
+      return;
+    }
 
     // Atualização otimista — 'cliente' mexe na flag, as demais na etapa
     onThreadsChange(prev => prev.map(t => {
@@ -365,6 +379,22 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
           })}
         </div>
       </div>
+
+      <AnimatePresence>
+        {perdaPendente && (
+          <MotivoPerdaModal
+            contactId={perdaPendente.contactId}
+            nomeContato={perdaPendente.nome}
+            onClose={() => setPerdaPendente(null)}
+            onConfirmado={() => {
+              // A rota gravou etapa, motivo e data; o card só precisa se mover.
+              onThreadsChange(prev => prev.map(t => t.id === perdaPendente.threadId
+                ? { ...t, funilStatus: 'perdido', is_client: false, ticketStatus: 'resolved' }
+                : t));
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
