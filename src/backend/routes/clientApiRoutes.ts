@@ -391,12 +391,30 @@ router.patch('/:contactId', async (req: AuthenticatedRequest, res: Response) => 
             : null;
       }
 
-      const { error } = await supabase
-        .from('client_profiles')
-        .upsert(
-          { contact_id: contactId, user_id: userId, ...dadosFicha, updated_at: new Date().toISOString() },
-          { onConflict: 'contact_id' }
+      const gravar = (dados: Record<string, any>) =>
+        supabase
+          .from('client_profiles')
+          .upsert(
+            { contact_id: contactId, user_id: userId, ...dados, updated_at: new Date().toISOString() },
+            { onConflict: 'contact_id' }
+          );
+
+      let { error } = await gravar(dadosFicha);
+
+      // encerrado_em é um campo auxiliar do LTV, criado numa migration
+      // posterior. Se ela ainda não foi aplicada, salvar a ficha — que é a
+      // ação principal — não pode falhar por causa dele: grava o resto e
+      // avisa. O carimbo volta a funcionar sozinho quando a coluna existir.
+      const colunaAusente = error && (error.code === '42703' || error.code === 'PGRST204');
+      if (colunaAusente && 'encerrado_em' in dadosFicha) {
+        console.warn(
+          '[ClientAPI] coluna encerrado_em ausente (migration 20260824120000 pendente) — ' +
+          'ficha salva sem o carimbo de encerramento.'
         );
+        const { encerrado_em, ...semCarimbo } = dadosFicha as any;
+        ({ error } = await gravar(semCarimbo));
+      }
+
       if (error) throw error;
     }
 
