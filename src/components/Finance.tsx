@@ -17,13 +17,16 @@ import {
   Download,
   Edit,
   Trash2,
-  User as UserIcon
+  User as UserIcon,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { standardFetch } from '../services/supabaseService';
 
 interface Transaction {
   id: string;
@@ -40,8 +43,8 @@ interface Transaction {
 
 interface Contact {
   id: string;
-  name: string;
-  pushname?: string;
+  nome: string;
+  telefone?: string;
 }
 
 interface Category {
@@ -60,6 +63,7 @@ export default function Finance() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [gerandoMensalidades, setGerandoMensalidades] = useState(false);
   
   // Filter States
   const [filterType, setFilterType] = useState<'all' | 'entrada' | 'saida'>('all');
@@ -87,6 +91,36 @@ export default function Finance() {
   const totalDespesa = transactions.filter(t => t.tipo === 'saida' && t.status === 'pago').reduce((acc, t) => acc + Number(t.valor), 0);
   const saldo = totalReceita - totalDespesa;
 
+  // Comparação com o mês anterior. Antes havia "+12%" e "-5%" escritos no
+  // código: apareciam mesmo com a tela zerada, o que é pior do que não ter
+  // indicador nenhum.
+  const noMes = (t: Transaction, offset: number) => {
+    const d = new Date(`${t.data_pagamento}T12:00:00`);
+    const ref = new Date();
+    ref.setDate(1);
+    ref.setMonth(ref.getMonth() - offset);
+    return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear();
+  };
+  const somaMes = (tipo: 'entrada' | 'saida', offset: number) =>
+    transactions
+      .filter(t => t.tipo === tipo && t.status === 'pago' && noMes(t, offset))
+      .reduce((acc, t) => acc + Number(t.valor), 0);
+
+  const variacao = (tipo: 'entrada' | 'saida') => {
+    const atual = somaMes(tipo, 0);
+    const anterior = somaMes(tipo, 1);
+    if (!anterior) return atual > 0 ? { texto: 'primeiro mês com movimento', positivo: true } : null;
+    const pct = Math.round(((atual - anterior) / anterior) * 100);
+    return { texto: `${pct >= 0 ? '+' : ''}${pct}% vs. mês anterior`, positivo: pct >= 0 };
+  };
+  const varReceita = variacao('entrada');
+  const varDespesa = variacao('saida');
+
+  // Mensalidades previstas x recebidas no mês corrente
+  const previstoMes = transactions
+    .filter(t => t.tipo === 'entrada' && t.status === 'pendente' && noMes(t, 0))
+    .reduce((acc, t) => acc + Number(t.valor), 0);
+
   // Lista Filtrada
   const filteredTransactions = transactions.filter(t => {
     const matchesSearch = t.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -107,6 +141,38 @@ export default function Finance() {
       fetchContacts()
     ]);
     setLoading(false);
+  };
+
+  /**
+   * Traz para o Financeiro o que a carteira já sabe: cada cliente ativo com
+   * mensalidade vira um lançamento pendente do mês. Repetir o clique não
+   * duplica — o backend tem índice único por cliente e competência.
+   */
+  const gerarMensalidades = async () => {
+    try {
+      setGerandoMensalidades(true);
+      const res = await standardFetch('/api/v2/finance/gerar-mensalidades', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const r = await res.json();
+      if (!r.success && r.error) throw new Error(r.error);
+
+      if (r.criados > 0) {
+        toast.success(`${r.criados} mensalidade(s) lançada(s)`, {
+          description: r.pulados ? `${r.pulados} cliente(s) sem cobrança neste mês ou já lançados.` : undefined,
+        });
+      } else {
+        toast.info('Nada novo a lançar', {
+          description: r.mensagem || 'As mensalidades deste mês já foram geradas.',
+        });
+      }
+      fetchTransactions();
+    } catch (e: any) {
+      toast.error('Erro ao gerar mensalidades: ' + e.message);
+    } finally {
+      setGerandoMensalidades(false);
+    }
   };
 
   const fetchCategories = async () => {
@@ -184,7 +250,7 @@ export default function Finance() {
         .select(`
           *,
           financial_categories(nome),
-          contacts(name, pushname)
+          contacts(nome)
         `)
         .order('data_pagamento', { ascending: false });
 
@@ -193,7 +259,7 @@ export default function Finance() {
       const formatted = (data || []).map(t => ({
         ...t,
         categoria_nome: t.financial_categories?.nome,
-        contact_name: t.contacts?.name || t.contacts?.pushname
+        contact_name: t.contacts?.nome
       }));
       
       setTransactions(formatted);
@@ -400,7 +466,7 @@ export default function Finance() {
                       >
                         <option value="">Nenhum</option>
                         {contacts.map(contact => (
-                          <option key={contact.id} value={contact.id}>{contact.name || contact.pushname}</option>
+                          <option key={contact.id} value={contact.id}>{contact.nome || contact.telefone}</option>
                         ))}
                       </select>
                     </div>
@@ -449,6 +515,15 @@ export default function Finance() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={gerarMensalidades}
+            disabled={gerandoMensalidades}
+            title="Cria os lançamentos pendentes do mês a partir dos clientes ativos"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+          >
+            {gerandoMensalidades ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            Gerar mensalidades
+          </button>
           <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
             <Tag size={16} /> Categorias
           </button>
@@ -481,9 +556,16 @@ export default function Finance() {
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Total</span>
           </div>
           <h3 className="text-3xl font-black text-slate-900">{formatCurrency(totalReceita)}</h3>
-          <div className="mt-4 flex items-center gap-2 text-emerald-600 text-[10px] font-bold">
-            <span className="px-2 py-0.5 bg-emerald-50 rounded-full">+12% este mês</span>
-          </div>
+          {varReceita && (
+            <div className={`mt-4 flex items-center gap-2 text-[10px] font-bold ${varReceita.positivo ? 'text-emerald-600' : 'text-red-600'}`}>
+              <span className={`px-2 py-0.5 rounded-full ${varReceita.positivo ? 'bg-emerald-50' : 'bg-red-50'}`}>{varReceita.texto}</span>
+            </div>
+          )}
+          {previstoMes > 0 && (
+            <div className="mt-2 text-[10px] font-bold text-amber-600">
+              <span className="px-2 py-0.5 bg-amber-50 rounded-full">{formatCurrency(previstoMes)} a receber este mês</span>
+            </div>
+          )}
         </motion.div>
 
         <motion.div 
@@ -502,9 +584,11 @@ export default function Finance() {
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Despesas Totais</span>
           </div>
           <h3 className="text-3xl font-black text-slate-900">{formatCurrency(totalDespesa)}</h3>
-          <div className="mt-4 flex items-center gap-2 text-red-600 text-[10px] font-bold">
-            <span className="px-2 py-0.5 bg-red-50 rounded-full">-5% este mês</span>
-          </div>
+          {varDespesa && (
+            <div className={`mt-4 flex items-center gap-2 text-[10px] font-bold ${varDespesa.positivo ? 'text-red-600' : 'text-emerald-600'}`}>
+              <span className={`px-2 py-0.5 rounded-full ${varDespesa.positivo ? 'bg-red-50' : 'bg-emerald-50'}`}>{varDespesa.texto}</span>
+            </div>
+          )}
         </motion.div>
 
         <motion.div 
