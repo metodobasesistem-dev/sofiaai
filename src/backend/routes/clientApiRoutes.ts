@@ -25,13 +25,57 @@ const CONTACT_FIELDS = ['nome', 'telefone', 'email', 'instagram', 'website'] as 
 /** Campos da ficha comercial. */
 const PROFILE_FIELDS = [
   'mensalidade', 'moeda', 'ciclo', 'cliente_desde',
-  'status_contrato', 'observacoes', 'custom_fields',
+  'status_contrato', 'observacoes', 'custom_fields', 'encerrado_em',
 ] as const;
 
 const pick = (source: any, fields: readonly string[]) =>
   Object.fromEntries(
     Object.entries(source || {}).filter(([k]) => fields.includes(k))
   );
+
+/**
+ * LTV realizado — quanto o cliente JÁ pagou desde que entrou na carteira.
+ *
+ * É o número histórico, não uma projeção: projetar exigiria uma taxa de
+ * cancelamento que o sistema ainda não tem histórico para calcular.
+ *
+ * O período vai de cliente_desde até hoje, ou até encerrado_em quando o
+ * contrato acabou — senão um cliente que saiu continuaria "faturando" para
+ * sempre no relatório.
+ *
+ * Períodos são contados FECHADOS: quem entrou há 45 dias pagou 1 mensalidade,
+ * não 1,5. Contar fração transformaria o LTV numa estimativa, e a graça dele
+ * aqui é ser o valor que de fato entrou.
+ */
+export function calcularLTV(profile: any): { ltv: number; meses: number } {
+  if (!profile) return { ltv: 0, meses: 0 };
+
+  const valor = Number(profile.mensalidade) || 0;
+  const inicio = profile.cliente_desde ? new Date(profile.cliente_desde) : null;
+  if (!valor || !inicio || isNaN(inicio.getTime())) return { ltv: 0, meses: 0 };
+
+  const fim = profile.encerrado_em ? new Date(profile.encerrado_em) : new Date();
+  if (isNaN(fim.getTime()) || fim < inicio) return { ltv: 0, meses: 0 };
+
+  const meses =
+    (fim.getFullYear() - inicio.getFullYear()) * 12 +
+    (fim.getMonth() - inicio.getMonth()) -
+    (fim.getDate() < inicio.getDate() ? 1 : 0);
+  const mesesCompletos = Math.max(0, meses);
+
+  if (profile.ciclo === 'unico') {
+    // Pagamento único: o LTV é o próprio valor, desde o primeiro dia.
+    return { ltv: valor, meses: mesesCompletos };
+  }
+
+  if (profile.ciclo === 'anual') {
+    const anos = Math.floor(mesesCompletos / 12);
+    return { ltv: valor * anos, meses: mesesCompletos };
+  }
+
+  return { ltv: valor * mesesCompletos, meses: mesesCompletos };
+}
+
 
 // ─── POST /api/v2/clients ─────────────────────────────────────────────────
 // Cadastro manual: cria o contato já como cliente, com a ficha.
@@ -150,7 +194,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     const porContato = new Map(fichas.map(f => [f.contact_id, f]));
-    const clientes = (contatos || []).map(c => ({ ...c, profile: porContato.get(c.id) || null }));
+    const clientes = (contatos || []).map(c => {
+      const profile = porContato.get(c.id) || null;
+      return { ...c, profile, ...calcularLTV(profile) };
+    });
 
     // Receita recorrente: só contrato ativo entra, e anual é diluído em 12
     // para que o número seja comparável mês a mês.
@@ -165,6 +212,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const ativos = clientes.filter(c => c.profile?.status_contrato === 'ativo').length;
 
+    // LTV acumulado: soma o que TODA a carteira já pagou, inclusive quem
+    // cancelou — é justamente esse histórico que dá sentido ao número.
+    const ltvTotal = clientes.reduce((soma, c) => soma + (c.ltv || 0), 0);
+    const comLtv = clientes.filter(c => (c.ltv || 0) > 0).length;
+
     res.json({
       success: true,
       data: clientes,
@@ -173,6 +225,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
         ativos,
         mrr: Math.round(mrr * 100) / 100,
         ticket_medio: ativos > 0 ? Math.round((mrr / ativos) * 100) / 100 : 0,
+        ltv_total: Math.round(ltvTotal * 100) / 100,
+        // Média só entre quem já gerou receita: incluir quem entrou ontem com
+        // zero puxaria o indicador para baixo sem significar nada.
+        ltv_medio: comLtv > 0 ? Math.round((ltvTotal / comLtv) * 100) / 100 : 0,
       },
     });
   } catch (err: any) {
@@ -216,7 +272,12 @@ router.get('/:contactId', async (req: AuthenticatedRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: { ...contato, profile: profile || null, appointments: agendamentos || [] },
+      data: {
+        ...contato,
+        profile: profile || null,
+        appointments: agendamentos || [],
+        ...calcularLTV(profile),
+      },
     });
   } catch (err: any) {
     console.error('[ClientAPI] GET :id error:', err.message);
@@ -321,6 +382,15 @@ router.patch('/:contactId', async (req: AuthenticatedRequest, res: Response) => 
     }
 
     if (Object.keys(dadosFicha).length) {
+      // O LTV precisa saber quando o contrato acabou para parar de contar.
+      // updated_at não serve: muda a cada edição da ficha.
+      if ('status_contrato' in dadosFicha) {
+        (dadosFicha as any).encerrado_em =
+          dadosFicha.status_contrato === 'cancelado'
+            ? new Date().toISOString().slice(0, 10)
+            : null;
+      }
+
       const { error } = await supabase
         .from('client_profiles')
         .upsert(
