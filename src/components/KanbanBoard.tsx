@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Search, Filter, LayoutGrid, Ticket, User, MessageCircle, ArrowRight, Calendar, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { ETAPAS_FUNIL, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
 import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { 
@@ -33,42 +34,23 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Estrutura das colunas baseadas no modo de visualização
+  // As colunas do funil vêm de src/lib/funil.ts, a mesma lista que o seletor
+  // da conversa usa — antes cada tela mantinha a sua e elas divergiam.
   const columns = viewMode === 'funil'
-    ? [
-        { id: 'novo_lead',      title: 'Novo Lead',       desc: 'Primeiro contato recebido',              dot: 'bg-slate-400',   color: 'bg-slate-50',    borderColor: 'border-slate-200',   titleColor: 'text-slate-600' },
-        { id: 'primeiro_atend', title: 'Primeiro Atend.', desc: 'Em conversa ativa com a equipe',         dot: 'bg-blue-400',    color: 'bg-blue-50',     borderColor: 'border-blue-100',    titleColor: 'text-blue-600' },
-        { id: 'sem_resposta',   title: 'Sem Resposta',    desc: 'Aguardando retorno do lead',             dot: 'bg-amber-400',   color: 'bg-amber-50',    borderColor: 'border-amber-100',   titleColor: 'text-amber-600' },
-        { id: 'qualificado',    title: 'Qualificado',     desc: 'Interesse confirmado, pronto para agendar', dot: 'bg-violet-400', color: 'bg-violet-50',  borderColor: 'border-violet-100',  titleColor: 'text-violet-600' },
-        { id: 'agendamento',    title: 'Agendamento',     desc: 'Compromisso marcado no calendário',         dot: 'bg-indigo-400',  color: 'bg-indigo-50',   borderColor: 'border-indigo-100',  titleColor: 'text-indigo-600' },
-        { id: 'cliente',        title: 'Cliente',         desc: 'Conversão concluída',                    dot: 'bg-emerald-400', color: 'bg-emerald-50',  borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
-      ]
+    ? ETAPAS_FUNIL.map(e => ({
+        id: e.id,
+        title: e.label,
+        desc: e.desc,
+        dot: e.dot,
+        color: e.bg,
+        borderColor: e.border,
+        titleColor: e.text,
+      }))
     : [
         { id: 'open',     title: 'Abertos',    desc: '', dot: 'bg-amber-400',   color: 'bg-amber-50',   borderColor: 'border-amber-100',   titleColor: 'text-amber-600' },
         { id: 'pending',  title: 'Pendentes',  desc: '', dot: 'bg-primary-400', color: 'bg-primary-50', borderColor: 'border-primary-100', titleColor: 'text-primary-600' },
         { id: 'resolved', title: 'Resolvidos', desc: '', dot: 'bg-emerald-400', color: 'bg-emerald-50', borderColor: 'border-emerald-100', titleColor: 'text-emerald-600' },
       ];
-
-  // Etapa do funil (banco) ↔ coluna do quadro. 'Cliente' NÃO é etapa de funil:
-  // é a flag contacts.is_client, a mesma que a tela de Clientes usa. Antes
-  // 'Resolvido' era exibido como Cliente, o que fazia a mesma pessoa aparecer
-  // como cliente aqui e como lead na lista de contatos.
-  const FUNIL_COMPAT: Record<string, string> = {
-    'Lead': 'novo_lead',
-    'Qualificado': 'qualificado',
-    'Agendado': 'agendamento',
-    'Resolvido': 'resolvido',
-  };
-  const normFunil = (s?: string) => { if (!s) return 'novo_lead'; return FUNIL_COMPAT[s] ?? s; };
-
-  // Coluna → valor aceito pelo CHECK de contacts.status_funil. As colunas
-  // 'primeiro_atend' e 'sem_resposta' não têm equivalente no banco: são
-  // visuais e por isso não gravam etapa (ver nota no handleDrop).
-  const COLUNA_PARA_FUNIL: Record<string, string> = {
-    novo_lead: 'Lead',
-    qualificado: 'Qualificado',
-    agendamento: 'Agendado',
-    resolvido: 'Resolvido',
-  };
 
   /** A coluna Cliente é alimentada pela flag, não pela etapa. */
   const cardEhCliente = (t: any) => t.is_client === true;
@@ -83,7 +65,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
       const matchMode = viewMode === 'funil'
         ? (columnId === 'cliente'
             ? cardEhCliente(t)
-            : !cardEhCliente(t) && normFunil(t.funilStatus) === columnId)
+            : !cardEhCliente(t) && idDaEtapa(t.funilStatus) === columnId)
         : (t.ticketStatus || 'open') === columnId;
       if (!matchMode) return false;
 
@@ -148,7 +130,7 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
           ...t,
           is_client: false,
           funilStatus: targetColumnId,
-          ticketStatus: targetColumnId === 'resolvido' ? 'resolved' : 'open',
+          ticketStatus: targetColumnId === 'perdido' ? 'resolved' : 'open',
         };
       }
       return { ...t, ticketStatus: targetColumnId };
@@ -176,15 +158,14 @@ export default function KanbanBoard({ user, threads, onThreadsChange }: KanbanBo
             onThreadsChange(prev => prev.map(t => t.id === draggedCardId ? { ...t, is_client: false } : t));
           }
 
-          const etapa = COLUNA_PARA_FUNIL[targetColumnId];
+          const etapa = valorBancoDaEtapa(targetColumnId);
           if (etapa && contactId) {
             const { error } = await supabase.from('contacts').update({ status_funil: etapa }).eq('id', contactId);
             if (error) throw error;
           }
-          // 'primeiro_atend' e 'sem_resposta' não existem no funil salvo:
-          // o card se move na tela, mas não há etapa correspondente para gravar.
 
-          const ticketStatusUpdate = targetColumnId === 'resolvido' ? 'resolved' : 'open';
+          // Perdido encerra o atendimento; as demais etapas o mantêm aberto.
+          const ticketStatusUpdate = targetColumnId === 'perdido' ? 'resolved' : 'open';
           await supabase.from('threads').update({ ticket_status: ticketStatusUpdate }).eq('id', draggedCardId);
         }
       } else {
