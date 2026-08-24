@@ -2310,3 +2310,53 @@ export const demoteClient = async (contactId: string) => {
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao remover da carteira');
 };
+
+// ─── Campos personalizados da ficha do cliente ────────────────────────────
+// Cada inquilino define os campos do próprio ramo; os valores ficam no
+// custom_fields da ficha.
+
+export type TipoCampoCliente = 'texto' | 'numero' | 'data' | 'selecao' | 'multi_selecao' | 'booleano';
+
+export interface CampoCliente {
+  id: string;
+  chave: string;
+  label: string;
+  tipo: TipoCampoCliente;
+  opcoes: string[];
+  ordem: number;
+}
+
+export const listClientFields = async (): Promise<CampoCliente[]> => {
+  const res = await standardFetch('/api/v2/clients/campos/definicoes');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar campos');
+  return result.data || [];
+};
+
+export const createClientField = async (payload: {
+  label: string; tipo: TipoCampoCliente; opcoes?: string[];
+}): Promise<CampoCliente> => {
+  const res = await standardFetch('/api/v2/clients/campos/definicoes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao criar campo');
+  return result.data;
+};
+
+export const updateClientField = async (id: string, payload: Partial<CampoCliente>) => {
+  const res = await standardFetch(`/api/v2/clients/campos/definicoes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao salvar campo');
+};
+
+/** Remove a definição. Os valores já preenchidos continuam nas fichas. */
+export const deleteClientField = async (id: string) => {
+  const res = await standardFetch(`/api/v2/clients/campos/definicoes/${id}`, { method: 'DELETE' });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover campo');
+};

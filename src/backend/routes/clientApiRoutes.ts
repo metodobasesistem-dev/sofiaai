@@ -36,6 +36,135 @@ const pick = (source: any, fields: readonly string[]) =>
 
 
 
+// ─── Campos personalizados da ficha ───────────────────────────────────────
+// Cada inquilino define os campos que fazem sentido para o ramo dele. Os
+// VALORES ficam em client_profiles.custom_fields; aqui vive a definição.
+
+const TIPOS_CAMPO = ['texto', 'numero', 'data', 'selecao', 'multi_selecao', 'booleano'];
+
+/** Rótulo → chave estável do JSONB ("Plataformas de anúncio" → plataformas_de_anuncio). */
+export function chaveDoLabel(label: string): string {
+  return label
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || `campo_${Date.now()}`;
+}
+
+router.get('/campos/definicoes', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('client_field_definitions')
+      .select('*')
+      .eq('user_id', req.userId!)
+      .order('ordem')
+      .order('created_at');
+    if (error) throw error;
+    res.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error('[ClientAPI] campos GET:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/campos/definicoes', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const label = String(req.body?.label || '').trim();
+  const tipo = String(req.body?.tipo || 'texto');
+
+  if (!label) return res.status(400).json({ success: false, error: 'Informe o nome do campo.' });
+  if (!TIPOS_CAMPO.includes(tipo)) return res.status(400).json({ success: false, error: 'Tipo de campo inválido.' });
+
+  const opcoes = Array.isArray(req.body?.opcoes)
+    ? req.body.opcoes.map((o: any) => String(o).trim()).filter(Boolean)
+    : [];
+
+  if ((tipo === 'selecao' || tipo === 'multi_selecao') && opcoes.length === 0) {
+    return res.status(400).json({ success: false, error: 'Campos de seleção precisam de ao menos uma opção.' });
+  }
+
+  try {
+    const { count } = await supabase
+      .from('client_field_definitions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    const { data, error } = await supabase
+      .from('client_field_definitions')
+      .insert({
+        user_id: userId,
+        chave: chaveDoLabel(label),
+        label,
+        tipo,
+        opcoes,
+        ordem: count || 0,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ success: false, error: 'Já existe um campo com esse nome.' });
+      }
+      throw error;
+    }
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[ClientAPI] campos POST:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.patch('/campos/definicoes/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  try {
+    // A chave nunca muda: renomear o rótulo não pode perder o que já foi
+    // preenchido nas fichas.
+    const payload: Record<string, any> = {};
+    if (req.body?.label) payload.label = String(req.body.label).trim();
+    if (req.body?.tipo && TIPOS_CAMPO.includes(req.body.tipo)) payload.tipo = req.body.tipo;
+    if (Array.isArray(req.body?.opcoes)) {
+      payload.opcoes = req.body.opcoes.map((o: any) => String(o).trim()).filter(Boolean);
+    }
+    if (typeof req.body?.ordem === 'number') payload.ordem = req.body.ordem;
+
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ success: false, error: 'Nada para atualizar.' });
+    }
+
+    const { error } = await supabase
+      .from('client_field_definitions')
+      .update(payload)
+      .eq('id', req.params.id)
+      .eq('user_id', userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[ClientAPI] campos PATCH:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/campos/definicoes/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Só a definição sai. Os valores continuam no custom_fields das fichas —
+    // recriar o campo com o mesmo nome traz o histórico de volta, e um clique
+    // errado não apaga dado de cliente.
+    const { error } = await supabase
+      .from('client_field_definitions')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId!);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[ClientAPI] campos DELETE:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 // ─── POST /api/v2/clients ─────────────────────────────────────────────────
 // Cadastro manual: cria o contato já como cliente, com a ficha.
 //
