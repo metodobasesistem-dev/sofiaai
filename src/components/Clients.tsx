@@ -242,7 +242,7 @@ function FichaCliente({
                           {formatDate(a.data)} {a.time ? `às ${a.time}` : ''}
                         </p>
                         <p className="text-[11px] text-slate-500 truncate">
-                          {a.summary || a.tipo_consulta || 'Sem descrição'}
+                          {a.summary || a.modalidade || 'Sem descrição'}
                         </p>
                       </div>
                       <span className="text-[10px] font-bold uppercase text-slate-400">{a.status}</span>

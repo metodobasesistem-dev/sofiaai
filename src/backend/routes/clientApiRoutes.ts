@@ -115,7 +115,7 @@ router.get('/:contactId', async (req: AuthenticatedRequest, res: Response) => {
     const telefone = (contato.telefone || '').replace(/\D/g, '');
     const { data: agendamentos } = await supabase
       .from('appointments')
-      .select('id, data, time, status, summary, professional_name, tipo_consulta')
+      .select('id, data, time, status, summary, professional_name, modalidade')
       .eq('user_id', userId)
       .or(`contact_id.eq.${contactId}${telefone ? `,client_phone.ilike.%${telefone.slice(-8)}%` : ''}`)
       .order('data', { ascending: false })
