@@ -833,7 +833,21 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
   const isRevoked = message.message_type === 'revoked';
 
   const [showMobileActions, setShowMobileActions] = useState(false);
+  // Posição do seletor de reação em coordenadas de tela
+  const [emojiPos, setEmojiPos] = useState<{ top: number; left: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sendo fixed, o popover ficaria parado na tela enquanto a conversa rola
+  useEffect(() => {
+    if (!emojiPos) return;
+    const fechar = () => setEmojiPos(null);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    return () => {
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('resize', fechar);
+    };
+  }, [emojiPos]);
 
   const handleTouchStart = () => {
     longPressTimerRef.current = setTimeout(() => {
@@ -1171,24 +1185,48 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
 
       {!isRevoked && (
         <div className={`hidden md:flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
-          <div className="relative group/emoji">
-            <button 
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                if (emojiPos) { setEmojiPos(null); return; }
+                // O popover era absolute dentro da lista de mensagens, que
+                // rola: perto do topo ele saía da área visível e aparecia
+                // cortado. Posicionado por coordenadas de tela, nenhum
+                // container consegue recortá-lo.
+                const r = e.currentTarget.getBoundingClientRect();
+                const ALTURA = 150;  // 3 linhas de emoji + padding
+                const LARGURA = 236;
+                const cabeAcima = r.top - ALTURA - 8 > 8;
+                setEmojiPos({
+                  top: cabeAcima ? r.top - ALTURA - 8 : r.bottom + 8,
+                  left: Math.min(Math.max(8, r.left - LARGURA / 2), window.innerWidth - LARGURA - 8),
+                });
+              }}
               className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
               title="Reagir"
             >
               <Smile size={14} />
             </button>
-            <div className={`absolute bottom-full mb-2 ${isLead ? 'left-0' : 'right-0'} bg-white border border-slate-200 rounded-2xl shadow-xl p-2 hidden group-focus-within/emoji:grid grid-cols-6 gap-1.5 z-[100] animate-in slide-in-from-bottom-2 duration-200 min-w-[220px]`}>
-              {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '💡', '✅', '❌', '🚀', '👀', '🤔', '💯', '⭐', '🤝'].map(emoji => (
-                <button 
-                  key={emoji}
-                  onClick={() => onReact(message.id, emoji)}
-                  className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[18px] hover:scale-125"
+
+            {emojiPos && (
+              <>
+                <div className="fixed inset-0 z-[99]" onClick={() => setEmojiPos(null)} />
+                <div
+                  style={{ position: 'fixed', top: emojiPos.top, left: emojiPos.left, width: 236 }}
+                  className="bg-white border border-slate-200 rounded-2xl shadow-xl p-2 grid grid-cols-6 gap-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
                 >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+                  {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '💡', '✅', '❌', '🚀', '👀', '🤔', '💯', '⭐', '🤝'].map(emoji => (
+                    <button
+                      key={emoji}
+                      onClick={() => { onReact(message.id, emoji); setEmojiPos(null); }}
+                      className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[18px] hover:scale-125"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
           
           <button 
