@@ -92,3 +92,98 @@ export function resumoCarteira(fichas: Array<FichaComercial | null | undefined>)
     ltv_medio: comLtv > 0 ? arredonda(ltvTotal / comLtv) : 0,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// VIGÊNCIAS — o valor do contrato ao longo do tempo
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface VigenciaContrato {
+  id?: string;
+  contact_id?: string;
+  valor: number | string;
+  moeda?: string | null;
+  ciclo?: 'mensal' | 'anual' | 'unico' | string | null;
+  inicio: string;
+  /** null = vigente */
+  fim?: string | null;
+}
+
+const dia = (d: string | Date) => (typeof d === 'string' ? new Date(`${d}T12:00:00`) : d);
+
+/** Meses completos entre duas datas — a mesma regra de período fechado do LTV. */
+function mesesCompletos(de: Date, ate: Date): number {
+  if (ate < de) return 0;
+  const m =
+    (ate.getFullYear() - de.getFullYear()) * 12 +
+    (ate.getMonth() - de.getMonth()) -
+    (ate.getDate() < de.getDate() ? 1 : 0);
+  return Math.max(0, m);
+}
+
+/**
+ * LTV contratado somando faixa a faixa.
+ *
+ * Cada vigência rende pelo próprio valor, então um reajuste vale só do início
+ * dele em diante — o passado continua no preço da época. O contrato encerrado
+ * (encerrado_em na ficha) limita todas as faixas: quem saiu para de acumular.
+ *
+ * Vigência que ainda não começou (reajuste agendado) não soma nada.
+ */
+export function calcularLTVPorVigencias(
+  vigencias: VigenciaContrato[],
+  ficha?: FichaComercial | null,
+  referencia: Date = new Date()
+): { ltv: number; meses: number } {
+  if (!vigencias?.length) return { ltv: 0, meses: 0 };
+
+  const fimDoContrato = ficha?.encerrado_em ? dia(ficha.encerrado_em) : null;
+  const teto = fimDoContrato && fimDoContrato < referencia ? fimDoContrato : referencia;
+
+  let ltv = 0;
+  let mesesTotais = 0;
+  let inicioMaisAntigo: Date | null = null;
+
+  for (const v of vigencias) {
+    const valor = Number(v.valor) || 0;
+    if (!valor || !v.inicio) continue;
+
+    const inicio = dia(v.inicio);
+    if (isNaN(inicio.getTime()) || inicio > teto) continue; // ainda não vigorou
+
+    const fimFaixa = v.fim ? dia(v.fim) : teto;
+    const ate = fimFaixa < teto ? fimFaixa : teto;
+
+    if (!inicioMaisAntigo || inicio < inicioMaisAntigo) inicioMaisAntigo = inicio;
+
+    if (v.ciclo === 'unico') {
+      // Pagamento único conta uma vez, no momento em que a faixa começou.
+      ltv += valor;
+      continue;
+    }
+
+    const meses = mesesCompletos(inicio, ate);
+    mesesTotais += meses;
+    ltv += v.ciclo === 'anual' ? valor * Math.floor(meses / 12) : valor * meses;
+  }
+
+  // "Meses de casa" é o tempo total desde a primeira faixa, não a soma das
+  // faixas — elas são contíguas, mas arredondamentos poderiam divergir.
+  const mesesDeCasa = inicioMaisAntigo ? mesesCompletos(inicioMaisAntigo, teto) : mesesTotais;
+
+  return { ltv: Math.round(ltv * 100) / 100, meses: mesesDeCasa };
+}
+
+/** Valor que vale numa data — usado pela geração de mensalidades. */
+export function vigenciaEm(vigencias: VigenciaContrato[], data: Date | string): VigenciaContrato | null {
+  const alvo = dia(data);
+  const candidatas = (vigencias || [])
+    .filter(v => {
+      const inicio = dia(v.inicio);
+      if (isNaN(inicio.getTime()) || inicio > alvo) return false;
+      if (!v.fim) return true;
+      return dia(v.fim) >= alvo;
+    })
+    .sort((a, b) => dia(b.inicio).getTime() - dia(a.inicio).getTime());
+
+  return candidatas[0] || null;
+}
