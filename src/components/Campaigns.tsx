@@ -502,6 +502,26 @@ export default function Campaigns() {
     setIsModalOpen(true);
   };
 
+  // Aplicar o padrão só no clique de "Nova Campanha" não bastava: se a lista
+  // de modelos ainda não tinha chegado naquele instante, o assistente abria
+  // sem seleção. Aqui a escolha é reafirmada assim que houver um padrão e
+  // nenhum modelo escolhido — e nunca ao editar uma campanha existente, que
+  // tem o modelo dela.
+  useEffect(() => {
+    if (!isModalOpen || editingCampaignId) return;
+    if (campaignData.templateId) return;
+    const padrao = templates.find(t => t.is_default);
+    if (!padrao) return;
+    setCampaignData(prev => ({
+      ...prev,
+      messageType: 'template',
+      templateId: padrao.id,
+      templateName: padrao.name,
+      templateLanguage: padrao.language || 'pt_BR',
+      isMetaTemplate: false,
+    }));
+  }, [isModalOpen, editingCampaignId, templates, campaignData.templateId]);
+
   useEffect(() => {
     fetchCampaigns();
     fetchTemplates();
@@ -1233,8 +1253,8 @@ export default function Campaigns() {
                           onClick={() => setCampaignData({...campaignData, templateId: template.id, templateName: template.name, isMetaTemplate: false, templateLanguage: 'pt_BR', variables: {}})}
                           className={`py-2 px-3.5 rounded-xl border-2 transition-all text-left flex items-center justify-between ${
                             campaignData.templateId === template.id
-                              ? 'border-primary-500 bg-primary-50/30'
-                              : 'border-slate-50 bg-white hover:border-slate-100'
+                              ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-500/15'
+                              : 'border-slate-100 bg-white hover:border-slate-200'
                           }`}
                         >
                           <div>
