@@ -27,7 +27,8 @@ import {
   FileText,
   ClipboardList,
   ShieldCheck,
-  XCircle
+  XCircle,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -35,6 +36,8 @@ import { supabase } from '../lib/supabase';
 import { Skeleton } from './common/SkeletonLoader';
 import { sendTemplateMessage, getMetaTemplates } from '../services/whatsappService';
 import { standardFetch } from '../services/supabaseService';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Campaign {
   id: string;
@@ -54,9 +57,162 @@ interface Campaign {
   variables?: any;
 }
 
+/** Quem recebeu a mensagem de uma campanha, com o resultado de cada envio. */
+function ContatosDaCampanhaModal({
+  campanha,
+  onClose,
+}: {
+  campanha: any;
+  onClose: () => void;
+}) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [filtro, setFiltro] = useState<'todos' | 'sent' | 'error'>('todos');
+
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      try {
+        const res = await standardFetch(`/api/v2/campaigns/${campanha.id}/logs`);
+        const r = await res.json();
+        if (!ativo) return;
+        if (!r.success) throw new Error(r.error);
+        setLogs(r.data || []);
+      } catch (e: any) {
+        toast.error('Erro ao carregar contatos: ' + e.message);
+      } finally {
+        if (ativo) setCarregando(false);
+      }
+    })();
+    return () => { ativo = false; };
+  }, [campanha.id]);
+
+  const filtrados = logs.filter(l => {
+    if (filtro !== 'todos' && l.status !== filtro) return false;
+    const termo = busca.toLowerCase().trim();
+    if (!termo) return true;
+    return (l.nome || '').toLowerCase().includes(termo) || (l.telefone || '').includes(termo);
+  });
+
+  const enviados = logs.filter(l => l.status === 'sent').length;
+  const erros = logs.filter(l => l.status === 'error').length;
+
+  const formatarTelefone = (p?: string | null) => {
+    if (!p) return '—';
+    const d = p.replace(/\D/g, '');
+    if (d.length === 13) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+    if (d.length === 12) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+    return p;
+  };
+
+  const chip = (id: 'todos' | 'sent' | 'error', texto: string, cor: string) => (
+    <button
+      onClick={() => setFiltro(id)}
+      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all border ${
+        filtro === id ? cor : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+      }`}
+    >
+      {texto}
+    </button>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 20 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-start justify-between shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-slate-900 tracking-tight truncate">{campanha.name}</h2>
+            <p className="text-[12px] text-slate-500">
+              {logs.length} contato(s) · {enviados} enviada(s)
+              {erros > 0 && <span className="text-red-500"> · {erros} com erro</span>}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all shrink-0">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="px-6 py-3 border-b border-slate-50 bg-slate-50/40 flex flex-col sm:flex-row gap-3 shrink-0">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar por nome ou telefone…"
+              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-[13px] focus:border-primary-500 outline-none transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {chip('todos', 'Todos', 'bg-slate-900 border-slate-900 text-white')}
+            {chip('sent', 'Enviadas', 'bg-emerald-50 border-emerald-200 text-emerald-700')}
+            {chip('error', 'Erros', 'bg-red-50 border-red-200 text-red-700')}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {carregando ? (
+            <div className="py-16 flex justify-center text-slate-400">
+              <Loader2 size={28} className="animate-spin" />
+            </div>
+          ) : filtrados.length === 0 ? (
+            <div className="py-16 text-center text-slate-400">
+              <Users size={32} className="mx-auto mb-3 opacity-40" />
+              <p className="text-[13px] font-medium">
+                {logs.length === 0 ? 'Nenhum envio registrado nesta campanha.' : 'Nenhum contato para este filtro.'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {filtrados.map(l => (
+                <div key={l.id} className="px-6 py-3.5 flex items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-slate-800 truncate">{l.nome}</p>
+                    <p className="text-[12px] text-slate-500 tabular-nums">{formatarTelefone(l.telefone)}</p>
+                    {l.error_message && (
+                      <p className="text-[11px] text-red-500 mt-0.5 truncate" title={l.error_message}>
+                        {l.error_message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${
+                        l.status === 'sent'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-red-50 text-red-700'
+                      }`}
+                    >
+                      {l.status === 'sent' ? 'Enviada' : 'Erro'}
+                    </span>
+                    {l.sent_at && (
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        {format(new Date(l.sent_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
+  // Campanha aberta para ver quem recebeu a mensagem
+  const [campanhaAberta, setCampanhaAberta] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'campaigns' | 'templates'>('campaigns');
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1734,6 +1890,8 @@ export default function Campaigns() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={campaign.id}
+                  onClick={() => setCampanhaAberta(campaign)}
+                  title="Ver quem recebeu esta campanha"
                   className="group bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary-200 hover:shadow-xl hover:shadow-primary-500/5 transition-all cursor-pointer"
                 >
                   <div className="flex items-center justify-between gap-4">
@@ -2148,6 +2306,15 @@ export default function Campaigns() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {campanhaAberta && (
+          <ContatosDaCampanhaModal
+            campanha={campanhaAberta}
+            onClose={() => setCampanhaAberta(null)}
+          />
         )}
       </AnimatePresence>
     </div>
