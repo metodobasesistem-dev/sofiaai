@@ -15,7 +15,7 @@ import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.
 import { invalidateCache, cacheKey } from '../lib/redisCache.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 import { randomUUID } from 'crypto';
-import { calcularLTV, resumoCarteira } from '../lib/carteira.js';
+import { calcularLTV, calcularLTVPorVigencias, resumoCarteira, vigenciaEm } from '../lib/carteira.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -247,6 +247,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       );
     if (fichaErr) throw fichaErr;
 
+    await sincronizarVigencia(userId, contactId);
     await invalidateCache(cacheKey.contacts(userId)).catch(() => {});
     res.json({ success: true, data: { id: contactId } });
   } catch (err: any) {
@@ -254,6 +255,70 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+
+/**
+ * Mantém a vigência aberta em sincronia com a ficha.
+ *
+ * Quando a ficha ganha um valor e o cliente ainda não tem nenhuma faixa, abre
+ * a primeira começando na data de entrada. Se já existe faixa aberta e o valor
+ * da ficha mudou por edição direta, isso é CORREÇÃO do valor atual — não
+ * reajuste — então ajusta a faixa no lugar. Reajuste de verdade passa por
+ * POST /:contactId/reajuste, que abre faixa nova e preserva o passado.
+ */
+async function sincronizarVigencia(userId: string, contactId: string) {
+  try {
+    const { data: ficha } = await supabase
+      .from('client_profiles')
+      .select('mensalidade, moeda, ciclo, cliente_desde, created_at')
+      .eq('contact_id', contactId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!ficha || !ficha.mensalidade || Number(ficha.mensalidade) <= 0) return;
+
+    const { data: periodos, error } = await supabase
+      .from('client_contract_periods')
+      .select('id, valor, fim, inicio')
+      .eq('contact_id', contactId)
+      .order('inicio', { ascending: false });
+
+    // Tabela ainda não migrada: o cálculo antigo continua valendo, sem ruído.
+    if (error) return;
+
+    const aberta = (periodos || []).find(p => !p.fim);
+
+    if (!aberta && (periodos || []).length === 0) {
+      const inicio = ficha.cliente_desde || String(ficha.created_at || '').slice(0, 10) ||
+        new Date().toISOString().slice(0, 10);
+      const { error: insErr } = await supabase.from('client_contract_periods').insert({
+        contact_id: contactId,
+        user_id: userId,
+        valor: ficha.mensalidade,
+        moeda: ficha.moeda || 'BRL',
+        ciclo: ficha.ciclo || 'mensal',
+        inicio,
+      });
+      if (insErr) console.error('[ClientAPI] sincronizarVigencia insert:', insErr.message);
+      return;
+    }
+
+    // Faixa aberta com início no futuro é reajuste AGENDADO: o valor da ficha
+    // ainda é o antigo de propósito, e sobrescrever aqui apagaria o reajuste.
+    const hoje = new Date().toISOString().slice(0, 10);
+    const jaVigente = aberta && aberta.inicio <= hoje;
+
+    if (aberta && jaVigente && Number(aberta.valor) !== Number(ficha.mensalidade)) {
+      const { error: updErr } = await supabase
+        .from('client_contract_periods')
+        .update({ valor: ficha.mensalidade, ciclo: ficha.ciclo || 'mensal', moeda: ficha.moeda || 'BRL' })
+        .eq('id', aberta.id);
+      if (updErr) console.error('[ClientAPI] sincronizarVigencia update:', updErr.message);
+    }
+  } catch (err: any) {
+    console.error('[ClientAPI] sincronizarVigencia:', err.message);
+  }
+}
 
 
 // ─── GET /api/v2/clients ──────────────────────────────────────────────────
@@ -281,11 +346,54 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
       fichas = data || [];
     }
 
+    // Vigências: o LTV soma faixa a faixa, então um reajuste não reescreve o
+    // passado. Sem vigências (migration pendente ou cliente sem valor), cai no
+    // cálculo antigo — a tela nunca fica sem número.
+    const { data: vigencias } = ids.length
+      ? await supabase
+          .from('client_contract_periods')
+          .select('contact_id, valor, ciclo, inicio, fim')
+          .eq('user_id', userId)
+          .in('contact_id', ids)
+      : { data: [] as any[] };
+
+    const porContatoVig = new Map<string, any[]>();
+    for (const v of vigencias || []) {
+      const lista = porContatoVig.get(v.contact_id) || [];
+      lista.push(v);
+      porContatoVig.set(v.contact_id, lista);
+    }
+
     const porContato = new Map(fichas.map(f => [f.contact_id, f]));
     const clientes = (contatos || []).map(c => {
       const profile = porContato.get(c.id) || null;
-      return { ...c, profile, ...calcularLTV(profile) };
+      const faixas = porContatoVig.get(c.id) || [];
+      const ltv = faixas.length ? calcularLTVPorVigencias(faixas, profile) : calcularLTV(profile);
+      return { ...c, profile, ...ltv };
     });
+
+    // Reajuste agendado que já virou: a ficha guarda o valor vigente, e é ela
+    // que alimenta MRR, ticket médio e receita recorrente. Ao detectar a
+    // virada aqui, corrige a ficha — sem isso o faturamento seguiria no preço
+    // antigo até alguém editar o cliente na mão.
+    const hojeStr = new Date().toISOString().slice(0, 10);
+    for (const c of clientes) {
+      const faixas = porContatoVig.get(c.id) || [];
+      if (!faixas.length || !c.profile) continue;
+      const atual = vigenciaEm(faixas, hojeStr);
+      if (!atual || Number(atual.valor) === Number(c.profile.mensalidade)) continue;
+
+      c.profile.mensalidade = Number(atual.valor);
+      if (atual.ciclo) c.profile.ciclo = atual.ciclo;
+      supabase
+        .from('client_profiles')
+        .update({ mensalidade: Number(atual.valor), ciclo: atual.ciclo || c.profile.ciclo })
+        .eq('contact_id', c.id)
+        .eq('user_id', userId)
+        .then(({ error: e }) => {
+          if (e) console.error('[ClientAPI] virada de vigência:', e.message);
+        });
+    }
 
     const metricas = resumoCarteira(clientes.map(c => c.profile));
 
@@ -333,13 +441,35 @@ router.get('/:contactId', async (req: AuthenticatedRequest, res: Response) => {
       .order('data', { ascending: false })
       .limit(50);
 
+    const { data: faixas } = await supabase
+      .from('client_contract_periods')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('contact_id', contactId)
+      .order('inicio', { ascending: false });
+
+    // Quanto de fato entrou: soma das mensalidades marcadas como pagas. É o
+    // número mais fiel, mas só existe desde que o Financeiro passou a ser
+    // usado — por isso convive com o contratado em vez de substituí-lo.
+    const { data: pagos } = await supabase
+      .from('financial_transactions')
+      .select('valor')
+      .eq('user_id', userId)
+      .eq('contact_id', contactId)
+      .eq('tipo', 'entrada')
+      .eq('status', 'pago');
+
+    const ltvRecebido = (pagos || []).reduce((soma, l) => soma + Number(l.valor || 0), 0);
+
     res.json({
       success: true,
       data: {
         ...contato,
         profile: profile || null,
         appointments: agendamentos || [],
-        ...calcularLTV(profile),
+        vigencias: faixas || [],
+        ltv_recebido: Math.round(ltvRecebido * 100) / 100,
+        ...(faixas?.length ? calcularLTVPorVigencias(faixas, profile) : calcularLTV(profile)),
       },
     });
   } catch (err: any) {
@@ -350,6 +480,151 @@ router.get('/:contactId', async (req: AuthenticatedRequest, res: Response) => {
 
 // ─── POST /api/v2/clients/:contactId/promote ──────────────────────────────
 // Promove um lead a cliente e abre a ficha.
+// ─── GET /api/v2/clients/:contactId/vigencias ─────────────────────────────
+router.get('/:contactId/vigencias', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('client_contract_periods')
+      .select('*')
+      .eq('user_id', req.userId!)
+      .eq('contact_id', req.params.contactId)
+      .order('inicio', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error('[ClientAPI] vigencias GET:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/clients/:contactId/reajuste ─────────────────────────────
+// Registra um novo valor a partir de uma data. O período anterior é fechado
+// na véspera — nunca alterado no valor, porque é ele que sustenta o LTV do
+// passado.
+router.post('/:contactId/reajuste', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { contactId } = req.params;
+  const valor = Number(req.body?.valor);
+  const ciclo = ['mensal', 'anual', 'unico'].includes(req.body?.ciclo) ? req.body.ciclo : 'mensal';
+  const inicio = String(req.body?.inicio || '').slice(0, 10);
+
+  if (!valor || valor <= 0) return res.status(400).json({ success: false, error: 'Informe o novo valor.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio)) return res.status(400).json({ success: false, error: 'Informe a data de início.' });
+
+  try {
+    const { data: contato } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('id', contactId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!contato) return res.status(404).json({ success: false, error: 'Cliente não encontrado.' });
+
+    // Véspera do novo início: o período antigo vale até o dia anterior.
+    const vespera = new Date(`${inicio}T12:00:00`);
+    vespera.setDate(vespera.getDate() - 1);
+    const fimAnterior = vespera.toISOString().slice(0, 10);
+
+    const { data: vigente } = await supabase
+      .from('client_contract_periods')
+      .select('id, inicio')
+      .eq('contact_id', contactId)
+      .is('fim', null)
+      .maybeSingle();
+
+    if (vigente) {
+      if (new Date(`${vigente.inicio}T12:00:00`) > new Date(`${inicio}T12:00:00`)) {
+        return res.status(400).json({
+          success: false,
+          error: 'O reajuste precisa começar depois do início do valor atual.',
+        });
+      }
+      const { error: fecharErr } = await supabase
+        .from('client_contract_periods')
+        .update({ fim: fimAnterior })
+        .eq('id', vigente.id);
+      if (fecharErr) throw fecharErr;
+    }
+
+    const { data: nova, error: insErr } = await supabase
+      .from('client_contract_periods')
+      .insert({ contact_id: contactId, user_id: userId, valor, ciclo, inicio })
+      .select()
+      .single();
+
+    if (insErr) {
+      // Não deixa o cliente sem período aberto se a inserção falhar
+      if (vigente) await supabase.from('client_contract_periods').update({ fim: null }).eq('id', vigente.id);
+      throw insErr;
+    }
+
+    // A ficha guarda o valor VIGENTE (é o que a lista e o MRR leem). Reajuste
+    // agendado para o futuro não muda a ficha ainda.
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (inicio <= hoje) {
+      await supabase
+        .from('client_profiles')
+        .update({ mensalidade: valor, ciclo })
+        .eq('contact_id', contactId)
+        .eq('user_id', userId);
+    }
+
+    await invalidateCache(cacheKey.contacts(userId)).catch(() => {});
+    res.json({ success: true, data: nova, aplicado: inicio <= hoje });
+  } catch (err: any) {
+    console.error('[ClientAPI] reajuste:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── DELETE /api/v2/clients/:contactId/vigencias/:id ──────────────────────
+// Desfaz um reajuste agendado por engano. Só remove período que ainda não
+// começou — apagar faixa já vivida reescreveria o histórico, que é
+// exatamente o que estas vigências existem para impedir.
+router.delete('/:contactId/vigencias/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  try {
+    const { data: periodo } = await supabase
+      .from('client_contract_periods')
+      .select('id, inicio, contact_id')
+      .eq('id', req.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!periodo) return res.status(404).json({ success: false, error: 'Vigência não encontrada.' });
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (periodo.inicio <= hoje) {
+      return res.status(400).json({
+        success: false,
+        error: 'Só dá para remover um reajuste que ainda não entrou em vigor.',
+      });
+    }
+
+    const { error } = await supabase.from('client_contract_periods').delete().eq('id', periodo.id);
+    if (error) throw error;
+
+    // O período anterior volta a ficar aberto
+    const { data: anterior } = await supabase
+      .from('client_contract_periods')
+      .select('id')
+      .eq('contact_id', periodo.contact_id)
+      .order('inicio', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (anterior) {
+      await supabase.from('client_contract_periods').update({ fim: null }).eq('id', anterior.id);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[ClientAPI] vigencia DELETE:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 router.post('/:contactId/promote', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId!;
   const { contactId } = req.params;
@@ -394,6 +669,7 @@ router.post('/:contactId/promote', async (req: AuthenticatedRequest, res: Respon
       throw upErr;
     }
 
+    await sincronizarVigencia(userId, contactId);
     await invalidateCache(cacheKey.contacts(userId)).catch(() => {});
     res.json({ success: true });
   } catch (err: any) {
@@ -481,6 +757,7 @@ router.patch('/:contactId', async (req: AuthenticatedRequest, res: Response) => 
       if (error) throw error;
     }
 
+    await sincronizarVigencia(userId, contactId);
     await invalidateCache(cacheKey.contacts(userId)).catch(() => {});
     res.json({ success: true });
   } catch (err: any) {

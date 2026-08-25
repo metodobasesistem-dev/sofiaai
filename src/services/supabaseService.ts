@@ -2236,8 +2236,11 @@ export interface ClientRecord {
   profile_picture_url?: string | null;
   profile?: ClientProfile | null;
   appointments?: Array<Record<string, any>>;
-  /** LTV realizado: quanto este cliente já pagou até hoje. */
+  /** LTV contratado: soma das faixas de valor já vividas. */
   ltv?: number;
+  /** LTV recebido: soma do que foi de fato marcado como pago no Financeiro. */
+  ltv_recebido?: number;
+  vigencias?: VigenciaContrato[];
   /** Meses completos desde a entrada (ou até o encerramento). */
   meses?: number;
 }
@@ -2410,4 +2413,49 @@ export const reopenLead = async (contactId: string, etapa?: string) => {
   });
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao reabrir o lead');
+};
+
+// ─── Vigências de contrato ────────────────────────────────────────────────
+// Cada faixa de preço tem início e fim. É o que impede um reajuste de
+// reescrever o LTV do passado.
+
+export interface VigenciaContrato {
+  id: string;
+  contact_id: string;
+  valor: number;
+  moeda?: string;
+  ciclo: 'mensal' | 'anual' | 'unico';
+  inicio: string;
+  fim: string | null;
+}
+
+export const listContractPeriods = async (contactId: string): Promise<VigenciaContrato[]> => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}/vigencias`);
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar vigências');
+  return result.data || [];
+};
+
+/** Registra um novo valor a partir de uma data (pode ser futura). */
+export const applyRateChange = async (
+  contactId: string,
+  payload: { valor: number; ciclo?: string; inicio: string }
+): Promise<{ aplicado: boolean }> => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}/reajuste`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao registrar o reajuste');
+  return { aplicado: result.aplicado };
+};
+
+/** Desfaz um reajuste que ainda não entrou em vigor. */
+export const deleteContractPeriod = async (contactId: string, id: string) => {
+  const res = await standardFetch(
+    `/api/v2/clients/${encodeURIComponent(contactId)}/vigencias/${id}`,
+    { method: 'DELETE' }
+  );
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover a vigência');
 };

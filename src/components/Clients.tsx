@@ -7,7 +7,7 @@
  * Não confundir com a gestão de inquilinos da plataforma (Painel Admin): lá
  * são as empresas que contratam o sistema, aqui são os clientes de cada uma.
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Search, Users, Phone, Mail, Instagram, Globe, Loader2, X, RefreshCw,
   Calendar, MessageSquare, TrendingUp, Save, UserMinus, Download, Wallet, Plus, Trophy, Trash2, SlidersHorizontal,
@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   listClients, getClient, updateClient, demoteClient, createClient,
   listClientFields, createClientField, deleteClientField,
+  applyRateChange, deleteContractPeriod, type VigenciaContrato,
   type CampoCliente, type TipoCampoCliente,
   type ClientRecord, type ClientProfile, type ClientsSummary,
 } from '../services/supabaseService';
@@ -306,6 +307,201 @@ function GerenciarCamposModal({
 }
 
 
+/**
+ * Reajuste e histórico de valores do contrato.
+ *
+ * O valor não é editado no lugar: cada mudança abre uma faixa nova com data
+ * de início. É isso que mantém o LTV do passado no preço da época — e permite
+ * agendar o aumento para o mês que vem sem mexer em nada hoje.
+ */
+function ValorDoContrato({
+  contactId,
+  vigencias,
+  fallback,
+  onMudou,
+}: {
+  contactId: string;
+  vigencias: VigenciaContrato[];
+  /** Ficha, para quando ainda não há vigência registrada. */
+  fallback: { mensalidade?: number | null; ciclo?: string | null; moeda?: string | null; cliente_desde?: string | null } | null;
+  onMudou: () => void;
+}) {
+  const [abrindo, setAbrindo] = useState(false);
+  const [valor, setValor] = useState('');
+  const [inicio, setInicio] = useState(() => {
+    // Padrão: primeiro dia do mês que vem, que é quando reajuste costuma valer
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() + 1, 1, 12).toISOString().slice(0, 10);
+  });
+  const [ciclo, setCiclo] = useState('mensal');
+  const [salvando, setSalvando] = useState(false);
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  // Só o essencial para exibir: o fallback da ficha não é uma vigência de
+  // verdade (não tem id nem faixa), mas mostra o mesmo valor na tela.
+  const vigente: { valor: number; ciclo?: string | null; moeda?: string | null; inicio: string } | null =
+    vigencias.find(v => !v.fim && v.inicio <= hoje) ||
+    (fallback?.mensalidade
+      ? {
+          valor: Number(fallback.mensalidade),
+          ciclo: fallback.ciclo || 'mensal',
+          moeda: fallback.moeda,
+          inicio: fallback.cliente_desde || '',
+        }
+      : null);
+  const agendadas = vigencias.filter(v => v.inicio > hoje);
+  const passadas = vigencias.filter(v => v.fim && v.fim < hoje);
+
+  const registrar = async () => {
+    const n = Number(valor);
+    if (!n || n <= 0) {
+      toast.error('Informe o novo valor');
+      return;
+    }
+    try {
+      setSalvando(true);
+      const { aplicado } = await applyRateChange(contactId, {
+        valor: n,
+        ciclo,
+        inicio,
+      });
+      toast.success(
+        aplicado ? 'Novo valor em vigor' : 'Reajuste agendado',
+        { description: aplicado ? undefined : `Passa a valer em ${formatDate(inicio)}.` }
+      );
+      setValor('');
+      setAbrindo(false);
+      onMudou();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const remover = async (v: VigenciaContrato) => {
+    if (!window.confirm(`Cancelar o reajuste para ${formatMoney(v.valor)} previsto para ${formatDate(v.inicio)}?`)) return;
+    try {
+      await deleteContractPeriod(contactId, v.id);
+      toast.success('Reajuste cancelado');
+      onMudou();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Valor vigente</p>
+          <p className="text-xl font-semibold text-slate-900 tracking-tight">
+            {vigente ? formatMoney(vigente.valor, vigente.moeda) : '—'}
+            {vigente && (
+              <span className="text-[12px] font-normal text-slate-400 ml-2">
+                {CICLOS.find(c => c.id === vigente.ciclo)?.label.toLowerCase()}
+                {vigente.inicio ? ` · desde ${formatDate(vigente.inicio)}` : ''}
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            // Reajuste raramente muda o ciclo: parte do que já está valendo.
+            if (!abrindo) setCiclo(vigente?.ciclo || 'mensal');
+            setAbrindo(v => !v);
+          }}
+          className="px-3 py-1.5 border border-slate-200 rounded-lg text-[12px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors shrink-0"
+        >
+          {abrindo ? 'Cancelar' : vigente ? 'Reajustar' : 'Definir valor'}
+        </button>
+      </div>
+
+      {abrindo && (
+        <div className="p-3 bg-slate-50 rounded-xl space-y-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 block">Novo valor</label>
+              <input
+                type="number"
+                value={valor}
+                onChange={e => setValor(e.target.value)}
+                placeholder="0,00"
+                autoFocus
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:border-primary-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 block">A partir de</label>
+              <input
+                type="date"
+                value={inicio}
+                onChange={e => setInicio(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:border-primary-500 outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 block">Ciclo</label>
+            <select
+              value={ciclo}
+              onChange={e => setCiclo(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:border-primary-500 outline-none"
+            >
+              {CICLOS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            O que já passou continua valendo {vigente ? formatMoney(vigente.valor, vigente.moeda) : 'o valor anterior'} — o LTV do histórico não muda.
+          </p>
+          <button
+            onClick={registrar}
+            disabled={salvando}
+            className="w-full py-2 bg-slate-900 text-white rounded-lg text-[12px] font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {salvando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Registrar reajuste
+          </button>
+        </div>
+      )}
+
+      {agendadas.length > 0 && (
+        <div className="space-y-1.5">
+          {agendadas.map(v => (
+            <div key={v.id} className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg">
+              <Calendar size={13} className="text-amber-600 shrink-0" />
+              <p className="text-[12px] text-amber-800 flex-1">
+                <span className="font-semibold">{formatMoney(v.valor, v.moeda)}</span> a partir de {formatDate(v.inicio)}
+              </p>
+              <button
+                onClick={() => remover(v)}
+                className="text-amber-600 hover:text-red-600 transition-colors shrink-0"
+                title="Cancelar este reajuste"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {passadas.length > 0 && (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Valores anteriores</p>
+          <div className="space-y-1">
+            {passadas.map(v => (
+              <p key={v.id} className="text-[11px] text-slate-500">
+                {formatMoney(v.valor, v.moeda)} — {formatDate(v.inicio)} a {formatDate(v.fim)}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ── Ficha lateral ─────────────────────────────────────────────────────────
 
 function FichaCliente({
@@ -324,12 +520,13 @@ function FichaCliente({
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
 
-  useEffect(() => {
-    let ativo = true;
+  // Recarregar precisa ser chamável de fora do efeito: depois de um reajuste
+  // a ficha inteira muda (valor vigente, LTV, histórico) e o form em memória
+  // ficaria com o valor velho, que o próximo "Salvar" gravaria de volta.
+  const carregar = useCallback(() => {
     setCarregando(true);
-    getClient(contactId)
+    return getClient(contactId)
       .then(dados => {
-        if (!ativo) return;
         setCliente(dados);
         setForm({
           nome: dados.nome || '',
@@ -346,9 +543,10 @@ function FichaCliente({
         });
       })
       .catch(e => toast.error('Erro ao carregar ficha: ' + e.message))
-      .finally(() => ativo && setCarregando(false));
-    return () => { ativo = false; };
+      .finally(() => setCarregando(false));
   }, [contactId]);
+
+  useEffect(() => { carregar(); }, [carregar]);
 
   const salvar = async () => {
     try {
@@ -423,21 +621,31 @@ function FichaCliente({
       ) : (
         <>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* LTV realizado — o que este cliente já pagou. Fica no topo porque
-                é o número que responde "quanto vale essa relação". */}
+            {/* LTV contratado — o que este cliente vale somando cada faixa de
+                preço pelo tempo em que ela valeu. Reajuste não reescreve o
+                passado, então o número aqui é histórico, não projeção. */}
             <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-5 text-white shadow-lg shadow-primary-200">
               <div className="flex items-center gap-2 mb-1 opacity-90">
                 <Trophy size={14} />
-                <span className="text-[10px] font-black uppercase tracking-widest">LTV realizado</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">LTV contratado</span>
               </div>
               <p className="text-3xl font-black tracking-tight">{formatMoney(cliente?.ltv || 0)}</p>
               <p className="text-[11px] font-medium opacity-80 mt-1">
                 {cliente?.meses
-                  ? `${cliente.meses} ${cliente.meses === 1 ? 'mês' : 'meses'} de casa` +
-                    (cliente.profile?.mensalidade ? ` × ${formatMoney(cliente.profile.mensalidade, cliente.profile.moeda)}` : '')
+                  ? `${cliente.meses} ${cliente.meses === 1 ? 'mês' : 'meses'} de casa`
                   : 'Ainda no primeiro mês'}
                 {cliente?.profile?.encerrado_em ? ` · encerrado em ${formatDate(cliente.profile.encerrado_em)}` : ''}
               </p>
+
+              {/* O que de fato entrou em caixa. Só conta o que está lançado no
+                  financeiro, então costuma ser menor que o contratado — é essa
+                  diferença que mostra atraso ou lançamento faltando. */}
+              {typeof cliente?.ltv_recebido === 'number' && cliente.ltv_recebido > 0 && (
+                <div className="mt-4 pt-3 border-t border-white/20 flex items-baseline justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Recebido</span>
+                  <span className="text-lg font-bold tabular-nums">{formatMoney(cliente.ltv_recebido)}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -451,19 +659,12 @@ function FichaCliente({
 
             <div className="space-y-4 pt-2 border-t border-slate-100">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-4">Comercial</p>
-              <div className="grid grid-cols-2 gap-3">
-                {campo('Mensalidade', 'mensalidade', <Wallet size={11} />, 'number', '0,00')}
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Ciclo</label>
-                  <select
-                    value={form.ciclo}
-                    onChange={e => setForm(f => ({ ...f, ciclo: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
-                  >
-                    {CICLOS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
-                </div>
-              </div>
+              <ValorDoContrato
+                contactId={contactId}
+                vigencias={cliente?.vigencias || []}
+                fallback={cliente?.profile || null}
+                onMudou={() => { carregar(); onChanged(); }}
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

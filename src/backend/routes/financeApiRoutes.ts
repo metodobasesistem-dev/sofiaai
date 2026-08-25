@@ -8,7 +8,7 @@
 import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
-import { resumoCarteira } from '../lib/carteira.js';
+import { resumoCarteira, vigenciaEm } from '../lib/carteira.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -178,6 +178,22 @@ router.post('/gerar-mensalidades', async (req: AuthenticatedRequest, res: Respon
 
     const porContato = new Map((fichas || []).map(f => [f.contact_id, f]));
 
+    // A cobrança usa o valor VIGENTE na competência, não o valor atual da
+    // ficha: gerar setembro depois de um reajuste que começa em setembro tem
+    // de sair pelo valor novo, e regerar um mês antigo, pelo valor da época.
+    const { data: vigencias } = await supabase
+      .from('client_contract_periods')
+      .select('contact_id, valor, ciclo, inicio, fim')
+      .eq('user_id', userId)
+      .in('contact_id', clientes.map(c => c.id));
+
+    const faixasPorContato = new Map<string, any[]>();
+    for (const v of vigencias || []) {
+      const lista = faixasPorContato.get(v.contact_id) || [];
+      lista.push(v);
+      faixasPorContato.set(v.contact_id, lista);
+    }
+
     // 2. Categoria "Mensalidades" (criada na primeira geração)
     let categoriaId: string | null = null;
     const { data: cat } = await supabase
@@ -208,12 +224,24 @@ router.post('/gerar-mensalidades', async (req: AuthenticatedRequest, res: Respon
 
     for (const cliente of clientes) {
       const ficha = porContato.get(cliente.id);
-      if (!cobraNesteMes(ficha, competencia)) { pulados++; continue; }
+      if (!ficha) { pulados++; continue; }
+
+      // O valor da competência vem da vigência; a ficha decide se cobra
+      // (contrato ativo, ciclo, data de entrada).
+      const faixa = vigenciaEm(faixasPorContato.get(cliente.id) || [], competencia);
+      const valorDaCompetencia = faixa ? Number(faixa.valor) : Number(ficha.mensalidade);
+      const fichaDaCompetencia = {
+        ...ficha,
+        mensalidade: valorDaCompetencia,
+        ciclo: faixa?.ciclo || ficha.ciclo,
+      };
+
+      if (!cobraNesteMes(fichaDaCompetencia, competencia)) { pulados++; continue; }
 
       const { error } = await supabase.from('financial_transactions').insert({
         user_id: userId,
         descricao: `Mensalidade ${rotulo} — ${cliente.nome}`,
-        valor: Number(ficha.mensalidade),
+        valor: valorDaCompetencia,
         tipo: 'entrada',
         status: 'pendente',
         data_pagamento: vencimentoNoMes(ficha.cliente_desde, competencia),
