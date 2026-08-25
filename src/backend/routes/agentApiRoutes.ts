@@ -243,6 +243,21 @@ router.post('/:id/knowledge', async (req: AuthenticatedRequest, res: Response) =
   const agentId = req.params.id;
 
   try {
+    // O agente precisa ser deste inquilino. Sem esta checagem, qualquer
+    // usuário autenticado podia gravar um bloco de conhecimento no agente de
+    // outro tenant — e o texto entraria no prompt da IA que atende os
+    // clientes dele.
+    const { data: agente } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('id', agentId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!agente) {
+      return res.status(404).json({ success: false, error: 'Agente não encontrado' });
+    }
+
     const { data, error } = await supabase
       .from('agent_knowledge')
       .insert({
