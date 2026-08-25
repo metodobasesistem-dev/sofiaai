@@ -39,6 +39,22 @@ import { standardFetch } from '../services/supabaseService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+/**
+ * Contato já colocado na fila do disparo.
+ *
+ * A validação viaja junto com o contato: quem foi checado antes de entrar na
+ * fila continua exibindo o resultado depois, sem precisar revalidar na hora
+ * de revisar o lote.
+ */
+interface ContatoNaFila {
+  nome: string;
+  telefone: string;
+  temWhatsapp?: boolean;
+  jaNaBase?: boolean;
+  nomeNaBase?: string;
+  naoVerificado?: boolean;
+}
+
 interface Campaign {
   id: string;
   name: string;
@@ -48,12 +64,16 @@ interface Campaign {
   sent_count: number;
   error_count: number;
   created_at: string;
-  target_type?: 'all' | 'labels' | 'funnel' | 'manual' | 'upload';
+  target_type?: 'all' | 'labels' | 'funnel' | 'manual' | 'upload' | 'single_contact';
   selected_labels?: any;
   selected_funnel_status?: string;
   manual_list?: string;
   uploaded_contacts?: any[];
   template_id?: string;
+  // Campos que a tela já lia do banco mas faltavam no tipo — sem eles o
+  // TypeScript não protegia quem herda a mensagem de uma campanha existente.
+  message_type?: 'custom' | 'template';
+  custom_text?: string | null;
   variables?: any;
 }
 
@@ -307,6 +327,74 @@ export default function Campaigns() {
     }
   };
 
+  /** Só dígitos, para comparar números escritos de formas diferentes. */
+  const digitos = (v: string) => String(v || '').replace(/\D/g, '');
+
+  /**
+   * Move o contato do formulário para a fila do disparo.
+   *
+   * Validar antes é opcional: quem não validou entra marcado como não
+   * verificado, e a revisão mostra isso. Bloquear aqui só faria o usuário
+   * validar um por um, que é justamente o trabalho que a fila elimina.
+   */
+  const adicionarContatoNaFila = () => {
+    const { nome, telefone, lista } = campaignData.singleContact;
+    const tel = digitos(telefone);
+
+    if (tel.length < 8) {
+      toast.error('Informe um telefone com pelo menos 8 dígitos.');
+      return;
+    }
+    if (lista.some(c => digitos(c.telefone) === tel)) {
+      toast.warning('Esse número já está na fila.');
+      return;
+    }
+
+    const item: ContatoNaFila = {
+      nome: nome.trim() || 'Sem nome',
+      telefone: telefone.trim(),
+      ...(contactCheckResult
+        ? {
+            temWhatsapp: contactCheckResult.hasWhatsapp,
+            jaNaBase: contactCheckResult.found,
+            nomeNaBase: contactCheckResult.name,
+            naoVerificado: contactCheckResult.waCheckFailed,
+          }
+        : { naoVerificado: true }),
+    };
+
+    setCampaignData({
+      ...campaignData,
+      singleContact: { ...campaignData.singleContact, nome: '', telefone: '', lista: [...lista, item] },
+    });
+    setContactCheckResult(null);
+    toast.success(`${item.nome} entrou na fila (${lista.length + 1})`);
+  };
+
+  const removerContatoDaFila = (telefone: string) => {
+    setCampaignData({
+      ...campaignData,
+      singleContact: {
+        ...campaignData.singleContact,
+        lista: campaignData.singleContact.lista.filter(c => digitos(c.telefone) !== digitos(telefone)),
+      },
+    });
+  };
+
+  /**
+   * A fila do disparo, já contando o contato que está no formulário mas ainda
+   * não foi adicionado — esquecer de clicar em "Adicionar" não pode fazer o
+   * contato ficar de fora do envio.
+   */
+  const filaDeEnvio = (): ContatoNaFila[] => {
+    const { nome, telefone, lista } = campaignData.singleContact;
+    const tel = digitos(telefone);
+    if (tel.length >= 8 && !lista.some(c => digitos(c.telefone) === tel)) {
+      return [...lista, { nome: nome.trim() || 'Sem nome', telefone: telefone.trim(), naoVerificado: !contactCheckResult }];
+    }
+    return lista;
+  };
+
   const validateManualNumbers = async () => {
     const rawNumbers = (campaignData.manualList || '').split('\n').map(n => n.trim()).filter(Boolean);
     if (rawNumbers.length === 0) {
@@ -370,7 +458,7 @@ export default function Campaigns() {
     selectedFunnelStatus: '',
     manualList: '',
     uploadedContacts: [] as any[],
-    singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
+    singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
     messageType: 'custom' as 'custom' | 'template',
     customText: '',
     templateId: '',
@@ -650,7 +738,7 @@ export default function Campaigns() {
       templateName: campaign.template_name || '',
       templateLanguage: campaign.template_language || 'pt_BR',
       isMetaTemplate: false,
-      singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
+      singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
       variables: campaign.variables || {}
     });
     setCurrentStep(1);
@@ -703,7 +791,7 @@ export default function Campaigns() {
         selectedFunnelStatus: '',
         manualList: '',
         uploadedContacts: [],
-        singleContact: { nome: prefillName, telefone: prefillPhone, linkToCampaign: false, linkedCampaignId: '' },
+        singleContact: { nome: prefillName, telefone: prefillPhone, linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
         ...camposDeMensagemIniciais()
       });
       setCurrentStep(1);
@@ -838,7 +926,7 @@ export default function Campaigns() {
                   { id: 'funnel', label: 'Funil', icon: <Layers size={18} /> },
                   { id: 'manual', label: 'Manual', icon: <ClipboardList size={18} /> },
                   { id: 'upload', label: 'Planilha', icon: <Upload size={18} /> },
-                  { id: 'single_contact', label: 'Contato Único', icon: <Zap size={18} /> }
+                  { id: 'single_contact', label: 'Avulsos', icon: <Zap size={18} /> }
                 ].map(type => (
                   <button
                     key={type.id}
@@ -866,6 +954,7 @@ export default function Campaigns() {
                   className="p-6 bg-slate-50 rounded-3xl space-y-4 border border-slate-100"
                 >
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalhes do Contato</p>
+                  <p className="text-[11px] text-slate-500 -mt-2">Adicione quantos quiser: a partir de dois contatos o envio vira uma campanha, com intervalo entre as mensagens.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <input 
                       type="text" 
@@ -924,6 +1013,82 @@ export default function Campaigns() {
                     </div>
                   )}
                   
+                  <button
+                    onClick={adicionarContatoNaFila}
+                    disabled={digitos(campaignData.singleContact.telefone).length < 8}
+                    className="w-full py-2.5 border border-dashed border-primary-300 text-primary-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-primary-50 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Plus size={14} /> Adicionar à fila e limpar
+                  </button>
+
+                  {campaignData.singleContact.lista.length > 0 && (
+                    <div className="space-y-2 pt-3 border-t border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Fila de envio · {campaignData.singleContact.lista.length} contato(s)
+                        </p>
+                        <button
+                          onClick={() => setCampaignData({
+                            ...campaignData,
+                            singleContact: { ...campaignData.singleContact, lista: [] },
+                          })}
+                          className="text-[10px] font-bold text-slate-400 hover:text-red-600 transition-colors uppercase tracking-widest"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                        {campaignData.singleContact.lista.map((c, idx) => (
+                          <div
+                            key={digitos(c.telefone)}
+                            className="flex items-center gap-3 px-3 py-2 bg-white border border-slate-200 rounded-xl"
+                          >
+                            <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-500 text-[10px] font-black flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 truncate">{c.nome}</p>
+                              <p className="text-[11px] text-slate-500 font-mono">{c.telefone}</p>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
+                                c.naoVerificado
+                                  ? 'bg-slate-100 text-slate-500'
+                                  : c.temWhatsapp === false
+                                    ? 'bg-red-50 text-red-700'
+                                    : c.jaNaBase
+                                      ? 'bg-amber-50 text-amber-700'
+                                      : 'bg-emerald-50 text-emerald-700'
+                              }`}
+                              title={c.jaNaBase && c.nomeNaBase ? `Já na base como ${c.nomeNaBase}` : undefined}
+                            >
+                              {c.naoVerificado
+                                ? 'não validado'
+                                : c.temWhatsapp === false
+                                  ? 'sem WhatsApp'
+                                  : c.jaNaBase
+                                    ? 'já na base'
+                                    : 'inédito'}
+                            </span>
+                            <button
+                              onClick={() => removerContatoDaFila(c.telefone)}
+                              className="p-1 text-slate-300 hover:text-red-600 transition-colors shrink-0"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {campaignData.singleContact.lista.some(c => c.temWhatsapp === false) && (
+                        <p className="text-[11px] font-bold text-red-600">
+                          Há número sem WhatsApp na fila — o envio para ele vai falhar.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="pt-2 mt-3 border-t border-slate-200 space-y-3">
                     <label 
                       className="flex items-center gap-2 cursor-pointer group"
@@ -1212,7 +1377,9 @@ export default function Campaigns() {
             <button 
               disabled={(() => {
                 if (campaignData.targetType === 'single_contact') {
-                  if (!campaignData.singleContact.telefone) return true;
+                  // A fila conta o contato ainda no formulário, então quem
+                  // digitou um número e não clicou em "Adicionar" também passa.
+                  if (filaDeEnvio().length === 0) return true;
                   if (campaignData.singleContact.linkToCampaign && !campaignData.singleContact.linkedCampaignId) return true;
                   if (!campaignData.singleContact.linkToCampaign && !campaignData.name) return true;
                   return false;
@@ -1351,9 +1518,11 @@ export default function Campaigns() {
                         if (campaignData.targetType === 'upload' && campaignData.uploadedContacts?.length > 0) {
                           sampleName = campaignData.uploadedContacts[0].nome || campaignData.uploadedContacts[0].name || sampleName;
                           samplePhone = campaignData.uploadedContacts[0].telefone || samplePhone;
-                        } else if (campaignData.singleContact?.nome) {
-                          sampleName = campaignData.singleContact.nome;
-                          samplePhone = campaignData.singleContact.telefone || samplePhone;
+                        } else if (campaignData.targetType === 'single_contact' && filaDeEnvio().length > 0) {
+                          // Depois de entrar na fila o formulário fica vazio;
+                          // o exemplo tem que vir de quem vai receber.
+                          sampleName = filaDeEnvio()[0].nome;
+                          samplePhone = filaDeEnvio()[0].telefone || samplePhone;
                         }
                         
                         return campaignData.customText
@@ -1557,7 +1726,11 @@ export default function Campaigns() {
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                    <div>
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Público</p>
-                      <p className="text-sm font-bold">{campaignData.targetType === 'all' ? 'Todos os contatos' : 'Segmentado'}</p>
+                      <p className="text-sm font-bold">
+                        {campaignData.targetType === 'single_contact'
+                          ? `${filaDeEnvio().length} contato(s) na fila`
+                          : campaignData.targetType === 'all' ? 'Todos os contatos' : 'Segmentado'}
+                      </p>
                    </div>
                    <div>
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mensagem</p>
@@ -1589,9 +1762,9 @@ export default function Campaigns() {
                if (campaignData.targetType === 'upload' && campaignData.uploadedContacts?.length > 0) {
                  sampleName = campaignData.uploadedContacts[0].nome || campaignData.uploadedContacts[0].name || sampleName;
                  samplePhone = campaignData.uploadedContacts[0].telefone || samplePhone;
-               } else if (campaignData.singleContact?.nome) {
-                 sampleName = campaignData.singleContact.nome;
-                 samplePhone = campaignData.singleContact.telefone || samplePhone;
+               } else if (campaignData.targetType === 'single_contact' && filaDeEnvio().length > 0) {
+                 sampleName = filaDeEnvio()[0].nome;
+                 samplePhone = filaDeEnvio()[0].telefone || samplePhone;
                }
                
                let finalMessage = previewBody
@@ -1683,6 +1856,70 @@ export default function Campaigns() {
                          nome: c.nome || c.name || 'Lead Planilha'
                       }));
                     } else if (campaignData.targetType === 'single_contact') {
+                      const fila = filaDeEnvio();
+
+                      // Dois ou mais contatos viram campanha de verdade: é o
+                      // caminho que já tem intervalo anti-ban entre as
+                      // mensagens, progresso, cancelamento e relatório. Um
+                      // contato só continua no envio direto — ninguém espera
+                      // um minuto para mandar uma única mensagem.
+                      if (fila.length > 1) {
+                        const resContatos = await standardFetch('/api/v2/campaigns/ensure-contacts', {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            contacts: fila.map(c => ({ nome: c.nome, telefone: c.telefone })),
+                          }),
+                        });
+                        const dadosContatos = await resContatos.json();
+                        if (!dadosContatos.success) throw new Error(dadosContatos.error);
+
+                        const registrados = dadosContatos.data as any[];
+                        const falhas = (dadosContatos.falhas || []) as any[];
+
+                        const campanhaVinculada = campaignData.singleContact.linkToCampaign
+                          ? campaigns.find(c => c.id === campaignData.singleContact.linkedCampaignId)
+                          : null;
+
+                        const nomeDoLote =
+                          campaignData.name ||
+                          (campanhaVinculada ? `${campanhaVinculada.name} — novo lote` : 'Disparo em lote');
+
+                        const { data: novaCamp, error: erroCamp } = await supabase
+                          .from('campaigns')
+                          .insert({
+                            tenant_id: user.id,
+                            name: nomeDoLote,
+                            template_name: campaignData.messageType === 'custom' ? 'Mensagem Personalizada' : campaignData.templateName,
+                            template_id: campaignData.templateId || null,
+                            message_type: campaignData.messageType,
+                            custom_text: campaignData.messageType === 'custom' ? campaignData.customText : null,
+                            target_type: 'upload',
+                            uploaded_contacts: registrados.map(c => ({ id: c.id, nome: c.nome, telefone: c.telefone })),
+                            variables: campaignData.variables,
+                            status: 'pending',
+                            total_contacts: registrados.length,
+                            sent_count: 0,
+                            error_count: 0,
+                          })
+                          .select()
+                          .single();
+
+                        if (erroCamp) throw erroCamp;
+
+                        if (falhas.length) {
+                          toast.warning(`${falhas.length} número(s) ficaram de fora por serem inválidos.`);
+                        }
+                        toast.success(`Campanha criada com ${registrados.length} contatos. Iniciando o disparo…`);
+
+                        setIsModalOpen(false);
+                        setEditingCampaignId(null);
+                        await fetchCampaigns();
+                        setIsSaving(false);
+                        startCampaign(novaCamp as any);
+                        return;
+                      }
+
+                      const unico = fila[0];
                       const res = await standardFetch('/api/v2/campaigns/send-single', {
                         method: 'POST',
                         body: JSON.stringify({
@@ -1695,10 +1932,7 @@ export default function Campaigns() {
                             customText: campaignData.customText,
                             variables: campaignData.variables
                           },
-                          contact: {
-                            nome: campaignData.singleContact.nome,
-                            telefone: campaignData.singleContact.telefone
-                          }
+                          contact: { nome: unico.nome, telefone: unico.telefone }
                         })
                       });
                       const result = await res.json();
@@ -1799,7 +2033,7 @@ export default function Campaigns() {
                 selectedFunnelStatus: '', 
                 manualList: '',
                 uploadedContacts: [],
-                singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '' },
+                singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
                 ...camposDeMensagemIniciais()
               });
               setCurrentStep(1);

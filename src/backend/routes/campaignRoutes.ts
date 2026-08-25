@@ -62,6 +62,54 @@ function getContactFieldValue(contact: any, field: string, sender?: { nome_compl
   }
 }
 
+/**
+ * Resolve um contato do CRM a partir de nome + telefone, criando se não existir.
+ *
+ * Sempre grava o telefone NORMALIZADO (com 55) no id e na coluna: o
+ * agentService salva contatos como {userId}_{normalizePhone(phone)}, então usar
+ * o número cru aqui faria o mesmo lead virar duas linhas quando ele
+ * respondesse — duplicado no CRM e nas notificações.
+ */
+async function garantirContato(
+  userId: string,
+  contato: { nome?: string; telefone: string }
+): Promise<{ id: string; nome: string; telefone: string; jaExistia: boolean }> {
+  const phoneRaw = String(contato.telefone || '').replace(/\D/g, '');
+  const phone = normalizePhone(phoneRaw);
+
+  const { data: existentes } = await supabase
+    .from('contacts')
+    .select('id, nome, telefone')
+    .eq('user_id', userId)
+    .in('telefone', Array.from(new Set([phone, phoneRaw])))
+    .limit(1);
+
+  const existente = existentes?.[0];
+  if (existente) {
+    return {
+      id: existente.id,
+      nome: contato.nome || existente.nome || '',
+      telefone: existente.telefone || phone,
+      jaExistia: true,
+    };
+  }
+
+  const { data: novo, error } = await supabase
+    .from('contacts')
+    .insert({
+      id: `${userId}_${phone}`,
+      user_id: userId,
+      nome: contato.nome || 'Lead Isolado',
+      telefone: phone,
+      status_funil: 'Lead',
+    })
+    .select('id, nome, telefone')
+    .single();
+
+  if (error) throw new Error('Erro ao criar contato: ' + error.message);
+  return { id: novo.id, nome: novo.nome, telefone: novo.telefone, jaExistia: false };
+}
+
 // ─── Background campaign runner ────────────────────────────────────────────
 
 async function runCampaign(campaignId: string, userId: string): Promise<void> {
@@ -122,7 +170,10 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
     } else if (campaign.target_type === 'upload') {
       const uploaded: any[] = campaign.uploaded_contacts || [];
       contacts = uploaded.map((c: any) => ({
-        id: 'upload-' + (c.telefone || c.number || ''),
+        // Contato agrupado no assistente já vem com o id real do CRM. Sem
+        // preservá-lo, o log gravaria "upload-5532…" e o relatório de quem
+        // recebeu ficaria sem nome.
+        id: c.id || 'upload-' + (c.telefone || c.number || ''),
         telefone: (c.telefone || c.number || '').replace(/\D/g, ''),
         nome: c.nome || c.name || 'Lead Planilha'
       }));
@@ -405,6 +456,54 @@ router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+/**
+ * POST /ensure-contacts — registra no CRM uma lista de contatos avulsos e
+ * devolve os ids reais.
+ *
+ * O disparo em lote precisa disso antes de criar a campanha: campaign_logs
+ * guarda só o contact_id, então sem contato de verdade o relatório de quem
+ * recebeu a mensagem viria como "Contato removido".
+ */
+router.post('/ensure-contacts', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const lista: any[] = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+
+    if (!lista.length) {
+      return res.status(400).json({ success: false, error: 'Nenhum contato informado.' });
+    }
+    if (lista.length > 200) {
+      return res.status(400).json({ success: false, error: 'Máximo de 200 contatos por lote.' });
+    }
+
+    const resolvidos: any[] = [];
+    const falhas: any[] = [];
+
+    for (const item of lista) {
+      const telefone = String(item?.telefone || '').replace(/\D/g, '');
+      if (telefone.length < 8) {
+        falhas.push({ telefone: item?.telefone, erro: 'Telefone inválido' });
+        continue;
+      }
+      try {
+        const c = await garantirContato(userId, { nome: item?.nome, telefone });
+        resolvidos.push({ id: c.id, nome: c.nome, telefone: c.telefone, ja_existia: c.jaExistia });
+      } catch (err: any) {
+        falhas.push({ telefone, erro: err.message });
+      }
+    }
+
+    if (!resolvidos.length) {
+      return res.status(400).json({ success: false, error: 'Nenhum contato pôde ser registrado.', falhas });
+    }
+
+    res.json({ success: true, data: resolvidos, falhas });
+  } catch (err: any) {
+    console.error('[Campaigns] ensure-contacts:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** POST /send-single — Envia mensagem para um contato isolado, registrando-o no CRM se necessário e opcionalmente vinculando a uma campanha */
 router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -417,40 +516,11 @@ router.post('/send-single', async (req: AuthenticatedRequest, res: Response) => 
 
     const phoneRaw = contact.telefone.replace(/\D/g, '');
     const phone = normalizePhone(phoneRaw);
-    
+
     // 1. Garante que o contato existe no CRM (contacts)
-    // IMPORTANTE: sempre usar o telefone NORMALIZADO (com 55) no id e na coluna.
-    // O agentService grava contatos como {userId}_{normalizePhone(phone)}; se aqui
-    // usássemos o número cru, o mesmo lead viraria duas linhas em contacts quando
-    // ele respondesse — e apareceria duplicado nas notificações e no CRM.
-    let contactId = '';
-    const { data: existingContacts } = await supabase
-      .from('contacts')
-      .select('id, nome, telefone')
-      .eq('user_id', userId)
-      .in('telefone', Array.from(new Set([phone, phoneRaw])))
-      .limit(1);
-
-    const existingContact = existingContacts?.[0];
-
-    if (existingContact) {
-      contactId = existingContact.id;
-    } else {
-      const { data: newContact, error: insertErr } = await supabase
-        .from('contacts')
-        .insert({
-          id: `${userId}_${phone}`,
-          user_id: userId,
-          nome: contact.nome || 'Lead Isolado',
-          telefone: phone,
-          status_funil: 'Lead',
-        })
-        .select('id')
-        .single();
-      
-      if (insertErr) throw new Error('Erro ao criar contato: ' + insertErr.message);
-      contactId = newContact.id;
-    }
+    const resolvido = await garantirContato(userId, { nome: contact.nome, telefone: phoneRaw });
+    const contactId = resolvido.id;
+    const existingContact = resolvido.jaExistia ? resolvido : null;
 
     // 2. Resolve Campaign Data (linkada ou nova)
     let campaignId = linkedCampaignId;
