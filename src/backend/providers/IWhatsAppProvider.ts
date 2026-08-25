@@ -70,6 +70,13 @@ export interface IWhatsAppProvider {
   sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type?: 'image' | 'video' | 'document' | 'audio'): Promise<{ messageId: string }>;
 
   /**
+   * Mostra "digitando…"/"gravando…" no aparelho do contato enquanto o
+   * atendente escreve. É sinal efêmero: nem todo provedor suporta, e falhar
+   * aqui nunca pode atrapalhar o atendimento.
+   */
+  sendPresence?(instanceId: string, to: string, presence: 'composing' | 'recording' | 'paused'): Promise<void>;
+
+  /**
    * Fetches profile picture URL for a contact
    */
   fetchProfilePictureUrl(instanceId: string, number: string): Promise<string | null>;

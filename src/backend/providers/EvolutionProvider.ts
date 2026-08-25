@@ -165,6 +165,28 @@ export class EvolutionProvider implements IWhatsAppProvider {
     return { messageId: data.key?.id || data.id || '' };
   }
 
+  /**
+   * Presença avulsa — usada enquanto o ATENDENTE digita no painel. O envio de
+   * mensagem já leva presence junto; isto é para o intervalo antes disso.
+   *
+   * O WhatsApp expira o "digitando" sozinho depois de alguns segundos, então
+   * o chamador reenvia enquanto houver digitação e manda 'paused' ao parar.
+   */
+  async sendPresence(instanceId: string, to: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
+    const cleanNumber = to.split('@')[0].replace(/D/g, '');
+    try {
+      await this.api.post(`/chat/sendPresence/${instanceId}`, {
+        number: cleanNumber,
+        presence,
+        delay: presence === 'paused' ? 0 : 3000,
+      });
+    } catch (error: any) {
+      // Sinal cosmético: um erro aqui não pode aparecer para o atendente nem
+      // interromper o que ele está escrevendo.
+      console.warn('[EvolutionProvider] sendPresence falhou:', error?.response?.status || error?.message);
+    }
+  }
+
   async fetchProfilePictureUrl(instanceId: string, number: string): Promise<string | null> {
     try {
       const cleanNumber = number.split('@')[0].replace(/\D/g, '');

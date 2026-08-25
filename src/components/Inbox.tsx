@@ -66,7 +66,7 @@ import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
-import { sendMessage, SendMessageError } from '../services/whatsappService';
+import { sendMessage, sendPresence, SendMessageError } from '../services/whatsappService';
 import MetaTemplatesModal from './MetaTemplatesModal';
 import { getMetaStatus } from '../services/supabaseService';
 import { listQuickReplies, type QuickReply, listProfessionals, type Professional, updateContact } from '../services/supabaseService';
@@ -1624,6 +1624,43 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
   const navigationLayerRef = useRef(0);
+
+  // "Digitando…" no aparelho do contato enquanto o atendente escreve.
+  //
+  // O WhatsApp expira esse estado sozinho em alguns segundos, então precisa
+  // ser reenviado — mas não a cada tecla: um aviso a cada 4s cobre a digitação
+  // contínua sem transformar o campo de texto num gerador de requisições.
+  const presencaUltimoEnvioRef = useRef(0);
+  const presencaPausaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const avisarDigitando = (jid?: string) => {
+    if (!jid) return;
+    const agora = Date.now();
+
+    if (agora - presencaUltimoEnvioRef.current > 4000) {
+      presencaUltimoEnvioRef.current = agora;
+      sendPresence(jid, 'composing');
+    }
+
+    // Parou de digitar por 5s: encerra o aviso em vez de deixar o contato
+    // vendo "digitando…" enquanto ninguém escreve.
+    if (presencaPausaRef.current) clearTimeout(presencaPausaRef.current);
+    presencaPausaRef.current = setTimeout(() => {
+      presencaUltimoEnvioRef.current = 0;
+      sendPresence(jid, 'paused');
+    }, 5000);
+  };
+
+  const encerrarDigitando = () => {
+    if (presencaPausaRef.current) {
+      clearTimeout(presencaPausaRef.current);
+      presencaPausaRef.current = null;
+    }
+    presencaUltimoEnvioRef.current = 0;
+  };
+
+  // Trocar de conversa ou sair da tela não pode deixar o aviso pendurado
+  useEffect(() => () => encerrarDigitando(), []);
 
   // Estados para edição rápida de nome na barra lateral
   const [isEditingName, setIsEditingName] = useState(false);
@@ -3223,6 +3260,9 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     if (!userId) return;
 
     setIsSending(true);
+    // O envio ja leva presence junto; manter o timer ativo faria disparar um
+    // "paused" avulso segundos depois da mensagem sair.
+    encerrarDigitando();
     const text = messageText;
     setMessageText('');
 
@@ -4631,6 +4671,11 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                     onChange={(e) => {
                       const val = e.target.value;
                       setMessageText(val);
+                      if (val.trim() && !isPrivateNoteMode) {
+                        // Nota privada não vai para o contato — avisar que
+                        // está digitando seria mentira.
+                        avisarDigitando(activeThread?.remoteJid);
+                      }
                       const match = val.match(/(?:\s|^)\/([^\s]*)$/);
                       if (match && quickReplies.length > 0) {
                         setShowSlashMenu(true);
