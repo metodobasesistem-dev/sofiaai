@@ -213,7 +213,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const toggleFeatureFlag = async (key: string, enabled: boolean) => {
     try {
-      const { data: { user } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('feature_flags')
         .update({ 
@@ -1020,6 +1020,24 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       toast.error('Erro: ' + error.message);
     } finally {
       setIsActionLoading(false);
+    }
+  };
+
+  /**
+   * Abre os logs de conversa de um inquilino.
+   *
+   * O modal e a rota já existiam; faltava a função que os liga — o botão de
+   * Logs chamava um nome que não existia e quebrava ao ser clicado.
+   */
+  const handleViewActivity = async (userId: string) => {
+    setUserActivity([]);
+    setIsActivityModalOpen(true);
+    try {
+      const dados = await getAdminUserActivity(userId);
+      setUserActivity(dados || []);
+    } catch (error: any) {
+      toast.error('Erro ao carregar logs: ' + error.message);
+      setIsActivityModalOpen(false);
     }
   };
 
@@ -3040,6 +3058,69 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
               <div className="p-10 border-b border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">Logs do Ecossistema</h3>
                   <p className="text-xs text-slate-500 font-medium mt-1">Sincronizado com os últimos 50 eventos.</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
+                {userActivity.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-40">
+                     <FileText size={48} className="mb-4" />
+                     <p className="text-sm font-black uppercase tracking-widest">Sem eventos registrados</p>
+                  </div>
+                ) : (
+                  userActivity.map((log, i) => (
+                    <div key={i} className="flex gap-4">
+                       <div className="flex flex-col items-center gap-2">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${log.role === 'assistant' ? 'bg-primary-600 text-white border-primary-500' : 'bg-white text-slate-400 border-slate-200'}`}>
+                             {log.role === 'assistant' ? <Bot size={20} /> : <Users size={20} />}
+                          </div>
+                          <div className="w-0.5 flex-1 bg-slate-200 rounded-full"></div>
+                       </div>
+                       <div className="flex-1 pb-8">
+                          <div className="flex items-center justify-between mb-2">
+                             <span className={`text-[10px] font-black uppercase tracking-widest ${log.role === 'assistant' ? 'text-primary-600' : 'text-slate-400'}`}>
+                               {log.role === 'assistant' ? '🤖 Sofia (IA)' : '👤 Cliente'}
+                             </span>
+                             <span className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-sm text-slate-700 leading-relaxed">
+                             {log.content}
+                          </div>
+                       </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="p-10 border-t border-slate-50 bg-slate-50/50">
+                 <button 
+                  onClick={() => setIsActivityModalOpen(false)}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                 >
+                   Fechar Visualização
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Autopilot Modal */}
+        {isAutopilotModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsAutopilotModalOpen(false)}></div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              <div className="p-10 border-b border-slate-50 relative">
+                 <button onClick={() => setIsAutopilotModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-slate-600">
+                    <XCircle size={24} />
+                 </button>
+                 <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner mb-6">
+                    <Rocket size={32} />
+                 </div>
+                 <h3 className="text-2xl font-black text-slate-900 mb-2">Configurar Disparo</h3>
+                 <p className="text-sm text-slate-500 font-medium">Como as mensagens são enviadas via API Oficial, o primeiro contato deve ser feito através de um <b>Template Aprovado</b> pela Meta.</p>
               </div>
 
               <div className="flex-1 overflow-y-auto p-10 space-y-8 bg-slate-50/30 custom-scrollbar">
