@@ -12,6 +12,7 @@ import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js
 import { whatsappService } from '../services/whatsappService.js';
 import { EvolutionApiService } from '../services/evolutionApiService.js';
 import { runInstagramLeadScan } from '../services/instagramLeadSearch.js';
+import { garantirContato } from '../lib/contatos.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -296,10 +297,43 @@ router.delete('/leads/autopilot', (req: AuthenticatedRequest, res: Response) => 
   res.json({ success: true, message: 'Cancelamento solicitado.' });
 });
 
+/**
+ * Resolve o texto que cada lead vai receber, conforme o modo escolhido.
+ *
+ * 'ia' usa a mensagem que o Radar gerou para aquele lead — é a única que muda
+ * de contato para contato. As outras partem de um texto só, com {nome} e
+ * {telefone} substituídos por lead.
+ */
+function montarMensagemDoLead(
+  lead: any,
+  modo: string,
+  corpo: string,
+  senderName: string
+): string {
+  if (modo === 'ia') return lead.personalized_message || '';
+  const nome = lead.contact_name || shortenEstablishmentName(lead.name || 'Cliente');
+  return (corpo || '')
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{telefone\}/gi, lead.phone || '')
+    .replace(/\{\{1\}\}/g, nome)
+    .replace(/\{\{2\}\}/g, senderName);
+}
+
 router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const { leadIds, limit = 40, minDelay = 60, maxDelay = 180, templateName, injectVariable } = req.body;
+    const {
+      leadIds, limit = 40, minDelay = 60, maxDelay = 180,
+      templateName, injectVariable,
+      // Novos: a mensagem deixou de ser só template da Meta, e o disparo passa
+      // a ser registrado numa campanha para aparecer no relatório.
+      messageMode = 'meta',
+      templateId,
+      customText,
+      campaignId: campanhaVinculadaId,
+      newCampaignName,
+    } = req.body;
+
     if (!leadIds || leadIds.length === 0) {
       return res.status(400).json({ success: false, error: 'Nenhum lead selecionado.' });
     }
@@ -318,7 +352,7 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       .from('lead_campaigns')
       .select('id')
       .eq('user_id', userId);
-      
+
     if (campErr) throw campErr;
     const campaignIds = (userCampaigns || []).map(c => c.id);
 
@@ -338,6 +372,70 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ success: false, error: 'Nenhum dos leads selecionados possui telefone válido para envio.' });
     }
 
+    // ── Corpo da mensagem, resolvido uma vez ────────────────────────────────
+    let corpoDaMensagem = '';
+    if (messageMode === 'custom') {
+      corpoDaMensagem = String(customText || '').trim();
+      if (!corpoDaMensagem) {
+        return res.status(400).json({ success: false, error: 'Escreva a mensagem que será enviada.' });
+      }
+    } else if (messageMode === 'template') {
+      const { data: tpl } = await supabase
+        .from('message_templates')
+        .select('body, name')
+        .eq('id', templateId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      corpoDaMensagem = (tpl as any)?.body || '';
+      if (!corpoDaMensagem) {
+        return res.status(400).json({ success: false, error: 'Modelo não encontrado ou sem texto.' });
+      }
+    } else if (messageMode === 'ia') {
+      const semMensagem = leads.filter(l => !l.personalized_message).length;
+      if (semMensagem === leads.length) {
+        return res.status(400).json({ success: false, error: 'Nenhum lead selecionado tem mensagem gerada pela IA.' });
+      }
+    } else if (messageMode === 'meta' && !templateName) {
+      return res.status(400).json({ success: false, error: 'Selecione o template aprovado da Meta.' });
+    }
+
+    // ── Campanha que guarda o relatório deste disparo ───────────────────────
+    // Sem isso o envio some: leads_radar só marca "contatado", e não há como
+    // saber depois quem recebeu o quê.
+    let campanhaDoDisparo: any = null;
+    if (campanhaVinculadaId) {
+      const { data: existente } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campanhaVinculadaId)
+        .eq('tenant_id', userId)
+        .maybeSingle();
+      if (!existente) {
+        return res.status(400).json({ success: false, error: 'Campanha selecionada não encontrada.' });
+      }
+      campanhaDoDisparo = existente;
+    } else {
+      const { data: nova, error: erroNova } = await supabase
+        .from('campaigns')
+        .insert({
+          tenant_id: userId,
+          name: String(newCampaignName || '').trim() || `Radar de Leads · ${new Date().toLocaleDateString('pt-BR')}`,
+          template_name: messageMode === 'meta' ? templateName : (messageMode === 'ia' ? 'Mensagem da IA' : 'Mensagem Personalizada'),
+          template_id: messageMode === 'template' ? templateId : null,
+          message_type: messageMode === 'meta' ? 'template' : 'custom',
+          custom_text: messageMode === 'custom' ? corpoDaMensagem : null,
+          target_type: 'upload',
+          status: 'sending',
+          total_contacts: leads.length,
+          sent_count: 0,
+          error_count: 0,
+        })
+        .select()
+        .single();
+      if (erroNova) throw erroNova;
+      campanhaDoDisparo = nova;
+    }
+
     const job: AutopilotJob = {
       total: leads.length, sent: 0, errors: 0,
       currentLead: null, log: [],
@@ -351,14 +449,32 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
       const senderName = await fetchSenderFirstName(userId!);
 
       // Busca o corpo do template uma vez antes do loop (para armazenar texto legível no chat)
-      const templateBodyText = templateName ? await fetchTemplateBodyText(userId!, templateName) : undefined;
+      const templateBodyText = messageMode === 'meta' && templateName
+        ? await fetchTemplateBodyText(userId!, templateName)
+        : undefined;
 
       for (let i = 0; i < leads.length; i++) {
-        if (job.cancelRequested) { job.jobStatus = 'cancelled'; return; }
+        if (job.cancelRequested) { job.jobStatus = 'cancelled'; break; }
         const lead = leads[i];
         job.currentLead = lead.name || lead.phone;
+
+        // O lead vira contato do CRM antes do envio: é o que liga a resposta
+        // dele à conversa no Atendimento e o que faz o relatório da campanha
+        // mostrar o nome em vez de "Contato removido".
+        let contatoId: string | null = null;
         try {
-          if (templateName && provider.sendTemplate) {
+          const contato = await garantirContato(userId!, {
+            nome: lead.contact_name || shortenEstablishmentName(lead.name || '') || 'Lead do Radar',
+            telefone: lead.phone,
+          });
+          contatoId = contato.id;
+        } catch (contatoErr: any) {
+          console.error('[LeadRadar] contato:', contatoErr.message);
+        }
+
+        let erroDoEnvio = '';
+        try {
+          if (messageMode === 'meta' && templateName && provider.sendTemplate) {
             const components = [
               {
                 type: 'body',
@@ -371,18 +487,40 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
             const result = await whatsappService.sendTemplate(userId, lead.phone, templateName, 'pt_BR', components, templateBodyText);
             if (!result.success) throw new Error(result.error);
           } else {
-            if (!lead.personalized_message) throw new Error('Sem mensagem personalizada para enviar');
-            const result = await whatsappService.sendMessage(userId, lead.phone, lead.personalized_message);
+            const texto = montarMensagemDoLead(lead, messageMode, corpoDaMensagem, senderName);
+            if (!texto) throw new Error('Sem mensagem para enviar a este lead');
+            const result = await whatsappService.sendMessage(userId, lead.phone, texto);
             if (!result.success) throw new Error(result.error);
           }
           await supabase.from('leads_radar').update({ status: 'contatado', updated_at: new Date().toISOString() }).eq('id', lead.id);
           job.sent++;
           job.log.unshift({ name: lead.name || '—', phone: lead.phone, status: 'sent', time: new Date().toLocaleTimeString('pt-BR') });
         } catch (sendErr: any) {
+          erroDoEnvio = sendErr.message || 'Erro desconhecido';
           await supabase.from('leads_radar').update({ status: 'erro', updated_at: new Date().toISOString() }).eq('id', lead.id);
           job.errors++;
           job.log.unshift({ name: lead.name || '—', phone: lead.phone, status: 'error', time: new Date().toLocaleTimeString('pt-BR') });
         }
+
+        if (contatoId) {
+          await supabase.from('campaign_logs').insert({
+            campaign_id: campanhaDoDisparo.id,
+            contact_id: contatoId,
+            status: erroDoEnvio ? 'error' : 'sent',
+            error_message: erroDoEnvio || null,
+          });
+        }
+
+        // Contadores a cada 5 envios, como na campanha: quem fechar a aba
+        // ainda encontra o número certo ao voltar.
+        const processados = job.sent + job.errors;
+        if (processados % 5 === 0 || processados === leads.length) {
+          await supabase
+            .from('campaigns')
+            .update({ sent_count: job.sent, error_count: job.errors })
+            .eq('id', campanhaDoDisparo.id);
+        }
+
         if (i < leads.length - 1 && !job.cancelRequested) {
           const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
           job.nextSendAt = Date.now() + delaySeconds * 1000;
@@ -390,13 +528,31 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
           job.nextSendAt = null;
         }
       }
-      job.jobStatus = 'done';
+
+      await supabase
+        .from('campaigns')
+        .update({
+          status: job.jobStatus === 'cancelled' ? 'cancelled' : 'completed',
+          sent_count: job.sent,
+          error_count: job.errors,
+          total_contacts: campanhaVinculadaId
+            ? (campanhaDoDisparo.total_contacts || 0) + leads.length
+            : leads.length,
+        })
+        .eq('id', campanhaDoDisparo.id);
+
+      if (job.jobStatus !== 'cancelled') job.jobStatus = 'done';
       job.currentLead = null;
       setTimeout(() => autopilotJobs.delete(userId), 60_000);
     };
 
     runAutopilot().catch(err => { job.jobStatus = 'done'; console.error('[LeadRadar] Erro fatal:', err); });
-    res.json({ success: true, count: leads.length, message: `Piloto Automático iniciado para ${leads.length} leads.` });
+    res.json({
+      success: true,
+      count: leads.length,
+      campaignId: campanhaDoDisparo.id,
+      message: `Piloto Automático iniciado para ${leads.length} leads.`,
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -405,9 +561,14 @@ router.post('/leads/autopilot', async (req: AuthenticatedRequest, res: Response)
 router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const { phone, templateName, templateLanguage = 'pt_BR', leadName, templateBodyText } = req.body;
+    const { phone, templateName, templateLanguage = 'pt_BR', leadName, templateBodyText, text } = req.body;
     if (!phone) return res.status(400).json({ success: false, error: 'Telefone é obrigatório' });
-    if (!templateName) return res.status(400).json({ success: false, error: 'Template é obrigatório' });
+    // Com o disparo aceitando modelo próprio e texto livre, o teste precisa
+    // cobrir os dois: exigir template aqui deixaria o botão morto nos modos
+    // que não usam a Meta.
+    if (!templateName && !String(text || '').trim()) {
+      return res.status(400).json({ success: false, error: 'Informe o template ou o texto da mensagem' });
+    }
 
     const provider = await WhatsAppProviderFactory.getProvider(userId);
     if (!provider) return res.status(400).json({ success: false, error: 'Nenhuma conexão de WhatsApp ativa encontrada.' });
@@ -419,9 +580,22 @@ router.post('/leads/test-send', async (req: AuthenticatedRequest, res: Response)
     }
 
     const digits = phone.replace(/\D/g, '');
-    const jid = (digits.startsWith('55') ? digits : `55${digits}`) + '@s.whatsapp.net';
 
     const senderName = await fetchSenderFirstName(userId!);
+
+    if (String(text || '').trim()) {
+      const nome = shortenEstablishmentName(leadName || 'Estabelecimento Teste');
+      const corpo = String(text)
+        .replace(/\{nome\}/gi, nome)
+        .replace(/\{telefone\}/gi, digits)
+        .replace(/\{\{1\}\}/g, nome)
+        .replace(/\{\{2\}\}/g, senderName);
+      const result = await whatsappService.sendMessage(userId, digits, corpo);
+      if (result.success) {
+        return res.json({ success: true, message: `Mensagem de teste enviada com sucesso para ${digits}` });
+      }
+      return res.status(400).json({ success: false, error: result.error || 'Erro ao enviar mensagem de teste.' });
+    }
 
     if (provider.sendTemplate) {
       const components = [

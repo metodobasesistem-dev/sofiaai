@@ -94,6 +94,17 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   const [isAutopilotModalOpen, setIsAutopilotModalOpen] = useState(false);
   const [autopilotTemplateName, setAutopilotTemplateName] = useState('prospeccao_fria');
   const [autopilotInjectVar, setAutopilotInjectVar] = useState(true);
+  // Disparo do Radar: a mensagem deixou de ser só template da Meta, e o envio
+  // passa a ser registrado numa campanha para render relatório.
+  const [autopilotMessageMode, setAutopilotMessageMode] = useState<'meta' | 'template' | 'custom' | 'ia'>('template');
+  const [autopilotTemplateId, setAutopilotTemplateId] = useState('');
+  const [autopilotCustomText, setAutopilotCustomText] = useState('');
+  const [autopilotDestino, setAutopilotDestino] = useState<'nova' | 'existente'>('nova');
+  const [autopilotCampaignName, setAutopilotCampaignName] = useState('');
+  const [autopilotCampaignId, setAutopilotCampaignId] = useState('');
+  const [modelosDeMensagem, setModelosDeMensagem] = useState<any[]>([]);
+  const [campanhasDeDisparo, setCampanhasDeDisparo] = useState<any[]>([]);
+  const [ehProviderMeta, setEhProviderMeta] = useState(false);
   const [isTestInputVisible, setIsTestInputVisible] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
@@ -511,10 +522,25 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
   };
 
   const confirmAutopilot = async () => {
-    if (!autopilotTemplateName) return toast.error('Nome do template é obrigatório');
     if (selectedLeadIds.size === 0) {
       return toast.error('Selecione pelo menos um lead para iniciar o Piloto Automático');
     }
+
+    // Cada modo tem o seu requisito — avisar aqui evita descobrir no meio do
+    // disparo, quando metade das mensagens já saiu.
+    if (autopilotMessageMode === 'meta' && !autopilotTemplateName) {
+      return toast.error('Selecione o template aprovado da Meta');
+    }
+    if (autopilotMessageMode === 'template' && !autopilotTemplateId) {
+      return toast.error('Selecione o modelo de mensagem');
+    }
+    if (autopilotMessageMode === 'custom' && !autopilotCustomText.trim()) {
+      return toast.error('Escreva a mensagem que será enviada');
+    }
+    if (autopilotDestino === 'existente' && !autopilotCampaignId) {
+      return toast.error('Selecione a campanha onde o disparo será registrado');
+    }
+
     setIsAutopilotModalOpen(false);
     setIsAutopilotRunning(true);
     setAutopilotProgress(null);
@@ -525,7 +551,12 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
           leadIds: Array.from(selectedLeadIds),
           limit: 40, minDelay: 60, maxDelay: 180,
           templateName: autopilotTemplateName,
-          injectVariable: autopilotInjectVar
+          injectVariable: autopilotInjectVar,
+          messageMode: autopilotMessageMode,
+          templateId: autopilotMessageMode === 'template' ? autopilotTemplateId : null,
+          customText: autopilotMessageMode === 'custom' ? autopilotCustomText : null,
+          campaignId: autopilotDestino === 'existente' ? autopilotCampaignId : null,
+          newCampaignName: autopilotDestino === 'nova' ? autopilotCampaignName : null,
         })
       });
       const res = await response.json();
@@ -566,7 +597,17 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
   const sendTestMessage = async () => {
     if (!testPhone) return toast.error('O número de telefone é obrigatório para o teste.');
-    if (!autopilotTemplateName) return toast.error('Selecione um template para testar.');
+    // O texto testado e o mesmo que sera disparado, para o teste valer.
+    const corpoDoTeste =
+      autopilotMessageMode === 'template'
+        ? (modelosDeMensagem.find(m => m.id === autopilotTemplateId)?.body || '')
+        : autopilotMessageMode === 'custom'
+          ? autopilotCustomText
+          : autopilotMessageMode === 'ia'
+            ? (radarLeads.find((l) => l.id === [...selectedLeadIds][0])?.personalized_message || '')
+            : '';
+    if (autopilotMessageMode === 'meta' && !autopilotTemplateName) return toast.error('Selecione um template para testar.');
+    if (autopilotMessageMode !== 'meta' && !corpoDoTeste.trim()) return toast.error('Escolha ou escreva a mensagem antes de testar.');
 
     // Usa o nome do primeiro lead selecionado para preencher {{1}} na mensagem de teste
     const firstSelectedId = [...selectedLeadIds][0];
@@ -583,7 +624,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
         method: 'POST',
         body: JSON.stringify({
           phone: testPhone,
-          templateName: autopilotTemplateName,
+          templateName: autopilotMessageMode === 'meta' ? autopilotTemplateName : null,
+          text: autopilotMessageMode === 'meta' ? null : corpoDoTeste,
           leadName,
           templateBodyText
         })
@@ -888,13 +930,52 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
+
+      // Modelos cadastrados, campanhas anteriores e o provedor em uso: o modal
+      // precisa dos três para deixar escolher a mensagem e onde registrar o
+      // disparo sem sair da tela.
+      if (user?.id) {
+        supabase
+          .from('message_templates')
+          .select('id, name, body, is_default')
+          .eq('user_id', user.id)
+          .order('is_default', { ascending: false })
+          .then(({ data }) => {
+            const lista = data || [];
+            setModelosDeMensagem(lista);
+            setAutopilotTemplateId(prev => prev || lista.find((t: any) => t.is_default)?.id || lista[0]?.id || '');
+          });
+
+        supabase
+          .from('campaigns')
+          .select('id, name, created_at')
+          .eq('tenant_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(30)
+          .then(({ data }) => setCampanhasDeDisparo(data || []));
+
+        supabase
+          .from('profiles')
+          .select('whatsapp_provider')
+          .eq('id', user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            const meta = (data as any)?.whatsapp_provider === 'meta_official';
+            setEhProviderMeta(meta);
+            // Pela API oficial o primeiro contato só sai por template aprovado.
+            if (meta) setAutopilotMessageMode('meta');
+          });
+      }
+
+      const agora = new Date().toLocaleDateString('pt-BR');
+      setAutopilotCampaignName(prev => prev || `Radar de Leads · ${agora}`);
     } else {
       setMetaTemplates([]);
       setIsTestInputVisible(false);
       setIsTestSending(false);
       setTestPhone('');
     }
-  }, [isAutopilotModalOpen]);
+  }, [isAutopilotModalOpen, user?.id]);
 
   // Carrega credenciais Meta quando seleciona usuário. Lê do profile (novas colunas)
   // com fallback para tenant_secrets (legacy) caso o admin ainda não tenha migrado.
@@ -2961,136 +3042,204 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                   <p className="text-xs text-slate-500 font-medium mt-1">Sincronizado com os últimos 50 eventos.</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
-                {userActivity.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center opacity-40">
-                     <FileText size={48} className="mb-4" />
-                     <p className="text-sm font-black uppercase tracking-widest">Sem eventos registrados</p>
-                  </div>
-                ) : (
-                  userActivity.map((log, i) => (
-                    <div key={i} className="flex gap-4">
-                       <div className="flex flex-col items-center gap-2">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${log.role === 'assistant' ? 'bg-primary-600 text-white border-primary-500' : 'bg-white text-slate-400 border-slate-200'}`}>
-                             {log.role === 'assistant' ? <Bot size={20} /> : <Users size={20} />}
-                          </div>
-                          <div className="w-0.5 flex-1 bg-slate-200 rounded-full"></div>
-                       </div>
-                       <div className="flex-1 pb-8">
-                          <div className="flex items-center justify-between mb-2">
-                             <span className={`text-[10px] font-black uppercase tracking-widest ${log.role === 'assistant' ? 'text-primary-600' : 'text-slate-400'}`}>
-                               {log.role === 'assistant' ? '🤖 Sofia (IA)' : '👤 Cliente'}
-                             </span>
-                             <span className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-sm text-slate-700 leading-relaxed">
-                             {log.content}
-                          </div>
-                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="p-10 border-t border-slate-50 bg-slate-50/50">
-                 <button 
-                  onClick={() => setIsActivityModalOpen(false)}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all"
-                 >
-                   Fechar Visualização
-                 </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Autopilot Modal */}
-        {isAutopilotModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsAutopilotModalOpen(false)}></div>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
-            >
-              <div className="p-10 border-b border-slate-50 relative">
-                 <button onClick={() => setIsAutopilotModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-slate-600">
-                    <XCircle size={24} />
-                 </button>
-                 <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner mb-6">
-                    <Rocket size={32} />
+              <div className="flex-1 overflow-y-auto p-10 space-y-8 bg-slate-50/30 custom-scrollbar">
+                 <div className="flex items-center gap-3 px-4 py-3 bg-primary-50 border border-primary-100 rounded-2xl">
+                   <Users size={16} className="text-primary-600 shrink-0" />
+                   <p className="text-xs font-bold text-primary-900">
+                     {selectedLeadIds.size} lead{selectedLeadIds.size > 1 ? 's' : ''} selecionado{selectedLeadIds.size > 1 ? 's' : ''} para receber a mensagem
+                   </p>
                  </div>
-                 <h3 className="text-2xl font-black text-slate-900 mb-2">Configurar Disparo</h3>
-                 <p className="text-sm text-slate-500 font-medium">Como as mensagens são enviadas via API Oficial, o primeiro contato deve ser feito através de um <b>Template Aprovado</b> pela Meta.</p>
-              </div>
 
-              <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
+                 {/* ── O que enviar ─────────────────────────────────────── */}
                  <div className="space-y-3">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">
-                     Nome do Template (Meta)
-                     {loadingTemplates && <RefreshCw size={12} className="animate-spin" />}
-                   </label>
-                   {metaTemplates.length > 0 ? (
-                     <select 
-                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none"
-                       value={autopilotTemplateName}
-                       onChange={(e) => setAutopilotTemplateName(e.target.value)}
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Mensagem</label>
+
+                   <div className="grid grid-cols-2 gap-2">
+                     {[
+                       { id: 'template', label: 'Modelo cadastrado', desc: 'Os mesmos das campanhas' },
+                       { id: 'custom', label: 'Escrever agora', desc: 'Texto livre com {nome}' },
+                       { id: 'ia', label: 'Mensagem da IA', desc: 'A que o Radar gerou por lead' },
+                       ...(ehProviderMeta ? [{ id: 'meta', label: 'Template Meta', desc: 'Aprovado no Gerenciador' }] : []),
+                     ].map(op => (
+                       <button
+                         key={op.id}
+                         onClick={() => setAutopilotMessageMode(op.id as any)}
+                         className={`p-3 rounded-2xl border text-left transition-all ${
+                           autopilotMessageMode === op.id
+                             ? 'bg-white border-blue-500 ring-4 ring-blue-500/10 shadow-sm'
+                             : 'bg-white/60 border-slate-200 hover:border-slate-300'
+                         }`}
+                       >
+                         <p className={`text-xs font-black ${autopilotMessageMode === op.id ? 'text-blue-700' : 'text-slate-700'}`}>{op.label}</p>
+                         <p className="text-[10px] text-slate-400 font-medium mt-0.5">{op.desc}</p>
+                       </button>
+                     ))}
+                   </div>
+
+                   {autopilotMessageMode === 'template' && (
+                     modelosDeMensagem.length > 0 ? (
+                       <select
+                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                         value={autopilotTemplateId}
+                         onChange={e => setAutopilotTemplateId(e.target.value)}
+                       >
+                         {modelosDeMensagem.map(t => (
+                           <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (padrão)' : ''}</option>
+                         ))}
+                       </select>
+                     ) : (
+                       <p className="text-xs text-amber-600 font-bold px-1">
+                         Nenhum modelo cadastrado ainda — crie um em Automação → Campanhas → Modelos de Mensagem.
+                       </p>
+                     )
+                   )}
+
+                   {autopilotMessageMode === 'custom' && (
+                     <textarea
+                       rows={5}
+                       value={autopilotCustomText}
+                       onChange={e => setAutopilotCustomText(e.target.value)}
+                       placeholder="Oi {nome}, tudo bem? …"
+                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none leading-relaxed"
+                     />
+                   )}
+
+                   {autopilotMessageMode === 'ia' && (
+                     <p className="text-xs text-slate-500 px-1 leading-relaxed">
+                       Cada lead recebe a mensagem que a IA escreveu para ele durante a varredura. Quem não tiver mensagem gerada é pulado.
+                     </p>
+                   )}
+
+                   {autopilotMessageMode === 'meta' && (
+                     metaTemplates.length > 0 ? (
+                       <select
+                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                         value={autopilotTemplateName}
+                         onChange={(e) => setAutopilotTemplateName(e.target.value)}
+                       >
+                         <option value="">Selecione um template aprovado...</option>
+                         {metaTemplates.map(t => (
+                           <option key={`${t.name}_${t.language}`} value={t.name}>
+                             {t.name} ({t.language}) · {t.category || 'GENERAL'}
+                           </option>
+                         ))}
+                       </select>
+                     ) : (
+                       <input
+                         type="text"
+                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                         placeholder="Ex: prospeccao_fria"
+                         value={autopilotTemplateName}
+                         onChange={(e) => setAutopilotTemplateName(e.target.value)}
+                       />
+                     )
+                   )}
+                 </div>
+
+                 {/* ── Pré-visualização com o primeiro lead selecionado ──── */}
+                 {(() => {
+                   const primeiroId = [...selectedLeadIds][0];
+                   const lead = radarLeads.find((l: any) => l.id === primeiroId);
+                   const nomeExemplo =
+                     lead?.contact_name ||
+                     (lead?.name || '').split(/\s*[|–-]\s*/)[0].trim().substring(0, 40) ||
+                     '[Nome do lead]';
+                   const remetente = senderName || '[Seu Nome]';
+
+                   let corpo = '';
+                   if (autopilotMessageMode === 'template') {
+                     corpo = modelosDeMensagem.find(t => t.id === autopilotTemplateId)?.body || '';
+                   } else if (autopilotMessageMode === 'custom') {
+                     corpo = autopilotCustomText;
+                   } else if (autopilotMessageMode === 'ia') {
+                     corpo = lead?.personalized_message || '';
+                   } else {
+                     const t = metaTemplates.find(x => x.name === autopilotTemplateName);
+                     corpo = t?.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                   }
+                   if (!corpo.trim()) return null;
+
+                   const texto = corpo
+                     .replace(/\{nome\}/gi, nomeExemplo)
+                     .replace(/\{telefone\}/gi, lead?.phone || '')
+                     .replace(/\{\{1\}\}/g, nomeExemplo)
+                     .replace(/\{\{2\}\}/g, remetente);
+
+                   return (
+                     <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                         Como vai chegar {lead?.name ? `para ${nomeExemplo}` : ''}
+                       </label>
+                       <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                         {texto}
+                       </div>
+                       {!senderName && texto.includes('[Seu Nome]') && (
+                         <p className="text-[10px] text-amber-500 font-bold px-1">
+                           ⚠ Seu nome não está configurado — vá em Configurações → Conta e preencha o campo Nome Completo.
+                         </p>
+                       )}
+                     </div>
+                   );
+                 })()}
+
+                 {/* ── Onde o disparo fica registrado ───────────────────── */}
+                 <div className="space-y-3 pt-2 border-t border-slate-100">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 pt-4 block">Registrar como campanha</label>
+                   <p className="text-[11px] text-slate-500 px-1 -mt-1">
+                     É o que permite abrir depois e ver quem recebeu, quem falhou e quando.
+                   </p>
+
+                   <div className="grid grid-cols-2 gap-2">
+                     {[
+                       { id: 'nova', label: 'Nova campanha' },
+                       { id: 'existente', label: 'Campanha existente' },
+                     ].map(op => (
+                       <button
+                         key={op.id}
+                         onClick={() => setAutopilotDestino(op.id as any)}
+                         className={`px-3 py-3 rounded-2xl border text-xs font-black transition-all ${
+                           autopilotDestino === op.id
+                             ? 'bg-white border-blue-500 text-blue-700 ring-4 ring-blue-500/10'
+                             : 'bg-white/60 border-slate-200 text-slate-600 hover:border-slate-300'
+                         }`}
+                       >
+                         {op.label}
+                       </button>
+                     ))}
+                   </div>
+
+                   {autopilotDestino === 'nova' ? (
+                     <input
+                       type="text"
+                       value={autopilotCampaignName}
+                       onChange={e => setAutopilotCampaignName(e.target.value)}
+                       placeholder="Nome da campanha"
+                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                     />
+                   ) : campanhasDeDisparo.length > 0 ? (
+                     <select
+                       value={autopilotCampaignId}
+                       onChange={e => setAutopilotCampaignId(e.target.value)}
+                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                      >
-                       <option value="">Selecione um template aprovado...</option>
-                       {metaTemplates.map(t => (
-                         <option key={`${t.name}_${t.language}`} value={t.name}>
-                           {t.name} ({t.language}) · {t.category || 'GENERAL'}
+                       <option value="">Selecione a campanha...</option>
+                       {campanhasDeDisparo.map(c => (
+                         <option key={c.id} value={c.id}>
+                           {c.name} ({new Date(c.created_at).toLocaleDateString('pt-BR')})
                          </option>
                        ))}
                      </select>
                    ) : (
-                     <input 
-                       type="text" 
-                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
-                       placeholder="Ex: prospeccao_fria"
-                       value={autopilotTemplateName}
-                       onChange={(e) => setAutopilotTemplateName(e.target.value)}
-                     />
+                     <p className="text-xs text-amber-600 font-bold px-1">Você ainda não tem campanhas — o disparo criará a primeira.</p>
                    )}
-                   <p className="text-xs text-slate-400 px-1">
-                     {metaTemplates.length > 0 
-                       ? 'Templates aprovados carregados automaticamente da sua conta Meta.' 
-                       : 'Deve ser exatamente o nome configurado no seu Gerenciador do WhatsApp.'}
-                   </p>
                  </div>
 
-                 {metaTemplates.length > 0 && autopilotTemplateName && (
-                   <div className="space-y-2">
-                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pré-visualização do Template</label>
-                     <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed shadow-sm">
-                       {(() => {
-                         const t = metaTemplates.find(x => x.name === autopilotTemplateName);
-                         if (!t) return <span className="text-slate-400 italic">Template não encontrado...</span>;
-                         const body = t.components.find((c: any) => c.type === 'BODY')?.text || '';
-                         if (!body) return <span className="text-slate-400 italic">Template sem corpo de texto.</span>;
-                         
-                         if (body.includes('{{1}}') || body.includes('{{2}}')) {
-                           const firstSelId = [...selectedLeadIds][0];
-                           const firstSelLead = radarLeads.find((l: any) => l.id === firstSelId);
-                           const rawLeadName = firstSelLead?.name || '[Nome do Estabelecimento]';
-                           // Usa o nome próprio editado (contact_name) se disponível, senão encurta o nome do negócio
-                           const previewLeadName = firstSelLead?.contact_name || rawLeadName.split(/\s*[|–-]\s*/)[0].trim().substring(0, 40) || rawLeadName;
-                           const previewSender = senderName || '[Seu Nome]';
-                           return body
-                             .replace(/\{\{1\}\}/g, previewLeadName)
-                             .replace(/\{\{2\}\}/g, previewSender);
-                         }
-                         return body;
-                       })()}
-                     </div>
-                     <p className="text-[10px] text-slate-400 font-medium px-1">
-                       O nome do estabelecimento será injetado na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{1}}'}</code> e o seu nome de perfil na variável <code className="bg-slate-100 px-1 rounded font-mono">{'{{2}}'}</code>.
-                       {!senderName && (
-                         <span className="ml-1 text-amber-500 font-bold">⚠ Seu nome não está configurado — vá em Configurações → Conta e preencha o campo Nome Completo.</span>
-                       )}
-                     </p>
-                   </div>
-                 )}
+                 <div className="flex items-start gap-3 px-4 py-3 bg-slate-100/70 rounded-2xl">
+                   <Shield size={16} className="text-slate-500 shrink-0 mt-0.5" />
+                   <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                     O envio respeita o intervalo aleatório de <b>60 a 180 segundos</b> entre as mensagens e continua rodando no servidor mesmo se você fechar esta aba.
+                   </p>
+                 </div>
               </div>
 
               <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex flex-col gap-4">
