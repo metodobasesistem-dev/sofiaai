@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { EvolutionApiService } from '../services/evolutionApiService.js';
+import { garantirContato, normalizePhone } from '../lib/contatos.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -26,11 +27,6 @@ const campaignJobs = new Map<string, CampaignJob>();
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-/** Normalize a phone number to E.164 digits (with Brazilian +55 prefix). */
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.startsWith('55') ? digits : '55' + digits;
-}
 
 /**
  * Resolve the value of a template variable field against a contact object.
@@ -60,54 +56,6 @@ function getContactFieldValue(contact: any, field: string, sender?: { nome_compl
     default:
       return contact[field] || '';
   }
-}
-
-/**
- * Resolve um contato do CRM a partir de nome + telefone, criando se não existir.
- *
- * Sempre grava o telefone NORMALIZADO (com 55) no id e na coluna: o
- * agentService salva contatos como {userId}_{normalizePhone(phone)}, então usar
- * o número cru aqui faria o mesmo lead virar duas linhas quando ele
- * respondesse — duplicado no CRM e nas notificações.
- */
-async function garantirContato(
-  userId: string,
-  contato: { nome?: string; telefone: string }
-): Promise<{ id: string; nome: string; telefone: string; jaExistia: boolean }> {
-  const phoneRaw = String(contato.telefone || '').replace(/\D/g, '');
-  const phone = normalizePhone(phoneRaw);
-
-  const { data: existentes } = await supabase
-    .from('contacts')
-    .select('id, nome, telefone')
-    .eq('user_id', userId)
-    .in('telefone', Array.from(new Set([phone, phoneRaw])))
-    .limit(1);
-
-  const existente = existentes?.[0];
-  if (existente) {
-    return {
-      id: existente.id,
-      nome: contato.nome || existente.nome || '',
-      telefone: existente.telefone || phone,
-      jaExistia: true,
-    };
-  }
-
-  const { data: novo, error } = await supabase
-    .from('contacts')
-    .insert({
-      id: `${userId}_${phone}`,
-      user_id: userId,
-      nome: contato.nome || 'Lead Isolado',
-      telefone: phone,
-      status_funil: 'Lead',
-    })
-    .select('id, nome, telefone')
-    .single();
-
-  if (error) throw new Error('Erro ao criar contato: ' + error.message);
-  return { id: novo.id, nome: novo.nome, telefone: novo.telefone, jaExistia: false };
 }
 
 // ─── Background campaign runner ────────────────────────────────────────────
