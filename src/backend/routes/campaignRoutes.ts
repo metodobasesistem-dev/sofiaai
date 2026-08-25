@@ -728,6 +728,61 @@ router.post('/:id/start', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 /** GET /:id/status — return job status from memory or DB fallback */
+// ─── GET /api/v2/campaigns/:id/logs ───────────────────────────────────────
+// Quem recebeu a mensagem desta campanha, com o resultado de cada envio.
+router.get('/:id/logs', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const campaignId = req.params.id;
+
+  try {
+    // A campanha precisa ser do próprio usuário: sem esta checagem, bastaria
+    // ter o id de uma campanha alheia para ler a lista de contatos dela.
+    const { data: campanha, error: cErr } = await supabase
+      .from('campaigns')
+      .select('id, name, template_name, created_at, sent_count, error_count, total_contacts')
+      .eq('id', campaignId)
+      .eq('tenant_id', userId)
+      .maybeSingle();
+
+    if (cErr) throw cErr;
+    if (!campanha) return res.status(404).json({ success: false, error: 'Campanha não encontrada' });
+
+    const { data: logs, error: lErr } = await supabase
+      .from('campaign_logs')
+      .select('id, contact_id, status, error_message, sent_at')
+      .eq('campaign_id', campaignId)
+      .order('sent_at', { ascending: false });
+
+    if (lErr) throw lErr;
+
+    // Nome e telefone vêm de contacts; o log guarda só o id.
+    const ids = [...new Set((logs || []).map(l => l.contact_id).filter(Boolean))];
+    let contatos: Record<string, { nome: string; telefone: string }> = {};
+
+    if (ids.length) {
+      const { data: dados } = await supabase
+        .from('contacts')
+        .select('id, nome, telefone')
+        .in('id', ids);
+      contatos = Object.fromEntries((dados || []).map(c => [c.id, { nome: c.nome, telefone: c.telefone }]));
+    }
+
+    const data = (logs || []).map(l => ({
+      ...l,
+      // Contato apagado depois do disparo não pode sumir do histórico: o
+      // envio aconteceu e precisa continuar visível.
+      nome: contatos[l.contact_id]?.nome || 'Contato removido',
+      telefone: contatos[l.contact_id]?.telefone || null,
+    }));
+
+    res.json({ success: true, campanha, data });
+  } catch (err: any) {
+    console.error('[Campaigns] logs:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 router.get('/:id/status', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const campaignId = req.params.id;
