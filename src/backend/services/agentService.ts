@@ -210,6 +210,9 @@ export class AgentService {
         .from('agent_knowledge')
         .select('*')
         .eq('agent_id', agentData.id)
+        // Filtrar também pelo dono é defesa em profundidade: nenhum bloco
+        // gravado por outro tenant entra no prompt deste agente.
+        .eq('user_id', userId)
         .eq('is_active', true);
 
       // 3. Persistent History — lê as últimas 40 mensagens íntegras, como no fluxo n8n original.
