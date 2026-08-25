@@ -992,7 +992,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
 
       default:
         return (
-          <p className="whitespace-pre-wrap break-all leading-relaxed">
+          <p className="whitespace-pre-wrap break-words leading-relaxed">
             {renderFormattedText(
               message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''),
               highlightQuery
