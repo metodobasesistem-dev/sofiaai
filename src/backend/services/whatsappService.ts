@@ -559,6 +559,26 @@ class WhatsAppService {
 
   async destroySession(userId: string) { await this.logout(userId); }
 
+  /**
+   * "Digitando…" enquanto o ATENDENTE escreve no painel.
+   *
+   * O envio de mensagem já carrega presence junto; isto cobre o intervalo
+   * anterior, em que o contato não via nada acontecendo. Nunca lança: é sinal
+   * cosmético e não pode atrapalhar quem está escrevendo.
+   */
+  async sendPresence(userId: string, to: string, presence: 'composing' | 'recording' | 'paused'): Promise<boolean> {
+    try {
+      const provider = await WhatsAppProviderFactory.getProvider(userId);
+      if (typeof (provider as any).sendPresence !== 'function') return false; // provedor sem suporte
+      const instanceName = await this.getInstanceName(userId);
+      await (provider as any).sendPresence(instanceName, to, presence);
+      return true;
+    } catch (err: any) {
+      console.warn('[WhatsAppService] sendPresence:', err?.message || err);
+      return false;
+    }
+  }
+
   async sendMessage(userId: string, to: string, message: string, senderName: string = 'Atendente', senderType: 'IA' | 'Atendente' = 'Atendente', quotedMessageId?: string): Promise<any> {
     if (!userId) {
       console.error('[WhatsAppService] ❌ ERROR: userId is undefined in sendMessage');

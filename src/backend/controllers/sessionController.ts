@@ -64,6 +64,20 @@ class SessionController {
     }
   }
 
+  /**
+   * Presença de digitação. Responde 200 mesmo quando o provedor não suporta —
+   * o painel não deve tratar isso como erro nem repetir a tentativa.
+   */
+  async sendPresence(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId!;
+    const { to, presence } = req.body || {};
+    if (!to) return res.status(400).json({ success: false, error: 'Destinatário não informado' });
+
+    const valida = presence === 'recording' || presence === 'paused' ? presence : 'composing';
+    const enviado = await whatsappService.sendPresence(userId, to, valida);
+    res.json({ success: true, enviado });
+  }
+
   async restoreSession(req: AuthenticatedRequest, res: Response) {
     const userId = req.userId!;
     try {

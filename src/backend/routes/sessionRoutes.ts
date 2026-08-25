@@ -15,6 +15,7 @@ router.get('/status/:userId', requireAuth, sessionController.getStatus);
 router.get('/status',         requireAuth, sessionController.getStatus);
 router.get('/restore/:userId', requireAuth, sessionController.restoreSession);
 router.post('/send',          requireAuth, sessionController.sendMessage);
+router.post('/presence',      requireAuth, sessionController.sendPresence);
 router.post('/disconnect',    requireAuth, sessionController.disconnectSession);
 router.post('/delete',        requireAuth, sessionController.deleteSession);
 router.post('/delete-message', requireAuth, sessionController.deleteMessage);

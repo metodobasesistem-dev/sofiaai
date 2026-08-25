@@ -106,6 +106,23 @@ export class SendMessageError extends Error {
  * Throws SendMessageError with errorInfo if the backend returns success=false
  * — the UI uses errorInfo.is24hWindowClosed to decide whether to prompt for a template.
  */
+/**
+ * Avisa o contato que o atendente está digitando.
+ *
+ * Silencioso de propósito: é sinal cosmético e roda a cada poucos segundos —
+ * um erro aqui não pode virar toast nem poluir o console de quem escreve.
+ */
+export const sendPresence = async (to: string, presence: 'composing' | 'paused' = 'composing') => {
+  try {
+    await standardFetch('/api/sessions/presence', {
+      method: 'POST',
+      body: JSON.stringify({ to, presence }),
+    }, 4000);
+  } catch {
+    // sem retry: o próximo caractere digitado já tenta de novo
+  }
+};
+
 export const sendMessage = async (to: string, message: string, quotedMessageId?: string) => {
   const response = await standardFetch('/api/messages/send', {
     method: 'POST',
