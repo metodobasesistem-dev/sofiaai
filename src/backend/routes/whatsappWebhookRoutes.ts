@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { normalizePhone, isSamePhone } from '../lib/phoneHelper.js';
-import { extractAdReferral, captureLeadOrigin } from '../services/leadOriginService.js';
+import { extractAdReferral, captureLeadOrigin, detectAndTagLeadOrigin } from '../services/leadOriginService.js';
 
 
 const router = Router();
@@ -298,6 +298,11 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
     // 2. SÓ DISPARA SE PERSISTIU (ou se for outbound do telefone, não dispara IA)
     if (!fromMe) {
+      // Detector de origem por frase cadastrada. Roda em paralelo ao
+      // atendimento: só depois do persist (precisa do contato) e sem await,
+      // porque falhar aqui não pode atrasar nem derrubar a resposta.
+      detectAndTagLeadOrigin(userId, cleanPhone, body).catch(() => {});
+
       const { data: threadRow } = await supabase.from('threads').select('agent_id').eq('id', threadId).maybeSingle();
       await (whatsappService as any).triggerAIResponseViaWebhook(userId, from, body, contactName, cleanPhone, messageId, false, undefined, undefined, threadRow?.agent_id ?? null);
     }

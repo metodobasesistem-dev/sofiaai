@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 import { buildAdTracking, type AdReferral } from '../lib/adReferral.js';
+import { escolherPadrao } from '../lib/leadOriginPattern.js';
 
 /**
  * Gravação da origem do lead capturada num clique em anúncio (Click-to-WhatsApp).
@@ -15,6 +16,7 @@ import { buildAdTracking, type AdReferral } from '../lib/adReferral.js';
 
 export { extractAdReferral, buildAdTracking } from '../lib/adReferral.js';
 export type { AdReferral, AdTracking } from '../lib/adReferral.js';
+export { escolherPadrao, normalizarTexto } from '../lib/leadOriginPattern.js';
 
 /** Slugs de source que representam escolha humana — nenhum detector sobrescreve. */
 const MANUAL_SOURCES = new Set(['manual', 'balcao', 'atendente']);
@@ -52,12 +54,16 @@ export async function captureLeadOrigin(
 
       const { data: contato } = await supabase
         .from('contacts')
-        .select('ad_tracking, source')
+        .select('ad_tracking, source, origin_locked')
         .eq('id', contactId)
         .maybeSingle();
 
       if (!contato) continue; // persistMessage ainda não criou a linha
 
+      if (contato.origin_locked) {
+        console.log(`[LeadOrigin] 🔒 ${contactId} tem origem travada à mão, não sobrescreve`);
+        return;
+      }
       const atual = contato.ad_tracking as any;
       if (atual?.source || atual?.headline) {
         console.log(`[LeadOrigin] ⏭️ ${contactId} já tem origem gravada, mantendo a primeira`);
@@ -86,5 +92,94 @@ export async function captureLeadOrigin(
     console.warn(`[LeadOrigin] ⚠️ Contato ${contactId} não apareceu a tempo; rastro do anúncio descartado`);
   } catch (err) {
     console.error('[LeadOrigin] Erro ao gravar origem do lead:', err);
+  }
+}
+
+// ─── Detector por frase cadastrada ──────────────────────────────────────────
+
+/** Rótulo legível a partir do slug gravado em contacts.source. */
+const ROTULOS_DE_SOURCE: Record<string, string> = {
+  instagram: 'Instagram',
+  google: 'Google',
+  site: 'Site',
+  facebook: 'Facebook',
+  indicacao: 'Indicação',
+  telefone: 'Telefone',
+  meta_ads: 'Meta Ads',
+  organico: 'Orgânico',
+};
+
+function rotuloDeSource(slug: string): string {
+  return ROTULOS_DE_SOURCE[slug.toLowerCase()] || slug;
+}
+
+/**
+ * Marca a origem do lead pela frase da mensagem, quando nenhum sinal mais
+ * forte já respondeu por ela.
+ *
+ * Roda a cada mensagem recebida, em paralelo ao atendimento: nunca lança, e
+ * falhar aqui não pode derrubar a resposta ao paciente.
+ */
+export async function detectAndTagLeadOrigin(
+  userId: string,
+  phoneNumber: string,
+  mensagem: string
+): Promise<void> {
+  try {
+    // Mensagem sem letra nenhuma (só emoji, número ou pontuação) não carrega
+    // frase de campanha e não tem o que casar.
+    if (!mensagem || !/\p{L}/u.test(mensagem)) return;
+
+    const cleanPhone = normalizePhone(phoneNumber);
+    const contactId = `${userId}_${cleanPhone}`;
+
+    const { data: contato } = await supabase
+      .from('contacts')
+      .select('ad_tracking, source, origin_locked')
+      .eq('id', contactId)
+      .maybeSingle();
+
+    if (!contato) return; // ainda não persistido; a próxima mensagem tenta
+
+    if (contato.origin_locked) return;                       // escolha manual vence
+    const atual = contato.ad_tracking as any;
+    if (atual?.source || atual?.headline) return;            // já tem origem
+    if (contato.source && contato.source !== 'whatsapp') return; // idem
+
+    const { data: padroes, error } = await supabase
+      .from('lead_origin_patterns')
+      .select('pattern, source, campaign_name')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    if (!padroes?.length) return;
+
+    const escolhido = escolherPadrao(mensagem, padroes);
+    if (!escolhido) return;
+
+    const { error: updateError } = await supabase
+      .from('contacts')
+      .update({
+        source: escolhido.source,
+        ad_tracking: {
+          source: rotuloDeSource(escolhido.source),
+          // MARCA O DETECTOR. O classificador precisa distinguir frase de
+          // clique em anúncio: os campos source e headline são preenchidos
+          // pelos dois, inclusive para um padrão de Site ou de Indicação.
+          type: 'ad_pattern',
+          headline: escolhido.campaign_name,
+          body: mensagem,
+          captured_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', contactId);
+
+    if (updateError) throw updateError;
+
+    console.log(
+      `[LeadOrigin] 🏷️ ${contactId} marcado como ${escolhido.source} pela frase "${escolhido.pattern}"`
+    );
+  } catch (err) {
+    console.error('[LeadOrigin] Erro no detector por frase:', err);
   }
 }
