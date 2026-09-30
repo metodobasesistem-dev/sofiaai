@@ -38,8 +38,8 @@ export default function CamposClienteSection() {
     <div className="space-y-6">
       <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
         A ficha do cliente é a mesma para todo mundo, menos por estes campos: cada ramo acompanha
-        o que importa para ele. Remover um campo guarda os valores já preenchidos — recriá-lo com o
-        mesmo nome traz o histórico de volta.
+        o que importa para ele. Renomear um campo não perde o que já foi preenchido, e remover
+        guarda os valores — recriá-lo com o mesmo nome traz o histórico de volta.
       </p>
 
       {/* Mesma largura da coluna de formulário das outras seções: esticado na

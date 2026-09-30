@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Zap, Lock, Key, Smartphone, LogOut, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import PWADiagnostic from '../PWADiagnostic';
+import { supabase } from '../../lib/supabase';
 import type { SecaoDePerfilProps } from './types';
 
 /** Cartão branco com cabeçalho — a moldura de toda seção de Configurações. */
@@ -46,6 +47,60 @@ export default function EmpresaSection({
     newPassword: '',
     confirmPassword: '',
   });
+  const [trocandoSenha, setTrocandoSenha] = useState(false);
+
+  /** Tamanho mínimo da nova senha. É o que o campo promete ao usuário. */
+  const MINIMO_DA_SENHA = 8;
+
+  const trocarSenha = async () => {
+    const { currentPassword, newPassword, confirmPassword } = passwordData;
+
+    if (!formData.email) {
+      toast.error('Não foi possível identificar sua conta. Recarregue a página.');
+      return;
+    }
+    if (!currentPassword) {
+      toast.error('Informe a senha atual.');
+      return;
+    }
+    if (newPassword.length < MINIMO_DA_SENHA) {
+      toast.error(`A nova senha precisa ter ao menos ${MINIMO_DA_SENHA} caracteres.`);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('A confirmação não bate com a nova senha.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      toast.error('A nova senha é igual à atual.');
+      return;
+    }
+
+    setTrocandoSenha(true);
+    try {
+      // O Supabase troca a senha da sessão aberta SEM pedir a senha atual.
+      // Conferimos por reautenticação: sem isso, quem passasse por um
+      // computador com a sessão esquecida aberta trocaria a senha do dono.
+      const { error: erroDeLogin } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: currentPassword,
+      });
+      if (erroDeLogin) {
+        toast.error('Senha atual incorreta.');
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Senha atualizada.');
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao atualizar a senha');
+    } finally {
+      setTrocandoSenha(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -208,11 +263,12 @@ export default function EmpresaSection({
           </div>
 
           <div className="flex justify-end pt-4">
-            {/* TODO: a troca de senha nunca foi ligada — este botão não tem
-                handler desde antes desta refatoração. Mantido como está para
-                não misturar comportamento novo com a reorganização da tela. */}
-            <button className="px-6 py-2.5 bg-primary-500/50 hover:bg-primary-500 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2">
-              <Key size={18} />
+            <button
+              onClick={trocarSenha}
+              disabled={trocandoSenha}
+              className={`${botaoSalvar} px-6 py-2.5`}
+            >
+              {trocandoSenha ? <Loader2 size={18} className="animate-spin" /> : <Key size={18} />}
               Atualizar senha
             </button>
           </div>
