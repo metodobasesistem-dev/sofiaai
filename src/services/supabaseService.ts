@@ -105,11 +105,16 @@ export interface Contact {
   ultimaInteracao?: string;
   primeiroContato?: string;
   totalMensagens?: number;
-  source?: 'whatsapp' | 'manual';
+  /** Slug da origem. 'whatsapp' é o padrão e significa origem DESCONHECIDA. */
+  source?: string;
   is_client?: boolean;
   priority?: string;
   profile_picture_url?: string;
   profile_picture_updated_at?: string;
+  /** Rastro bruto da origem. Interpretado por lib/leadOrigin, nunca direto. */
+  ad_tracking?: any;
+  /** O atendente escolheu a origem à mão: nenhum detector sobrescreve. */
+  origin_locked?: boolean;
 }
 
 export interface UserProfile {
@@ -574,7 +579,11 @@ export const listContacts = async (): Promise<Contact[]> => {
       primeiroContato: c.primeiro_contato,
       totalMensagens: c.total_mensagens,
       source: c.source as any,
-      is_client: c.is_client
+      is_client: c.is_client,
+      // Sem estes dois a classificação da origem cai para o caminho mais
+      // fraco (só o slug) e um lead de anúncio sai como "Outros".
+      ad_tracking: c.ad_tracking,
+      origin_locked: c.origin_locked
     }));
   } catch (err: any) {
     logSystemError('frontend:contacts', err.message);

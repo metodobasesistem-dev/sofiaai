@@ -34,7 +34,8 @@ import {
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getDashboardStats, getDashboardGrowth } from '../services/supabaseService';
+import { getDashboardStats, getDashboardGrowth, listContacts, type Contact } from '../services/supabaseService';
+import LeadOriginReport from './LeadOriginReport';
 
 const ReportCard = ({ children, title, subtitle, icon: Icon }: { children: React.ReactNode, title: string, subtitle?: string, icon?: any }) => (
   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -63,6 +64,7 @@ export default function Reports() {
     avgScore: 0 
   });
   const [chartData, setChartData] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,9 +73,16 @@ export default function Reports() {
         const s = await getDashboardStats();
         setStats(s as any);
 
+        // O relatório de origem classifica no cliente, pelo mesmo
+        // lib/leadOrigin que o Inbox e os Contatos usam. Falhar aqui não
+        // pode derrubar o resto da tela.
+        listContacts()
+          .then(setContacts)
+          .catch(err => console.error('Failed to fetch contacts for origin report:', err));
+
         // Fetch real historical data for the chart
         const growthData = await getDashboardGrowth();
-        
+
         const data = growthData.map((d: any) => ({
           name: format(new Date(d.date + 'T12:00:00'), 'dd MMM', { locale: ptBR }),
           leads: d.leads || 0,
@@ -270,6 +279,9 @@ export default function Reports() {
           </ReportCard>
         </div>
       </div>
+
+      {/* Origem dos Leads */}
+      <LeadOriginReport contacts={contacts} />
 
       {/* Bottom Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
