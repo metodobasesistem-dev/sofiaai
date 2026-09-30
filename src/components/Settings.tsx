@@ -28,6 +28,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import PWADiagnostic from './PWADiagnostic';
+import LeadOriginSettings from './LeadOriginSettings';
 
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -420,6 +421,7 @@ export default function Settings({
     { id: 'account', label: 'Conta', icon: <User size={18} /> },
     { id: 'subscription', label: 'Assinatura', icon: <CreditCard size={18} /> },
     { id: 'ai_config', label: 'Configuração IA', icon: <Zap size={18} /> },
+    { id: 'lead_origin', label: 'Origem dos Leads', icon: <Globe size={18} /> },
   ];
 
   if (isLoading) {
@@ -1014,6 +1016,7 @@ export default function Settings({
             </div>
           )}
 
+          {activeSubTab === 'lead_origin' && <LeadOriginSettings />}
 
         </motion.div>
       </AnimatePresence>

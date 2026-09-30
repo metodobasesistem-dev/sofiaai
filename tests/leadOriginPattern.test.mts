@@ -11,7 +11,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { escolherPadrao, normalizarTexto } from '../src/backend/lib/leadOriginPattern.js';
+import { escolherPadrao, normalizarTexto } from '../src/lib/leadOriginPattern.js';
 
 /** Os padrões de uma clínica real, do documento de rastreio. */
 const PADROES = [

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 import { buildAdTracking, type AdReferral } from '../lib/adReferral.js';
-import { escolherPadrao } from '../lib/leadOriginPattern.js';
+import { escolherPadrao } from '../../lib/leadOriginPattern.js';
 
 /**
  * Gravação da origem do lead capturada num clique em anúncio (Click-to-WhatsApp).
@@ -16,7 +16,7 @@ import { escolherPadrao } from '../lib/leadOriginPattern.js';
 
 export { extractAdReferral, buildAdTracking } from '../lib/adReferral.js';
 export type { AdReferral, AdTracking } from '../lib/adReferral.js';
-export { escolherPadrao, normalizarTexto } from '../lib/leadOriginPattern.js';
+export { escolherPadrao, normalizarTexto } from '../../lib/leadOriginPattern.js';
 
 /** Slugs de source que representam escolha humana — nenhum detector sobrescreve. */
 const MANUAL_SOURCES = new Set(['manual', 'balcao', 'atendente']);

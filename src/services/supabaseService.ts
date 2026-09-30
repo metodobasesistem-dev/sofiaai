@@ -2468,3 +2468,43 @@ export const deleteContractPeriod = async (contactId: string, id: string) => {
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao remover a vigência');
 };
+
+// ─── Origem dos leads ──────────────────────────────────────────────────────
+
+/** Uma frase cadastrada que identifica por onde o lead chegou. */
+export interface LeadOriginPattern {
+  id: string;
+  created_at: string;
+  /** A frase procurada na mensagem, como substring sem acento. */
+  pattern: string;
+  /** Slug gravado em contacts.source: 'site', 'instagram', 'google', ... */
+  source: string;
+  /** Vira ad_tracking.headline: o que aparece no relatório. */
+  campaign_name: string;
+  description?: string | null;
+}
+
+export const listLeadOriginPatterns = async (): Promise<LeadOriginPattern[]> => {
+  const res = await standardFetch('/api/v2/contacts/origin-patterns');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar as frases');
+  return result.data || [];
+};
+
+export const createLeadOriginPattern = async (
+  payload: { pattern: string; source: string; campaign_name: string; description?: string }
+): Promise<LeadOriginPattern> => {
+  const res = await standardFetch('/api/v2/contacts/origin-patterns', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao cadastrar a frase');
+  return result.data;
+};
+
+export const deleteLeadOriginPattern = async (id: string): Promise<void> => {
+  const res = await standardFetch(`/api/v2/contacts/origin-patterns/${id}`, { method: 'DELETE' });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover a frase');
+};
