@@ -62,6 +62,7 @@ const formatRelative = (date: any): string => {
 import { syncContacts } from '../services/whatsappService';
 import { listContacts, deleteContact, updateContactFunilStatus, listContactAppointments } from '../services/supabaseService';
 import { ContactAvatar } from './ContactAvatar';
+import { classifyLeadOrigin } from '../lib/leadOrigin';
 
 // Componente de Badge para Status
 const StatusBadge = ({ status }: { status: string }) => {
@@ -187,7 +188,7 @@ const SidePanel = ({
           <div className="bg-slate-50/50 rounded-[24px] p-6 space-y-4 border border-slate-100/50">
             {[
               { label: 'Telefone', value: formatPhone(contact.telefone), icon: <Phone size={14} /> },
-              { label: 'Origem', value: contact.source || 'WhatsApp', icon: <Globe size={14} /> },
+              { label: 'Origem', value: classifyLeadOrigin(contact.source, (contact as any).ad_tracking, { originLocked: (contact as any).origin_locked }).label, icon: <Globe size={14} /> },
               { label: 'Última Mensagem', value: contact.ultimaMensagem || '—', icon: <MessageSquare size={14} /> },
               { label: 'Visto por último', value: formatRelative(contact.ultimaInteracao), icon: <Clock size={14} /> },
             ].map((item, i) => (
@@ -465,7 +466,7 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
                   `"${c.status_funil}"`,
                   `"${c.is_client ? 'Sim' : 'Não'}"`,
                   `"${c.totalMensagens || 0}"`,
-                  `"${c.source || 'manual'}"`,
+                  `"${classifyLeadOrigin(c.source, (c as any).ad_tracking, { originLocked: (c as any).origin_locked }).label}"`,
                   `"${new Date(c.data_criacao || Date.now()).toLocaleString('pt-BR')}"`,
                   `"${c.ultimaInteracao ? new Date(c.ultimaInteracao).toLocaleString('pt-BR') : '—'}"`
                 ].join(','));
@@ -617,7 +618,7 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
                             <ContactAvatar url={contact.profile_picture_url} name={contact.nome} size="md" />
                             <div>
                               <p className="text-sm font-bold text-slate-900">{/^\d+$/.test(contact.nome) ? formatPhone(contact.nome) : contact.nome}</p>
-                              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-1">{contact.totalMensagens || 0} msgs • {contact.source || 'WhatsApp'}</p>
+                              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-1">{contact.totalMensagens || 0} msgs • {classifyLeadOrigin(contact.source, (contact as any).ad_tracking, { originLocked: (contact as any).origin_locked }).label}</p>
                             </div>
                           </div>
                         </td>

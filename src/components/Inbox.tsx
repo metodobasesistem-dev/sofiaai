@@ -61,6 +61,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
+import { classifyLeadOrigin } from '../lib/leadOrigin';
 import MotivoPerdaModal from './MotivoPerdaModal';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
@@ -1277,11 +1278,23 @@ const ChatBubble = React.memo(ChatBubbleInner, (prev, next) => {
 });
 
 const TrackingModal: React.FC<{
-  isOpen: boolean, 
-  onClose: () => void, 
-  trackingData: any 
-}> = ({ isOpen, onClose, trackingData }) => {
+  isOpen: boolean,
+  onClose: () => void,
+  trackingData: any,
+  source?: string | null,
+  originLocked?: boolean
+}> = ({ isOpen, onClose, trackingData, source, originLocked }) => {
   if (!isOpen || !trackingData) return null;
+
+  // A classificação vem do classificador único, nunca de uma regra local:
+  // cada tela já teve a própria cópia e elas divergiram.
+  const origem = classifyLeadOrigin(source, trackingData, { originLocked });
+  const CONFIANCA_ROTULO: Record<string, string> = {
+    alta: 'Confiança alta',
+    media: 'Confiança média',
+    baixa: 'Confiança baixa',
+    nenhuma: 'Sem sinal de origem',
+  };
 
   return (
     <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1306,7 +1319,7 @@ const TrackingModal: React.FC<{
           <div className="bg-gradient-to-br from-primary-50/50 to-white border border-primary-100 rounded-3xl p-6 relative overflow-hidden">
              <div className="flex items-start gap-4 relative z-10">
                 <div className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center shrink-0 border border-slate-100">
-                   {trackingData.source === 'Meta Ads' ? (
+                   {origem.category === 'ad' || origem.category === 'impulsionamento' || origem.category === 'instagram' ? (
                      <Instagram className="text-pink-600" size={32} />
                    ) : (
                      <Globe className="text-primary-600" size={32} />
@@ -1315,12 +1328,12 @@ const TrackingModal: React.FC<{
                 <div className="flex-1 min-w-0">
                    <div className="flex items-center gap-2 mb-1">
                       <span className="px-2 py-0.5 bg-primary-600 text-white text-[9px] font-black uppercase rounded-md tracking-widest">
-                        {trackingData.source || 'Plataforma'}
+                        {origem.label}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-bold">Origem do contato</span>
+                      <span className="text-[10px] text-slate-400 font-bold">{CONFIANCA_ROTULO[origem.confidence]}</span>
                    </div>
                    <h4 className="text-lg font-black text-slate-900 leading-tight mb-2">
-                     {trackingData.headline || 'Campanha Direta'}
+                     {origem.campaign || 'Campanha Direta'}
                    </h4>
                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
                      {trackingData.body || 'O lead iniciou uma conversa através de um link direto ou anúncio sem descrição adicional.'}
@@ -1335,14 +1348,14 @@ const TrackingModal: React.FC<{
                    <Layers size={14} />
                    <span className="text-[9px] font-black uppercase tracking-widest">Plataforma</span>
                 </div>
-                <p className="text-sm font-bold text-slate-800">{trackingData.source || 'Instagram / Facebook'}</p>
+                <p className="text-sm font-bold text-slate-800">{origem.label}</p>
              </div>
              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <div className="flex items-center gap-2 mb-2 text-slate-400">
                    <Bot size={14} />
                    <span className="text-[9px] font-black uppercase tracking-widest">Campanha</span>
                 </div>
-                <p className="text-sm font-bold text-slate-800 truncate">{trackingData.headline || 'N/A'}</p>
+                <p className="text-sm font-bold text-slate-800 truncate">{origem.campaign || 'N/A'}</p>
              </div>
           </div>
 
@@ -5181,6 +5194,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         isOpen={showTrackingModal}
         onClose={() => setShowTrackingModal(false)}
         trackingData={selectedContact?.ad_tracking || activeThread?.ad_tracking}
+        source={(selectedContact as any)?.source}
+        originLocked={(selectedContact as any)?.origin_locked}
       />
 
       <MetaTemplatesModal
