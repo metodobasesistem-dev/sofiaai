@@ -7,6 +7,7 @@ import { transcribeAudio } from '../services/aiService.js';
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 import { webhookLimiter } from '../middleware/rateLimiter.js';
+import { extractAdReferral, captureLeadOrigin } from '../services/leadOriginService.js';
 
 const router = Router();
 
@@ -536,6 +537,19 @@ async function handleMetaMessages(userId: string, phoneNumberId: string, value: 
   }
 
   console.log(`[MetaWebhook] 📥 Processing inbound: ${messageId} | Type: ${type}`);
+
+  // Rastreamento de Anúncios (Click-to-WhatsApp).
+  // Fica ANTES do desvio de mídia: o clique chega na primeira mensagem, que
+  // pode perfeitamente ser uma imagem ou um vídeo. Dispara sem await — a
+  // captura espera o contato existir por conta própria e nunca derruba o
+  // atendimento.
+  const referral = extractAdReferral(raw);
+  if (referral) {
+    console.log(`[MetaWebhook] 🎯 Clique em anúncio detectado para ${from}:`, referral.headline || referral.source_id);
+    captureLeadOrigin(userId, cleanPhone, referral).catch(err =>
+      console.error('[MetaWebhook] Erro ao capturar origem do lead:', err)
+    );
+  }
 
   // Media types are processed asynchronously (download + transcribe + upload)
   const MEDIA_TYPES = ['image', 'video', 'audio', 'document', 'sticker'];

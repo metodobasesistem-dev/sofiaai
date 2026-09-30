@@ -1346,15 +1346,17 @@ const TrackingModal: React.FC<{
              </div>
           </div>
 
-          {trackingData.sourceUrl && (
+          {/* Contatos gravados antes da fase 1 do rastreio usam camelCase;
+              os novos usam snake_case. Lê os dois. */}
+          {(trackingData.source_url || trackingData.sourceUrl) && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-slate-400 px-1">
                  <ExternalLink size={14} />
                  <span className="text-[9px] font-black uppercase tracking-widest">Link do Anúncio</span>
               </div>
               <div className="p-4 bg-primary-50/30 border border-primary-100 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-primary-50 transition-all"
-                   onClick={() => window.open(trackingData.sourceUrl, '_blank')}>
-                 <span className="text-xs font-medium text-primary-600 truncate flex-1 mr-4">{trackingData.sourceUrl}</span>
+                   onClick={() => window.open(trackingData.source_url || trackingData.sourceUrl, '_blank')}>
+                 <span className="text-xs font-medium text-primary-600 truncate flex-1 mr-4">{trackingData.source_url || trackingData.sourceUrl}</span>
                  <ExternalLink size={14} className="text-primary-400 group-hover:text-primary-600" />
               </div>
             </div>

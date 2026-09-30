@@ -7,6 +7,7 @@ import { googleCalendarService } from './googleCalendarService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
+import { captureLeadOrigin } from './leadOriginService.js';
 import { randomUUID } from 'crypto';
 
 /**
@@ -2281,22 +2282,24 @@ tudo que tiver no 'intent'.`,
       }
     ];
   }
+  /**
+   * @deprecated Use `captureLeadOrigin` de leadOriginService.
+   *
+   * Ficou como porta de compatibilidade: a versão anterior fazia um UPDATE
+   * direto em ad_tracking, sem respeitar primeiro toque nem origem manual, e
+   * sem gravar contacts.source — o que deixava todo lead como 'whatsapp'.
+   * Agora delega para o caminho guardado, aceitando a forma camelCase antiga.
+   */
   public async updateContactTracking(userId: string, phoneNumber: string, trackingData: any) {
-    try {
-      const cleanPhone = normalizePhone(phoneNumber);
-      const contactId = `${userId}_${cleanPhone}`;
-
-      console.log(`[AgentService] 🎯 Updating tracking for contact ${contactId}`);
-      
-      const { error } = await supabase
-        .from('contacts')
-        .update({ ad_tracking: trackingData })
-        .eq('id', contactId);
-        
-      if (error) throw error;
-    } catch (err) {
-      console.error('[AgentService] Error updating contact tracking:', err);
-    }
+    await captureLeadOrigin(userId, phoneNumber, {
+      source_id:   trackingData?.source_id   ?? trackingData?.sourceId,
+      source_url:  trackingData?.source_url  ?? trackingData?.sourceUrl,
+      source_type: trackingData?.source_type ?? trackingData?.type,
+      headline:    trackingData?.headline,
+      body:        trackingData?.body,
+      ctwa_clid:   trackingData?.ctwa_clid   ?? trackingData?.ctwaClid,
+      media_url:   trackingData?.media_url   ?? trackingData?.mediaUrl,
+    });
   }
 
   public async syncProfilePicture(userId: string, threadId: string, remoteJid: string, force = false) {
