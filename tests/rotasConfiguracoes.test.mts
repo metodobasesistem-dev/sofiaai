@@ -36,8 +36,9 @@ describe('rotas de Configurações — ida e volta', () => {
     // Espelha SECOES em components/Settings.tsx. Uma seção nova no rail sem
     // rota correspondente quebra o clique, sem erro nenhum aparecer.
     const noRail = [
-      'account', 'professionals', 'agents', 'quick_replies',
-      'lead_origin', 'availability', 'integrations', 'ai_config', 'subscription',
+      'account', 'professionals', 'agents', 'quick_replies', 'lead_origin',
+      'client_fields', 'loss_reasons', 'availability', 'integrations',
+      'ai_config', 'subscription',
     ];
     for (const secao of noRail) {
       assert.ok(

@@ -66,6 +66,8 @@ export const VALID_SUB_TABS: Record<string, readonly string[]> = {
   settings: [
     'account',
     'lead_origin',
+    'client_fields',
+    'loss_reasons',
     'professionals',
     'agents',
     'quick_replies',

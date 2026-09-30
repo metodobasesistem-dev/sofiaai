@@ -11,10 +11,10 @@
  */
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { X, Plus, Loader2, Trash2, XCircle } from 'lucide-react';
+import { X, Plus, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  listLossReasons, createLossReason, deleteLossReason, markLeadAsLost,
+  listLossReasons, createLossReason, markLeadAsLost,
   type MotivoPerda,
 } from '../services/supabaseService';
 
@@ -34,7 +34,6 @@ export default function MotivoPerdaModal({ contactId, nomeContato, onClose, onCo
   const [novoMotivo, setNovoMotivo] = useState('');
   const [criando, setCriando] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [gerenciando, setGerenciando] = useState(false);
 
   const carregar = async () => {
     try {
@@ -61,17 +60,6 @@ export default function MotivoPerdaModal({ contactId, nomeContato, onClose, onCo
       toast.error(e.message);
     } finally {
       setCriando(false);
-    }
-  };
-
-  const remover = async (motivo: MotivoPerda) => {
-    if (!window.confirm(`Remover "${motivo.nome}" da lista? Os leads perdidos por esse motivo continuam registrados.`)) return;
-    try {
-      await deleteLossReason(motivo.id);
-      setMotivos(prev => prev.filter(m => m.id !== motivo.id));
-      if (selecionado === motivo.id) setSelecionado(null);
-    } catch (e: any) {
-      toast.error(e.message);
     }
   };
 
@@ -136,15 +124,6 @@ export default function MotivoPerdaModal({ contactId, nomeContato, onClose, onCo
                         >
                           {m.nome}
                         </button>
-                        {gerenciando && (
-                          <button
-                            onClick={() => remover(m)}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-red-600 flex items-center justify-center shadow-sm"
-                            title="Remover motivo"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        )}
                       </div>
                     );
                   })}
@@ -173,14 +152,12 @@ export default function MotivoPerdaModal({ contactId, nomeContato, onClose, onCo
                 </button>
               </div>
 
-              {motivos.length > 0 && (
-                <button
-                  onClick={() => setGerenciando(v => !v)}
-                  className="text-[11px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {gerenciando ? 'Concluir edição da lista' : 'Editar lista de motivos'}
-                </button>
-              )}
+              {/* Criar fica aqui porque é parte do fluxo: quem percebe que
+                  falta um motivo no meio do atendimento não deveria ter que
+                  sair. Curar a lista é outra coisa, e mora num lugar só. */}
+              <p className="text-[11px] text-slate-400">
+                Para remover ou organizar os motivos, vá em Configurações → Motivos de Perda.
+              </p>
 
               <div>
                 <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">

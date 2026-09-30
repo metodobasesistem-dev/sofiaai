@@ -21,6 +21,7 @@ import {
   type ClientRecord, type ClientProfile, type ClientsSummary,
 } from '../services/supabaseService';
 import { toast } from 'sonner';
+import CamposClienteManager from './settings/CamposClienteManager';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -44,14 +45,6 @@ const formatMoney = (valor?: number | null, moeda = 'BRL') => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: moeda || 'BRL' }).format(Number(valor));
 };
 
-const TIPOS_LABEL: Record<TipoCampoCliente, string> = {
-  texto: 'Texto',
-  numero: 'Número',
-  data: 'Data',
-  selecao: 'Escolha única',
-  multi_selecao: 'Escolha múltipla',
-  booleano: 'Sim / Não',
-};
 
 const CICLOS: Array<{ id: NonNullable<ClientProfile['ciclo']>; label: string }> = [
   { id: 'mensal', label: 'Mensal' },
@@ -161,49 +154,6 @@ function GerenciarCamposModal({
   onClose: () => void;
   onMudou: () => void;
 }) {
-  const [label, setLabel] = useState('');
-  const [tipo, setTipo] = useState<TipoCampoCliente>('texto');
-  const [opcoesTexto, setOpcoesTexto] = useState('');
-  const [salvando, setSalvando] = useState(false);
-
-  const precisaOpcoes = tipo === 'selecao' || tipo === 'multi_selecao';
-
-  const criar = async () => {
-    if (!label.trim()) {
-      toast.error('Dê um nome ao campo');
-      return;
-    }
-    const opcoes = opcoesTexto.split(/[\n,]/).map(o => o.trim()).filter(Boolean);
-    if (precisaOpcoes && opcoes.length === 0) {
-      toast.error('Liste as opções, uma por linha');
-      return;
-    }
-    try {
-      setSalvando(true);
-      await createClientField({ label: label.trim(), tipo, opcoes });
-      toast.success(`Campo "${label.trim()}" criado`);
-      setLabel('');
-      setOpcoesTexto('');
-      setTipo('texto');
-      onMudou();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  const remover = async (campo: CampoCliente) => {
-    if (!window.confirm(`Remover o campo "${campo.label}" da ficha? O que já foi preenchido nos clientes continua guardado.`)) return;
-    try {
-      await deleteClientField(campo.id);
-      toast.success('Campo removido');
-      onMudou();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
@@ -225,81 +175,10 @@ function GerenciarCamposModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {campos.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Campos atuais</p>
-              {campos.map(c => (
-                <div key={c.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-slate-700 truncate">{c.label}</p>
-                    <p className="text-[11px] text-slate-400">
-                      {TIPOS_LABEL[c.tipo]}
-                      {c.opcoes?.length ? ` · ${c.opcoes.join(', ')}` : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => remover(c)}
-                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Remover campo"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="space-y-3 pt-2 border-t border-slate-100">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 pt-4">Novo campo</p>
-
-            <div>
-              <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Nome</label>
-              <input
-                value={label}
-                onChange={e => setLabel(e.target.value)}
-                placeholder="Ex: Plataformas de anúncio"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Tipo</label>
-              <select
-                value={tipo}
-                onChange={e => setTipo(e.target.value as TipoCampoCliente)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all"
-              >
-                {Object.entries(TIPOS_LABEL).map(([id, nome]) => (
-                  <option key={id} value={id}>{nome}</option>
-                ))}
-              </select>
-            </div>
-
-            {precisaOpcoes && (
-              <div>
-                <label className="text-[11px] font-medium text-slate-500 mb-1.5 block">
-                  Opções — uma por linha
-                </label>
-                <textarea
-                  rows={3}
-                  value={opcoesTexto}
-                  onChange={e => setOpcoesTexto(e.target.value)}
-                  placeholder={'Meta\nGoogle'}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:bg-white focus:border-primary-500 outline-none transition-all resize-none"
-                />
-              </div>
-            )}
-
-            <button
-              onClick={criar}
-              disabled={salvando}
-              className="w-full py-2.5 bg-primary-600 text-white rounded-xl text-[13px] font-semibold hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {salvando ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-              Adicionar campo
-            </button>
-          </div>
+        {/* Só a moldura mora aqui: a gestão em si é a mesma de
+            Configuracoes -> Campos da Ficha (settings/CamposClienteManager). */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <CamposClienteManager campos={campos} onMudou={onMudou} />
         </div>
       </motion.div>
     </div>
