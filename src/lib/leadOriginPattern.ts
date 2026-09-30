@@ -1,9 +1,13 @@
 /**
  * Casamento da mensagem com as frases de origem cadastradas.
  *
- * Módulo puro de propósito: não toca banco nem rede, para que a regra de
- * desempate seja testável sem infraestrutura. A gravação fica em
- * services/leadOriginService.ts.
+ * Módulo puro de propósito: não toca banco nem rede. Fica em src/lib porque
+ * é COMPARTILHADO — o backend usa para detectar, e a tela de configuração
+ * usa para mostrar qual frase venceria numa mensagem de teste. Se a regra
+ * vivesse só no backend, a tela teria uma segunda cópia para divergir.
+ *
+ * Não importe nada de backend aqui: este arquivo vai para o bundle do
+ * navegador. A gravação fica em backend/services/leadOriginService.ts.
  */
 
 /** Minúscula, sem acento, espaços colapsados. Aplicada aos dois lados. */
