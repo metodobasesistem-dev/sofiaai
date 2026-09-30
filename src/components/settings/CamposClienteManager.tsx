@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   createClientField,
   deleteClientField,
+  updateClientField,
   type CampoCliente,
   type TipoCampoCliente,
 } from '../../services/supabaseService';
@@ -44,7 +45,44 @@ export default function CamposClienteManager({
   const [opcoesTexto, setOpcoesTexto] = useState('');
   const [salvando, setSalvando] = useState(false);
 
+  /** Campo em edição de nome, e o texto sendo digitado. */
+  const [renomeando, setRenomeando] = useState<string | null>(null);
+  const [nomeNovo, setNomeNovo] = useState('');
+  const [renomeandoSalvando, setRenomeandoSalvando] = useState(false);
+
   const precisaOpcoes = tipo === 'selecao' || tipo === 'multi_selecao';
+
+  const abrirRenomear = (c: CampoCliente) => {
+    setRenomeando(c.id);
+    setNomeNovo(c.label);
+  };
+
+  /**
+   * Renomear troca só o rótulo. A chave do JSONB não muda — é por isso que o
+   * que já foi preenchido nas fichas continua aparecendo depois.
+   */
+  const confirmarRenomear = async (c: CampoCliente) => {
+    const label = nomeNovo.trim();
+    if (!label) {
+      toast.error('O campo precisa de um nome.');
+      return;
+    }
+    if (label === c.label) {
+      setRenomeando(null);
+      return;
+    }
+    try {
+      setRenomeandoSalvando(true);
+      await updateClientField(c.id, { label });
+      toast.success('Campo renomeado.');
+      setRenomeando(null);
+      onMudou();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setRenomeandoSalvando(false);
+    }
+  };
 
   const criar = async () => {
     if (!label.trim()) {
@@ -96,20 +134,59 @@ export default function CamposClienteManager({
           </p>
           {campos.map(c => (
             <div key={c.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold text-slate-700 truncate">{c.label}</p>
-                <p className="text-[11px] text-slate-400">
-                  {TIPOS_LABEL[c.tipo]}
-                  {c.opcoes?.length ? ` · ${c.opcoes.join(', ')}` : ''}
-                </p>
-              </div>
-              <button
-                onClick={() => remover(c)}
-                className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Remover campo"
-              >
-                <Trash2 size={15} />
-              </button>
+              {renomeando === c.id ? (
+                <>
+                  <input
+                    autoFocus
+                    value={nomeNovo}
+                    onChange={e => setNomeNovo(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') confirmarRenomear(c);
+                      if (e.key === 'Escape') setRenomeando(null);
+                    }}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-primary-500 rounded-lg text-[13px] font-semibold text-slate-700 outline-none"
+                  />
+                  <button
+                    onClick={() => confirmarRenomear(c)}
+                    disabled={renomeandoSalvando}
+                    className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                    title="Salvar nome"
+                  >
+                    {renomeandoSalvando ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  </button>
+                  <button
+                    onClick={() => setRenomeando(null)}
+                    className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                    title="Cancelar"
+                  >
+                    <X size={15} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-slate-700 truncate">{c.label}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {TIPOS_LABEL[c.tipo]}
+                      {c.opcoes?.length ? ` · ${c.opcoes.join(', ')}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => abrirRenomear(c)}
+                    className="p-2 text-slate-300 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                    title="Renomear campo"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => remover(c)}
+                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remover campo"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
