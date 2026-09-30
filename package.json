@@ -11,6 +11,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test:chat": "node --test tests/chat.test.mjs",
+    "test:origem": "tsx --test tests/adReferral.test.mts",
     "health:check": "curl -s http://localhost:3000/api/health/chat | node -e \"const d=require('fs').readFileSync('/dev/stdin','utf8');const r=JSON.parse(d);console.log(JSON.stringify(r,null,2));process.exit(r.status==='healthy'?0:1)\""
   },
   "dependencies": {

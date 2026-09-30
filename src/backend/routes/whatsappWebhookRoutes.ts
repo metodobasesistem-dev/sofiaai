@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 import { normalizePhone, isSamePhone } from '../lib/phoneHelper.js';
+import { extractAdReferral, captureLeadOrigin } from '../services/leadOriginService.js';
 
 
 const router = Router();
@@ -267,6 +268,21 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
   // INBOUND OR OUTBOUND FROM PHONE
   console.log(`[Webhook] 📥 Processing message: ${messageId} | Type: ${type} | fromMe: ${fromMe}`);
 
+  // Rastreamento de Anúncios (Click-to-WhatsApp).
+  // Fica ANTES do desvio de mídia: o clique chega na primeira mensagem, que
+  // pode perfeitamente ser uma imagem ou um vídeo. Dispara sem await — a
+  // captura espera o contato existir por conta própria e nunca derruba o
+  // atendimento.
+  if (!fromMe) {
+    const referral = extractAdReferral(raw);
+    if (referral) {
+      console.log(`[Webhook] 🎯 Clique em anúncio detectado para ${from}:`, referral.headline || referral.source_id);
+      captureLeadOrigin(userId, cleanPhone, referral).catch(err =>
+        console.error('[Webhook] Erro ao capturar origem do lead:', err)
+      );
+    }
+  }
+
   // Handle Media Asynchronously
   if (type !== 'text' && type !== 'unknown') {
     handleMediaMessage(userId, instanceName, threadId, message, provider, fromMe ? 'outbound' : 'inbound').catch(err => {
@@ -277,21 +293,6 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
 
   // Persist Text and Trigger AI (only if inbound)
   try {
-    // 3. Rastreamento de Anúncios (Click-to-WhatsApp)
-    const referral = raw?.message?.referral;
-    if (referral) {
-      console.log(`[Webhook] 🎯 Ad Referral detected for ${from}:`, referral.headline);
-      await agentService.updateContactTracking(userId, cleanPhone, {
-        source: 'Meta Ads',
-        type: referral.sourceType,
-        sourceId: referral.sourceId,
-        sourceUrl: referral.sourceUrl,
-        headline: referral.headline,
-        body: referral.body,
-        mediaUrl: referral.imageUrl || referral.videoUrl
-      }).catch(err => console.error('[Webhook] Error updating tracking:', err));
-    }
-
     // 1. PRIMEIRO PERSISTE (Bug 1: Garante ordem e sucesso)
     await agentService.persistMessage(threadId, userId, body, fromMe ? 'outbound' : 'inbound', messageId, contactName, from, cleanPhone, fromMe ? 'Atendente' : undefined, undefined, undefined, type, undefined, undefined, undefined, undefined, fromMe, quotedId, quotedText, contactJid);
 
