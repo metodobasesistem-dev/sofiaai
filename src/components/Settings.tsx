@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { Building2, CreditCard, Zap, Globe, Loader2, Users, Clock, Plug, MessageSquare, Bot } from 'lucide-react';
+import { Building2, CreditCard, Zap, Globe, Loader2, Users, Clock, Plug, MessageSquare, Bot, SlidersHorizontal, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -13,6 +13,8 @@ import EmpresaSection from './settings/EmpresaSection';
 import AssinaturaSection from './settings/AssinaturaSection';
 import IASection from './settings/IASection';
 import LeadOriginSettings from './LeadOriginSettings';
+import CamposClienteSection from './settings/CamposClienteSection';
+import MotivosPerdaManager from './settings/MotivosPerdaManager';
 import type { SettingsFormData } from './settings/types';
 
 // Telas grandes que passaram a morar aqui. Continuam em chunks próprios: se
@@ -56,6 +58,8 @@ const SECOES: (SecaoDeConfiguracao & { flag?: string; minPlan?: string })[] = [
   { id: 'agents', label: 'Agentes de IA', descricao: 'Quem atende por você no WhatsApp', icon: <Bot size={18} />, minPlan: 'Pro' },
   { id: 'quick_replies', label: 'Respostas Rápidas', descricao: 'Atalhos de mensagem para o atendimento', icon: <MessageSquare size={18} />, minPlan: 'Starter' },
   { id: 'lead_origin', label: 'Canais / Origens', descricao: 'De onde vêm os seus leads', icon: <Globe size={18} /> },
+  { id: 'client_fields', label: 'Campos da Ficha', descricao: 'O que a ficha do cliente acompanha no seu ramo', icon: <SlidersHorizontal size={18} />, flag: 'crm' },
+  { id: 'loss_reasons', label: 'Motivos de Perda', descricao: 'Por que um lead não avançou', icon: <XCircle size={18} /> },
   { id: 'availability', label: 'Disponibilidade', descricao: 'Horários em que a agenda aceita marcação', icon: <Clock size={18} />, flag: 'agendas', minPlan: 'Pro' },
   { id: 'integrations', label: 'Integrações', descricao: 'WhatsApp, Google e demais conexões', icon: <Plug size={18} />, flag: 'official_api' },
   { id: 'ai_config', label: 'Configuração IA', descricao: 'Provedor de IA e chaves de API', icon: <Zap size={18} /> },
@@ -339,6 +343,10 @@ export default function Settings({
             </Suspense>
 
             {secaoAberta === 'lead_origin' && <LeadOriginSettings />}
+
+            {secaoAberta === 'client_fields' && <CamposClienteSection />}
+
+            {secaoAberta === 'loss_reasons' && <MotivosPerdaManager />}
 
             {secaoAberta === 'ai_config' && (
               <IASection
