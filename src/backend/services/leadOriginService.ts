@@ -34,6 +34,26 @@ const ESPERAS_ATE_O_CONTATO_EXISTIR = [0, 400, 1200, 3000];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /**
+ * A clínica declarou que só anuncia pelo botão "Impulsionar"?
+ *
+ * Só é consultado no clique em anúncio, que é raro perto do volume de
+ * mensagens. Na dúvida responde false: marcar como impulsionamento por
+ * engano esconde o nome de uma campanha que existe.
+ */
+async function clinicaSoImpulsiona(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('anuncios_sao_impulsionamento')
+      .eq('id', userId)
+      .maybeSingle();
+    return Boolean(data?.anuncios_sao_impulsionamento);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Grava a origem do contato. Primeiro toque vence: a origem de um lead não
  * muda, então a função sai cedo se já houver rastro gravado ou se a origem
  * tiver sido escolhida à mão.
@@ -75,6 +95,16 @@ export async function captureLeadOrigin(
       }
 
       const adTracking = buildAdTracking(referral);
+
+      // A clínica que só anuncia pelo botão "Impulsionar" declara isso nas
+      // Configurações. O clique é idêntico ao de um anúncio do Gerenciador —
+      // nada no que o WhatsApp entrega separa os dois —, então a declaração é
+      // o único sinal disponível enquanto não houver token de leitura de
+      // anúncios para perguntar à Graph API.
+      if (await clinicaSoImpulsiona(userId)) {
+        adTracking.tipo_de_anuncio = 'impulsionamento';
+        adTracking.tipo_detectado_por = 'config_da_clinica';
+      }
 
       const { error } = await supabase
         .from('contacts')

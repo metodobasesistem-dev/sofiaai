@@ -27,6 +27,13 @@ export interface AdTracking extends AdReferral {
   utm_content?: string;
   utm_medium?: string;
   captured_at: string;
+  /**
+   * 'impulsionamento' quando o clique veio do botão do Instagram, cuja conta
+   * de anúncios é implícita e cujo nome de campanha nunca vai existir.
+   */
+  tipo_de_anuncio?: 'impulsionamento';
+  /** Como se chegou a esse veredito. */
+  tipo_detectado_por?: 'config_da_clinica' | 'conta_inalcancavel';
 }
 
 /**

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Globe, Plus, Trash2, Loader2, FlaskConical, AlertTriangle } from 'lucide-react';
+import { Globe, Plus, Trash2, Loader2, FlaskConical, AlertTriangle, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   listLeadOriginPatterns,
   createLeadOriginPattern,
   deleteLeadOriginPattern,
+  getUserProfile,
+  updateUserProfile,
   type LeadOriginPattern,
 } from '../services/supabaseService';
 import { classifyLeadOrigin } from '../lib/leadOrigin';
@@ -44,14 +46,35 @@ export default function LeadOriginSettings() {
 
   const [mensagemTeste, setMensagemTeste] = useState('');
 
+  const [soImpulsiona, setSoImpulsiona] = useState(false);
+  const [salvandoFlag, setSalvandoFlag] = useState(false);
+
   const carregar = async () => {
     try {
-      setPatterns(await listLeadOriginPatterns());
+      const [frases, perfil] = await Promise.all([listLeadOriginPatterns(), getUserProfile()]);
+      setPatterns(frases);
+      setSoImpulsiona(Boolean(perfil?.anuncios_sao_impulsionamento));
     } catch (err: any) {
       console.error('Failed to load origin patterns:', err);
       toast.error(err.message || 'Erro ao carregar as frases');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const alternarImpulsionamento = async (valor: boolean) => {
+    setSalvandoFlag(true);
+    // Otimista: o checkbox responde na hora e volta atrás se o salvamento
+    // falhar — é um toggle, não um formulário.
+    setSoImpulsiona(valor);
+    try {
+      await updateUserProfile({ anuncios_sao_impulsionamento: valor });
+      toast.success(valor ? 'Anúncios marcados como impulsionamento.' : 'Configuração removida.');
+    } catch (err: any) {
+      setSoImpulsiona(!valor);
+      toast.error(err.message || 'Erro ao salvar a configuração');
+    } finally {
+      setSalvandoFlag(false);
     }
   };
 
@@ -224,6 +247,49 @@ export default function LeadOriginSettings() {
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Impulsionamento */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center">
+              <Megaphone size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Como você anuncia</h3>
+              <p className="text-xs text-gray-500">Separa impulsionamento de anúncio no relatório</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 space-y-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={soImpulsiona}
+              disabled={salvandoFlag}
+              onChange={e => alternarImpulsionamento(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded accent-primary-600 cursor-pointer disabled:opacity-50"
+            />
+            <span className="text-sm text-gray-700 leading-relaxed">
+              <strong className="font-bold text-gray-900">
+                Só anuncio pelo botão "Impulsionar" do Instagram
+              </strong>
+              <br />
+              Não uso o Gerenciador de Anúncios da Meta.
+            </span>
+          </label>
+
+          <p className="text-xs text-gray-500 leading-relaxed max-w-3xl">
+            Um post impulsionado roda numa conta de anúncios implícita, fora do Gerenciador, e
+            o nome da campanha dele <strong>nunca</strong> vai existir. Marcando esta opção, os
+            leads de anúncio aparecem no relatório como <strong>Impulsionamento</strong>, em vez
+            de virarem "Anúncio" com um identificador que você procuraria para sempre no
+            Gerenciador. Só marque se for verdade: se você também usa o Gerenciador, isso
+            esconderia o nome de campanhas que existem.
+          </p>
         </div>
       </div>
 
