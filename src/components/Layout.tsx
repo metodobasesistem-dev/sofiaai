@@ -42,6 +42,7 @@ import { useFeature, useFeatureContext } from '../contexts/FeatureFlagContext';
 import { useRef, useEffect } from 'react';
 import SofiaChat from './Sofia/SofiaChat';
 import { useNotification } from '../contexts/NotificationContext';
+import { podeVer } from '../lib/acesso';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -132,6 +133,14 @@ export default function Layout({
   // reagir quando a navegação acontece sem recarregar a página.
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  /**
+   * A barra inferior tem atalhos para telas que hoje são seções de
+   * Configurações. Só `activeTab` não basta para acendê-los: ele vale
+   * 'settings' para todas elas, então é preciso olhar a sub-seção na URL.
+   */
+  const estaEmConfig = (secao: string) =>
+    activeTab === 'settings' && location.pathname.split('/')[2] === secao;
 
   useEffect(() => {
     if (!user?.id) return;
@@ -330,7 +339,9 @@ export default function Layout({
           icon: <Bot size={16} />,
           label: 'Automação',
           subItems: [
-            { id: 'agents', icon: <img src="/sofiamini.png" className="w-3.5 h-3.5 object-cover rounded-md" alt="Agentes" />, label: 'Agentes de IA', minPlan: 'Pro' },
+            // Agentes de IA e Atalhos mudaram para Configurações → o menu
+            // lateral ficou só com o que se USA no dia a dia; o que se
+            // CONFIGURA uma vez mora junto em Configurações.
             {
               id: 'leo',
               icon: <Zap size={13} className="text-amber-500" />,
@@ -339,7 +350,6 @@ export default function Layout({
               minPlan: 'Starter'
             },
             { id: 'campaigns', icon: <Send size={13} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
-            { id: 'quick_replies', icon: <MessageSquare size={13} />, label: 'Atalhos', minPlan: 'Starter' },
           ]
         }
       ]
@@ -353,9 +363,8 @@ export default function Layout({
           label: 'Sistema',
           subItems: [
             { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={13} />, flag: 'agendas', minPlan: 'Pro' },
-            { id: 'availability', label: 'Disponibilidade', icon: <Clock size={13} />, flag: 'agendas', minPlan: 'Pro' },
-            { id: 'integrations', icon: <Plug size={13} />, label: 'Integrações', flag: 'official_api' },
-            { id: 'professionals', icon: <Users size={13} />, label: 'Equipe', flag: 'crm' },
+            // Disponibilidade, Integrações e Equipe mudaram para dentro de
+            // Configurações. Agendamentos fica: é operação diária, não ajuste.
             { id: 'settings', icon: <Settings size={13} />, label: 'Configurações' },
           ]
         }
@@ -375,33 +384,16 @@ export default function Layout({
       const filteredItems = section.items.map(item => {
         const clonedItem = { ...item };
         if (clonedItem.subItems) {
-          clonedItem.subItems = clonedItem.subItems.filter(sub => {
-            if (sub.flag && flags[sub.flag] === false) return false;
-            if (role === 'admin') return true;
-            if (sub.minPlan) {
-              const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
-              const userPlanIdx = plans.indexOf(plano || 'Trial');
-              const minPlanIdx = plans.indexOf(sub.minPlan);
-              if (userPlanIdx < minPlanIdx) return false;
-            }
-            return true;
-          });
+          // Mesma regra do rail de Configurações (lib/acesso): duas cópias
+          // divergiriam, e o sintoma seria um cliente vendo tela que o plano
+          // dele não cobre — ou perdendo uma que cobre.
+          clonedItem.subItems = clonedItem.subItems.filter(sub =>
+            podeVer(sub, { role, plano, flags })
+          );
         }
         return clonedItem;
       }).filter(item => {
-        // Feature Flag Check no item principal
-        if (item.flag && flags[item.flag] === false) return false;
-        
-        if (role === 'admin') return true;
-        
-        // Plan Restriction Check no item principal
-        if (item.minPlan) {
-          const plans = ['Trial', 'Starter', 'Pro', 'Elite', 'Enterprise'];
-          const userPlanIdx = plans.indexOf(plano || 'Trial');
-          const minPlanIdx = plans.indexOf(item.minPlan);
-          
-          if (userPlanIdx < minPlanIdx) return false;
-        }
+        if (!podeVer(item, { role, plano, flags })) return false;
 
         // Se o item tem subitens e após o filtro ficou vazio, oculte-o
         if (item.subItems && item.subItems.length === 0) {
@@ -804,23 +796,26 @@ export default function Layout({
           </button>
         )}
 
-        <button 
-          onClick={() => onTabChange('integrations')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'integrations' ? 'text-primary-600' : 'text-slate-400'}`}
+        {/* Integrações e Agentes agora vivem em Configurações. Os atalhos
+            apontam direto para lá: passar pela URL antiga funcionaria pelo
+            redirecionamento, mas o item nunca acenderia como ativo. */}
+        <button
+          onClick={() => onTabChange('settings', 'integrations')}
+          className={`flex flex-col items-center gap-1 ${estaEmConfig('integrations') ? 'text-primary-600' : 'text-slate-400'}`}
         >
           <Layers size={22} />
           <span className="text-[10px] font-bold uppercase tracking-wider">Integrações</span>
         </button>
 
-        <button 
-          onClick={() => onTabChange('agents')}
-          className={`flex flex-col items-center gap-1 ${activeTab === 'agents' ? 'text-primary' : 'text-slate-400'}`}
+        <button
+          onClick={() => onTabChange('settings', 'agents')}
+          className={`flex flex-col items-center gap-1 ${estaEmConfig('agents') ? 'text-primary' : 'text-slate-400'}`}
         >
           <div className="w-[22px] h-[22px] overflow-hidden rounded-md">
-            <img 
-              src="/sofiamini.png" 
-              alt="Agentes" 
-              className={`w-full h-full object-cover ${activeTab === 'agents' ? '' : 'grayscale opacity-60'}`} 
+            <img
+              src="/sofiamini.png"
+              alt="Agentes"
+              className={`w-full h-full object-cover ${estaEmConfig('agents') ? '' : 'grayscale opacity-60'}`}
             />
           </div>
           <span className="text-[10px] font-bold uppercase tracking-wider">Agentes</span>
