@@ -172,4 +172,114 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// ─── Origem do lead ───────────────────────────────────────────────────────
+// As frases que identificam o canal, e a correção manual da origem.
+
+// ─── GET /api/v2/contacts/origin-patterns ────────────────────────────────
+router.get('/origin-patterns', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('lead_origin_patterns')
+      .select('*')
+      .eq('user_id', req.userId!)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error('[ContactAPI] origin-patterns GET:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/contacts/origin-patterns ───────────────────────────────
+router.post('/origin-patterns', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const pattern = String(req.body?.pattern || '').trim();
+  const source = String(req.body?.source || '').trim().toLowerCase();
+  const campaignName = String(req.body?.campaign_name || '').trim();
+  const description = String(req.body?.description || '').trim() || null;
+
+  if (!pattern) return res.status(400).json({ success: false, error: 'Informe a frase.' });
+  if (!source) return res.status(400).json({ success: false, error: 'Informe a origem.' });
+  if (!campaignName) return res.status(400).json({ success: false, error: 'Informe o nome da campanha.' });
+
+  // Frase curta demais casa mensagem que não devia: a comparação é substring,
+  // e "oi" apareceria em quase tudo.
+  if (pattern.length < 4) {
+    return res.status(400).json({ success: false, error: 'A frase precisa ter ao menos 4 caracteres.' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('lead_origin_patterns')
+      .insert({ user_id: userId, pattern, source, campaign_name: campaignName, description })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ success: false, error: 'Essa frase já está cadastrada.' });
+      }
+      throw error;
+    }
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[ContactAPI] origin-patterns POST:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── DELETE /api/v2/contacts/origin-patterns/:id ─────────────────────────
+router.delete('/origin-patterns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Apagar a frase não reclassifica quem já foi marcado por ela: a origem
+    // gravada no contato é um fato do passado.
+    const { error } = await supabase
+      .from('lead_origin_patterns')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId!);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[ContactAPI] origin-patterns DELETE:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── PATCH /api/v2/contacts/:id/origin ───────────────────────────────────
+// Correção manual. Trava a origem: nenhum detector sobrescreve depois disso.
+router.patch('/:id/origin', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const source = String(req.body?.source || '').trim().toLowerCase();
+  if (!source) return res.status(400).json({ success: false, error: 'Informe a origem.' });
+
+  try {
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({
+        source,
+        origin_locked: true,
+        ad_tracking: {
+          source: req.body?.label || source,
+          type: 'manual',
+          headline: req.body?.campaign_name || null,
+          captured_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', req.params.id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await invalidateCache(cacheKey.contacts(userId));
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[ContactAPI] origin PATCH:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

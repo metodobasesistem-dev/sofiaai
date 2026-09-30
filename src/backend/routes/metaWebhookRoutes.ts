@@ -7,7 +7,7 @@ import { transcribeAudio } from '../services/aiService.js';
 import { MetaProvider } from '../providers/MetaProvider.js';
 import { normalizePhone } from '../lib/phoneHelper.js';
 import { webhookLimiter } from '../middleware/rateLimiter.js';
-import { extractAdReferral, captureLeadOrigin } from '../services/leadOriginService.js';
+import { extractAdReferral, captureLeadOrigin, detectAndTagLeadOrigin } from '../services/leadOriginService.js';
 
 const router = Router();
 
@@ -568,6 +568,11 @@ async function handleMetaMessages(userId: string, phoneNumberId: string, value: 
       undefined, undefined, undefined, type, undefined, undefined, undefined, undefined,
       false, quotedId, quotedText, undefined
     );
+
+    // Detector de origem por frase cadastrada. Roda em paralelo ao
+    // atendimento: só depois do persist (precisa do contato) e sem await,
+    // porque falhar aqui não pode atrasar nem derrubar a resposta.
+    detectAndTagLeadOrigin(userId, cleanPhone, body).catch(() => {});
 
     // Busca o agent_id salvo na thread (igual ao Evolution webhook)
     const { data: threadRow } = await supabase.from('threads').select('agent_id').eq('id', threadId).maybeSingle();
