@@ -103,4 +103,32 @@ describe('agruparPorAnuncio', () => {
     ] as any);
     assert.deepEqual(linhas, []);
   });
+
+  it('marca impulsionamento, para separar "sem nome ainda" de "sem nome nunca"', () => {
+    const linhas = agruparPorAnuncio([
+      { source: 'meta_ads', ad_tracking: { source_id: '111', ctwa_clid: 'a' } },
+      {
+        source: 'meta_ads',
+        ad_tracking: {
+          source_id: '222',
+          ctwa_clid: 'b',
+          tipo_de_anuncio: 'impulsionamento',
+          tipo_detectado_por: 'config_da_clinica',
+        },
+      },
+    ] as any);
+
+    assert.equal(linhas.find(l => l.adId === '111')!.impulsionamento, false);
+    assert.equal(linhas.find(l => l.adId === '222')!.impulsionamento, true);
+  });
+
+  it('conta impulsionamento junto com anúncio na tabela', () => {
+    // Os dois são mídia paga e aparecem na mesma tabela; o que muda é só o
+    // motivo de não haver nome.
+    const linhas = agruparPorAnuncio([
+      { source: 'meta_ads', ad_tracking: { source_id: '333', ctwa_clid: 'a', tipo_de_anuncio: 'impulsionamento' } },
+    ] as any);
+    assert.equal(linhas.length, 1);
+    assert.equal(linhas[0].total, 1);
+  });
 });

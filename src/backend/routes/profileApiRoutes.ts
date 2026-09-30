@@ -68,6 +68,8 @@ const SELF_PROFILE_PATCH_ALLOWED_FIELDS = new Set([
   'notification_phone', 'preferred_locale', 'sofia_active', 'feature_flags',
   // IA e modelos (Configurações → Configuração IA)
   'llm_provider', 'openai_api_key', 'gemini_api_key', 'default_ai_model', 'sofia_prompt',
+  // Rastreio de origem (Configurações → Origem dos Leads)
+  'anuncios_sao_impulsionamento',
 ]);
 
 router.patch('/', async (req: AuthenticatedRequest, res: Response) => {

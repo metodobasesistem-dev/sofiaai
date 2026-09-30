@@ -32,6 +32,12 @@ interface LinhaDeAnuncio {
   adId: string;
   nome: string | null;
   total: number;
+  /**
+   * Impulsionamento: o nome NUNCA vai chegar, porque a conta de anúncios do
+   * botão do Instagram é implícita. Distingue "ainda sem nome" de "sem nome
+   * para sempre" — sem isso a tela manda procurar uma campanha que não existe.
+   */
+  impulsionamento: boolean;
 }
 
 // Cor única para os canais: o gráfico tem uma série só (contatos por
@@ -76,13 +82,14 @@ export function agruparPorAnuncio(contatos: Contact[]): LinhaDeAnuncio[] {
 
     // Sem token com ads_read a Graph API não resolve o nome e sobra o ID.
     const nome = t.ad_name || t.campaign_name || t.headline || null;
+    const impulsionamento = origem.category === 'impulsionamento';
 
     const atual = porAnuncio.get(adId);
     if (atual) {
       atual.total += 1;
       if (!atual.nome && nome) atual.nome = nome;
     } else {
-      porAnuncio.set(adId, { adId, nome, total: 1 });
+      porAnuncio.set(adId, { adId, nome, total: 1, impulsionamento });
     }
   }
 
@@ -232,7 +239,13 @@ export default function LeadOriginReport({ contacts }: { contacts: Contact[] }) 
                 {anuncios.map(a => (
                   <tr key={a.adId} className="border-t border-slate-100">
                     <td className="py-3 font-bold text-slate-800">
-                      {a.nome || <span className="text-slate-400 font-medium">Nome não disponível</span>}
+                      {a.nome
+                        ? a.nome
+                        : a.impulsionamento
+                          // Não é falta de token: a conta é implícita e o nome
+                          // não existe. Dizer "não disponível" mandaria procurar.
+                          ? <span className="text-slate-500 font-medium">Post impulsionado — sem nome de campanha</span>
+                          : <span className="text-slate-400 font-medium">Nome não disponível</span>}
                     </td>
                     <td className="py-3 text-[11px] font-mono text-slate-400">{a.adId}</td>
                     <td className="py-3 font-black text-slate-900 text-right">{a.total}</td>
@@ -242,10 +255,23 @@ export default function LeadOriginReport({ contacts }: { contacts: Contact[] }) 
             </table>
           </div>
 
-          {anuncios.some(a => !a.nome) && (
+          {/* Duas causas diferentes para a mesma lacuna. Atribuir as duas ao
+              token faria a clínica que só impulsiona procurar uma configuração
+              que não resolveria nada. */}
+          {anuncios.some(a => !a.nome && !a.impulsionamento) && (
             <p className="mt-4 text-[11px] text-slate-400 font-medium leading-relaxed">
-              O WhatsApp entrega o ID do anúncio, nunca o nome. Sem um token com permissão
-              de leitura de anúncios, o relatório mostra o identificador.
+              O WhatsApp entrega o ID do anúncio, nunca o nome. Onde aparece "Nome não
+              disponível", ou o sistema ainda não tem um token com permissão de leitura de
+              anúncios, ou o anúncio é um post impulsionado — cuja campanha não existe no
+              Gerenciador. Se você só anuncia pelo botão Impulsionar, marque isso em
+              Configurações → Origem dos Leads e essas linhas passam a dizer o motivo.
+            </p>
+          )}
+
+          {anuncios.some(a => a.impulsionamento) && (
+            <p className="mt-4 text-[11px] text-slate-400 font-medium leading-relaxed">
+              Posts impulsionados rodam numa conta de anúncios implícita: o nome da campanha
+              não existe e não vai aparecer com token nenhum.
             </p>
           )}
         </Cartao>

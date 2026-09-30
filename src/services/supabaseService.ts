@@ -146,6 +146,8 @@ export interface UserProfile {
   openai_api_key?: string;
   gemini_api_key?: string;
   default_ai_model?: string;
+  /** A clínica só anuncia pelo botão "Impulsionar" do Instagram. */
+  anuncios_sao_impulsionamento?: boolean;
   google_refresh_token?: string;
   whatsapp_provider?: string;
   whatsapp_provider_config?: any;
@@ -881,6 +883,8 @@ export const getUserProfile = async (passedUserId?: string): Promise<UserProfile
         default_ai_model: profile.default_ai_model || '',
         sofia_prompt: profile.sofia_prompt || '',
         sofia_active: profile.sofia_active ?? true,
+        // Rastreio de origem
+        anuncios_sao_impulsionamento: profile.anuncios_sao_impulsionamento ?? false,
       };
     }
     return null;
