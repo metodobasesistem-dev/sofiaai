@@ -54,14 +54,46 @@ export const SUB_TAB_DEFAULTS: Record<string, string> = {
   leo: 'dashboard',
 };
 
-/** Sub-abas aceitas por seção — o que não estiver aqui cai no default. */
+/**
+ * Sub-abas aceitas por seção — o que não estiver aqui cai no default.
+ *
+ * Esquecer de registrar uma sub-aba aqui não dá erro: buildPath devolve
+ * '/settings', parsePath lê o default e a tela volta sozinha para a primeira
+ * seção. Já aconteceu com 'lead_origin'. Ao criar uma seção nova em
+ * Configurações, o id entra nesta lista no mesmo commit.
+ */
 export const VALID_SUB_TABS: Record<string, readonly string[]> = {
-  settings: ['account', 'subscription', 'ai_config'],
+  settings: [
+    'account',
+    'lead_origin',
+    'professionals',
+    'agents',
+    'quick_replies',
+    'availability',
+    'integrations',
+    'ai_config',
+    'subscription',
+  ],
   admin: ['overview', 'users', 'config', 'billing', 'flags', 'meta_activator', 'lead_radar'],
   leo: ['dashboard', 'leads', 'campanhas', 'instagram', 'postagens', 'configuracoes'],
 };
 
 const TAB_SET = new Set<string>(TABS);
+
+/**
+ * Telas que passaram a viver dentro de Configurações.
+ *
+ * As URLs antigas continuam valendo: estão em links salvos, no retorno do
+ * OAuth do Google (/integrations) e nos atalhos do rodapé. Em vez de quebrar,
+ * redirecionam para o novo lugar.
+ */
+export const MOVIDAS_PARA_CONFIGURACOES: Record<string, string> = {
+  professionals: 'professionals',
+  agents: 'agents',
+  quick_replies: 'quick_replies',
+  availability: 'availability',
+  integrations: 'integrations',
+};
 
 /** Monta o caminho de uma seção (com sub-seção, quando houver). */
 export function buildPath(tab: string, subTab?: string): string {

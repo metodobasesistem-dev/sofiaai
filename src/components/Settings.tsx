@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, CreditCard, Zap, Globe, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { Building2, CreditCard, Zap, Globe, Loader2, Users, Clock, Plug, MessageSquare, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 import { getUserProfile, updateUserProfile, UserProfile } from '../services/supabaseService';
 import { supabase } from '../lib/supabase';
+import { podeVer } from '../lib/acesso';
+import { useFeatureContext } from '../contexts/FeatureFlagContext';
 
 import SettingsNav, { type SecaoDeConfiguracao } from './settings/SettingsNav';
 import EmpresaSection from './settings/EmpresaSection';
@@ -12,6 +14,21 @@ import AssinaturaSection from './settings/AssinaturaSection';
 import IASection from './settings/IASection';
 import LeadOriginSettings from './LeadOriginSettings';
 import type { SettingsFormData } from './settings/types';
+
+// Telas grandes que passaram a morar aqui. Continuam em chunks próprios: se
+// virassem import estático, abrir Configurações baixaria Agentes e Integrações
+// junto, mesmo para quem só quer trocar o nome da empresa.
+const Professionals = lazy(() => import('./Professionals'));
+const Agents = lazy(() => import('./Agents'));
+const QuickReplies = lazy(() => import('./QuickReplies'));
+const Availability = lazy(() => import('./Availability'));
+const Integrations = lazy(() => import('./Integrations'));
+
+const CarregandoSecao = () => (
+  <div className="h-64 w-full flex items-center justify-center text-primary-500">
+    <Loader2 size={32} className="animate-spin" />
+  </div>
+);
 
 /**
  * Configurações — casca de navegação.
@@ -26,9 +43,21 @@ import type { SettingsFormData } from './settings/types';
  * links salvos. Só os rótulos mudaram.
  */
 
-const SECOES: SecaoDeConfiguracao[] = [
+/**
+ * As seções do rail, na ordem em que aparecem.
+ *
+ * `flag` e `minPlan` seguem a mesma regra do menu lateral, por lib/acesso:
+ * mover uma tela para cá não pode fazer um cliente Starter passar a enxergar
+ * o que o plano dele não cobre.
+ */
+const SECOES: (SecaoDeConfiguracao & { flag?: string; minPlan?: string })[] = [
   { id: 'account', label: 'Empresa', descricao: 'Informações gerais da sua empresa', icon: <Building2 size={18} /> },
+  { id: 'professionals', label: 'Equipe', descricao: 'Profissionais que atendem na sua clínica', icon: <Users size={18} />, flag: 'crm' },
+  { id: 'agents', label: 'Agentes de IA', descricao: 'Quem atende por você no WhatsApp', icon: <Bot size={18} />, minPlan: 'Pro' },
+  { id: 'quick_replies', label: 'Respostas Rápidas', descricao: 'Atalhos de mensagem para o atendimento', icon: <MessageSquare size={18} />, minPlan: 'Starter' },
   { id: 'lead_origin', label: 'Canais / Origens', descricao: 'De onde vêm os seus leads', icon: <Globe size={18} /> },
+  { id: 'availability', label: 'Disponibilidade', descricao: 'Horários em que a agenda aceita marcação', icon: <Clock size={18} />, flag: 'agendas', minPlan: 'Pro' },
+  { id: 'integrations', label: 'Integrações', descricao: 'WhatsApp, Google e demais conexões', icon: <Plug size={18} />, flag: 'official_api' },
   { id: 'ai_config', label: 'Configuração IA', descricao: 'Provedor de IA e chaves de API', icon: <Zap size={18} /> },
   { id: 'subscription', label: 'Assinatura', descricao: 'Seu plano e faturamento', icon: <CreditCard size={18} /> },
 ];
@@ -43,11 +72,24 @@ const FORM_VAZIO: SettingsFormData = {
 export default function Settings({
   initialSubTab = 'account',
   onSubTabChange,
+  user,
+  role,
+  plano,
 }: {
   initialSubTab?: string;
   /** Avisa o App para refletir a sub-aba na URL (/settings/ai_config). */
   onSubTabChange?: (subTab: string) => void;
+  /** Necessários pelas telas que passaram a morar aqui. */
+  user?: any;
+  role?: string | null;
+  plano?: string | null;
 }) {
+  const { flags = {} } = useFeatureContext();
+
+  const secoesVisiveis = useMemo(
+    () => SECOES.filter(s => podeVer(s, { role, plano, flags })),
+    [role, plano, flags]
+  );
   const [activeSubTab, setActiveSubTabState] = useState(initialSubTab || 'account');
 
   // Toda troca de seção passa por aqui para que estado e URL não divirjam.
@@ -246,7 +288,11 @@ export default function Settings({
     );
   }
 
-  const secaoAtual = SECOES.find(s => s.id === activeSubTab) || SECOES[0];
+  // Uma seção que o plano não cobre não fica só escondida no rail: chegar
+  // nela pela URL cai na primeira seção visível, em vez de tela em branco.
+  const secaoAtual =
+    secoesVisiveis.find(s => s.id === activeSubTab) || secoesVisiveis[0] || SECOES[0];
+  const secaoAberta = secaoAtual.id;
 
   return (
     <div className="flex flex-col md:flex-row md:items-start gap-8">
@@ -257,7 +303,7 @@ export default function Settings({
           <p className="text-sm text-gray-500">Administração da conta</p>
         </div>
 
-        <SettingsNav secoes={SECOES} ativa={activeSubTab} onSelecionar={setActiveSubTab} />
+        <SettingsNav secoes={secoesVisiveis} ativa={secaoAberta} onSelecionar={setActiveSubTab} />
       </div>
 
       {/* Painel de conteúdo. */}
@@ -269,12 +315,12 @@ export default function Settings({
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeSubTab}
+            key={secaoAberta}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
-            {activeSubTab === 'account' && (
+            {secaoAberta === 'account' && (
               <EmpresaSection
                 formData={formData}
                 setFormData={setFormData}
@@ -284,9 +330,17 @@ export default function Settings({
               />
             )}
 
-            {activeSubTab === 'lead_origin' && <LeadOriginSettings />}
+            <Suspense fallback={<CarregandoSecao />}>
+              {secaoAberta === 'professionals' && <Professionals />}
+              {secaoAberta === 'agents' && <Agents user={user} role={role} />}
+              {secaoAberta === 'quick_replies' && <QuickReplies />}
+              {secaoAberta === 'availability' && <Availability />}
+              {secaoAberta === 'integrations' && <Integrations user={user} role={role} />}
+            </Suspense>
 
-            {activeSubTab === 'ai_config' && (
+            {secaoAberta === 'lead_origin' && <LeadOriginSettings />}
+
+            {secaoAberta === 'ai_config' && (
               <IASection
                 formData={formData}
                 setFormData={setFormData}
@@ -295,7 +349,7 @@ export default function Settings({
               />
             )}
 
-            {activeSubTab === 'subscription' && (
+            {secaoAberta === 'subscription' && (
               <AssinaturaSection
                 profile={profile}
                 billingCycle={billingCycle}

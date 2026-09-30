@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { buildPath, parsePath, DEFAULT_TAB } from './routes';
+import { buildPath, parsePath, DEFAULT_TAB, MOVIDAS_PARA_CONFIGURACOES } from './routes';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Inbox from './components/Inbox';
@@ -16,19 +16,14 @@ import { useFeatureContext } from './contexts/FeatureFlagContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 
 // Code splitting: telas secundárias só carregam quando o usuário navega para elas
-const Agents = lazy(() => import('./components/Agents'));
 const Contacts = lazy(() => import('./components/Contacts'));
 const Clients = lazy(() => import('./components/Clients'));
 const Schedules = lazy(() => import('./components/Schedules'));
-const Availability = lazy(() => import('./components/Availability'));
-const Integrations = lazy(() => import('./components/Integrations'));
 const Settings = lazy(() => import('./components/Settings'));
 const Reports = lazy(() => import('./components/Reports'));
-const Professionals = lazy(() => import('./components/Professionals'));
 const Overview = lazy(() => import('./components/Overview'));
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const Campaigns = lazy(() => import('./components/Campaigns'));
-const QuickReplies = lazy(() => import('./components/QuickReplies'));
 const LeoApp = lazy(() => import('./pages/Leo/LeoApp'));
 const Finance = lazy(() => import('./components/Finance'));
 const MetaTemplatesAdminPage = lazy(() => import('./components/MetaTemplatesAdminPage'));
@@ -90,13 +85,28 @@ export default function App() {
     if (
       !hasInboxDeepLink &&
       localStorage.getItem('connecting_google') === 'true' &&
-      activeTab !== 'integrations'
+      !(activeTab === 'settings' && subTab === 'integrations')
     ) {
-      navigate({ pathname: buildPath('integrations'), hash: location.hash }, { replace: true });
+      navigate(
+        { pathname: buildPath('settings', 'integrations'), hash: location.hash },
+        { replace: true }
+      );
       return;
     }
 
-    // 2. Caminho canônico da seção que está na tela
+    // 2. URLs antigas das telas que mudaram para dentro de Configurações.
+    // Elas estão em links salvos e em atalhos, então redirecionam em vez de
+    // cair no Dashboard. `replace` para não empilhar no histórico.
+    const novoLugar = MOVIDAS_PARA_CONFIGURACOES[activeTab];
+    if (novoLugar) {
+      navigate(
+        { pathname: buildPath('settings', novoLugar), search: location.search, hash: location.hash },
+        { replace: true }
+      );
+      return;
+    }
+
+    // 3. Caminho canônico da seção que está na tela
     const canonical = buildPath(activeTab, subTab);
     if (location.pathname !== canonical) {
       navigate({ pathname: canonical, search: location.search, hash: location.hash }, { replace: true });
@@ -243,7 +253,6 @@ export default function App() {
   const { flags = {}, isLoading: flagsLoading } = useFeatureContext();
   const leoEnabled = flags['leo_ai'] === true;
   const agendasEnabled = flags['agendas'] === true;
-  const crmEnabled = flags['crm'] !== false; // Permite por padrão se não existir no banco
   const chatEnabled = flags['chat'] !== false; // Permite por padrão se não existir no banco
 
   if (loading || flagsLoading) {
@@ -256,6 +265,11 @@ export default function App() {
   }
 
   const renderContent = () => {
+    // Telas que mudaram para dentro de Configurações: o efeito acima já está
+    // redirecionando. Mostrar o loader por esse quadro evita o piscar de
+    // "Em desenvolvimento" antes da URL nova assumir.
+    if (MOVIDAS_PARA_CONFIGURACOES[activeTab]) return <PageFallback />;
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} plano={plano} />;
@@ -292,17 +306,9 @@ export default function App() {
       case 'health':
       case 'overview':
         return <Overview />;
-      case 'professionals':
-        if (role !== 'admin' && !crmEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
-        return <Professionals />;
-      case 'agents':
-        return <Agents user={user} role={role} />;
       case 'schedule':
         if (role !== 'admin' && !agendasEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Schedules user={user} role={role} />;
-      case 'availability':
-        if (role !== 'admin' && !agendasEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
-        return <Availability />;
       case 'inbox':
         if (role !== 'admin' && !chatEnabled) return <Dashboard onTabChange={handleTabChange} role={role || 'client'} user={user} />;
         return <Inbox user={user} role={role} initialTab="conversations" onTabChange={handleTabChange} />;
@@ -317,13 +323,14 @@ export default function App() {
         return <Clients />;
       case 'meta_templates':
         return <MetaTemplatesAdminPage />;
-      case 'integrations':
-        return <Integrations user={user} role={role} />;
       case 'settings':
         return (
           <Settings
             initialSubTab={settingsSubTab}
             onSubTabChange={(t) => handleSubTabChange('settings', t)}
+            user={user}
+            role={role}
+            plano={plano}
           />
         );
       case 'leo':
@@ -339,8 +346,6 @@ export default function App() {
         );
       case 'campaigns':
         return <Campaigns />;
-      case 'quick_replies':
-        return <QuickReplies />;
       case 'finance':
         return <Finance />;
       case 'onboarding':
