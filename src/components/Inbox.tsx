@@ -63,6 +63,7 @@ import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
 import { classifyLeadOrigin } from '../lib/leadOrigin';
 import OrigemDoLead from './OrigemDoLead';
+import ProgramarMensagemModal from './ProgramarMensagemModal';
 import MotivoPerdaModal from './MotivoPerdaModal';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
@@ -1554,6 +1555,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [showProgramarModal, setShowProgramarModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -4776,12 +4778,23 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                       <Paperclip size={20} className="md:size-[22px] rotate-45" />
                     </button>
 
-                    <button 
-                      type="button" 
-                      onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)} 
+                    <button
+                      type="button"
+                      onClick={() => setIsPrivateNoteMode(!isPrivateNoteMode)}
                       className={`p-1.5 md:p-2.5 transition-all shrink-0 ${isPrivateNoteMode ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <Lock size={18} />
+                    </button>
+
+                    {/* Programar mensagem fica no compositor porque é aqui que
+                        o atendente decide o que dizer — só que para depois. */}
+                    <button
+                      type="button"
+                      onClick={() => setShowProgramarModal(true)}
+                      className="p-1.5 md:p-2.5 text-slate-400 hover:text-primary-500 transition-colors shrink-0"
+                      title="Programar mensagem"
+                    >
+                      <Clock size={18} />
                     </button>
                   </div>
                   
@@ -5203,6 +5216,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         onSchedule={handleScheduleFollowUp}
         contactName={activeThread?.name || ''}
       />
+
+      {showProgramarModal && activeThread && (
+        <ProgramarMensagemModal
+          threadId={activeThread.id}
+          nomeDoContato={activeThread.name}
+          onFechar={() => setShowProgramarModal(false)}
+        />
+      )}
 
       <TrackingModal
         isOpen={showTrackingModal}

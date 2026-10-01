@@ -2633,3 +2633,52 @@ export const deleteFollowUpTemplate = async (id: string) => {
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao remover o modelo');
 };
+
+// ─── Mensagens programadas ────────────────────────────────────────────────
+// O texto vai renderizado: quem agenda viu a prévia, e é ela que precisa
+// chegar ao paciente. Guardar o modelo faria editá-lo depois mudar, em
+// silêncio, mensagens já agendadas.
+
+export interface MensagemProgramada {
+  id: string;
+  thread_id: string;
+  telefone: string;
+  conteudo: string;
+  enviar_em: string;
+  status: 'pendente' | 'enviada' | 'cancelada' | 'falhou';
+  erro: string | null;
+  enviada_em: string | null;
+  template_id: string | null;
+  created_at: string;
+}
+
+export const listScheduledMessages = async (threadId?: string): Promise<MensagemProgramada[]> => {
+  const qs = threadId ? `?threadId=${encodeURIComponent(threadId)}` : '';
+  const res = await standardFetch(`/api/v2/scheduled-messages${qs}`);
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar as mensagens programadas');
+  return result.data || [];
+};
+
+export const createScheduledMessage = async (payload: {
+  thread_id: string;
+  conteudo: string;
+  /** ISO. O backend recusa horário no passado. */
+  enviar_em: string;
+  template_id?: string | null;
+}): Promise<MensagemProgramada> => {
+  const res = await standardFetch('/api/v2/scheduled-messages', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao agendar a mensagem');
+  return result.data;
+};
+
+/** Cancela. Só funciona no que ainda não saiu. */
+export const cancelScheduledMessage = async (id: string) => {
+  const res = await standardFetch(`/api/v2/scheduled-messages/${id}`, { method: 'DELETE' });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao cancelar');
+};
