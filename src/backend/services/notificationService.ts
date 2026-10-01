@@ -56,6 +56,17 @@ export class NotificationService {
   private interval: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
+  /**
+   * As mensagens programadas têm laço próprio, a cada minuto.
+   *
+   * O laço dos lembretes roda de 15 em 15 minutos, o que serve para "avisar
+   * algumas horas antes". Aqui o atendente escolheu uma HORA; sair 14 minutos
+   * depois do que ele marcou é visível, e logo ele deixa de confiar no
+   * recurso. A consulta é uma só, por índice parcial (pendentes vencidas).
+   */
+  private intervalAgendadas: NodeJS.Timeout | null = null;
+  private processandoAgendadas = false;
+
   async startBackgroundJobs() {
     console.log('[NotificationService] Starting background jobs (Reminders/Follow-ups)...');
     
@@ -79,9 +90,67 @@ export class NotificationService {
       }
     }, 15 * 60 * 1000);
 
+    this.intervalAgendadas = setInterval(async () => {
+      if (this.processandoAgendadas) return;
+      this.processandoAgendadas = true;
+      try {
+        await this.enviarMensagensProgramadas();
+      } catch (err: any) {
+        console.error('[NotificationService] Erro no envio de mensagens programadas:', err);
+      } finally {
+        this.processandoAgendadas = false;
+      }
+    }, 60 * 1000);
+
     // Run first time immediately
     this.checkReminders();
     this.checkFollowUps();
+  }
+
+  /**
+   * Envia o que venceu e ainda está pendente.
+   *
+   * Cada mensagem é marcada ANTES do envio: se o processo cair no meio, ela
+   * não sai duas vezes. O preço é que uma queda exatamente entre a marcação e
+   * o envio perde a mensagem — melhor que o paciente receber duas.
+   */
+  async enviarMensagensProgramadas() {
+    const { data: pendentes, error } = await supabase
+      .from('scheduled_messages')
+      .select('*')
+      .eq('status', 'pendente')
+      .lte('enviar_em', new Date().toISOString())
+      .limit(50);
+
+    if (error) {
+      console.error('[NotificationService] Erro ao buscar mensagens programadas:', error);
+      return;
+    }
+    if (!pendentes?.length) return;
+
+    for (const msg of pendentes) {
+      // A marca só pega se a linha AINDA estiver pendente: duas instâncias do
+      // servidor rodando o mesmo laço não enviam a mesma mensagem.
+      const { data: travada } = await supabase
+        .from('scheduled_messages')
+        .update({ status: 'enviada', enviada_em: new Date().toISOString() })
+        .eq('id', msg.id)
+        .eq('status', 'pendente')
+        .select();
+
+      if (!travada || travada.length === 0) continue;
+
+      try {
+        await whatsappService.sendMessage(msg.user_id, msg.telefone, msg.conteudo);
+        console.log(`[NotificationService] 📤 Mensagem programada ${msg.id} enviada`);
+      } catch (err: any) {
+        console.error(`[NotificationService] Falha ao enviar a programada ${msg.id}:`, err?.message || err);
+        await supabase
+          .from('scheduled_messages')
+          .update({ status: 'falhou', erro: String(err?.message || err).slice(0, 500) })
+          .eq('id', msg.id);
+      }
+    }
   }
 
   async checkReminders() {
@@ -283,6 +352,7 @@ export class NotificationService {
 
   stop() {
     if (this.interval) clearInterval(this.interval);
+    if (this.intervalAgendadas) clearInterval(this.intervalAgendadas);
   }
 }
 

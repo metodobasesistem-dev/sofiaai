@@ -62,6 +62,7 @@ import funnelApiRoutes from './src/backend/routes/funnelApiRoutes.js';
 import profileApiRoutes from './src/backend/routes/profileApiRoutes.js';
 import quickReplyApiRoutes from './src/backend/routes/quickReplyApiRoutes.js';
 import followUpTemplateApiRoutes from './src/backend/routes/followUpTemplateApiRoutes.js';
+import scheduledMessageApiRoutes from './src/backend/routes/scheduledMessageApiRoutes.js';
 import adminApiRoutes from './src/backend/routes/adminApiRoutes.js';
 import radarRoutes from './src/backend/routes/radarRoutes.js';
 import campaignRoutes from './src/backend/routes/campaignRoutes.js';
@@ -321,6 +322,7 @@ async function startServer() {
     app.use('/api/v2/profile', profileApiRoutes);
     app.use('/api/v2/quick-replies', quickReplyApiRoutes);
     app.use('/api/v2/follow-up-templates', followUpTemplateApiRoutes);
+    app.use('/api/v2/scheduled-messages', scheduledMessageApiRoutes);
     app.use('/api/v2/admin', adminLimiter, adminApiRoutes);
     app.use('/api/v2/admin/diagnostics', adminLimiter, requireAuth as any, requireAdmin as any, diagnosticsRoutes);
     app.use('/api/v2/radar', apiLimiter, radarRoutes);
