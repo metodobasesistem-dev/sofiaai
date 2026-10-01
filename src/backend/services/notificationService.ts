@@ -2,6 +2,55 @@ import { supabase } from '../lib/supabaseClient.js';
 import { whatsappService } from './whatsappService.js';
 import { format, addHours, subHours, isBefore, isAfter, parseISO } from 'date-fns';
 import { monitoringService } from './monitoringService.js';
+import { renderizarModelo } from '../../lib/mensagemModelo.js';
+
+/**
+ * O texto que o paciente recebe quando a clínica não cadastrou um modelo.
+ *
+ * É exatamente o que o sistema mandava antes dos modelos existirem: ligar os
+ * modelos não pode mudar, sozinho, o que os clientes atuais já enviam.
+ */
+function lembretePadrao(appt: any): string {
+  return `Olá *${appt.client_name}*! Passando para lembrar do nosso compromisso hoje às *${appt.time}*. Nos vemos em breve! 😄`;
+}
+
+/**
+ * Monta a mensagem do lembrete de consulta.
+ *
+ * Usa o modelo que a clínica marcou como "Lembrete de consulta", se houver um
+ * ATIVO. Sem modelo, ou com qualquer erro na busca, cai no texto padrão: um
+ * lembrete que não sai é pior que um lembrete genérico.
+ */
+async function montarLembrete(appt: any): Promise<string> {
+  try {
+    const { data: modelo } = await supabase
+      .from('follow_up_templates')
+      .select('conteudo')
+      .eq('user_id', appt.user_id)
+      .eq('gatilho', 'lembrete_consulta')
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (!modelo?.conteudo) return lembretePadrao(appt);
+
+    const nomeCompleto = String(appt.client_name || '').trim();
+    const texto = renderizarModelo(modelo.conteudo, {
+      nome: nomeCompleto.split(/\s+/)[0] || '',
+      nome_completo: nomeCompleto,
+      // appt.data é 'YYYY-MM-DD'; o paciente lê dd/mm.
+      data: appt.data ? format(parseISO(appt.data), 'dd/MM') : '',
+      hora: appt.time || '',
+      profissional: appt.professional_name || '',
+    });
+
+    // Um modelo que virou texto vazio — por exemplo, só variáveis e nenhum
+    // dado — não pode sair como mensagem em branco.
+    return texto.trim() || lembretePadrao(appt);
+  } catch (err) {
+    console.error('[NotificationService] Falha ao montar o lembrete pelo modelo:', err);
+    return lembretePadrao(appt);
+  }
+}
 
 export class NotificationService {
   private interval: NodeJS.Timeout | null = null;
@@ -68,9 +117,9 @@ export class NotificationService {
         // If appt is between +1.5h and +3h from now
         if (isAfter(apptDateTime, now) && isBefore(apptDateTime, threeHoursFromNow)) {
           console.log(`[NotificationService] Sending reminder for appointment ${appt.id} to ${appt.client_phone}`);
-          
-          const msg = `Olá *${appt.client_name}*! Passando para lembrar do nosso compromisso hoje às *${appt.time}*. Nos vemos em breve! 😄`;
-          
+
+          const msg = await montarLembrete(appt);
+
           await whatsappService.sendMessage(appt.user_id, appt.client_phone, msg);
 
           // Mark as sent

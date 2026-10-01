@@ -9,6 +9,26 @@ import { Router, Response } from 'express';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 
+/**
+ * Envios automáticos que podem usar um modelo. Nulo = só envio manual.
+ *
+ * Um gatilho desconhecido é recusado em vez de gravado: a coluna existe para
+ * o backend PROCURAR por ela, e um valor com erro de digitação viraria um
+ * modelo que nunca é usado, sem erro nenhum aparecer.
+ */
+const GATILHOS = ['lembrete_consulta'];
+
+/**
+ * O 23505 pode vir de dois lugares: o nome único por clínica, ou o índice
+ * parcial que garante um modelo só por gatilho. Dizer sempre "nome duplicado"
+ * mandaria o usuário renomear um modelo que estava com o nome certo.
+ */
+function mensagemDeDuplicado(error: any): string {
+  return String(error?.message || '').includes('gatilho')
+    ? 'Já existe um modelo usado nesse envio automático. Desmarque o outro primeiro.'
+    : 'Já existe um modelo com esse nome.';
+}
+
 const router = Router();
 router.use(requireAuth as any);
 
@@ -38,6 +58,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   if (!nome) return res.status(400).json({ success: false, error: 'Dê um nome ao modelo.' });
   if (!conteudo) return res.status(400).json({ success: false, error: 'Escreva a mensagem.' });
 
+  const gatilho = req.body?.gatilho ? String(req.body.gatilho).trim() : null;
+  if (gatilho && !GATILHOS.includes(gatilho)) {
+    return res.status(400).json({ success: false, error: 'Gatilho desconhecido.' });
+  }
+
   try {
     const { count } = await supabase
       .from('follow_up_templates')
@@ -46,13 +71,13 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const { data, error } = await supabase
       .from('follow_up_templates')
-      .insert({ user_id: userId, nome, conteudo, ordem: count || 0 })
+      .insert({ user_id: userId, nome, conteudo, gatilho, ordem: count || 0 })
       .select()
       .single();
 
     if (error) {
       if (error.code === '23505') {
-        return res.status(400).json({ success: false, error: 'Já existe um modelo com esse nome.' });
+        return res.status(400).json({ success: false, error: mensagemDeDuplicado(error) });
       }
       throw error;
     }
@@ -70,6 +95,13 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
   if (typeof req.body?.conteudo === 'string' && req.body.conteudo.trim()) payload.conteudo = req.body.conteudo.trim();
   if (typeof req.body?.ativo === 'boolean') payload.ativo = req.body.ativo;
   if (typeof req.body?.ordem === 'number') payload.ordem = req.body.ordem;
+  if ('gatilho' in (req.body || {})) {
+    const g = req.body.gatilho ? String(req.body.gatilho).trim() : null;
+    if (g && !GATILHOS.includes(g)) {
+      return res.status(400).json({ success: false, error: 'Gatilho desconhecido.' });
+    }
+    payload.gatilho = g;
+  }
 
   if (Object.keys(payload).length === 0) {
     return res.status(400).json({ success: false, error: 'Nada para atualizar.' });
@@ -83,7 +115,7 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
       .eq('user_id', req.userId!);
     if (error) {
       if (error.code === '23505') {
-        return res.status(400).json({ success: false, error: 'Já existe um modelo com esse nome.' });
+        return res.status(400).json({ success: false, error: mensagemDeDuplicado(error) });
       }
       throw error;
     }
