@@ -62,6 +62,52 @@ const ROTULOS: Record<LeadOriginCategory, string> = {
   whatsapp: 'Origem desconhecida',
 };
 
+/**
+ * Emoji de cada origem, para as telas que listam canais.
+ *
+ * Mora junto dos rótulos de propósito: são as duas faces da mesma coisa, e
+ * separá-los faria uma tela mostrar um ícone para um canal que o
+ * classificador já chama de outro nome.
+ */
+const EMOJIS: Record<LeadOriginCategory, string> = {
+  ad: '📣',
+  impulsionamento: '🚀',
+  instagram: '📷',
+  google: '🔍',
+  site: '🌐',
+  telefone: '📞',
+  indicacao: '🤝',
+  organico: '🌱',
+  manual: '🛎️',
+  outros: '🏷️',
+  whatsapp: '❔',
+};
+
+/**
+ * As origens que são CANAL DE CAPTAÇÃO, na ordem em que as telas listam.
+ *
+ * 'whatsapp' fica fora: é ausência de sinal, não canal — incluí-la numa lista
+ * de "de onde vêm seus leads" é o mesmo erro que já distorceu os percentuais
+ * do relatório.
+ */
+export const CANAIS_DE_ORIGEM: LeadOriginCategory[] = [
+  'site',
+  'ad',
+  'impulsionamento',
+  'instagram',
+  'google',
+  'organico',
+  'indicacao',
+  'telefone',
+  'manual',
+  'outros',
+];
+
+/** Rótulo e emoji de uma categoria, para chips e selos. */
+export function origemParaExibicao(category: LeadOriginCategory): { label: string; emoji: string } {
+  return { label: ROTULOS[category], emoji: EMOJIS[category] };
+}
+
 /** Mapeia o slug de contacts.source para a categoria, quando basta ele. */
 const CATEGORIA_POR_SOURCE: Record<string, LeadOriginCategory> = {
   instagram: 'instagram',
