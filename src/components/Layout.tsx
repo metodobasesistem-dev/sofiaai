@@ -145,7 +145,6 @@ export default function Layout({
     prospeccao_menu: false,
     atendimento_menu: true,
     ia_menu: false,
-    config_menu: false,
   });
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const headerProfileRef = useRef<HTMLDivElement>(null);
@@ -216,17 +215,16 @@ export default function Layout({
     if (['lead_radar'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, prospeccao_menu: true }));
     }
-    if (['inbox', 'kanban', 'contacts', 'clients'].includes(activeTab)) {
+    if (['inbox', 'kanban', 'contacts', 'clients', 'schedule'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, suporte_menu: true }));
     }
-    if (['finance'].includes(activeTab)) {
+    if (['finance', 'reports'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, financeiro_menu: true }));
     }
-    if (['agents', 'leo', 'campaigns', 'quick_replies'].includes(activeTab)) {
+    // 'agents' e 'quick_replies' saíram daqui: viraram seções de
+    // Configurações, e a URL deles resolve para 'settings'.
+    if (['leo', 'campaigns'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, ia_menu: true }));
-    }
-    if (['schedule', 'availability', 'integrations', 'reports', 'professionals', 'settings'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, config_menu: true }));
     }
   }, [activeTab]);
 
@@ -300,6 +298,10 @@ export default function Layout({
             { id: 'kanban', icon: <Layers size={13} />, label: 'Kanban', minPlan: 'Pro' },
             { id: 'contacts', icon: <Users size={13} />, label: 'Leads' },
             { id: 'clients', icon: <Star size={13} />, label: 'Clientes' },
+            // Agendamentos é operação do dia a dia, como o resto daqui — a
+            // disponibilidade, que é o ajuste por trás dele, fica em
+            // Configurações.
+            { id: 'schedule', icon: <Calendar size={13} />, label: 'Agendamentos', flag: 'agendas', minPlan: 'Pro' },
           ]
         }
       ]
@@ -342,18 +344,16 @@ export default function Layout({
       ]
     },
     {
-      id: 'sec_sistema',
+      // Configurações é item de primeiro nível, sem submenu: depois que
+      // Equipe, Agentes, Atalhos, Disponibilidade e Integrações mudaram para
+      // dentro dela, a seção "Sistema" existia só para abrigar um item — um
+      // clique a mais para chegar na tela que mais recebe ajuste.
+      id: 'sec_configuracoes',
       items: [
         {
-          id: 'config_menu',
+          id: 'settings',
           icon: <Settings size={16} />,
-          label: 'Sistema',
-          subItems: [
-            { id: 'schedule', label: 'Agendamentos', icon: <Calendar size={13} />, flag: 'agendas', minPlan: 'Pro' },
-            // Disponibilidade, Integrações e Equipe mudaram para dentro de
-            // Configurações. Agendamentos fica: é operação diária, não ajuste.
-            { id: 'settings', icon: <Settings size={13} />, label: 'Configurações' },
-          ]
+          label: 'Configurações',
         }
       ]
     }
