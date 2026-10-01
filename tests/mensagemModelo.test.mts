@@ -80,6 +80,40 @@ describe('renderizarModelo — variável sem dado', () => {
   });
 });
 
+describe('lembrete de consulta — o caso real', () => {
+  // Os valores que notificationService monta a partir do agendamento.
+  const doAgendamento = (p: Partial<Record<string, string>> = {}) => ({
+    nome: 'Ana',
+    nome_completo: 'Ana Souza',
+    data: '12/10',
+    hora: '14h',
+    profissional: 'Dra. Adriana',
+    ...p,
+  });
+
+  const MODELO = 'Olá {nome}. Passando pra relembrar que você tem uma consulta com a {profissional}, agendada para hoje às {hora}.';
+
+  it('monta a mensagem completa', () => {
+    assert.equal(
+      renderizarModelo(MODELO, doAgendamento()),
+      'Olá Ana. Passando pra relembrar que você tem uma consulta com a Dra. Adriana, agendada para hoje às 14h.'
+    );
+  });
+
+  it('agendamento sem profissional não deixa buraco na frase', () => {
+    // appointments.professional_name é opcional — muita clínica não preenche.
+    const r = renderizarModelo(MODELO, doAgendamento({ profissional: '' }));
+    assert.ok(!r.includes('  '), 'sobrou espaço duplo');
+    assert.ok(!r.includes(' ,'), 'sobrou espaço antes da vírgula');
+    assert.ok(r.includes('às 14h.'));
+  });
+
+  it('um modelo só de variáveis vazias vira texto vazio', () => {
+    // É o caso que faz o backend cair no texto padrão em vez de mandar vazio.
+    assert.equal(renderizarModelo('{nome} {profissional}', { nome: '', profissional: '' }).trim(), '');
+  });
+});
+
 describe('variaveisUsadas', () => {
   it('lista as chaves do modelo, sem repetir', () => {
     assert.deepEqual(

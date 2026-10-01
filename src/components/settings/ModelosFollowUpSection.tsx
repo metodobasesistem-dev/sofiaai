@@ -24,6 +24,21 @@ const campoClasse =
   'w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500';
 const rotuloClasse = 'block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2';
 
+/**
+ * Envios automáticos que podem usar um modelo.
+ *
+ * Marcar aqui é o que faz o modelo SAIR de verdade: sem gatilho ele fica
+ * guardado para envio manual. O backend procura pelo gatilho, não pelo nome —
+ * renomear o modelo não pode parar de avisar o paciente em silêncio.
+ */
+const GATILHOS = [
+  { valor: '', label: 'Nenhum — só envio manual' },
+  { valor: 'lembrete_consulta', label: 'Lembrete de consulta', curto: 'Lembrete de consulta' },
+];
+
+const rotuloDoGatilho = (g?: string | null) =>
+  GATILHOS.find(x => x.valor === (g || ''))?.curto;
+
 /** Modal de criar e editar — os dois usam o mesmo formulário. */
 function ModeloModal({
   modelo,
@@ -37,6 +52,7 @@ function ModeloModal({
 }) {
   const [nome, setNome] = useState(modelo?.nome || '');
   const [conteudo, setConteudo] = useState(modelo?.conteudo || '');
+  const [gatilho, setGatilho] = useState(modelo?.gatilho || '');
   const [salvando, setSalvando] = useState(false);
 
   // A prévia usa valores de exemplo para mostrar a regra em ação: o que não
@@ -60,11 +76,11 @@ function ModeloModal({
     setSalvando(true);
     try {
       if (modelo) {
-        await updateFollowUpTemplate(modelo.id, { nome: nome.trim(), conteudo: conteudo.trim() });
-        onSalvo({ ...modelo, nome: nome.trim(), conteudo: conteudo.trim() });
+        await updateFollowUpTemplate(modelo.id, { nome: nome.trim(), conteudo: conteudo.trim(), gatilho: gatilho || null });
+        onSalvo({ ...modelo, nome: nome.trim(), conteudo: conteudo.trim(), gatilho: gatilho || null });
         toast.success('Modelo salvo.');
       } else {
-        const novo = await createFollowUpTemplate({ nome: nome.trim(), conteudo: conteudo.trim() });
+        const novo = await createFollowUpTemplate({ nome: nome.trim(), conteudo: conteudo.trim(), gatilho: gatilho || null });
         onSalvo(novo);
         toast.success('Modelo criado.');
       }
@@ -127,6 +143,20 @@ function ModeloModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className={rotuloClasse}>Usar automaticamente em</label>
+            <select value={gatilho} onChange={e => setGatilho(e.target.value)} className={`${campoClasse} bg-white`}>
+              {GATILHOS.map(g => (
+                <option key={g.valor} value={g.valor}>{g.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+              {gatilho
+                ? 'Este modelo substitui a mensagem padrão desse envio. Só um modelo por envio.'
+                : 'Fica guardado para envio manual — nenhum automático usa.'}
+            </p>
           </div>
 
           {conteudo.trim() && (
@@ -319,6 +349,16 @@ export default function ModelosFollowUpSection() {
                     <span className="px-2.5 py-1 rounded-md bg-primary-50 text-primary-700 text-[11px] font-bold">
                       {m.nome}
                     </span>
+                    {/* Sem este selo não há como saber, olhando a lista, qual
+                        modelo o sistema realmente envia sozinho. */}
+                    {rotuloDoGatilho(m.gatilho) && (
+                      <span
+                        className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold"
+                        title="Usado automaticamente neste envio"
+                      >
+                        {rotuloDoGatilho(m.gatilho)}
+                      </span>
+                    )}
                     <button
                       onClick={() => alternarAtivo(m)}
                       role="switch"

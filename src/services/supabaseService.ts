@@ -2582,6 +2582,8 @@ export interface ModeloDeFollowUp {
   conteudo: string;
   ativo: boolean;
   ordem: number;
+  /** Envio automático que usa este modelo. Nulo = só envio manual. */
+  gatilho: string | null;
   created_at: string;
 }
 
@@ -2593,7 +2595,7 @@ export const listFollowUpTemplates = async (): Promise<ModeloDeFollowUp[]> => {
 };
 
 export const createFollowUpTemplate = async (
-  payload: { nome: string; conteudo: string }
+  payload: { nome: string; conteudo: string; gatilho?: string | null }
 ): Promise<ModeloDeFollowUp> => {
   const res = await standardFetch('/api/v2/follow-up-templates', {
     method: 'POST',
@@ -2606,7 +2608,7 @@ export const createFollowUpTemplate = async (
 
 export const updateFollowUpTemplate = async (
   id: string,
-  payload: Partial<Pick<ModeloDeFollowUp, 'nome' | 'conteudo' | 'ativo' | 'ordem'>>
+  payload: Partial<Pick<ModeloDeFollowUp, 'nome' | 'conteudo' | 'ativo' | 'ordem' | 'gatilho'>>
 ) => {
   const res = await standardFetch(`/api/v2/follow-up-templates/${id}`, {
     method: 'PATCH',
