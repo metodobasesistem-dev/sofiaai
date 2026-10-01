@@ -707,9 +707,19 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
 const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, now: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, now, onClick, onDelete }) => (
   <div
     onClick={onClick}
-    className={`p-2.5 flex items-center gap-2.5 cursor-pointer transition-all duration-200 border-b border-slate-100 last:border-0 relative group
-      ${active ? 'bg-slate-50/80 border-l-2 border-emerald-500' : 'hover:bg-slate-50/50 border-l-2 border-transparent'}`}
+    /* Sem divisória e sem barra lateral: a seleção é um fundo suave, e a
+       separação entre itens vem do espaço. Era a borda inferior em cada linha
+       que dava o aspecto de planilha. */
+    className={`px-3 py-2.5 flex items-start gap-3 cursor-pointer transition-colors relative group
+      ${active ? 'bg-primary-50/70' : 'hover:bg-slate-50'}`}
   >
+    {/* O ponto de não lida fica fora do avatar, na margem — é o que o olho
+        encontra primeiro ao varrer a lista de cima a baixo. */}
+    <span
+      className={`mt-4 w-1.5 h-1.5 rounded-full shrink-0 ${(thread.unreadCount ?? 0) > 0 ? 'bg-red-500' : 'bg-transparent'}`}
+      aria-hidden
+    />
+
     <div className="relative shrink-0">
       <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="md" threadId={thread.id} />
       {thread.status === 'ia' && (
@@ -717,23 +727,26 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
       )}
     </div>
 
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-0.5">
-        <h4 className={`text-[13px] truncate flex items-center gap-1.5
-          ${(thread.unreadCount ?? 0) > 0 ? "font-black text-slate-900" : "font-medium text-slate-600"}`}>
-          {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
+    <div className="flex-1 min-w-0 py-0.5">
+      <div className="flex items-start justify-between gap-2">
+        <h4 className={`text-[13.5px] leading-snug truncate flex items-center gap-1.5 min-w-0
+          ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+          <span className="truncate">
+            {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
+          </span>
           {thread.is_client && <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />}
-          {thread.priority === 'urgent' && <span className="text-[11px]" title="Urgente">🔥</span>}
-          {thread.priority === 'high' && <span className="text-[11px]" title="Alta">🔴</span>}
+          {thread.priority === 'urgent' && <span className="text-[11px] shrink-0" title="Urgente">🔥</span>}
+          {thread.priority === 'high' && <span className="text-[11px] shrink-0" title="Alta">🔴</span>}
           {showWindow && <WindowCountdown lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt} variant="badge" />}
         </h4>
-        <div className="flex items-center gap-1.5">
+
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDelete(e);
             }}
-            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+            className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
             title="Excluir conversa"
           >
             <Trash size={11} />
@@ -743,44 +756,40 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
             now={now}
             show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && (thread.unreadCount ?? 0) > 0}
           />
-          <span className={(thread.unreadCount ?? 0) > 0
-            ? "text-[10px] font-bold text-emerald-500"
-            : "text-[10px] font-medium text-slate-400"}>
+          <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap">
             {thread.time}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-        <span className="text-[9px] text-slate-400 font-mono truncate">
-          {thread.remoteJid.split('@')[0]}
-        </span>
-        {thread.labels && thread.labels.slice(0, 2).map((lbl, i) => (
-          <span key={i} className="text-[8px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 border border-primary-100 shrink-0 leading-none">
-            {lbl}
-          </span>
-        ))}
-        {thread.labels && thread.labels.length > 2 && (
-          <span className="text-[8px] font-bold text-slate-400 shrink-0">+{thread.labels.length - 2}</span>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <p className={(thread.unreadCount ?? 0) > 0
-          ? "text-[12px] truncate leading-tight flex-1 mr-2 font-bold text-slate-900"
-          : "text-[12px] truncate leading-tight flex-1 mr-2 font-normal text-slate-500"}>
+      <div className="flex items-center justify-between gap-2 mt-0.5">
+        <p className={`text-[12.5px] truncate leading-relaxed flex-1 min-w-0
+          ${(thread.unreadCount ?? 0) > 0 ? 'font-medium text-slate-700' : 'font-normal text-slate-400'}`}>
           {thread.lastMessage || 'Inicie uma conversa'}
         </p>
         {(thread as any).isTyping ? (
-          <span className="text-[9px] text-emerald-500 font-bold animate-pulse shrink-0">
+          <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
             Digitando...
           </span>
         ) : (thread.unreadCount ?? 0) > 0 && (
-          <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+          <span className="bg-emerald-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
             {thread.unreadCount}
           </span>
         )}
       </div>
+
+      {thread.labels && thread.labels.length > 0 && (
+        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+          {thread.labels.slice(0, 2).map((lbl, i) => (
+            <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-primary-50 text-primary-600 shrink-0 leading-none">
+              {lbl}
+            </span>
+          ))}
+          {thread.labels.length > 2 && (
+            <span className="text-[9px] font-medium text-slate-300 shrink-0">+{thread.labels.length - 2}</span>
+          )}
+        </div>
+      )}
     </div>
   </div>
 );
@@ -3920,8 +3929,9 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           <div className={`${selectedThreadId ? 'hidden md:flex' : 'flex'} w-full md:w-[32%] lg:w-[26%] border-r border-gray-100 flex-col bg-gray-50/30`}>
         <div className="p-4 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
-              <MessageCircle size={14} className="text-primary-600" />
+            {/* Sem ícone e em cinza: é um rótulo de coluna, não um título que
+                precisa competir com os nomes da lista. */}
+            <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em]">
               Conversas
             </h2>
             <div className="flex items-center gap-1">
@@ -3973,15 +3983,18 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 placeholder="Pesquisar nome, telefone..." 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-[13px] placeholder-slate-400 focus:bg-white focus:border-primary-300 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[13px] placeholder-slate-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-50 transition-all outline-none"
               />
             </div>
+            {/* Cantos menos arredondados e sem a sombra colorida: o botão
+                continua verde, mas para de ser o elemento mais pesado da
+                coluna. */}
             <button
               onClick={() => setIsFilterOpen(v => !v)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold transition-all flex-shrink-0
+              className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[12px] font-semibold transition-colors flex-shrink-0
                 ${isFilterOpen
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200'
-                  : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-200/50'}`}
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-emerald-500 text-white hover:bg-emerald-600'}`}
             >
               <Filter size={14} />
               Filtrar
