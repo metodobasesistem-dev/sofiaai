@@ -123,6 +123,41 @@ describe('precedência 5 — origem desconhecida (REGRESSÃO)', () => {
   });
 });
 
+describe('origens próprias da clínica', () => {
+  // Elas não têm categoria: caem em 'outros'. O nome foi gravado em
+  // ad_tracking.source na captura, e é ele que a tela deve mostrar — senão
+  // "Convênio Unimed" aparece como "Outros" e a origem perde a graça.
+  it('agrupa em Outros, mas mostra o nome que a clínica deu', () => {
+    const r = classifyLeadOrigin('convenio_unimed', {
+      source: 'Convênio Unimed',
+      type: 'ad_pattern',
+      headline: 'Convênio',
+    });
+    assert.equal(r.category, 'outros', 'o agrupamento do relatório é Outros');
+    assert.equal(r.label, 'Convênio Unimed', 'a tela mostra o nome dado');
+  });
+
+  it('duas origens próprias diferentes mantêm cada uma o seu nome', () => {
+    const a = classifyLeadOrigin('convenio_unimed', { source: 'Convênio Unimed', type: 'ad_pattern' });
+    const b = classifyLeadOrigin('panfleto', { source: 'Panfleto', type: 'ad_pattern' });
+    assert.equal(a.category, b.category);
+    assert.notEqual(a.label, b.label);
+  });
+
+  it('o nome gravado NÃO sobrescreve o rótulo de uma origem nativa', () => {
+    // Renomear "Telefone" no código precisa chegar em todas as telas; se o
+    // valor gravado no contato ganhasse, cada lead carregaria o nome da época.
+    const r = classifyLeadOrigin('telefone', { source: 'Nome antigo', type: 'ad_pattern' });
+    assert.equal(r.category, 'telefone');
+    assert.equal(r.label, 'Telefone');
+  });
+
+  it('sem nome gravado, cai em Outros', () => {
+    const r = classifyLeadOrigin('origem_sem_nome', { type: 'ad_pattern' });
+    assert.equal(r.label, 'Outros');
+  });
+});
+
 describe('classifyOriginConfidence', () => {
   it('acompanha a classificação', () => {
     assert.equal(classifyOriginConfidence('meta_ads', { source_id: '1' }), 'alta');

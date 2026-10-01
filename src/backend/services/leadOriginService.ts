@@ -139,8 +139,33 @@ const ROTULOS_DE_SOURCE: Record<string, string> = {
   organico: 'Orgânico',
 };
 
-function rotuloDeSource(slug: string): string {
-  return ROTULOS_DE_SOURCE[slug.toLowerCase()] || slug;
+/**
+ * O nome legível de uma origem, gravado junto do contato.
+ *
+ * Para as nativas é o rótulo fixo acima. Para uma origem própria da clínica
+ * (convênio, panfleto) é o nome que ela cadastrou — e é por isso que ele vai
+ * para dentro do contato: o classificador do frontend é uma função pura e não
+ * tem como consultar a tabela. Gravado aqui, o nome viaja com o lead.
+ *
+ * Consulta extra só quando o slug não é nativo, e só quando uma frase casou —
+ * um caminho raro perto do volume de mensagens. Falhar aqui devolve o slug,
+ * que é feio mas não perde a origem.
+ */
+async function rotuloDaOrigem(userId: string, slug: string): Promise<string> {
+  const nativo = ROTULOS_DE_SOURCE[slug.toLowerCase()];
+  if (nativo) return nativo;
+
+  try {
+    const { data } = await supabase
+      .from('lead_origins')
+      .select('nome')
+      .eq('user_id', userId)
+      .eq('slug', slug)
+      .maybeSingle();
+    return data?.nome || slug;
+  } catch {
+    return slug;
+  }
 }
 
 /**
@@ -192,7 +217,7 @@ export async function detectAndTagLeadOrigin(
       .update({
         source: escolhido.source,
         ad_tracking: {
-          source: rotuloDeSource(escolhido.source),
+          source: await rotuloDaOrigem(userId, escolhido.source),
           // MARCA O DETECTOR. O classificador precisa distinguir frase de
           // clique em anúncio: os campos source e headline são preenchidos
           // pelos dois, inclusive para um padrão de Site ou de Indicação.

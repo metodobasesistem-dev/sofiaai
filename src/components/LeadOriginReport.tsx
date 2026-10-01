@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   LabelList,
 } from 'recharts';
-import { classifyLeadOrigin, type LeadOriginCategory } from '../lib/leadOrigin';
+import { classifyLeadOrigin, labelForCategory, type LeadOriginCategory } from '../lib/leadOrigin';
 import type { Contact } from '../services/supabaseService';
 
 /**
@@ -51,11 +51,19 @@ export function agruparPorOrigem(contatos: Contact[]): FatiaDeOrigem[] {
 
   for (const c of contatos) {
     const origem = classifyLeadOrigin(c.source, c.ad_tracking, { originLocked: c.origin_locked });
+
+    // Em 'outros' cabem TODAS as origens próprias da clínica, cada uma com o
+    // próprio nome. Usar o rótulo do primeiro contato faria a fatia dizer
+    // "Convênio Unimed" e contar junto os leads de Panfleto. Aqui a fatia é o
+    // agrupamento, então ela usa o nome do agrupamento; o nome que a clínica
+    // deu aparece onde o lead é mostrado individualmente.
+    const rotulo = origem.category === 'outros' ? labelForCategory('outros') : origem.label;
+
     const atual = porCategoria.get(origem.category);
     if (atual) {
       atual.total += 1;
     } else {
-      porCategoria.set(origem.category, { category: origem.category, label: origem.label, total: 1 });
+      porCategoria.set(origem.category, { category: origem.category, label: rotulo, total: 1 });
     }
   }
 
