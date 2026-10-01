@@ -63,6 +63,21 @@ describe('agruparPorOrigem', () => {
   it('base vazia devolve lista vazia', () => {
     assert.deepEqual(agruparPorOrigem([]), []);
   });
+
+  it('origens próprias somam numa fatia só, chamada Outros', () => {
+    // O gráfico conta canais. Usar o rótulo do primeiro contato faria a fatia
+    // dizer "Convênio Unimed" e contar junto os leads de Panfleto.
+    const fatias = agruparPorOrigem([
+      { source: 'convenio_unimed', ad_tracking: { source: 'Convênio Unimed', type: 'ad_pattern' } },
+      { source: 'convenio_unimed', ad_tracking: { source: 'Convênio Unimed', type: 'ad_pattern' } },
+      { source: 'panfleto', ad_tracking: { source: 'Panfleto', type: 'ad_pattern' } },
+    ] as any);
+
+    assert.equal(fatias.length, 1);
+    assert.equal(fatias[0].category, 'outros');
+    assert.equal(fatias[0].total, 3);
+    assert.equal(fatias[0].label, 'Outros', 'a fatia usa o nome do agrupamento, não o do primeiro lead');
+  });
 });
 
 describe('agruparPorAnuncio', () => {

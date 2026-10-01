@@ -173,7 +173,105 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // ─── Origem do lead ───────────────────────────────────────────────────────
-// As frases que identificam o canal, e a correção manual da origem.
+// As origens próprias da clínica, as frases que identificam o canal, e a
+// correção manual da origem.
+
+/** Nome → slug estável ("Convênio Unimed" → convenio_unimed). */
+function slugDaOrigem(nome: string): string {
+  return nome
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+}
+
+/**
+ * Slugs que o classificador já usa. Uma origem própria não pode roubá-los:
+ * cadastrar "Site" sobrescreveria a categoria nativa e os leads do site
+ * passariam a contar como Outros.
+ */
+const SLUGS_RESERVADOS = new Set([
+  'site', 'instagram', 'google', 'facebook', 'telefone', 'indicacao',
+  'organico', 'meta_ads', 'whatsapp', 'manual', 'balcao', 'atendente', 'outros',
+]);
+
+// ─── GET /api/v2/contacts/origins ────────────────────────────────────────
+router.get('/origins', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('lead_origins')
+      .select('*')
+      .eq('user_id', req.userId!)
+      .order('created_at');
+    if (error) throw error;
+    res.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error('[ContactAPI] origins GET:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/v2/contacts/origins ───────────────────────────────────────
+router.post('/origins', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const nome = String(req.body?.nome || '').trim();
+  const emoji = String(req.body?.emoji || '').trim() || '🏷️';
+
+  if (!nome) return res.status(400).json({ success: false, error: 'Informe o nome da origem.' });
+  if (nome.length < 3) {
+    return res.status(400).json({ success: false, error: 'O nome precisa ter ao menos 3 caracteres.' });
+  }
+
+  const slug = slugDaOrigem(nome);
+  if (!slug) {
+    return res.status(400).json({ success: false, error: 'Use ao menos uma letra ou número no nome.' });
+  }
+  if (SLUGS_RESERVADOS.has(slug)) {
+    return res.status(400).json({
+      success: false,
+      error: `"${nome}" já é uma origem do sistema. Escolha outro nome.`,
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('lead_origins')
+      .insert({ user_id: userId, slug, nome, emoji })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ success: false, error: 'Essa origem já está cadastrada.' });
+      }
+      throw error;
+    }
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error('[ContactAPI] origins POST:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── DELETE /api/v2/contacts/origins/:id ─────────────────────────────────
+router.delete('/origins/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Só a origem sai da lista. Os contatos já marcados com ela mantêm o
+    // source e o nome gravado no ad_tracking — apagar a opção não pode
+    // reescrever o histórico de onde os leads vieram.
+    const { error } = await supabase
+      .from('lead_origins')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId!);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[ContactAPI] origins DELETE:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ─── GET /api/v2/contacts/origin-patterns ────────────────────────────────
 router.get('/origin-patterns', async (req: AuthenticatedRequest, res: Response) => {

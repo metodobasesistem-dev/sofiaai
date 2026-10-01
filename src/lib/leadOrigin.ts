@@ -108,6 +108,28 @@ export function origemParaExibicao(category: LeadOriginCategory): { label: strin
   return { label: ROTULOS[category], emoji: EMOJIS[category] };
 }
 
+/**
+ * O rótulo a mostrar para um contato.
+ *
+ * Origens próprias da clínica (convênio, panfleto) não têm categoria no
+ * classificador: elas caem em 'outros'. Mas a tela precisa dizer "Convênio
+ * Unimed", não "Outros". O nome foi gravado em ad_tracking.source na hora da
+ * captura, então viaja com o contato — sem lista para carregar, sem rótulo
+ * piscando enquanto busca.
+ *
+ * Só vale para slug desconhecido: para os nativos, o rótulo do código manda,
+ * para que renomear "Telefone" aqui chegue em todas as telas de uma vez.
+ *
+ * Consequência aceita: renomear uma origem própria depois não renomeia quem
+ * já entrou. O histórico fica com o nome da época — mesmo princípio do "nada
+ * é reavaliado retroativamente" que já vale no resto do rastreio.
+ */
+function rotuloDoContato(categoria: LeadOriginCategory, slug: string, t: any): string {
+  if (CATEGORIA_POR_SOURCE[slug] || categoria !== 'outros') return ROTULOS[categoria];
+  const gravado = typeof t?.source === 'string' ? t.source.trim() : '';
+  return gravado || ROTULOS.outros;
+}
+
 /** Mapeia o slug de contacts.source para a categoria, quando basta ele. */
 const CATEGORIA_POR_SOURCE: Record<string, LeadOriginCategory> = {
   instagram: 'instagram',
@@ -179,7 +201,7 @@ export function classifyLeadOrigin(
 
     return {
       category: categoria,
-      label: ROTULOS[categoria],
+      label: rotuloDoContato(categoria, slug, t),
       campaign: t?.headline || undefined,
       confidence: 'alta',
     };
@@ -214,7 +236,7 @@ export function classifyLeadOrigin(
     const categoria = CATEGORIA_POR_SOURCE[slug] || 'outros';
     return {
       category: categoria,
-      label: ROTULOS[categoria],
+      label: rotuloDoContato(categoria, slug, t),
       campaign: t.headline || undefined,
       confidence: 'media',
     };
@@ -225,7 +247,7 @@ export function classifyLeadOrigin(
     const categoria = CATEGORIA_POR_SOURCE[slug] || 'outros';
     return {
       category: categoria,
-      label: ROTULOS[categoria],
+      label: rotuloDoContato(categoria, slug, t),
       campaign: t.headline || t.tracking_link_slug || undefined,
       confidence: 'media',
     };
@@ -234,7 +256,7 @@ export function classifyLeadOrigin(
   // 5 — Só o slug, sem rastro nenhum que o sustente.
   if (slug && slug !== 'whatsapp') {
     const categoria = CATEGORIA_POR_SOURCE[slug] || 'outros';
-    return { category: categoria, label: ROTULOS[categoria], confidence: 'baixa' };
+    return { category: categoria, label: rotuloDoContato(categoria, slug, t), confidence: 'baixa' };
   }
 
   return { category: 'whatsapp', label: ROTULOS.whatsapp, confidence: 'nenhuma' };

@@ -2512,3 +2512,43 @@ export const deleteLeadOriginPattern = async (id: string): Promise<void> => {
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao remover a frase');
 };
+
+// ─── Origens próprias da clínica ──────────────────────────────────────────
+// As nativas (anúncio, Instagram, site…) vivem em lib/leadOrigin, porque o
+// classificador decide coisas diferentes para cada uma. Estas são rótulos que
+// a clínica cria: convênio, panfleto, parceria.
+
+export interface OrigemDaClinica {
+  id: string;
+  /** Vai para contacts.source. Derivado do nome e fixo. */
+  slug: string;
+  nome: string;
+  emoji: string;
+  created_at: string;
+}
+
+export const listLeadOrigins = async (): Promise<OrigemDaClinica[]> => {
+  const res = await standardFetch('/api/v2/contacts/origins');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar as origens');
+  return result.data || [];
+};
+
+export const createLeadOrigin = async (
+  payload: { nome: string; emoji?: string }
+): Promise<OrigemDaClinica> => {
+  const res = await standardFetch('/api/v2/contacts/origins', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao cadastrar a origem');
+  return result.data;
+};
+
+/** Tira a origem da lista. Os contatos já marcados com ela não mudam. */
+export const deleteLeadOrigin = async (id: string): Promise<void> => {
+  const res = await standardFetch(`/api/v2/contacts/origins/${id}`, { method: 'DELETE' });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover a origem');
+};

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Globe, Plus, Trash2, Loader2, FlaskConical, AlertTriangle, Megaphone, X } from 'lucide-react';
+import { Globe, Plus, Trash2, Loader2, FlaskConical, AlertTriangle, Megaphone, X, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   listLeadOriginPatterns,
@@ -7,7 +7,11 @@ import {
   deleteLeadOriginPattern,
   getUserProfile,
   updateUserProfile,
+  listLeadOrigins,
+  createLeadOrigin,
+  deleteLeadOrigin,
   type LeadOriginPattern,
+  type OrigemDaClinica,
 } from '../services/supabaseService';
 import { classifyLeadOrigin, CANAIS_DE_ORIGEM, origemParaExibicao } from '../lib/leadOrigin';
 import { escolherPadrao, normalizarTexto } from '../lib/leadOriginPattern';
@@ -37,8 +41,24 @@ const CANAIS_DE_FRASE = [
 const rotuloDoCanal = (slug: string) =>
   classifyLeadOrigin(slug, { type: 'ad_pattern', headline: '' }).label;
 
-/** Selo da categoria no card do padrão. */
-function SeloDeCanal({ slug }: { slug: string }) {
+/**
+ * Selo da categoria no card do padrão.
+ *
+ * Uma origem própria não tem categoria: cai em "Outros". O selo mostra o nome
+ * que a clínica deu, senão quatro padrões diferentes apareceriam todos como
+ * "Outros" e o card deixaria de dizer qual é qual.
+ */
+function SeloDeCanal({ slug, origens }: { slug: string; origens: OrigemDaClinica[] }) {
+  const propria = origens.find(o => o.slug === slug);
+  if (propria) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary-50 text-primary-700 text-[10px] font-black uppercase tracking-wider">
+        <span aria-hidden>{propria.emoji}</span>
+        {propria.nome}
+      </span>
+    );
+  }
+
   const { category } = classifyLeadOrigin(slug, { type: 'ad_pattern', headline: '' });
   const { label, emoji } = origemParaExibicao(category);
   return (
@@ -57,9 +77,11 @@ const rotuloClasse = 'block text-xs font-bold text-gray-400 uppercase tracking-w
 function NovoPadraoModal({
   onFechar,
   onCriado,
+  origens,
 }: {
   onFechar: () => void;
   onCriado: (p: LeadOriginPattern) => void;
+  origens: OrigemDaClinica[];
 }) {
   const [pattern, setPattern] = useState('');
   const [source, setSource] = useState('site');
@@ -131,6 +153,13 @@ function NovoPadraoModal({
                 {CANAIS_DE_FRASE.map(c => (
                   <option key={c} value={c}>{rotuloDoCanal(c)}</option>
                 ))}
+                {origens.length > 0 && (
+                  <optgroup label="Origens da clínica">
+                    {origens.map(o => (
+                      <option key={o.id} value={o.slug}>{o.emoji} {o.nome}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             <div>
@@ -171,11 +200,21 @@ function NovoPadraoModal({
   );
 }
 
+/** Emojis oferecidos para uma origem nova. */
+const EMOJIS_SUGERIDOS = ['🏷️', '🤝', '📄', '🏥', '💳', '🎟️', '📻', '🏫', '🚗', '✉️'];
+
 export default function LeadOriginSettings() {
   const [patterns, setPatterns] = useState<LeadOriginPattern[]>([]);
+  const [origens, setOrigens] = useState<OrigemDaClinica[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [removendo, setRemovendo] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+
+  const [novaOrigem, setNovaOrigem] = useState('');
+  const [emoji, setEmoji] = useState(EMOJIS_SUGERIDOS[0]);
+  const [paletaAberta, setPaletaAberta] = useState(false);
+  const [criandoOrigem, setCriandoOrigem] = useState(false);
+  const [removendoOrigem, setRemovendoOrigem] = useState<string | null>(null);
 
   const [mensagemTeste, setMensagemTeste] = useState('');
 
@@ -184,18 +223,62 @@ export default function LeadOriginSettings() {
 
   const carregar = async () => {
     try {
-      const [frases, perfil] = await Promise.all([listLeadOriginPatterns(), getUserProfile()]);
+      const [frases, perfil, proprias] = await Promise.all([
+        listLeadOriginPatterns(),
+        getUserProfile(),
+        listLeadOrigins(),
+      ]);
       setPatterns(frases);
+      setOrigens(proprias);
       setSoImpulsiona(Boolean(perfil?.anuncios_sao_impulsionamento));
     } catch (err: any) {
       console.error('Failed to load origin patterns:', err);
-      toast.error(err.message || 'Erro ao carregar as frases');
+      toast.error(err.message || 'Erro ao carregar as origens');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => { carregar(); }, []);
+
+  const cadastrarOrigem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nome = novaOrigem.trim();
+    if (nome.length < 3) {
+      toast.error('O nome precisa ter ao menos 3 caracteres.');
+      return;
+    }
+    setCriandoOrigem(true);
+    try {
+      const criada = await createLeadOrigin({ nome, emoji });
+      setOrigens(prev => [...prev, criada]);
+      setNovaOrigem('');
+      toast.success(`"${criada.nome}" cadastrada.`);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao cadastrar a origem');
+    } finally {
+      setCriandoOrigem(false);
+    }
+  };
+
+  const removerOrigem = async (o: OrigemDaClinica) => {
+    const usada = patterns.some(p => p.source === o.slug);
+    const aviso = usada
+      ? `Remover "${o.nome}"? Há padrões apontando para ela — eles param de marcar leads com essa origem. Os contatos já marcados não mudam.`
+      : `Remover "${o.nome}" da lista? Os contatos já marcados com ela não mudam.`;
+    if (!window.confirm(aviso)) return;
+
+    setRemovendoOrigem(o.id);
+    try {
+      await deleteLeadOrigin(o.id);
+      setOrigens(prev => prev.filter(x => x.id !== o.id));
+      toast.success('Origem removida.');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao remover a origem');
+    } finally {
+      setRemovendoOrigem(null);
+    }
+  };
 
   const alternarImpulsionamento = async (valor: boolean) => {
     setSalvandoFlag(true);
@@ -267,32 +350,104 @@ export default function LeadOriginSettings() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">Origens da Clínica</h3>
-              <p className="text-sm text-gray-500">As origens que o sistema reconhece hoje</p>
+              <p className="text-sm text-gray-500">
+                Além das origens que já vêm no sistema, cadastre as suas — convênio, panfleto, parceria.
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="p-8 space-y-4">
-          {/* Os chips saem do próprio classificador: uma lista escrita à mão
-              aqui prometeria um canal que o relatório não conhece. */}
+        <div className="p-8 space-y-5">
+          {/* Os chips nativos saem do próprio classificador: uma lista escrita
+              à mão aqui prometeria um canal que o relatório não conhece. */}
           <div className="flex flex-wrap gap-2">
             {CANAIS_DE_ORIGEM.map(c => {
-              const { label, emoji } = origemParaExibicao(c);
+              const { label, emoji: e } = origemParaExibicao(c);
               return (
                 <span
                   key={c}
                   className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-gray-50 text-[12px] font-semibold text-gray-700"
                 >
-                  <span aria-hidden>{emoji}</span>
+                  <span aria-hidden>{e}</span>
                   {label}
                 </span>
               );
             })}
+
+            {origens.map(o => (
+              <span
+                key={o.id}
+                className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full border border-primary-200 bg-primary-50 text-[12px] font-semibold text-primary-800"
+              >
+                <span aria-hidden>{o.emoji}</span>
+                {o.nome}
+                <button
+                  onClick={() => removerOrigem(o)}
+                  disabled={removendoOrigem === o.id}
+                  className="p-0.5 text-primary-300 hover:text-red-600 rounded-full transition-colors disabled:opacity-50"
+                  aria-label={`Remover a origem ${o.nome}`}
+                >
+                  {removendoOrigem === o.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                </button>
+              </span>
+            ))}
           </div>
+
+          <form onSubmit={cadastrarOrigem} className="flex flex-col sm:flex-row gap-3">
+            <input
+              value={novaOrigem}
+              onChange={e => setNovaOrigem(e.target.value)}
+              placeholder="Ex: Convênio Unimed, Panfleto, Parceria Academia"
+              className={`${campoClasse} flex-1`}
+            />
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPaletaAberta(v => !v)}
+                className="h-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors flex items-center gap-2"
+                title="Escolher um ícone"
+              >
+                <span className="text-base" aria-hidden>{emoji}</span>
+                <Tag size={14} className="text-gray-400" />
+              </button>
+
+              {paletaAberta && (
+                <div className="absolute right-0 top-full mt-2 z-10 p-2 bg-white border border-gray-200 rounded-xl shadow-lg grid grid-cols-5 gap-1">
+                  {EMOJIS_SUGERIDOS.map(op => (
+                    <button
+                      key={op}
+                      type="button"
+                      onClick={() => { setEmoji(op); setPaletaAberta(false); }}
+                      className={`w-9 h-9 rounded-lg text-base hover:bg-gray-100 transition-colors ${op === emoji ? 'bg-primary-50' : ''}`}
+                    >
+                      {op}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={criandoOrigem || !novaOrigem.trim()}
+              className="px-6 py-2.5 bg-primary-600 text-white rounded-xl text-[12px] font-black uppercase tracking-wider hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              {criandoOrigem ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              Adicionar
+            </button>
+          </form>
+
+          <p className="text-[11px] text-gray-400 leading-relaxed max-w-3xl">
+            A origem nova aparece no seletor de canal dos padrões abaixo e na correção manual do
+            lead. Nos relatórios ela entra <strong>agrupada em Outros</strong> — o gráfico conta
+            canais, e uma origem própria não tem detector atrás dela. O nome que você deu continua
+            aparecendo onde o lead é mostrado individualmente.
+          </p>
 
           <p className="text-[11px] text-gray-400 leading-relaxed max-w-3xl">
             Um lead sem nenhum sinal de origem fica como <strong>Origem desconhecida</strong> — que
-            não é canal de captação e por isso não aparece acima.
+            não é canal de captação e por isso não aparece entre os chips.
           </p>
         </div>
       </div>
@@ -347,7 +502,7 @@ export default function LeadOriginSettings() {
               {ordenados.map((p, i) => (
                 <div key={p.id} className="border border-gray-200 rounded-2xl p-5 space-y-3">
                   <div className="flex items-start justify-between gap-3">
-                    <SeloDeCanal slug={p.source} />
+                    <SeloDeCanal slug={p.source} origens={origens} />
                     <div className="flex items-center gap-1 shrink-0">
                       <span
                         className="text-[10px] font-black text-gray-300 tabular-nums"
@@ -485,6 +640,7 @@ export default function LeadOriginSettings() {
         <NovoPadraoModal
           onFechar={() => setModalAberto(false)}
           onCriado={nova => setPatterns(prev => [nova, ...prev])}
+          origens={origens}
         />
       )}
     </div>
