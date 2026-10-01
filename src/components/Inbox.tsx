@@ -63,6 +63,7 @@ import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
 import { classifyLeadOrigin } from '../lib/leadOrigin';
 import OrigemDoLead from './OrigemDoLead';
+import SecaoRetratil from './SecaoRetratil';
 import ProgramarMensagemModal from './ProgramarMensagemModal';
 import MotivoPerdaModal from './MotivoPerdaModal';
 import { supabase } from '../lib/supabase';
@@ -2694,10 +2695,17 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           )}
 
           {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Bookmark size={14} className="text-primary-500" /> Contexto do Ticket
-            </h4>
+          <SecaoRetratil
+            id="contexto_do_ticket"
+            titulo="Contexto do Ticket"
+            icon={<Bookmark size={14} className="text-primary-500" />}
+            // Fechada, mostra a etapa — é o que o atendente procura aqui.
+            resumo={
+              activeThread.is_client
+                ? 'Cliente'
+                : etapaPorId(activeThread.funilStatus).label
+            }
+          >
             {showMeta24hWindow && (
               <div className="mb-3">
                 <WindowCountdown
@@ -2880,7 +2888,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 </button>
               </div>
             </div>
-          </div>
+          </SecaoRetratil>
 
           {/* Etiquetas (Labels) */}
           <div>

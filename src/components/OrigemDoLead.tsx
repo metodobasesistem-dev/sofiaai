@@ -7,6 +7,7 @@ import {
   type OrigemDaClinica,
 } from '../services/supabaseService';
 import { classifyLeadOrigin, CANAIS_DE_ORIGEM, origemParaExibicao } from '../lib/leadOrigin';
+import SecaoRetratil from './SecaoRetratil';
 
 /**
  * "De onde veio esse lead?" — a correção manual da origem.
@@ -83,28 +84,31 @@ export default function OrigemDoLead({
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-          <Globe size={14} className="text-primary-500" /> De onde veio esse lead?
-        </h4>
-        {originLocked && (
+    <SecaoRetratil
+      id="origem_do_lead"
+      titulo="De onde veio esse lead?"
+      icon={<Globe size={14} className="text-primary-500" />}
+      // Fechada, o cabeçalho já responde a pergunta do título.
+      resumo={atual.label}
+      extra={
+        originLocked ? (
           <span
-            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-600"
+            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-600 shrink-0"
             title="Escolhido à mão — nenhum detector sobrescreve"
           >
             <Lock size={10} /> Travada
           </span>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          {originLocked
+            ? 'Marcada à mão. Os detectores não vão mais alterá-la.'
+            : `Detectada automaticamente como ${atual.label}. Escolher abaixo trava a origem.`}
+        </p>
 
-      <p className="text-[11px] text-slate-400 leading-relaxed">
-        {originLocked
-          ? 'Marcada à mão. Os detectores não vão mais alterá-la.'
-          : `Detectada automaticamente como ${atual.label}. Escolher abaixo trava a origem.`}
-      </p>
-
-      <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
         {opcoes.map(o => {
           const escolhida = o.slug === slugAtual;
           return (
@@ -127,7 +131,8 @@ export default function OrigemDoLead({
             </button>
           );
         })}
+        </div>
       </div>
-    </div>
+    </SecaoRetratil>
   );
 }
