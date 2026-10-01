@@ -71,6 +71,7 @@ export const VALID_SUB_TABS: Record<string, readonly string[]> = {
     'professionals',
     'agents',
     'quick_replies',
+    'follow_up_templates',
     'availability',
     'integrations',
     'ai_config',

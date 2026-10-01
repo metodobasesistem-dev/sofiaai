@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { Building2, CreditCard, Zap, Globe, Loader2, Users, Clock, Plug, MessageSquare, Bot, SlidersHorizontal, XCircle } from 'lucide-react';
+import { Building2, CreditCard, Zap, Globe, Loader2, Users, Clock, Plug, MessageSquare, Bot, SlidersHorizontal, XCircle, Clock3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -15,6 +15,7 @@ import IASection from './settings/IASection';
 import LeadOriginSettings from './LeadOriginSettings';
 import CamposClienteSection from './settings/CamposClienteSection';
 import MotivosPerdaManager from './settings/MotivosPerdaManager';
+import ModelosFollowUpSection from './settings/ModelosFollowUpSection';
 import type { SettingsFormData } from './settings/types';
 
 // Telas grandes que passaram a morar aqui. Continuam em chunks próprios: se
@@ -57,6 +58,7 @@ const SECOES: (SecaoDeConfiguracao & { flag?: string; minPlan?: string })[] = [
   { id: 'professionals', label: 'Equipe', descricao: 'Profissionais que atendem na sua clínica', icon: <Users size={18} />, flag: 'crm' },
   { id: 'agents', label: 'Agentes de IA', descricao: 'Quem atende por você no WhatsApp', icon: <Bot size={18} />, minPlan: 'Pro' },
   { id: 'quick_replies', label: 'Respostas Rápidas', descricao: 'Atalhos de mensagem para o atendimento', icon: <MessageSquare size={18} />, minPlan: 'Starter' },
+  { id: 'follow_up_templates', label: 'Modelos de Follow-up', descricao: 'Mensagens prontas para envio programado', icon: <Clock3 size={18} />, minPlan: 'Starter' },
   { id: 'lead_origin', label: 'Canais / Origens', descricao: 'De onde vêm os seus leads', icon: <Globe size={18} /> },
   { id: 'client_fields', label: 'Campos da Ficha', descricao: 'O que a ficha do cliente acompanha no seu ramo', icon: <SlidersHorizontal size={18} />, flag: 'crm' },
   { id: 'loss_reasons', label: 'Motivos de Perda', descricao: 'Por que um lead não avançou', icon: <XCircle size={18} /> },
@@ -347,6 +349,8 @@ export default function Settings({
             {secaoAberta === 'client_fields' && <CamposClienteSection />}
 
             {secaoAberta === 'loss_reasons' && <MotivosPerdaManager />}
+
+            {secaoAberta === 'follow_up_templates' && <ModelosFollowUpSection />}
 
             {secaoAberta === 'ai_config' && (
               <IASection

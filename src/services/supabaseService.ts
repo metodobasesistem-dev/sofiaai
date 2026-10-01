@@ -2571,3 +2571,63 @@ export const setContactOrigin = async (
   if (!result.success) throw new Error(result.error || 'Falha ao salvar a origem');
   return result.data;
 };
+
+// ─── Modelos de follow-up ─────────────────────────────────────────────────
+// Mensagens prontas para envio programado. Diferente de quick_replies: estas
+// o sistema envia sozinho, então carregam `ativo` e `ordem`.
+
+export interface ModeloDeFollowUp {
+  id: string;
+  nome: string;
+  conteudo: string;
+  ativo: boolean;
+  ordem: number;
+  created_at: string;
+}
+
+export const listFollowUpTemplates = async (): Promise<ModeloDeFollowUp[]> => {
+  const res = await standardFetch('/api/v2/follow-up-templates');
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao carregar os modelos');
+  return result.data || [];
+};
+
+export const createFollowUpTemplate = async (
+  payload: { nome: string; conteudo: string }
+): Promise<ModeloDeFollowUp> => {
+  const res = await standardFetch('/api/v2/follow-up-templates', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao criar o modelo');
+  return result.data;
+};
+
+export const updateFollowUpTemplate = async (
+  id: string,
+  payload: Partial<Pick<ModeloDeFollowUp, 'nome' | 'conteudo' | 'ativo' | 'ordem'>>
+) => {
+  const res = await standardFetch(`/api/v2/follow-up-templates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao salvar o modelo');
+};
+
+/** Grava a ordem nova depois de arrastar. A lista inteira, já reordenada. */
+export const reorderFollowUpTemplates = async (ids: string[]) => {
+  const res = await standardFetch('/api/v2/follow-up-templates/ordem', {
+    method: 'PUT',
+    body: JSON.stringify({ ids }),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao salvar a ordem');
+};
+
+export const deleteFollowUpTemplate = async (id: string) => {
+  const res = await standardFetch(`/api/v2/follow-up-templates/${id}`, { method: 'DELETE' });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao remover o modelo');
+};
