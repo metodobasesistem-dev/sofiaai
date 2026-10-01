@@ -63,6 +63,7 @@ import { syncContacts } from '../services/whatsappService';
 import { listContacts, deleteContact, updateContactFunilStatus, listContactAppointments } from '../services/supabaseService';
 import { ContactAvatar } from './ContactAvatar';
 import { classifyLeadOrigin } from '../lib/leadOrigin';
+import OrigemDoLead from './OrigemDoLead';
 
 // Componente de Badge para Status
 const StatusBadge = ({ status }: { status: string }) => {
@@ -93,15 +94,18 @@ const ListSkeleton = ({ rows = 5 }: { rows?: number }) => (
 const SidePanel = ({ 
   contact, 
   onClose, 
-  onTabChange, 
-  onStatusChange, 
-  onEdit 
-}: { 
-  contact: any; 
-  onClose: () => void; 
+  onTabChange,
+  onStatusChange,
+  onEdit,
+  onAtualizouOrigem,
+}: {
+  contact: any;
+  onClose: () => void;
   onTabChange: (tab: string, passedPhone?: string) => void;
   onStatusChange: (id: string, status: string) => void;
   onEdit: (contact: any) => void;
+  /** A origem mudou: a lista por trás precisa refletir. */
+  onAtualizouOrigem: (patch: { source: string; origin_locked: boolean; ad_tracking: any }) => void;
 }) => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
@@ -200,6 +204,20 @@ const SidePanel = ({
               </div>
             ))}
           </div>
+
+          {/* A linha "Origem" acima só mostra. Corrigir é aqui — e a mesma
+              escolha vale na conversa, pelo mesmo componente. */}
+          {contact.id && (
+            <div className="bg-slate-50/50 rounded-[24px] p-6 border border-slate-100/50">
+              <OrigemDoLead
+                contactId={contact.id}
+                source={contact.source}
+                adTracking={contact.ad_tracking}
+                originLocked={contact.origin_locked}
+                onMudou={onAtualizouOrigem}
+              />
+            </div>
+          )}
         </section>
 
         {/* Próximos Agendamentos */}
@@ -726,6 +744,14 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
                 setEditingContactId(c.id || null);
                 setFormData({ nome: c.nome, telefone: c.telefone });
                 setIsModalOpen(true);
+              }}
+              onAtualizouOrigem={patch => {
+                // O painel lê de selectedContact; a lista atrás precisa do
+                // mesmo valor, senão volta ao antigo ao fechar e reabrir.
+                setSelectedContact((prev: any) => (prev ? { ...prev, ...patch } : prev));
+                setContacts(prev =>
+                  prev.map(c => (c.id === selectedContact?.id ? { ...c, ...patch } : c))
+                );
               }}
             />
           </>

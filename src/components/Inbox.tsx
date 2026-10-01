@@ -62,6 +62,7 @@ import { toast } from 'sonner';
 import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
 import { classifyLeadOrigin } from '../lib/leadOrigin';
+import OrigemDoLead from './OrigemDoLead';
 import MotivoPerdaModal from './MotivoPerdaModal';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
@@ -2677,6 +2678,19 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         </div>
 
         <div className="p-5 space-y-8">
+          {/* De onde veio esse lead? — a correção manual.
+              Fica aqui, logo acima do contexto do ticket, porque é na conversa
+              que o paciente conta de onde veio. */}
+          {selectedContact?.id && (
+            <OrigemDoLead
+              contactId={selectedContact.id}
+              source={selectedContact.source}
+              adTracking={selectedContact.ad_tracking}
+              originLocked={selectedContact.origin_locked}
+              onMudou={patch => setSelectedContact((prev: any) => ({ ...prev, ...patch }))}
+            />
+          )}
+
           {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
           <div>
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">

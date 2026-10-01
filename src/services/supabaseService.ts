@@ -2552,3 +2552,22 @@ export const deleteLeadOrigin = async (id: string): Promise<void> => {
   const result = await res.json();
   if (!result.success) throw new Error(result.error || 'Falha ao remover a origem');
 };
+
+/**
+ * Marca a origem do contato à mão e TRAVA (contacts.origin_locked).
+ *
+ * A trava é o ponto: sem ela a correção seria desfeita na mensagem seguinte,
+ * porque o detector por frase roda a cada mensagem recebida.
+ */
+export const setContactOrigin = async (
+  contactId: string,
+  payload: { source: string; label?: string; campaign_name?: string }
+) => {
+  const res = await standardFetch(`/api/v2/contacts/${encodeURIComponent(contactId)}/origin`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao salvar a origem');
+  return result.data;
+};
