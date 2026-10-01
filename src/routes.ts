@@ -39,7 +39,6 @@ export const TABS = [
   'health',
   'meta_templates',
   'diagnostics',
-  'onboarding',
 ] as const;
 
 export type AppTab = (typeof TABS)[number];
