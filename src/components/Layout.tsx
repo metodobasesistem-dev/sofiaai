@@ -32,7 +32,6 @@ import {
   FileText,
   Rocket
 } from 'lucide-react';
-import { ONBOARDING_STORAGE_KEY } from './OnboardingGuide';
 import NotificationBell from './NotificationBell';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -128,7 +127,6 @@ export default function Layout({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [onboardingDone, setOnboardingDone] = useState(0);
   // Ler a URL pelo router (e não por window.location) faz a barra inferior
   // reagir quando a navegação acontece sem recarregar a página.
   const location = useLocation();
@@ -141,17 +139,6 @@ export default function Layout({
    */
   const estaEmConfig = (secao: string) =>
     activeTab === 'settings' && location.pathname.split('/')[2] === secao;
-
-  useEffect(() => {
-    if (!user?.id) return;
-    try {
-      const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY(user.id));
-      if (saved) {
-        const parsed = JSON.parse(saved) as Record<string, boolean>;
-        setOnboardingDone(Object.values(parsed).filter(Boolean).length);
-      }
-    } catch {}
-  }, [user?.id, activeTab]);
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     admin_menu: false,
@@ -457,39 +444,6 @@ export default function Layout({
         </div>
 
         <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto custom-scrollbar">
-          {/* Primeiros Passos — sempre primeiro */}
-          <div
-            onClick={() => { onTabChange('onboarding'); setMobileMenuOpen(false); }}
-            className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all group relative
-              ${activeTab === 'onboarding'
-                ? 'bg-primary-50 text-primary-600 border-l-4 border-primary-500 rounded-l-sm'
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-l-4 border-transparent'
-              }`}
-          >
-            <div className={`w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-all
-              ${activeTab === 'onboarding' ? 'text-primary-600' : 'text-slate-400 group-hover:text-primary-600'}`}>
-              <Rocket size={16} />
-            </div>
-            {!collapsed && (
-              <span className="text-sm font-semibold flex-1 truncate">Primeiros Passos</span>
-            )}
-            {!collapsed && (
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0
-                ${onboardingDone >= 5
-                  ? 'bg-emerald-100 text-emerald-600'
-                  : activeTab === 'onboarding'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-orange-100 text-orange-600'
-                }`}>
-                {onboardingDone}/5
-              </span>
-            )}
-            {collapsed && (
-              <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">
-                Primeiros Passos
-              </div>
-            )}
-          </div>
 
           {filteredSections.map((section) => (
             <div key={section.id} className="space-y-1">
@@ -590,25 +544,6 @@ export default function Layout({
                 </button>
               </div>
               <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto">
-                {/* Primeiros Passos — sempre primeiro */}
-                <div
-                  onClick={() => { onTabChange('onboarding'); setMobileMenuOpen(false); }}
-                  className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all
-                    ${activeTab === 'onboarding'
-                      ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                >
-                  <div className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0">
-                    <Rocket size={16} />
-                  </div>
-                  <span className="text-sm font-semibold flex-1">Primeiros Passos</span>
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full
-                    ${onboardingDone >= 5 ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
-                    {onboardingDone}/5
-                  </span>
-                </div>
-
                 {filteredSections.map((section) => (
                   <div key={section.title} className="space-y-1">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5 mt-3 first:mt-0 select-none">
