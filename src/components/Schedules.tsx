@@ -6,6 +6,7 @@ import {
   User, 
   Bot, 
   CalendarDays,
+  CalendarPlus,
   MoreVertical,
   XCircle,
   RefreshCw,
@@ -20,6 +21,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Edit3 } from 'lucide-react';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
+import NovoAgendamentoModal from './NovoAgendamentoModal';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 const AppointmentCard: React.FC<{ 
@@ -131,6 +133,7 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editFormData, setEditFormData] = useState({ clientName: '', date: '', time: '' });
+  const [isNovoModalOpen, setIsNovoModalOpen] = useState(false);
 
   const fetchAppointments = async () => {
     const timeoutId = setTimeout(() => {
@@ -233,9 +236,18 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agendamentos</h1>
-          <p className="text-gray-500 text-sm">Visualize e gerencie os compromissos marcados pela IA.</p>
+          <p className="text-gray-500 text-sm">Compromissos marcados pela IA e os que você marcar aqui.</p>
         </div>
-        
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsNovoModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors shrink-0"
+          >
+            <CalendarPlus size={18} />
+            Novo agendamento
+          </button>
+
         <div className="flex items-center bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
           <button 
             onClick={() => setView('list')}
@@ -254,7 +266,15 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
             Calendário
           </button>
         </div>
+        </div>
       </div>
+
+      {isNovoModalOpen && (
+        <NovoAgendamentoModal
+          onFechar={() => setIsNovoModalOpen(false)}
+          onCriado={fetchAppointments}
+        />
+      )}
 
       {isLoading ? (
         <div className="space-y-4">

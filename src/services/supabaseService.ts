@@ -1015,6 +1015,58 @@ export const listAppointments = async (): Promise<Appointment[]> => {
   }
 };
 
+/**
+ * Cria um agendamento à mão, pela tela de Agendamentos.
+ *
+ * Mesma tabela e mesmo `status: 'confirmed'` do que a IA agenda — e é isso
+ * que faz o lembrete de consulta sair para ele também, sem nenhum código a
+ * mais: o enviador procura por agendamentos confirmados ainda sem lembrete.
+ *
+ * `agent_id` fica nulo de propósito: ninguém da IA agendou.
+ */
+export const createAppointment = async (payload: {
+  clientName: string;
+  clientPhone: string;
+  /** 'YYYY-MM-DD' */
+  date: string;
+  /** 'HH:MM' */
+  time: string;
+  professionalId?: string | null;
+  professionalName?: string | null;
+  modalidade?: 'presencial' | 'online' | null;
+  summary?: string | null;
+}): Promise<void> => {
+  const session = await getAuthSession();
+  if (!session?.user) throw new Error('Sessão expirada. Entre de novo.');
+
+  const { error } = await supabase.from('appointments').insert({
+    user_id: session.user.id,
+    data: payload.date,
+    time: payload.time,
+    client_name: payload.clientName.trim(),
+    client_phone: normalizePhoneBR(payload.clientPhone),
+    status: 'confirmed',
+    professional_id: payload.professionalId || null,
+    professional_name: payload.professionalName || null,
+    modalidade: payload.modalidade || null,
+    summary: payload.summary?.trim() || 'Agendado manualmente',
+  });
+
+  if (error) throw error;
+};
+
+/**
+ * Telefone no formato que o envio espera: só dígitos, com o 55 na frente.
+ *
+ * O lembrete é enviado por este número — um telefone digitado com máscara
+ * ("(32) 98800-9060") não chegaria a lugar nenhum.
+ */
+function normalizePhoneBR(telefone: string): string {
+  const digits = String(telefone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
+}
+
 export const deleteAppointment = async (id: string) => {
   try {
     const { error } = await supabase.from('appointments').delete().eq('id', id);
