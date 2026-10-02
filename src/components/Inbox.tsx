@@ -63,7 +63,6 @@ import { promoteToClient, demoteClient } from '../services/supabaseService';
 import { ETAPAS_FUNIL, etapaPorId, idDaEtapa, valorBancoDaEtapa } from '../lib/funil';
 import { classifyLeadOrigin } from '../lib/leadOrigin';
 import OrigemDoLead from './OrigemDoLead';
-import SecaoRetratil from './SecaoRetratil';
 import ProgramarMensagemModal from './ProgramarMensagemModal';
 import MotivoPerdaModal from './MotivoPerdaModal';
 import { supabase } from '../lib/supabase';
@@ -2704,17 +2703,10 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           )}
 
           {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
-          <SecaoRetratil
-            id="contexto_do_ticket"
-            titulo="Contexto do Ticket"
-            icon={<Bookmark size={14} className="text-primary-500" />}
-            // Fechada, mostra a etapa — é o que o atendente procura aqui.
-            resumo={
-              activeThread.is_client
-                ? 'Cliente'
-                : etapaPorId(activeThread.funilStatus).label
-            }
-          >
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+              <Bookmark size={14} className="text-primary-500" /> Contexto do Ticket
+            </h4>
             {showMeta24hWindow && (
               <div className="mb-3">
                 <WindowCountdown
@@ -2730,21 +2722,30 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             <div className="space-y-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Etapa no Kanban</label>
-                {/* Cada etapa com a cor que tem no quadro. Um <select> nativo
-                    não permite colorir cada opção de forma confiável entre
-                    navegadores, então a lista é montada à mão. */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  {ETAPAS_FUNIL.map(etapa => {
-                    const ehClienteEtapa = etapa.valorBanco === null;
-                    const ativa = ehClienteEtapa
-                      ? activeThread.is_client === true
-                      : activeThread.is_client !== true && idDaEtapa(activeThread.funilStatus) === etapa.id;
+                {(() => {
+                  const etapaCliente = ETAPAS_FUNIL.find(e => e.valorBanco === null);
+                  const idAtual = activeThread.is_client
+                    ? etapaCliente?.id || ''
+                    : idDaEtapa(activeThread.funilStatus);
+                  const etapaAtual = ETAPAS_FUNIL.find(e => e.id === idAtual);
 
-                    return (
-                      <button
-                        key={etapa.id}
-                        onClick={async () => {
-                          if (ativa) return;
+                  return (
+                    <div className="relative">
+                      {/* A cor da etapa fica num ponto ao lado do campo: um
+                          <select> nativo não permite colorir cada <option> de
+                          forma confiável entre navegadores. Assim a pista de
+                          cor continua, no valor que está escolhido. */}
+                      <span
+                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full pointer-events-none ${etapaAtual?.dot || 'bg-slate-300'}`}
+                        aria-hidden
+                      />
+                      <select
+                        value={idAtual}
+                        onChange={async (e) => {
+                          const etapa = ETAPAS_FUNIL.find(x => x.id === e.target.value);
+                          if (!etapa || etapa.id === idAtual) return;
+
+                          const ehClienteEtapa = etapa.valorBanco === null;
                           const contactId = activeThread.contactId;
                           try {
                             if (ehClienteEtapa) {
@@ -2787,18 +2788,16 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                             toast.error('Erro ao mudar etapa: ' + err.message);
                           }
                         }}
-                        title={etapa.desc}
-                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all text-left
-                          ${ativa
-                            ? `${etapa.bg} ${etapa.border} ${etapa.text}`
-                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg text-[13px] pl-8 pr-9 py-2.5 font-semibold text-slate-700 focus:ring-2 focus:ring-primary-100 focus:border-primary-500 outline-none transition-all"
                       >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${etapa.dot}`} />
-                        <span className="truncate">{etapa.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                        {ETAPAS_FUNIL.map(etapa => (
+                          <option key={etapa.id} value={etapa.id}>{etapa.label}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
@@ -2897,7 +2896,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 </button>
               </div>
             </div>
-          </SecaoRetratil>
+          </div>
 
           {/* Etiquetas (Labels) */}
           <div>

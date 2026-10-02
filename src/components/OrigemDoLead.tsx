@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Globe, Lock, Loader2, Check } from 'lucide-react';
+import { Globe, Lock, Loader2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   listLeadOrigins,
@@ -7,7 +7,6 @@ import {
   type OrigemDaClinica,
 } from '../services/supabaseService';
 import { classifyLeadOrigin, CANAIS_DE_ORIGEM, origemParaExibicao } from '../lib/leadOrigin';
-import SecaoRetratil from './SecaoRetratil';
 
 /**
  * "De onde veio esse lead?" — a correção manual da origem.
@@ -84,55 +83,59 @@ export default function OrigemDoLead({
   ];
 
   return (
-    <SecaoRetratil
-      id="origem_do_lead"
-      titulo="De onde veio esse lead?"
-      icon={<Globe size={14} className="text-primary-500" />}
-      // Fechada, o cabeçalho já responde a pergunta do título.
-      resumo={atual.label}
-      extra={
-        originLocked ? (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] flex items-center gap-2">
+          <Globe size={14} className="text-primary-500" /> De onde veio esse lead?
+        </label>
+        {originLocked && (
           <span
             className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-600 shrink-0"
             title="Escolhido à mão — nenhum detector sobrescreve"
           >
             <Lock size={10} /> Travada
           </span>
-        ) : undefined
-      }
-    >
-      <div className="space-y-3">
-        <p className="text-[11px] text-slate-400 leading-relaxed">
-          {originLocked
-            ? 'Marcada à mão. Os detectores não vão mais alterá-la.'
-            : `Detectada automaticamente como ${atual.label}. Escolher abaixo trava a origem.`}
-        </p>
-
-        <div className="flex flex-wrap gap-1.5">
-        {opcoes.map(o => {
-          const escolhida = o.slug === slugAtual;
-          return (
-            <button
-              key={o.slug}
-              onClick={() => escolher(o.slug, o.nome)}
-              disabled={salvando !== null}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all disabled:opacity-50
-                ${escolhida
-                  ? 'bg-primary-50 border-primary-300 text-primary-800'
-                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
-            >
-              {salvando === o.slug ? (
-                <Loader2 size={11} className="animate-spin" />
-              ) : (
-                <span aria-hidden>{o.emoji}</span>
-              )}
-              {o.nome}
-              {escolhida && originLocked && <Check size={11} />}
-            </button>
-          );
-        })}
-        </div>
+        )}
       </div>
-    </SecaoRetratil>
+
+      <div className="relative">
+        {/* Emoji fora do <select>: dentro das <option> ele some em parte dos
+            navegadores, e colorir opção nativa não funciona de forma
+            confiável. Fora, o ícone acompanha o valor escolhido. */}
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] pointer-events-none" aria-hidden>
+          {opcoes.find(o => o.slug === slugAtual)?.emoji || '❔'}
+        </span>
+
+        <select
+          value={slugAtual}
+          disabled={salvando !== null}
+          onChange={e => {
+            const o = opcoes.find(x => x.slug === e.target.value);
+            if (o) escolher(o.slug, o.nome);
+          }}
+          className="w-full appearance-none pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all disabled:opacity-60"
+        >
+          {/* A origem atual pode não estar na lista — um slug antigo, ou uma
+              origem própria que foi removida. Sem esta entrada o select
+              mostraria outra coisa como se fosse a escolhida. */}
+          {!opcoes.some(o => o.slug === slugAtual) && (
+            <option value={slugAtual}>{atual.label}</option>
+          )}
+          {opcoes.map(o => (
+            <option key={o.slug} value={o.slug}>{o.nome}</option>
+          ))}
+        </select>
+
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+          {salvando ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={16} />}
+        </span>
+      </div>
+
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        {originLocked
+          ? 'Marcada à mão. Os detectores não vão mais alterá-la.'
+          : `Detectada automaticamente. Escolher aqui trava a origem.`}
+      </p>
+    </div>
   );
 }
