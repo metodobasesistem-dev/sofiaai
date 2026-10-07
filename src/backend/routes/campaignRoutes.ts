@@ -321,6 +321,46 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+/**
+ * GET /envios — o que cada contato já recebeu de campanha (só envios com sucesso).
+ * Alimenta a coluna "recebeu campanha em…" e o filtro de ocultar recentes no seletor.
+ */
+router.get('/envios', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data: campanhas, error: errCamp } = await supabase
+      .from('campaigns')
+      .select('id, name')
+      .eq('tenant_id', req.userId);
+    if (errCamp) throw errCamp;
+
+    const nomes: Record<string, string> = {};
+    for (const c of campanhas || []) nomes[c.id] = c.name;
+    const ids = Object.keys(nomes);
+
+    const logs: { contact_id: string | null; campaign_id: string; sent_at: string }[] = [];
+    // O filtro por campanha vai em lotes para não estourar o tamanho da URL.
+    for (let i = 0; i < ids.length; i += 50) {
+      const lote = ids.slice(i, i + 50);
+      for (let de = 0; ; de += 1000) {
+        const { data, error } = await supabase
+          .from('campaign_logs')
+          .select('id, contact_id, campaign_id, sent_at')
+          .in('campaign_id', lote)
+          .in('status', ['sent', 'success'])
+          .order('id')
+          .range(de, de + 999);
+        if (error) throw error;
+        logs.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+    }
+
+    res.json({ success: true, data: { logs, campanhas: nomes } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** POST /test-send — send a real test message with resolved template variables */
 router.post('/test-send', async (req: AuthenticatedRequest, res: Response) => {
   try {
