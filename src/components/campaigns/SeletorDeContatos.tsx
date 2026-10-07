@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Loader2, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { standardFetch } from '../../services/supabaseService';
 import { etapaPorId, idDaEtapa } from '../../lib/funil';
 import {
   FAIXAS,
@@ -12,6 +13,9 @@ import {
   formatarHa,
   intervaloEntre,
   juntarComConversas,
+  juntarComEnvios,
+  ocultarRecentes,
+  resumirEnvios,
   ordenar,
   paginar,
   paraSelecionado,
@@ -23,6 +27,7 @@ import {
   type ConversaDoBanco,
   type IdDaFaixa,
   type LinhaDeContato,
+  type LogDeEnvio,
   type OrdemDaLista,
 } from '../../lib/selecaoDeContatos';
 
@@ -100,7 +105,7 @@ async function buscarConversas(userId: string): Promise<ConversaDoBanco[]> {
   }
 }
 
-async function carregarLinhas(): Promise<LinhaDeContato[]> {
+async function carregarLinhas(): Promise<{ linhas: LinhaDeContato[]; enviosIndisponiveis: boolean }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
@@ -116,14 +121,26 @@ async function carregarLinhas(): Promise<LinhaDeContato[]> {
     buscarConversas(user.id),
   ]);
 
-  return juntarComConversas(contatos, conversas);
+  const linhas = juntarComConversas(contatos, conversas);
+
+  // O histórico de envios é um complemento: se falhar, a lista continua útil.
+  try {
+    const res = await standardFetch('/api/v2/campaigns/envios');
+    const corpo = await res.json();
+    if (!res.ok || !corpo?.success) throw new Error(corpo?.error || `HTTP ${res.status}`);
+    const { logs, campanhas } = corpo.data as { logs: LogDeEnvio[]; campanhas: Record<string, string> };
+    return { linhas: juntarComEnvios(linhas, resumirEnvios(logs, campanhas)), enviosIndisponiveis: false };
+  } catch (err) {
+    console.warn('[SeletorDeContatos] Histórico de envios indisponível:', err);
+    return { linhas, enviosIndisponiveis: true };
+  }
 }
 
 /**
  * Cache de um minuto. Voltar do passo 2 para o 1 remonta a lista, e rebuscar
  * milhares de contatos a cada ida e volta seria lento à toa.
  */
-let cache: { em: number; linhas: LinhaDeContato[] } | null = null;
+let cache: { em: number; linhas: LinhaDeContato[]; enviosIndisponiveis: boolean } | null = null;
 
 const ROTULO_DA_ORDEM: Record<OrdemDaLista, string> = {
   conversa_antiga: 'Última conversa: mais antigas primeiro',
@@ -187,6 +204,9 @@ export default function SeletorDeContatos({
   const [base, setBase] = useState<BaseDoBloco>('conversa');
   const [faixa, setFaixa] = useState<IdDaFaixa | null>(null);
   const [quantidade, setQuantidade] = useState('');
+  const [enviosIndisponiveis, setEnviosIndisponiveis] = useState(false);
+  const [ocultar, setOcultar] = useState(false);
+  const [diasOcultar, setDiasOcultar] = useState('7');
   const [selecionados, setSelecionados] = useState<Set<string>>(
     () => new Set(selecionadosIniciais.map(c => c.id))
   );
@@ -199,6 +219,7 @@ export default function SeletorDeContatos({
 
     if (!forcar && cache && Date.now() - cache.em < VALIDADE_DO_CACHE_MS) {
       setLinhas(cache.linhas);
+      setEnviosIndisponiveis(cache.enviosIndisponiveis);
       setCarregando(false);
       return;
     }
@@ -206,8 +227,9 @@ export default function SeletorDeContatos({
     setCarregando(true);
     try {
       const novas = await carregarLinhas();
-      cache = { em: Date.now(), linhas: novas };
-      setLinhas(novas);
+      cache = { em: Date.now(), ...novas };
+      setLinhas(novas.linhas);
+      setEnviosIndisponiveis(novas.enviosIndisponiveis);
     } catch (err: any) {
       console.error('[SeletorDeContatos] Falha ao carregar contatos:', err);
       setErro(err?.message || 'Não foi possível carregar os contatos.');
@@ -248,7 +270,25 @@ export default function SeletorDeContatos({
 
   // A busca vale para os números dos blocos também: um bloco com "4" ao lado,
   // que some ao clicar porque a busca o esvaziou, seria uma promessa falsa.
-  const buscadas = useMemo(() => filtrarPorBusca(linhas, busca), [linhas, busca]);
+  const dias = Math.floor(Number(diasOcultar));
+  const diasValidos = Number.isFinite(dias) && dias >= 1;
+  const ocultando = ocultar && diasValidos && !enviosIndisponiveis;
+  const visiveis = useMemo(
+    () => (ocultando ? ocultarRecentes(linhas, dias, agora) : linhas),
+    [linhas, ocultando, dias, agora]
+  );
+  const ocultosCount = linhas.length - visiveis.length;
+
+  // Ocultar quem recebeu há pouco também desmarca essas pessoas: deixar marcado
+  // quem não aparece na lista mandaria para o contato que se quis poupar.
+  useEffect(() => {
+    if (!ocultando || selecionados.size === 0) return;
+    const visiveisIds = new Set(visiveis.map(l => l.id));
+    const restantes = new Set([...selecionados].filter(id => visiveisIds.has(id)));
+    if (restantes.size !== selecionados.size) aplicar(restantes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ocultando, visiveis]);
+  const buscadas = useMemo(() => filtrarPorBusca(visiveis, busca), [visiveis, busca]);
   const contagem = useMemo(() => contarPorFaixa(buscadas, base, agora), [buscadas, base, agora]);
   const marcadosPorFaixa = useMemo(
     () => contarPorFaixa(buscadas.filter(l => selecionados.has(l.id)), base, agora),
@@ -481,6 +521,42 @@ export default function SeletorDeContatos({
         </div>
 
         <p className="text-[10px] text-slate-400 leading-relaxed">{AJUDA_DA_BASE[base]}</p>
+
+        {/* Quem já recebeu campanha há pouco. Protege sobretudo a base "resposta",
+            em que o envio não tira ninguém do bloco. */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <label className={`flex items-center gap-2 text-[11px] font-bold ${enviosIndisponiveis ? 'text-slate-300' : 'text-slate-600 cursor-pointer'}`}>
+            <input
+              type="checkbox"
+              checked={ocultar}
+              disabled={enviosIndisponiveis}
+              onChange={e => setOcultar(e.target.checked)}
+              className="w-4 h-4 accent-primary-600"
+            />
+            Ocultar quem recebeu campanha nos últimos
+          </label>
+          <input
+            type="number"
+            min={1}
+            inputMode="numeric"
+            value={diasOcultar}
+            onChange={e => { setDiasOcultar(e.target.value); setPagina(1); }}
+            disabled={enviosIndisponiveis}
+            className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center outline-none focus:border-primary-500 disabled:opacity-40"
+            aria-label="Quantos dias"
+          />
+          <span className="text-[11px] font-bold text-slate-600">dias</span>
+          {ocultando && (
+            <span className="text-[10px] text-slate-400 font-medium">
+              {formatarNumero(ocultosCount)} oculto{ocultosCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+        {enviosIndisponiveis && (
+          <p className="text-[10px] text-amber-600 font-medium">
+            Não foi possível carregar o histórico de envios; a coluna e o filtro de "já recebeu" estão indisponíveis.
+          </p>
+        )}
       </div>
 
       <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
@@ -497,6 +573,7 @@ export default function SeletorDeContatos({
           <span className="flex-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Contato</span>
           <span className="w-20 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Última conversa</span>
           <span className="w-20 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Última resposta</span>
+          <span className="w-24 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Recebeu campanha</span>
         </div>
 
         <div className="max-h-[320px] overflow-y-auto custom-scrollbar divide-y divide-slate-50">
@@ -539,6 +616,12 @@ export default function SeletorDeContatos({
                   </div>
                   <span className="w-20 text-right"><Data iso={l.ultimaConversa} agora={agora} /></span>
                   <span className="w-20 text-right"><Data iso={l.ultimaResposta} agora={agora} /></span>
+                  <span
+                    className="w-24 text-right"
+                    title={l.ultimoEnvio ? `${l.campanhaDoEnvio} · ${l.enviosTotal} envio${l.enviosTotal === 1 ? '' : 's'} no total` : undefined}
+                  >
+                    <Data iso={l.ultimoEnvio} agora={agora} />
+                  </span>
                 </div>
               );
             })

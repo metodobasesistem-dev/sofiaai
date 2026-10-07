@@ -228,6 +228,12 @@ export interface LinhaDeContato {
   ultimaConversa: string | null;
   /** Última vez que o contato escreveu (threads.last_inbound_at). */
   ultimaResposta: string | null;
+  /** Quando recebeu a última campanha com sucesso. Nulo = nunca recebeu. */
+  ultimoEnvio: string | null;
+  /** Nome da campanha desse último envio. */
+  campanhaDoEnvio: string | null;
+  /** Quantas campanhas já recebeu com sucesso. */
+  enviosTotal: number;
 }
 
 /** O que a campanha guarda de quem foi escolhido. */
@@ -329,8 +335,133 @@ export function juntarComConversas(
       isClient: c.is_client === true,
       ultimaConversa: conversa?.last_message_time || null,
       ultimaResposta: conversa?.last_inbound_at || null,
+      ultimoEnvio: null,
+      campanhaDoEnvio: null,
+      enviosTotal: 0,
     };
   });
+}
+
+// ─── Histórico de envios de campanha ────────────────────────────────────────
+
+/** Uma linha de campaign_logs, só o que a soma precisa. */
+export interface LogDeEnvio {
+  contact_id: string | null;
+  campaign_id: string;
+  sent_at: string;
+}
+
+export interface ResumoDeEnvio {
+  /** O envio mais recente com sucesso. */
+  ultimoEnvio: string;
+  /** Nome da campanha desse envio. */
+  campanha: string;
+  /** Quantos envios com sucesso o contato já recebeu. */
+  vezes: number;
+}
+
+const tempoDe = (iso: string) => new Date(iso).getTime();
+
+/**
+ * Soma os envios por contato: o mais recente, de qual campanha, e quantos.
+ *
+ * Quem decide o que é "envio com sucesso" é quem monta a lista de logs: aqui
+ * entra só o que já foi filtrado. Registro sem contato ou com data inválida
+ * não tem a quem ser atribuído e é descartado em vez de quebrar a soma.
+ */
+export function resumirEnvios(
+  logs: LogDeEnvio[],
+  nomesDeCampanha: Record<string, string>
+): Record<string, ResumoDeEnvio> {
+  const resumo: Record<string, ResumoDeEnvio> = {};
+
+  for (const log of logs) {
+    if (!log.contact_id) continue;
+    if (Number.isNaN(tempoDe(log.sent_at))) continue;
+
+    const atual = resumo[log.contact_id];
+    const campanha = nomesDeCampanha[log.campaign_id] || 'Campanha';
+
+    if (!atual) {
+      resumo[log.contact_id] = { ultimoEnvio: log.sent_at, campanha, vezes: 1 };
+    } else {
+      atual.vezes += 1;
+      // A ordem em que os logs chegam não pode decidir qual é "o último".
+      if (tempoDe(log.sent_at) > tempoDe(atual.ultimoEnvio)) {
+        atual.ultimoEnvio = log.sent_at;
+        atual.campanha = campanha;
+      }
+    }
+  }
+
+  return resumo;
+}
+
+/** Une dois resumos do mesmo contato: o envio mais recente vence, as contagens somam. */
+function fundirResumos(a: ResumoDeEnvio, b: ResumoDeEnvio): ResumoDeEnvio {
+  const maisNovo = tempoDe(a.ultimoEnvio) >= tempoDe(b.ultimoEnvio) ? a : b;
+  return { ultimoEnvio: maisNovo.ultimoEnvio, campanha: maisNovo.campanha, vezes: a.vezes + b.vezes };
+}
+
+/**
+ * O telefone dentro de uma chave do tipo `{prefixo}_{telefone}`.
+ *
+ * Campanhas por etiqueta gravam no log o id da CONVERSA (`{userId}_{telefone}`)
+ * e não o do contato. Quando o contato tem esse mesmo formato de id, a junção
+ * exata já resolve; quando o id do contato é um UUID, o telefone da chave é o
+ * que sobra para ligar os dois.
+ */
+function telefoneDaChave(chave: string): string | null {
+  const m = chave.match(/_(\d{10,})$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Anexa a cada contato o histórico de campanhas recebidas.
+ *
+ * Junta primeiro pelo id do contato. Se não achar, tenta pelo telefone embutido
+ * nas chaves de conversa. Não tenta mais que isso: o log não guarda telefone,
+ * e adivinhar por nome ligaria homônimos.
+ */
+export function juntarComEnvios(
+  linhas: LinhaDeContato[],
+  resumo: Record<string, ResumoDeEnvio>
+): LinhaDeContato[] {
+  const porTelefone = new Map<string, ResumoDeEnvio>();
+  for (const [chave, r] of Object.entries(resumo)) {
+    const tel = telefoneDaChave(chave);
+    if (!tel) continue;
+    const anterior = porTelefone.get(tel);
+    porTelefone.set(tel, anterior ? fundirResumos(anterior, r) : r);
+  }
+
+  return linhas.map(l => {
+    const exato = resumo[l.id];
+    const pelaChave = l.telefone ? porTelefone.get(l.telefone) : undefined;
+    const r = exato && pelaChave && exato !== pelaChave ? fundirResumos(exato, pelaChave) : exato || pelaChave;
+    if (!r) return l;
+    return { ...l, ultimoEnvio: r.ultimoEnvio, campanhaDoEnvio: r.campanha, enviosTotal: r.vezes };
+  });
+}
+
+/**
+ * Recebeu campanha nos últimos `dias` dias?
+ *
+ * Inclusivo: com 7, quem recebeu há exatamente 7 dias conta. Na dúvida, errar
+ * para o lado de não repetir a mensagem.
+ */
+export function recebeuRecentemente(
+  l: Pick<LinhaDeContato, 'ultimoEnvio'>,
+  dias: number,
+  agora: Date = new Date()
+): boolean {
+  const d = diasDesde(l.ultimoEnvio, agora);
+  return d !== null && d <= dias;
+}
+
+/** Tira da lista quem recebeu campanha nos últimos `dias` dias. */
+export function ocultarRecentes(linhas: LinhaDeContato[], dias: number, agora: Date = new Date()): LinhaDeContato[] {
+  return linhas.filter(l => !recebeuRecentemente(l, dias, agora));
 }
 
 // ─── Busca e ordenação ──────────────────────────────────────────────────────

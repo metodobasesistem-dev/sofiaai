@@ -31,6 +31,10 @@ import {
   diasDesde,
   intervaloEntre,
   primeirosEnviaveis,
+  resumirEnvios,
+  juntarComEnvios,
+  recebeuRecentemente,
+  ocultarRecentes,
   type IdDaFaixa,
   type LinhaDeContato,
   type ContatoDoBanco,
@@ -48,6 +52,9 @@ const linha = (p: Partial<LinhaDeContato> = {}): LinhaDeContato => ({
   isClient: false,
   ultimaConversa: null,
   ultimaResposta: null,
+  ultimoEnvio: null,
+  campanhaDoEnvio: null,
+  enviosTotal: 0,
   ...p,
 });
 
@@ -420,5 +427,80 @@ describe('paginar', () => {
     const p = paginar([], 1, 50);
     assert.equal(p.totalPaginas, 1);
     assert.deepEqual(p.itens, []);
+  });
+});
+
+describe('histórico de envios de campanha', () => {
+  const nomes = { c1: 'Black Friday', c2: 'Retorno' };
+
+  it('resumirEnvios guarda o mais recente, a campanha dele e a contagem', () => {
+    const r = resumirEnvios([
+      { contact_id: 'a', campaign_id: 'c1', sent_at: '2026-09-01T10:00:00Z' },
+      { contact_id: 'a', campaign_id: 'c2', sent_at: '2026-09-20T10:00:00Z' },
+      { contact_id: 'b', campaign_id: 'c1', sent_at: '2026-09-02T10:00:00Z' },
+    ], nomes);
+    assert.deepEqual(r.a, { ultimoEnvio: '2026-09-20T10:00:00Z', campanha: 'Retorno', vezes: 2 });
+    assert.equal(r.b.vezes, 1);
+  });
+
+  it('a ordem de chegada dos logs não decide qual é o último', () => {
+    const r = resumirEnvios([
+      { contact_id: 'a', campaign_id: 'c2', sent_at: '2026-09-20T10:00:00Z' },
+      { contact_id: 'a', campaign_id: 'c1', sent_at: '2026-09-01T10:00:00Z' },
+    ], nomes);
+    assert.equal(r.a.campanha, 'Retorno');
+  });
+
+  it('descarta log sem contato ou com data inválida; campanha apagada vira "Campanha"', () => {
+    const r = resumirEnvios([
+      { contact_id: null, campaign_id: 'c1', sent_at: '2026-09-01T10:00:00Z' },
+      { contact_id: 'a', campaign_id: 'c1', sent_at: 'lixo' },
+      { contact_id: 'b', campaign_id: 'zzz', sent_at: '2026-09-01T10:00:00Z' },
+    ], nomes);
+    assert.equal(r.a, undefined);
+    assert.equal(r.b.campanha, 'Campanha');
+  });
+
+  it('juntarComEnvios liga por id e, na falta, pelo telefone da chave de conversa', () => {
+    const resumo = resumirEnvios([
+      { contact_id: 'u_5532988009060', campaign_id: 'c1', sent_at: '2026-09-01T10:00:00Z' },
+      { contact_id: 'u_5511999990000', campaign_id: 'c2', sent_at: '2026-09-05T10:00:00Z' },
+    ], nomes);
+    const [x, y, z] = juntarComEnvios([
+      linha(),
+      linha({ id: 'uuid-1', telefone: '5511999990000' }),
+      linha({ id: 'uuid-2', telefone: '5521988887777' }),
+    ], resumo);
+    assert.equal(x.campanhaDoEnvio, 'Black Friday');
+    assert.equal(y.campanhaDoEnvio, 'Retorno');
+    assert.equal(z.ultimoEnvio, null);
+    assert.equal(z.enviosTotal, 0);
+  });
+
+  it('id e telefone do mesmo contato somam em vez de um apagar o outro', () => {
+    const resumo = resumirEnvios([
+      { contact_id: 'uuid-1', campaign_id: 'c1', sent_at: '2026-09-01T10:00:00Z' },
+      { contact_id: 'u_5511999990000', campaign_id: 'c2', sent_at: '2026-09-05T10:00:00Z' },
+    ], nomes);
+    const [r] = juntarComEnvios([linha({ id: 'uuid-1', telefone: '5511999990000' })], resumo);
+    assert.equal(r.enviosTotal, 2);
+    assert.equal(r.campanhaDoEnvio, 'Retorno');
+  });
+
+  it('recebeuRecentemente é inclusivo no limite e nunca marca quem não recebeu', () => {
+    const dia = (n: number) => new Date(AGORA.getTime() - n * 86400000).toISOString();
+    assert.equal(recebeuRecentemente({ ultimoEnvio: dia(7) }, 7, AGORA), true);
+    assert.equal(recebeuRecentemente({ ultimoEnvio: dia(8) }, 7, AGORA), false);
+    assert.equal(recebeuRecentemente({ ultimoEnvio: null }, 7, AGORA), false);
+  });
+
+  it('ocultarRecentes tira só quem recebeu dentro da janela', () => {
+    const dia = (n: number) => new Date(AGORA.getTime() - n * 86400000).toISOString();
+    const lista = [
+      linha({ id: 'a', ultimoEnvio: dia(2) }),
+      linha({ id: 'b', ultimoEnvio: dia(30) }),
+      linha({ id: 'c' }),
+    ];
+    assert.deepEqual(ocultarRecentes(lista, 7, AGORA).map(l => l.id), ['b', 'c']);
   });
 });
