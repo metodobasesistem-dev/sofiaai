@@ -525,3 +525,41 @@ export function paginar<T>(lista: T[], pagina: number, tamanho: number) {
   const inicio = (atual - 1) * tamanho;
   return { itens: lista.slice(inicio, inicio + tamanho), pagina: atual, totalPaginas };
 }
+
+// ─── Juntar contatos a uma campanha existente ───────────────────────────────
+
+/**
+ * Junta contatos novos à lista de uma campanha, sem repetir ninguém.
+ *
+ * Dois contatos são o mesmo se têm o mesmo id OU o mesmo telefone: a lista
+ * antiga pode vir de planilha (sem id do CRM, só número), e o mesmo número
+ * receberia a mensagem duas vezes. Os já existentes ficam intactos e na ordem.
+ */
+export function mesclarContatos(
+  existentes: any[],
+  novos: ContatoSelecionado[]
+): { lista: any[]; adicionados: number; jaEstavam: number } {
+  const ids = new Set<string>();
+  const telefones = new Set<string>();
+  const registrar = (c: any) => {
+    if (c?.id) ids.add(String(c.id));
+    const t = soDigitos(c?.telefone ?? c?.number);
+    if (t) telefones.add(t);
+  };
+  existentes.forEach(registrar);
+
+  const lista = [...existentes];
+  let adicionados = 0;
+  let jaEstavam = 0;
+  for (const c of novos) {
+    const t = soDigitos(c.telefone);
+    if ((c.id && ids.has(String(c.id))) || (t && telefones.has(t))) {
+      jaEstavam++;
+      continue;
+    }
+    registrar(c);
+    lista.push({ id: c.id, nome: c.nome, telefone: c.telefone });
+    adicionados++;
+  }
+  return { lista, adicionados, jaEstavam };
+}
