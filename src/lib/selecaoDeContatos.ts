@@ -101,6 +101,120 @@ export function formatarHa(
   return anos === 1 ? 'há 1 ano' : `há ${anos} anos`;
 }
 
+/**
+ * Dias de calendário desde `iso` até `agora`. Nulo quando não há data.
+ *
+ * Data no futuro (relógio desalinhado) conta como 0, nunca negativo.
+ */
+export function diasDesde(iso: string | null | undefined, agora: Date = new Date()): number | null {
+  if (!iso) return null;
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return null;
+  return Math.max(0, diasEntre(data, agora));
+}
+
+// ─── Blocos por data ────────────────────────────────────────────────────────
+
+/** De que data os blocos partem. */
+export type BaseDoBloco = 'conversa' | 'resposta';
+
+export type IdDaFaixa = 'ate_7' | 'de_8_a_30' | 'de_31_a_90' | 'de_91_a_180' | 'mais_de_180' | 'nunca';
+
+export interface Faixa {
+  id: IdDaFaixa;
+  /** Limites em dias, inclusivos. `null` em `max` = sem teto. Faixa 'nunca' não tem limites. */
+  min: number | null;
+  max: number | null;
+}
+
+/**
+ * Os blocos, do mais recente ao mais antigo.
+ *
+ * Contíguos e sem sobreposição: todo dia inteiro (0, 1, 2…) cai em exatamente
+ * uma faixa, e quem não tem data cai em 'nunca'. É por isso que a soma dos
+ * blocos é sempre o total da base — um buraco entre faixas esconderia
+ * contatos de todos os filtros em silêncio.
+ */
+export const FAIXAS: Faixa[] = [
+  { id: 'ate_7', min: 0, max: 7 },
+  { id: 'de_8_a_30', min: 8, max: 30 },
+  { id: 'de_31_a_90', min: 31, max: 90 },
+  { id: 'de_91_a_180', min: 91, max: 180 },
+  { id: 'mais_de_180', min: 181, max: null },
+  { id: 'nunca', min: null, max: null },
+];
+
+/** O texto do botão. "Nunca" muda conforme a data usada: não conversar e não responder são coisas diferentes. */
+export function rotuloDaFaixa(id: IdDaFaixa, base: BaseDoBloco): string {
+  switch (id) {
+    case 'ate_7': return 'Até 7 dias';
+    case 'de_8_a_30': return '8 a 30 dias';
+    case 'de_31_a_90': return '31 a 90 dias';
+    case 'de_91_a_180': return '91 a 180 dias';
+    case 'mais_de_180': return 'Mais de 180 dias';
+    case 'nunca': return base === 'conversa' ? 'Nunca conversou' : 'Nunca respondeu';
+  }
+}
+
+/** A data que serve de base ao bloco, numa linha. */
+export function dataDaBase(l: LinhaDeContato, base: BaseDoBloco): string | null {
+  return base === 'conversa' ? l.ultimaConversa : l.ultimaResposta;
+}
+
+/** Em que faixa a linha cai, pela data da base escolhida. */
+export function faixaDe(l: LinhaDeContato, base: BaseDoBloco, agora: Date = new Date()): IdDaFaixa {
+  const dias = diasDesde(dataDaBase(l, base), agora);
+  if (dias === null) return 'nunca';
+  const faixa = FAIXAS.find(f => f.min !== null && dias >= f.min && (f.max === null || dias <= f.max));
+  // Inalcançável com FAIXAS contíguas a partir de 0; fica como rede de segurança.
+  return faixa ? faixa.id : 'mais_de_180';
+}
+
+/** Quantos contatos há em cada bloco. */
+export function contarPorFaixa(
+  linhas: LinhaDeContato[],
+  base: BaseDoBloco,
+  agora: Date = new Date()
+): Record<IdDaFaixa, number> {
+  const contagem = Object.fromEntries(FAIXAS.map(f => [f.id, 0])) as Record<IdDaFaixa, number>;
+  for (const l of linhas) contagem[faixaDe(l, base, agora)] += 1;
+  return contagem;
+}
+
+export function filtrarPorFaixa(
+  linhas: LinhaDeContato[],
+  faixa: IdDaFaixa | null,
+  base: BaseDoBloco,
+  agora: Date = new Date()
+): LinhaDeContato[] {
+  if (!faixa) return linhas;
+  return linhas.filter(l => faixaDe(l, base, agora) === faixa);
+}
+
+// ─── Seleção em massa ───────────────────────────────────────────────────────
+
+/**
+ * Os ids entre dois itens de uma lista, inclusive os dois — o "Shift + clique".
+ *
+ * Vale em qualquer sentido (de cima para baixo ou ao contrário) e atravessa
+ * páginas, porque trabalha sobre a lista inteira já filtrada e ordenada, não
+ * sobre as 50 linhas à vista. Se um dos dois não está na lista (a busca mudou
+ * entre um clique e outro), devolve vazio em vez de adivinhar um intervalo.
+ */
+export function intervaloEntre(ids: string[], de: string, ate: string): string[] {
+  const a = ids.indexOf(de);
+  const b = ids.indexOf(ate);
+  if (a === -1 || b === -1) return [];
+  const [inicio, fim] = a <= b ? [a, b] : [b, a];
+  return ids.slice(inicio, fim + 1);
+}
+
+/** Os `n` primeiros contatos enviáveis da lista, na ordem em que ela está. */
+export function primeirosEnviaveis(linhas: LinhaDeContato[], n: number): LinhaDeContato[] {
+  const limite = Math.max(0, Math.floor(n));
+  return linhas.filter(ehEnviavel).slice(0, limite);
+}
+
 // ─── Linhas da lista ────────────────────────────────────────────────────────
 
 export interface LinhaDeContato {
