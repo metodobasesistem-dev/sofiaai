@@ -38,6 +38,30 @@ export function normalizePhone(phone: string): string {
 }
 
 /**
+ * As formas em que o MESMO número brasileiro pode chegar: com e sem o 9º dígito.
+ *
+ * O WhatsApp devolve o número como está cadastrado na conta do contato, e
+ * contas antigas ficaram sem o 9. Enviar para 5532988996173 pode, portanto,
+ * ser respondido por 553288996173. A primeira posição da lista é sempre o
+ * número normalizado que entrou; a segunda, a outra forma, quando existe.
+ *
+ * Só celular tem a variação: fixo (8 dígitos começando em 2 a 5) nunca ganha o
+ * 9, e número fora do Brasil não é mexido.
+ */
+export function variantesDoTelefone(phone: string): string[] {
+  const n = normalizePhone(phone);
+  if (!n) return [];
+  if (!n.startsWith('55')) return [n];
+
+  const ddd = n.slice(2, 4);
+  const resto = n.slice(4);
+
+  if (n.length === 13 && resto.startsWith('9')) return [n, '55' + ddd + resto.slice(1)];
+  if (n.length === 12 && /^[6-9]/.test(resto)) return [n, '55' + ddd + '9' + resto];
+  return [n];
+}
+
+/**
  * Gera o threadId composto usado como PK na tabela threads.
  * Centraliza a lógica de composição para evitar inconsistências.
  */

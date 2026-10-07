@@ -6,7 +6,7 @@ import { format, addMinutes, parseISO, isValid, isWithinInterval } from 'date-fn
 import { googleCalendarService } from './googleCalendarService.js';
 import { EvolutionApiService } from './evolutionApiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
-import { normalizePhone } from '../lib/phoneHelper.js';
+import { normalizePhone, isSamePhone, variantesDoTelefone } from '../lib/phoneHelper.js';
 import { captureLeadOrigin } from './leadOriginService.js';
 import { randomUUID } from 'crypto';
 
@@ -563,9 +563,14 @@ export class AgentService {
     const timestamp = Date.now();
     console.log(`[AgentService] 💾 Persisting message: ${messageId} | Thread: ${threadId} | Direction: ${direction} | Type: ${messageType}`);
 
-    const cleanPhone = normalizePhone(
+    const phoneRecebido = normalizePhone(
       displayPhone || (threadId.includes('_') ? threadId.split('_').slice(1).join('_') : threadId)
     );
+    // A conversa pode ter sido encaixada na versão do número com/sem o 9º dígito
+    // (ver o webhook). O contato e a conversa seguem o número DELA, não o que o
+    // WhatsApp devolveu agora, para a mesma pessoa não virar dois leads.
+    const phoneDaConversa = threadId.includes('_') ? normalizePhone(threadId.split('_').slice(1).join('_')) : '';
+    const cleanPhone = phoneDaConversa && isSamePhone(phoneDaConversa, phoneRecebido) ? phoneDaConversa : phoneRecebido;
 
     // ── FASE 1: Busca estado existente (thread + contato) em paralelo ──
     let existingThread: any = null;
@@ -580,23 +585,28 @@ export class AgentService {
           .maybeSingle(),
         supabase
           .from('contacts')
-          .select('nome, status_funil, total_mensagens, primeiro_contato, data_criacao')
+          .select('id, telefone, nome, status_funil, total_mensagens, primeiro_contato, data_criacao')
           .eq('id', `${userId}_${cleanPhone}`)
           .maybeSingle()
       ]);
       existingThread = tData;
       existingContact = cData;
 
-      // [FIX] Busca aproximada para o 9º dígito brasileiro
-      if (!existingContact && cleanPhone.startsWith('55')) {
-        const last8 = cleanPhone.slice(-8);
-        const { data: fuzzyContact } = await supabase
-          .from('contacts')
-          .select('nome, status_funil, total_mensagens, primeiro_contato, data_criacao')
-          .eq('user_id', userId)
-          .ilike('telefone', `%${last8}`)
-          .maybeSingle();
-        existingContact = fuzzyContact;
+      // O contato pode existir na outra forma do número (com/sem o 9º dígito).
+      // Só vale a mesma pessoa: mesmo DDD e mesmo número, diferindo apenas no 9
+      // (a busca antiga pelos 8 últimos dígitos juntava DDDs diferentes).
+      if (!existingContact) {
+        const formas = variantesDoTelefone(cleanPhone);
+        if (formas.length > 1) {
+          const { data: variante } = await supabase
+            .from('contacts')
+            .select('id, telefone, nome, status_funil, total_mensagens, primeiro_contato, data_criacao')
+            .eq('user_id', userId)
+            .or(`telefone.in.(${formas.join(',')}),id.in.(${formas.map(f => `${userId}_${f}`).join(',')})`)
+            .order('data_criacao', { ascending: true, nullsFirst: false })
+            .limit(1);
+          existingContact = variante?.[0] ?? null;
+        }
       }
     } catch (fetchErr) {
       console.warn('[AgentService] Pre-fetch failed, proceeding with defaults:', fetchErr);
@@ -686,9 +696,11 @@ export class AgentService {
     };
 
     const contactPayload = {
-      id:              `${userId}_${cleanPhone}`,
+      // Reaproveita o contato que já existe (mesmo que esteja na outra forma do
+      // número) em vez de criar um novo com o número que acabou de chegar.
+      id:              existingContact?.id || `${userId}_${cleanPhone}`,
       user_id:         userId,
-      telefone:        cleanPhone,
+      telefone:        existingContact?.telefone || cleanPhone,
       nome:            resolvedContactName,
       status_funil:    existingContact?.status_funil || 'Lead',
       source:          'whatsapp',

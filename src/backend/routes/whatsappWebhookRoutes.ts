@@ -5,7 +5,7 @@ import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { transcribeAudio } from '../services/aiService.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
-import { normalizePhone, isSamePhone } from '../lib/phoneHelper.js';
+import { normalizePhone, isSamePhone, variantesDoTelefone } from '../lib/phoneHelper.js';
 import { extractAdReferral, captureLeadOrigin, detectAndTagLeadOrigin } from '../services/leadOriginService.js';
 
 
@@ -224,26 +224,30 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Deduplicação do 9º dígito brasileiro ──────────────────────────────────
-  // A Evolution às vezes entrega o mesmo número com e sem o 9º dígito:
-  //   outbound para 553288996173 (12 dig) → inbound de 5532988996173 (13 dig)
-  // Isso cria dois threads para o mesmo contato. Antes de processar, verifica
-  // se já existe um thread para a versão alternativa do número e usa esse ID.
-  if (cleanPhone.startsWith('55') && (cleanPhone.length === 12 || cleanPhone.length === 13)) {
-    const ddd = cleanPhone.slice(2, 4);   // ex: "32"
-    const rest = cleanPhone.slice(4);      // restante após DDD
-    let altPhone = '';
-    if (cleanPhone.length === 13 && rest.startsWith('9')) {
-      altPhone = '55' + ddd + rest.slice(1); // 13→12: remove o 9
-    } else if (cleanPhone.length === 12) {
-      altPhone = '55' + ddd + '9' + rest;   // 12→13: adiciona o 9
+  // O WhatsApp devolve o número como está cadastrado na conta do contato:
+  //   outbound para 5532988996173 (13 dig) → inbound de 553288996173 (12 dig)
+  // Isso criaria dois threads (e dois leads) para a mesma pessoa. Antes de
+  // processar, procura a outra forma do número — primeiro uma conversa, depois
+  // um contato (que pode existir sem conversa, como o criado por campanha).
+  const alternativas = variantesDoTelefone(cleanPhone).filter(p => p !== cleanPhone);
+  for (const altPhone of alternativas) {
+    const altThreadId = `${userId}_${altPhone}`;
+    const { data: altThread } = await supabase.from('threads').select('id').eq('id', altThreadId).maybeSingle();
+    if (altThread) {
+      threadId = altThreadId;
+      console.log(`[Webhook] 🔀 9º dígito dedup: roteando ${cleanPhone} → ${altPhone}`);
+      break;
     }
-    if (altPhone) {
-      const altThreadId = `${userId}_${altPhone}`;
-      const { data: altThread } = await supabase.from('threads').select('id').eq('id', altThreadId).maybeSingle();
-      if (altThread) {
-        threadId = altThreadId;
-        console.log(`[Webhook] 🔀 9º dígito dedup: roteando ${cleanPhone} → ${altPhone}`);
-      }
+    const { data: altContact } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('user_id', userId)
+      .or(`telefone.eq.${altPhone},id.eq.${altThreadId}`)
+      .limit(1);
+    if (altContact && altContact.length > 0) {
+      threadId = altThreadId;
+      console.log(`[Webhook] 🔀 9º dígito dedup (contato): roteando ${cleanPhone} → ${altPhone}`);
+      break;
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
