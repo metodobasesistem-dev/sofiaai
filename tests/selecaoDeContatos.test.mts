@@ -35,6 +35,7 @@ import {
   juntarComEnvios,
   recebeuRecentemente,
   ocultarRecentes,
+  mesclarContatos,
   type IdDaFaixa,
   type LinhaDeContato,
   type ContatoDoBanco,
@@ -502,5 +503,36 @@ describe('histórico de envios de campanha', () => {
       linha({ id: 'c' }),
     ];
     assert.deepEqual(ocultarRecentes(lista, 7, AGORA).map(l => l.id), ['b', 'c']);
+  });
+});
+
+describe('mesclarContatos — juntar a uma campanha existente', () => {
+  it('adiciona os novos no fim e mantém a lista antiga intacta', () => {
+    const antigos = [{ id: 'a', nome: 'A', telefone: '5532988000001' }];
+    const r = mesclarContatos(antigos, [{ id: 'b', nome: 'B', telefone: '5532988000002' }]);
+    assert.equal(r.adicionados, 1);
+    assert.equal(r.jaEstavam, 0);
+    assert.deepEqual(r.lista.map(c => c.id), ['a', 'b']);
+  });
+
+  it('pula quem já está, por id ou por telefone (lista de planilha não tem id)', () => {
+    const antigos = [{ id: 'a', nome: 'A', telefone: '5532988000001' }, { number: '32988000009' }];
+    const r = mesclarContatos(antigos, [
+      { id: 'a', nome: 'A', telefone: '5532988000001' },
+      { id: 'x', nome: 'X', telefone: '5532988000001' },
+      { id: 'y', nome: 'Y', telefone: '(32) 98800-0009' },
+      { id: 'z', nome: 'Z', telefone: '5532988000003' },
+    ]);
+    assert.equal(r.jaEstavam, 3);
+    assert.equal(r.adicionados, 1);
+  });
+
+  it('não repete quem vem duplicado no próprio lote', () => {
+    const r = mesclarContatos([], [
+      { id: 'a', nome: 'A', telefone: '5532988000001' },
+      { id: 'a', nome: 'A', telefone: '5532988000001' },
+    ]);
+    assert.equal(r.adicionados, 1);
+    assert.equal(r.jaEstavam, 1);
   });
 });

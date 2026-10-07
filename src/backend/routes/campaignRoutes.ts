@@ -8,7 +8,7 @@ import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.
 import { whatsappService } from '../services/whatsappService.js';
 import { EvolutionApiService } from '../services/evolutionApiService.js';
 import { garantirContato, normalizePhone } from '../lib/contatos.js';
-import { ATRASO_MIN_SEG, ATRASO_MAX_SEG } from '../../lib/selecaoDeContatos.js';
+import { ATRASO_MIN_SEG, ATRASO_MAX_SEG, mesclarContatos } from '../../lib/selecaoDeContatos.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -57,6 +57,24 @@ function getContactFieldValue(contact: any, field: string, sender?: { nome_compl
     default:
       return contact[field] || '';
   }
+}
+
+/** ids de contato que já receberam esta campanha com sucesso. */
+async function idsJaEnviados(campaignId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await supabase
+      .from('campaign_logs')
+      .select('id, contact_id')
+      .eq('campaign_id', campaignId)
+      .in('status', ['sent', 'success'])
+      .order('id')
+      .range(de, de + 999);
+    if (error) throw error;
+    for (const l of data || []) if (l.contact_id) ids.add(l.contact_id);
+    if (!data || data.length < 1000) break;
+  }
+  return ids;
 }
 
 // ─── Background campaign runner ────────────────────────────────────────────
@@ -145,12 +163,27 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
       return;
     }
 
-    job.total = contacts.length;
+    // Quem já recebeu esta campanha não recebe de novo. É o que permite juntar
+    // contatos novos a uma campanha que já rodou e disparar só para eles.
+    const jaEnviados = await idsJaEnviados(campaignId);
+    const totalDaCampanha = contacts.length;
+    contacts = contacts.filter(c => !jaEnviados.has(c.id));
+    job.total = totalDaCampanha;
+    job.sent = totalDaCampanha - contacts.length;
     // Sync total to DB
     await supabase
       .from('campaigns')
-      .update({ total_contacts: contacts.length })
+      .update({ total_contacts: totalDaCampanha })
       .eq('id', campaignId);
+
+    if (contacts.length === 0) {
+      await supabase
+        .from('campaigns')
+        .update({ status: 'completed', sent_count: job.sent, error_count: 0 })
+        .eq('id', campaignId);
+      job.jobStatus = 'done';
+      return;
+    }
 
     // c. Load template body (for non-meta_official providers) and sender profile
     let templateBody = '';
@@ -272,7 +305,7 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
 
       // Update DB progress every 5 sends
       const processed = job.sent + job.errors;
-      if (processed % 5 === 0 || processed === contacts.length) {
+      if (processed % 5 === 0 || i === contacts.length - 1) {
         await supabase
           .from('campaigns')
           .update({ sent_count: job.sent, error_count: job.errors })
@@ -726,6 +759,58 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const { error } = await supabase.from('campaigns').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /:id/contatos — junta contatos a uma campanha que já existe.
+ *
+ * Vale para campanhas de lista fixa ('upload'). Quem já está nela é pulado.
+ * Se a campanha já rodou, volta para "pendente": ao iniciar de novo, o envio
+ * pula quem já recebeu e manda só para os novos.
+ */
+router.post('/:id/contatos', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const novos: any[] = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+    if (novos.length === 0) {
+      return res.status(400).json({ success: false, error: 'Nenhum contato informado.' });
+    }
+
+    const { data: campaign } = await supabase
+      .from('campaigns')
+      .select('tenant_id, status, target_type, uploaded_contacts')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (!campaign) return res.status(404).json({ success: false, error: 'Campanha não encontrada' });
+    if (campaign.tenant_id !== userId) return res.status(403).json({ success: false, error: 'Acesso negado' });
+    if (campaign.status === 'sending' || campaignJobs.has(req.params.id)) {
+      return res.status(409).json({ success: false, error: 'A campanha está sendo enviada agora. Espere terminar para adicionar contatos.' });
+    }
+    if (campaign.target_type !== 'upload') {
+      return res.status(400).json({ success: false, error: 'Só dá para adicionar contatos a campanhas de lista fixa (as criadas por Todos ou Planilha).' });
+    }
+
+    const { lista, adicionados, jaEstavam } = mesclarContatos(
+      campaign.uploaded_contacts || [],
+      novos.map(c => ({ id: c.id, nome: c.nome, telefone: c.telefone }))
+    );
+
+    const { error } = await supabase
+      .from('campaigns')
+      .update({
+        uploaded_contacts: lista,
+        total_contacts: lista.length,
+        // Concluída/cancelada/falha volta a poder ser iniciada.
+        status: 'pending',
+      })
+      .eq('id', req.params.id);
+    if (error) throw error;
+
+    res.json({ success: true, data: { adicionados, jaEstavam, total: lista.length } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

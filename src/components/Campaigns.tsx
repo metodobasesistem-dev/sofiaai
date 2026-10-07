@@ -487,6 +487,10 @@ export default function Campaigns() {
 
   const [processingCampaignId, setProcessingCampaignId] = useState<string | null>(null);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  // Campanha já existente que vai receber os contatos marcados em "Todos"
+  // (vazio = criar uma nova).
+  const [campanhaDestinoId, setCampanhaDestinoId] = useState('');
+  const [adicionandoContatos, setAdicionandoContatos] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
 
@@ -904,13 +908,44 @@ export default function Campaigns() {
     }
   };
 
+  const adicionarAUmaCampanha = async () => {
+    setAdicionandoContatos(true);
+    try {
+      const res = await standardFetch(`/api/v2/campaigns/${campanhaDestinoId}/contatos`, {
+        method: 'POST',
+        body: JSON.stringify({ contacts: campaignData.selectedContacts }),
+      });
+      const corpo = await res.json();
+      if (!res.ok || !corpo.success) throw new Error(corpo.error || 'Não foi possível adicionar os contatos.');
+
+      const { adicionados, jaEstavam } = corpo.data as { adicionados: number; jaEstavam: number; total: number };
+      const nome = campaigns.find(c => c.id === campanhaDestinoId)?.name || 'campanha';
+      toast.success(
+        adicionados > 0
+          ? `${adicionados} contato${adicionados === 1 ? '' : 's'} adicionado${adicionados === 1 ? '' : 's'} a "${nome}". Inicie o envio pela lista.`
+          : `Nenhum contato novo: todos já estavam em "${nome}".`
+      );
+      if (jaEstavam > 0 && adicionados > 0) {
+        toast.info(`${jaEstavam} já estavam na campanha e foram pulados.`);
+      }
+
+      setIsModalOpen(false);
+      setCampanhaDestinoId('');
+      fetchCampaigns();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao adicionar contatos.');
+    } finally {
+      setAdicionandoContatos(false);
+    }
+  };
+
   // Modal - New Campaign Wizard
   const renderWizard = () => {
     switch (currentStep) {
       case 1:
         return (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-            {!(campaignData.targetType === 'single_contact' && campaignData.singleContact.linkToCampaign) && (
+            {!(campaignData.targetType === 'single_contact' && campaignData.singleContact.linkToCampaign) && !(campaignData.targetType === 'all' && campanhaDestinoId) && (
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome da Campanha</label>
                 <input 
@@ -958,6 +993,35 @@ export default function Campaigns() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                 >
+                  <div className="mb-3 p-4 bg-slate-50 rounded-3xl border border-slate-100 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest" htmlFor="destino-campanha">
+                      Em qual campanha?
+                    </label>
+                    <select
+                      id="destino-campanha"
+                      value={campanhaDestinoId}
+                      onChange={e => setCampanhaDestinoId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-primary-500 transition-all"
+                    >
+                      <option value="">+ Criar uma campanha nova</option>
+                      {campaigns
+                        .filter(c => c.target_type === 'upload' && c.status !== 'sending')
+                        .map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} · {c.total_contacts} contato{c.total_contacts === 1 ? '' : 's'}
+                          </option>
+                        ))}
+                    </select>
+                    {campanhaDestinoId ? (
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Os contatos marcados entram nesta campanha, com a mesma mensagem. Quem já está nela é pulado, e ao iniciar de novo ela envia só para os novos.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        Só aparecem campanhas de lista fixa (criadas por Todos ou Planilha) que não estão em envio.
+                      </p>
+                    )}
+                  </div>
                   <SeletorDeContatos
                     selecionadosIniciais={campaignData.selectedContacts}
                     onChange={lista => setCampaignData(prev => ({ ...prev, selectedContacts: lista }))}
@@ -1407,13 +1471,26 @@ export default function Campaigns() {
                 // "Todos" não manda mais para a base inteira por si só: exige
                 // ao menos um contato marcado na lista.
                 if (campaignData.targetType === 'all' && campaignData.selectedContacts.length === 0) return true;
+                if (campaignData.targetType === 'all' && campanhaDestinoId) return adicionandoContatos;
                 return !campaignData.name;
               })()}
-              onClick={() => setCurrentStep(2)}
+              onClick={() => {
+                if (campaignData.targetType === 'all' && campanhaDestinoId) adicionarAUmaCampanha();
+                else setCurrentStep(2);
+              }}
               className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all flex items-center justify-center gap-2 group shadow-xl disabled:opacity-50 disabled:grayscale"
             >
-              Próximo Passo: Escolher Mensagem
-              <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              {campaignData.targetType === 'all' && campanhaDestinoId ? (
+                <>
+                  {adicionandoContatos ? <RefreshCw className="animate-spin" size={18} /> : null}
+                  Adicionar {campaignData.selectedContacts.length} contato{campaignData.selectedContacts.length === 1 ? '' : 's'} à campanha
+                </>
+              ) : (
+                <>
+                  Próximo Passo: Escolher Mensagem
+                  <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
             </button>
           </div>
         );
@@ -2073,6 +2150,7 @@ export default function Campaigns() {
           <button 
             onClick={() => {
               setEditingCampaignId(null);
+              setCampanhaDestinoId('');
               setCampaignData({ 
                 name: '', 
                 targetType: 'manual', 
