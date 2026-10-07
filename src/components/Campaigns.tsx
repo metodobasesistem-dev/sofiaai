@@ -38,6 +38,8 @@ import { sendTemplateMessage, getMetaTemplates } from '../services/whatsappServi
 import { standardFetch } from '../services/supabaseService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import SeletorDeContatos from './campaigns/SeletorDeContatos';
+import { type ContatoSelecionado } from '../lib/selecaoDeContatos';
 
 /**
  * Contato já colocado na fila do disparo.
@@ -458,6 +460,8 @@ export default function Campaigns() {
     selectedFunnelStatus: '',
     manualList: '',
     uploadedContacts: [] as any[],
+    // Quem foi marcado na lista de "Todos". Começa vazio de propósito.
+    selectedContacts: [] as ContatoSelecionado[],
     singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
     messageType: 'custom' as 'custom' | 'template',
     customText: '',
@@ -732,6 +736,7 @@ export default function Campaigns() {
       selectedFunnelStatus: campaign.selected_funnel_status || '',
       manualList: campaign.manual_list || '',
       uploadedContacts: campaign.uploaded_contacts || [],
+      selectedContacts: [],
       messageType: campaign.message_type || (campaign.custom_text ? 'custom' : 'template'),
       customText: campaign.custom_text || '',
       templateId: campaign.template_id || '',
@@ -791,6 +796,7 @@ export default function Campaigns() {
         selectedFunnelStatus: '',
         manualList: '',
         uploadedContacts: [],
+        selectedContacts: [],
         singleContact: { nome: prefillName, telefone: prefillPhone, linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
         ...camposDeMensagemIniciais()
       });
@@ -945,8 +951,22 @@ export default function Campaigns() {
             </div>
 
             <AnimatePresence mode="wait">
+              {campaignData.targetType === 'all' && (
+                <motion.div
+                  key="all"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                >
+                  <SeletorDeContatos
+                    selecionadosIniciais={campaignData.selectedContacts}
+                    onChange={lista => setCampaignData(prev => ({ ...prev, selectedContacts: lista }))}
+                  />
+                </motion.div>
+              )}
+
               {campaignData.targetType === 'single_contact' && (
-                <motion.div 
+                <motion.div
                   key="single_contact"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1384,6 +1404,9 @@ export default function Campaigns() {
                   if (!campaignData.singleContact.linkToCampaign && !campaignData.name) return true;
                   return false;
                 }
+                // "Todos" não manda mais para a base inteira por si só: exige
+                // ao menos um contato marcado na lista.
+                if (campaignData.targetType === 'all' && campaignData.selectedContacts.length === 0) return true;
                 return !campaignData.name;
               })()}
               onClick={() => setCurrentStep(2)}
@@ -1518,7 +1541,11 @@ export default function Campaigns() {
                         if (campaignData.targetType === 'upload' && campaignData.uploadedContacts?.length > 0) {
                           sampleName = campaignData.uploadedContacts[0].nome || campaignData.uploadedContacts[0].name || sampleName;
                           samplePhone = campaignData.uploadedContacts[0].telefone || samplePhone;
-                        } else if (campaignData.targetType === 'single_contact' && filaDeEnvio().length > 0) {
+                        } else if (campaignData.targetType === 'all' && campaignData.selectedContacts.length > 0) {
+                // O exemplo vem de quem foi marcado na lista.
+                sampleName = campaignData.selectedContacts[0].nome || sampleName;
+                samplePhone = campaignData.selectedContacts[0].telefone || samplePhone;
+              } else if (campaignData.targetType === 'single_contact' && filaDeEnvio().length > 0) {
                           // Depois de entrar na fila o formulário fica vazio;
                           // o exemplo tem que vir de quem vai receber.
                           sampleName = filaDeEnvio()[0].nome;
@@ -1729,7 +1756,9 @@ export default function Campaigns() {
                       <p className="text-sm font-bold">
                         {campaignData.targetType === 'single_contact'
                           ? `${filaDeEnvio().length} contato(s) na fila`
-                          : campaignData.targetType === 'all' ? 'Todos os contatos' : 'Segmentado'}
+                          : campaignData.targetType === 'all'
+                            ? `${campaignData.selectedContacts.length} contato(s) selecionado(s)`
+                            : 'Segmentado'}
                       </p>
                    </div>
                    <div>
@@ -1762,7 +1791,11 @@ export default function Campaigns() {
                if (campaignData.targetType === 'upload' && campaignData.uploadedContacts?.length > 0) {
                  sampleName = campaignData.uploadedContacts[0].nome || campaignData.uploadedContacts[0].name || sampleName;
                  samplePhone = campaignData.uploadedContacts[0].telefone || samplePhone;
-               } else if (campaignData.targetType === 'single_contact' && filaDeEnvio().length > 0) {
+               } else if (campaignData.targetType === 'all' && campaignData.selectedContacts.length > 0) {
+                // O exemplo vem de quem foi marcado na lista.
+                sampleName = campaignData.selectedContacts[0].nome || sampleName;
+                samplePhone = campaignData.selectedContacts[0].telefone || samplePhone;
+              } else if (campaignData.targetType === 'single_contact' && filaDeEnvio().length > 0) {
                  sampleName = filaDeEnvio()[0].nome;
                  samplePhone = filaDeEnvio()[0].telefone || samplePhone;
                }
@@ -1944,7 +1977,14 @@ export default function Campaigns() {
                       setIsSaving(false);
                       return; // Sai do fluxo normal de criação
                     } else {
-                      finalContacts = allContacts || [];
+                      // "Todos" agora é a lista de contatos que foi marcada, não
+                      // a base inteira resolvida no servidor na hora do envio.
+                      // Contar o que está marcado é contar exatamente o que vai
+                      // sair — e sem o corte de 1.000 linhas da consulta acima.
+                      if (campaignData.selectedContacts.length === 0) {
+                        throw new Error('Marque ao menos um contato para receber a campanha.');
+                      }
+                      finalContacts = campaignData.selectedContacts;
                     }
 
                     const calculatedTotal = finalContacts.length;
@@ -1956,11 +1996,18 @@ export default function Campaigns() {
                       template_id: campaignData.templateId || null,
                       message_type: campaignData.messageType,
                       custom_text: campaignData.messageType === 'custom' ? campaignData.customText : null,
-                      target_type: campaignData.targetType,
+                      // A lista marcada vai como 'upload' com os ids do CRM: é o
+                      // formato que o servidor já envia e para o qual já preserva
+                      // o id (o relatório de quem recebeu depende dele).
+                      target_type: campaignData.targetType === 'all' ? 'upload' : campaignData.targetType,
                       selected_labels: campaignData.targetType === 'labels' ? campaignData.selectedLabels[0] : null,
                       selected_funnel_status: campaignData.targetType === 'funnel' ? campaignData.selectedFunnelStatus : null,
                       manual_list: campaignData.targetType === 'manual' ? campaignData.manualList : null,
-                      uploaded_contacts: campaignData.targetType === 'upload' ? campaignData.uploadedContacts : null,
+                      uploaded_contacts: campaignData.targetType === 'upload'
+                        ? campaignData.uploadedContacts
+                        : campaignData.targetType === 'all'
+                          ? campaignData.selectedContacts
+                          : null,
                       variables: campaignData.variables,
                       status: 'pending',
                       total_contacts: calculatedTotal,
@@ -2033,6 +2080,7 @@ export default function Campaigns() {
                 selectedFunnelStatus: '', 
                 manualList: '',
                 uploadedContacts: [],
+                selectedContacts: [],
                 singleContact: { nome: '', telefone: '', linkToCampaign: false, linkedCampaignId: '', lista: [] as ContatoNaFila[] },
                 ...camposDeMensagemIniciais()
               });

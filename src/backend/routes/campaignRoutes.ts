@@ -8,6 +8,7 @@ import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.
 import { whatsappService } from '../services/whatsappService.js';
 import { EvolutionApiService } from '../services/evolutionApiService.js';
 import { garantirContato, normalizePhone } from '../lib/contatos.js';
+import { ATRASO_MIN_SEG, ATRASO_MAX_SEG } from '../../lib/selecaoDeContatos.js';
 
 const router = Router();
 router.use(requireAuth as any);
@@ -189,7 +190,9 @@ async function runCampaign(campaignId: string, userId: string): Promise<void> {
 
       // Anti-ban delay — skip for the first message
       if (i > 0 && !job.cancelRequested) {
-        const delaySeconds = Math.floor(Math.random() * (180 - 60 + 1)) + 60;
+        // A faixa vem de lib/selecaoDeContatos: e a mesma que a tela usa para
+        // estimar quanto tempo a campanha leva.
+        const delaySeconds = Math.floor(Math.random() * (ATRASO_MAX_SEG - ATRASO_MIN_SEG + 1)) + ATRASO_MIN_SEG;
         job.nextSendAt = Date.now() + delaySeconds * 1000;
         await new Promise(r => setTimeout(r, delaySeconds * 1000));
         job.nextSendAt = null;
