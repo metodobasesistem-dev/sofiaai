@@ -13,6 +13,7 @@
     "test:chat": "node --test tests/chat.test.mjs",
     "test:rotas": "tsx --test tests/rotasConfiguracoes.test.mts",
     "test:campanhas": "tsx --test tests/selecaoDeContatos.test.mts",
+    "test:telefone": "tsx --test tests/telefone.test.mts",
     "test:modelos": "tsx --test tests/mensagemModelo.test.mts",
     "test:origem": "tsx --test tests/adReferral.test.mts tests/leadOriginPattern.test.mts tests/leadOrigin.test.mts tests/leadOriginReport.test.mts",
     "health:check": "curl -s http://localhost:3000/api/health/chat | node -e \"const d=require('fs').readFileSync('/dev/stdin','utf8');const r=JSON.parse(d);console.log(JSON.stringify(r,null,2));process.exit(r.status==='healthy'?0:1)\""

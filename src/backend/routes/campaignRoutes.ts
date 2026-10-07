@@ -7,7 +7,8 @@ import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { whatsappService } from '../services/whatsappService.js';
 import { EvolutionApiService } from '../services/evolutionApiService.js';
-import { garantirContato, normalizePhone } from '../lib/contatos.js';
+import { garantirContato } from '../lib/contatos.js';
+import { normalizePhone } from '../lib/phoneHelper.js';
 import { ATRASO_MIN_SEG, ATRASO_MAX_SEG, mesclarContatos } from '../../lib/selecaoDeContatos.js';
 
 const router = Router();
