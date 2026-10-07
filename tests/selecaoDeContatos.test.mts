@@ -23,6 +23,15 @@ import {
   filtrarPorBusca,
   ordenar,
   paginar,
+  FAIXAS,
+  faixaDe,
+  contarPorFaixa,
+  filtrarPorFaixa,
+  rotuloDaFaixa,
+  diasDesde,
+  intervaloEntre,
+  primeirosEnviaveis,
+  type IdDaFaixa,
   type LinhaDeContato,
   type ContatoDoBanco,
   type ConversaDoBanco,
@@ -113,6 +122,133 @@ describe('formatarHa', () => {
 
   it('data no futuro (relógio desalinhado) vira "hoje", não "há -2 dias"', () => {
     assert.equal(formatarHa('2026-10-09T10:00:00', AGORA), 'hoje');
+  });
+});
+
+describe('blocos por data', () => {
+  const diasAtras = (n: number) => new Date(AGORA.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
+  const comConversa = (dias: number | null, p: Partial<LinhaDeContato> = {}) =>
+    linha({ ultimaConversa: dias === null ? null : diasAtras(dias), ...p });
+
+  it('os limites de cada bloco: 7/8, 30/31, 90/91 e 180/181', () => {
+    const casos: [number, IdDaFaixa][] = [
+      [0, 'ate_7'], [7, 'ate_7'],
+      [8, 'de_8_a_30'], [30, 'de_8_a_30'],
+      [31, 'de_31_a_90'], [90, 'de_31_a_90'],
+      [91, 'de_91_a_180'], [180, 'de_91_a_180'],
+      [181, 'mais_de_180'], [900, 'mais_de_180'],
+    ];
+    for (const [dias, esperado] of casos) {
+      assert.equal(faixaDe(comConversa(dias), 'conversa', AGORA), esperado, `${dias} dias`);
+    }
+  });
+
+  it('sem data é "nunca", e data no futuro é o bloco mais recente', () => {
+    assert.equal(faixaDe(comConversa(null), 'conversa', AGORA), 'nunca');
+    const futuro = linha({ ultimaConversa: new Date(AGORA.getTime() + 3 * 86400000).toISOString() });
+    assert.equal(faixaDe(futuro, 'conversa', AGORA), 'ate_7');
+  });
+
+  it('os blocos NÃO deixam buraco: cada dia de 0 a 400 cai em exatamente um', () => {
+    // É a propriedade que importa: um buraco esconderia contatos de todos os filtros.
+    for (let dias = 0; dias <= 400; dias++) {
+      const candidatas = FAIXAS.filter(f => f.min !== null && dias >= f.min && (f.max === null || dias <= f.max));
+      assert.equal(candidatas.length, 1, `${dias} dias caiu em ${candidatas.length} faixas`);
+    }
+  });
+
+  it('a soma dos blocos é sempre o total da base', () => {
+    const base = [
+      comConversa(0), comConversa(5), comConversa(20), comConversa(60),
+      comConversa(120), comConversa(400), comConversa(null), comConversa(null),
+    ];
+    const contagem = contarPorFaixa(base, 'conversa', AGORA);
+    const soma = Object.values(contagem).reduce((a, b) => a + b, 0);
+    assert.equal(soma, base.length);
+    assert.deepEqual(contagem, {
+      ate_7: 2, de_8_a_30: 1, de_31_a_90: 1, de_91_a_180: 1, mais_de_180: 1, nunca: 2,
+    });
+  });
+
+  it('a base muda o bloco: respondeu há 100 dias, mas conversou ontem', () => {
+    // Quem recebeu uma campanha ontem tem conversa recente, mesmo sem ter respondido.
+    const l = linha({ ultimaConversa: diasAtras(1), ultimaResposta: diasAtras(100) });
+    assert.equal(faixaDe(l, 'conversa', AGORA), 'ate_7');
+    assert.equal(faixaDe(l, 'resposta', AGORA), 'de_91_a_180');
+  });
+
+  it('quem conversou mas nunca respondeu cai em "nunca" só na base de resposta', () => {
+    const l = linha({ ultimaConversa: diasAtras(10), ultimaResposta: null });
+    assert.equal(faixaDe(l, 'conversa', AGORA), 'de_8_a_30');
+    assert.equal(faixaDe(l, 'resposta', AGORA), 'nunca');
+  });
+
+  it('o rótulo de "nunca" acompanha a base', () => {
+    assert.equal(rotuloDaFaixa('nunca', 'conversa'), 'Nunca conversou');
+    assert.equal(rotuloDaFaixa('nunca', 'resposta'), 'Nunca respondeu');
+  });
+
+  it('filtrar por faixa devolve só o bloco; sem faixa devolve tudo', () => {
+    const base = [comConversa(2, { id: 'a' }), comConversa(50, { id: 'b' }), comConversa(null, { id: 'c' })];
+    assert.deepEqual(filtrarPorFaixa(base, 'de_31_a_90', 'conversa', AGORA).map(l => l.id), ['b']);
+    assert.deepEqual(filtrarPorFaixa(base, 'nunca', 'conversa', AGORA).map(l => l.id), ['c']);
+    assert.equal(filtrarPorFaixa(base, null, 'conversa', AGORA).length, 3);
+  });
+
+  it('conta dias de calendário, como o resto', () => {
+    // 23h50 de ontem lido às 00h10 de hoje: é 1 dia, não 0.
+    const agora = new Date('2026-10-07T00:10:00');
+    assert.equal(diasDesde('2026-10-06T23:50:00', agora), 1);
+    assert.equal(diasDesde(null, agora), null);
+  });
+});
+
+describe('intervaloEntre (Shift + clique)', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+  it('inclui os dois extremos', () => {
+    assert.deepEqual(intervaloEntre(ids, 'b', 'd'), ['b', 'c', 'd']);
+  });
+
+  it('vale nos dois sentidos', () => {
+    assert.deepEqual(intervaloEntre(ids, 'd', 'b'), ['b', 'c', 'd']);
+  });
+
+  it('o mesmo item nos dois cliques é só ele', () => {
+    assert.deepEqual(intervaloEntre(ids, 'c', 'c'), ['c']);
+  });
+
+  it('se um dos dois saiu da lista (a busca mudou), não adivinha: devolve vazio', () => {
+    assert.deepEqual(intervaloEntre(ids, 'b', 'zzz'), []);
+    assert.deepEqual(intervaloEntre(ids, 'zzz', 'b'), []);
+  });
+
+  it('atravessa o que seriam várias páginas', () => {
+    const muitos = Array.from({ length: 200 }, (_, i) => `id${i}`);
+    assert.equal(intervaloEntre(muitos, 'id10', 'id150').length, 141);
+  });
+});
+
+describe('primeirosEnviaveis', () => {
+  const lista = [
+    linha({ id: '1' }),
+    linha({ id: '2', telefone: '988' }), // sem DDD: não conta
+    linha({ id: '3' }),
+    linha({ id: '4' }),
+  ];
+
+  it('pega os N primeiros, pulando quem não dá para enviar', () => {
+    assert.deepEqual(primeirosEnviaveis(lista, 2).map(l => l.id), ['1', '3']);
+  });
+
+  it('N maior que a lista devolve o que há', () => {
+    assert.equal(primeirosEnviaveis(lista, 99).length, 3);
+  });
+
+  it('N zero, negativo ou quebrado não pega ninguém nem quebra', () => {
+    assert.equal(primeirosEnviaveis(lista, 0).length, 0);
+    assert.equal(primeirosEnviaveis(lista, -5).length, 0);
+    assert.equal(primeirosEnviaveis(lista, 2.9).length, 2);
   });
 });
 
