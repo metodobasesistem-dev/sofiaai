@@ -295,6 +295,16 @@ export default function Layout({
       ]
     },
     {
+      id: 'sec_dashboard',
+      items: [
+        {
+          id: 'dashboard',
+          icon: <LayoutDashboard size={18} />,
+          label: 'Dashboard',
+        }
+      ]
+    },
+    {
       id: 'sec_prospeccao',
       items: [
         {
@@ -304,16 +314,6 @@ export default function Layout({
           subItems: [
             { id: 'lead_radar', icon: <Search size={14} />, label: 'Radar de Leads' }
           ]
-        }
-      ]
-    },
-    {
-      id: 'sec_dashboard',
-      items: [
-        {
-          id: 'dashboard',
-          icon: <LayoutDashboard size={18} />,
-          label: 'Dashboard',
         }
       ]
     },
@@ -769,15 +769,23 @@ export default function Layout({
 
         {/* Content */}
         <main
-          className={`flex-1 flex flex-col min-h-0 overscroll-none p-4 md:p-6 lg:p-8 pt-20 md:pt-6 ${
+          className={`flex-1 flex flex-col min-h-0 overscroll-none p-3 sm:p-4 md:p-5 ${
             activeTab === 'inbox'
-              ? 'overflow-hidden pb-20 md:pb-6'
-              : 'overflow-y-auto pb-24 md:pb-8'
+              ? 'overflow-hidden pt-16 md:pt-4 pb-20 md:pb-4'
+              : 'overflow-y-auto pt-16 md:pt-4 pb-20 md:pb-6'
           }`}
           style={{ overscrollBehaviorY: 'none' }}
         >
           {activeTab === 'inbox' ? (
-            <div className="w-full max-w-screen-2xl mx-auto flex-1 min-h-0 flex flex-col">{children}</div>
+            <div className="w-full max-w-screen-2xl mx-auto flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="shrink-0 mb-3">
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Atendimento</h1>
+                <p className="text-sm text-slate-500 mt-0.5">Gerencie suas conversas e atendimentos em tempo real.</p>
+              </div>
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                {children}
+              </div>
+            </div>
           ) : (
             <div className="w-full max-w-screen-2xl mx-auto">{children}</div>
           )}
