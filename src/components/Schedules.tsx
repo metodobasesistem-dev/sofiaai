@@ -235,8 +235,8 @@ export default function Schedules({ user, role }: { user: SupabaseUser | null, r
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agendamentos</h1>
-          <p className="text-gray-500 text-sm">Compromissos marcados pela IA e os que você marcar aqui.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Agendamentos</h1>
+          <p className="text-sm text-slate-500 mt-1">Compromissos marcados pela IA e os que você marcar aqui.</p>
         </div>
 
         <div className="flex items-center gap-3">

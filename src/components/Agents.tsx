@@ -1021,11 +1021,11 @@ export default function Agents({ user, role }: { user: SupabaseUser | null, role
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Cérebro Zyreo <span className="text-primary-600">Sofia</span></h1>
-          <p className="text-slate-500 text-sm font-medium">Gerencie os agentes inteligentes e acompanhe cada decisão da Sofia.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cérebro <span className="text-primary-600">Sofia</span></h1>
+          <p className="text-sm text-slate-500 mt-1">Gerencie os agentes inteligentes e acompanhe cada decisão da Sofia.</p>
         </div>
         
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">

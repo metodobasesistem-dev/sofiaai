@@ -140,18 +140,15 @@ export default function ReportsDashboard() {
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-slate-50/30 overflow-y-auto no-scrollbar">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="p-6 md:p-8 border-b border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
-            <BarChart3 className="text-primary-600" />
-            Relatórios e Métricas
-          </h1>
-          <p className="text-gray-500 text-sm mt-1 font-medium">Acompanhe a inteligência e conversão do seu atendimento.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Relatórios e Métricas</h1>
+          <p className="text-sm text-slate-500 mt-1">Acompanhe a inteligência e conversão do seu atendimento.</p>
         </div>
         
-        <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
+        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
           {[
             { label: '7 Dias', val: 7 },
             { label: '30 Dias', val: 30 },
@@ -160,7 +157,7 @@ export default function ReportsDashboard() {
             <button 
               key={item.val}
               onClick={() => setPeriod(item.val)}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${period === item.val ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${period === item.val ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               {item.label}
             </button>
@@ -168,7 +165,7 @@ export default function ReportsDashboard() {
         </div>
       </div>
 
-      <div className="p-6 md:p-8 space-y-8">
+      <div className="space-y-6">
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
           {kpis.map((kpi, i) => (

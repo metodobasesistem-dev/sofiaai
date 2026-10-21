@@ -523,10 +523,10 @@ export default function DiagnosticsManager() {
       {/* ─── HEADER ─── */}
       <header className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Rocket className="text-emerald-500 w-7 h-7" /> Motor de Diagnóstico e Onboarding
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Motor de Diagnóstico e Onboarding
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-sm text-slate-500 mt-1">
             Auditoria estratégica de presença digital e roteiros de CRO com IA Vision para novos clientes.
           </p>
         </div>

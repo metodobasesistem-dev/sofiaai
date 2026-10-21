@@ -769,15 +769,15 @@ export default function Layout({
 
         {/* Content */}
         <main
-          className={`flex-1 flex flex-col min-h-0 overscroll-none ${
+          className={`flex-1 flex flex-col min-h-0 overscroll-none p-4 md:p-6 lg:p-8 pt-20 md:pt-6 ${
             activeTab === 'inbox'
-              ? 'overflow-hidden pt-16 md:pt-0'
-              : 'overflow-y-auto p-4 md:p-6 pt-20 md:pt-6'
+              ? 'overflow-hidden pb-20 md:pb-6'
+              : 'overflow-y-auto pb-24 md:pb-8'
           }`}
           style={{ overscrollBehaviorY: 'none' }}
         >
           {activeTab === 'inbox' ? (
-            <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+            <div className="w-full max-w-screen-2xl mx-auto flex-1 min-h-0 flex flex-col">{children}</div>
           ) : (
             <div className="w-full max-w-screen-2xl mx-auto">{children}</div>
           )}

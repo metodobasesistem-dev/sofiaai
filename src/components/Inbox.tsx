@@ -3798,7 +3798,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   return (
     <div className={isFullscreen
       ? "h-screen w-full bg-[#f0f2f5] flex overflow-hidden relative"
-      : "flex-1 min-h-0 bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-hidden"
+      : "flex-1 min-h-0 bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(16,24,40,0.06)] flex overflow-hidden"
     }>
       {isFullscreen && (
         <div className={`${isSidebarExpanded ? 'w-[200px]' : 'w-[70px]'} transition-all duration-300 ease-in-out bg-slate-900 hidden md:flex flex-col items-center py-6 border-r border-slate-800 shrink-0 z-20 relative`}>

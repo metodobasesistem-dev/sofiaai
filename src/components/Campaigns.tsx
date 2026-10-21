@@ -2127,26 +2127,17 @@ export default function Campaigns() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-4 md:px-0 pb-20">
+    <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-5">
-           <Send size={120} className="-rotate-12" />
-        </div>
-        
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-primary-50 text-primary-600 rounded-xl">
-              <Send size={24} />
-            </div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Campanhas Oficiais</h1>
-          </div>
-          <p className="text-slate-500 max-w-md">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Campanhas Oficiais</h1>
+          <p className="text-sm text-slate-500 mt-1 max-w-md">
             Gerencie seus modelos e dispare mensagens em massa com segurança Meta.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10">
+        <div className="flex items-center gap-3">
           <button 
             onClick={() => {
               setEditingCampaignId(null);

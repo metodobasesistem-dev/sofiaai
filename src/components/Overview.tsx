@@ -173,18 +173,18 @@ export default function Overview() {
   const globalStatus = health.some(h => h.status === 'error') ? 'DEGRADADO' : 'OPERACIONAL';
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-6">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
             Visão Geral 
-            <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${globalStatus === 'OPERACIONAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} flex items-center gap-1.5`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${globalStatus === 'OPERACIONAL' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${globalStatus === 'OPERACIONAL' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'} flex items-center gap-1.5`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${globalStatus === 'OPERACIONAL' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
               {globalStatus}
-            </div>
+            </span>
           </h1>
-          <p className="text-slate-500 font-medium mt-1">Torre de controle e clareza operacional da Sofia.</p>
+          <p className="text-sm text-slate-500 mt-1">Torre de controle e status operacional da Sofia.</p>
         </div>
         
         <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">

@@ -228,11 +228,11 @@ export default function Integrations({ user, role }: { user: User | null, role: 
   const googleStatus = profile?.google_calendar_active ? 'connected' : 'disconnected';
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header Section */}
       <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Integrações</h1>
-        <p className="text-slate-500 font-medium mt-1">Conecte seus canais e ferramentas à Sofia para automatizar seu fluxo de trabalho.</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Integrações</h1>
+        <p className="text-sm text-slate-500 mt-1">Conecte seus canais e ferramentas para automatizar seu fluxo de trabalho.</p>
       </div>
 
       {/* Integrations Grid */}

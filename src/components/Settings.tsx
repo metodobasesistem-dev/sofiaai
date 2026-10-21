@@ -305,8 +305,8 @@ export default function Settings({
       {/* Coluna da esquerda: título da página + rail. */}
       <div className="w-full md:w-60 md:shrink-0 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
-          <p className="text-sm text-gray-500">Administração da conta</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Configurações</h1>
+          <p className="text-sm text-slate-500 mt-1">Administração da conta</p>
         </div>
 
         <SettingsNav secoes={secoesVisiveis} ativa={secaoAberta} onSelecionar={setActiveSubTab} />
@@ -315,8 +315,8 @@ export default function Settings({
       {/* Painel de conteúdo. */}
       <div className="flex-1 min-w-0 space-y-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">{secaoAtual.label}</h2>
-          <p className="text-sm text-gray-500">{secaoAtual.descricao}</p>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">{secaoAtual.label}</h2>
+          <p className="text-sm text-slate-500 mt-1">{secaoAtual.descricao}</p>
         </div>
 
         <AnimatePresence mode="wait">

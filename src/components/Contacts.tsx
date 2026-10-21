@@ -434,17 +434,12 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
   }, [contacts]);
 
   return (
-    <div className="flex-1 h-full bg-slate-50/50 overflow-y-auto p-3 md:p-8 space-y-4 md:space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 md:w-10 md:h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary-500/20 shrink-0">
-            <UserPlus size={18} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight leading-tight">Leads</h1>
-            <p className="text-gray-400 text-[11px] font-medium hidden md:block">Quem ainda não é cliente. Ao promover, o contato passa para Clientes.</p>
-          </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Leads</h1>
+          <p className="text-sm text-slate-500 mt-1">Quem ainda não é cliente. Ao promover, o contato passa para Clientes.</p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

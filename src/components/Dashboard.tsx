@@ -456,12 +456,12 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
               Conectado em tempo real
             </span>
           </div>
-          <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             {role === 'admin'
               ? 'Visão Geral e Performance'
               : `Olá, ${(profile?.nome_completo?.split(' ')[0] || profile?.name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0]) || 'Usuário'}`}
           </h1>
-          <p className="text-slate-500 text-[13px] mt-0.5">
+          <p className="text-sm text-slate-500 mt-1">
             {role === 'admin' ? 'Acompanhamento consolidado de todos os clientes e métricas da plataforma.' : 'Aqui está o resumo do seu atendimento hoje.'}
           </p>
         </div>

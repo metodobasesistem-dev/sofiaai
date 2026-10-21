@@ -71,10 +71,10 @@ export default function QuickReplies() {
   );
 
   return (
-    <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Respostas Rápidas</h2>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Respostas Rápidas</h1>
           <p className="text-sm text-slate-500 mt-1">Gerencie seus modelos de mensagem para ganhar tempo no atendimento.</p>
         </div>
         
