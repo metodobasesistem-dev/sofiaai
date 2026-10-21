@@ -75,38 +75,52 @@ interface MenuSection {
   items: MenuItem[];
 }
 
+const SIDEBAR_STORAGE_KEY = 'sidebar_collapsed';
 
+/**
+ * Item do menu lateral escuro.
+ * - Recolhido: só o ícone, com o nome aparecendo num balão ao passar o mouse.
+ * - Expandido: ícone + nome (+ seta quando tem submenu).
+ */
 const SidebarItem = ({ icon, label, active, collapsed, onClick, hasSubmenu, isSubmenuOpen }: SidebarItemProps) => {
+  // Com o submenu aberto, o destaque forte fica no subitem ativo, não no pai.
+  const strongActive = active && (collapsed || !hasSubmenu);
+  const softActive = active && !strongActive;
+
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className={`flex items-center p-2 rounded-xl cursor-pointer transition-all duration-300 group relative
-        ${active
-          ? 'bg-primary-50 text-primary-600 border-l-4 border-primary-500 rounded-l-sm'
-          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group-active:scale-95 border-l-4 border-transparent'
+      aria-label={label}
+      className={`group relative flex w-full items-center rounded-lg h-10 transition-colors duration-150
+        ${collapsed ? 'justify-center' : 'gap-3 px-3'}
+        ${strongActive
+          ? 'bg-primary-600 text-white shadow-[0_6px_16px_-6px_rgba(37,99,235,0.7)]'
+          : softActive
+            ? 'bg-white/[0.06] text-white'
+            : 'text-slate-400 hover:bg-sidebar-hover hover:text-white'
         }`}
     >
-      <div className={`${active ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
-        {icon}
-      </div>
+      <span className="flex shrink-0 items-center justify-center">{icon}</span>
+
       {!collapsed && (
-        <div className="ml-2.5 flex-1 flex items-center justify-between overflow-hidden">
-          <motion.span
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-xs font-medium whitespace-nowrap"
-          >
-            {label}
-          </motion.span>
+        <>
+          <span className="flex-1 truncate text-left text-[13px] font-medium">{label}</span>
           {hasSubmenu && (
             <ChevronDown
-              size={13}
-              className={`transition-transform duration-200 ${isSubmenuOpen ? 'rotate-180' : ''}`}
+              size={14}
+              className={`shrink-0 opacity-60 transition-transform duration-200 ${isSubmenuOpen ? 'rotate-180' : ''}`}
             />
           )}
-        </div>
+        </>
       )}
-    </div>
+
+      {collapsed && (
+        <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">
+          {label}
+        </span>
+      )}
+    </button>
   );
 };
 
@@ -125,12 +139,26 @@ export default function Layout({
   role: string | null,
   plano: string | null
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // O menu começa recolhido (só ícones), como no padrão visual adotado.
+  // A escolha do usuário fica salva para a próxima visita.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Ler a URL pelo router (e não por window.location) faz a barra inferior
   // reagir quando a navegação acontece sem recarregar a página.
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+    } catch {}
+  }, [collapsed]);
 
   /**
    * A barra inferior tem atalhos para telas que hoje são seções de
@@ -148,6 +176,7 @@ export default function Layout({
   });
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
   const headerProfileRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { unreadTotal } = useNotification();
 
   useEffect(() => {
@@ -158,6 +187,18 @@ export default function Layout({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Atalho Ctrl+K (ou Cmd+K) para focar a busca do cabeçalho
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
   const handleLogout = async () => {
@@ -200,6 +241,9 @@ export default function Layout({
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
+  const displayName: string = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
+  const roleLabel = role === 'admin' ? 'Administrador' : plano ? `Plano ${plano}` : 'Usuário';
+
   // Log de diagnóstico para permissões (apenas em desenvolvimento)
   useEffect(() => {
     if (user) {
@@ -238,14 +282,14 @@ export default function Layout({
       items: [
         {
           id: 'admin_menu',
-          icon: <Shield size={16} />,
+          icon: <Shield size={18} />,
           label: 'Administração',
           subItems: [
-            { id: 'admin', label: 'Painel Admin', icon: <Shield size={13} /> },
-            { id: 'sofia_config', label: 'Configurações Sofia', icon: <Bot size={13} /> },
-            { id: 'overview', label: 'Visão Geral', icon: <Activity size={13} /> },
-            { id: 'meta_templates', label: 'Templates', icon: <FileText size={13} className="text-violet-500" /> },
-            { id: 'diagnostics', label: 'Diagnósticos', icon: <Rocket size={13} className="text-emerald-500" /> },
+            { id: 'admin', label: 'Painel Admin', icon: <Shield size={14} /> },
+            { id: 'sofia_config', label: 'Configurações Sofia', icon: <Bot size={14} /> },
+            { id: 'overview', label: 'Visão Geral', icon: <Activity size={14} /> },
+            { id: 'meta_templates', label: 'Templates', icon: <FileText size={14} /> },
+            { id: 'diagnostics', label: 'Diagnósticos', icon: <Rocket size={14} /> },
           ]
         }
       ]
@@ -255,10 +299,10 @@ export default function Layout({
       items: [
         {
           id: 'prospeccao_menu',
-          icon: <Search size={16} />,
+          icon: <Search size={18} />,
           label: 'Prospecção Ativa',
           subItems: [
-            { id: 'lead_radar', icon: <Search size={13} />, label: 'Radar de Leads' }
+            { id: 'lead_radar', icon: <Search size={14} />, label: 'Radar de Leads' }
           ]
         }
       ]
@@ -268,7 +312,7 @@ export default function Layout({
       items: [
         {
           id: 'dashboard',
-          icon: <LayoutDashboard size={16} />,
+          icon: <LayoutDashboard size={18} />,
           label: 'Dashboard',
         }
       ]
@@ -278,16 +322,16 @@ export default function Layout({
       items: [
         {
           id: 'suporte_menu',
-          icon: <MessageSquare size={16} />,
+          icon: <MessageSquare size={18} />,
           label: 'Suporte',
           subItems: [
             {
               id: 'inbox',
               icon: (
                 <div className="relative">
-                  <Inbox size={13} />
+                  <Inbox size={14} />
                   {unreadTotal > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white">
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-sidebar">
                       {unreadTotal > 99 ? '99+' : unreadTotal}
                     </span>
                   )}
@@ -295,13 +339,13 @@ export default function Layout({
               ),
               label: 'Atendimento'
             },
-            { id: 'kanban', icon: <Layers size={13} />, label: 'Kanban', minPlan: 'Pro' },
-            { id: 'contacts', icon: <Users size={13} />, label: 'Leads' },
-            { id: 'clients', icon: <Star size={13} />, label: 'Clientes' },
+            { id: 'kanban', icon: <Layers size={14} />, label: 'Kanban', minPlan: 'Pro' },
+            { id: 'contacts', icon: <Users size={14} />, label: 'Leads' },
+            { id: 'clients', icon: <Star size={14} />, label: 'Clientes' },
             // Agendamentos é operação do dia a dia, como o resto daqui — a
             // disponibilidade, que é o ajuste por trás dele, fica em
             // Configurações.
-            { id: 'schedule', icon: <Calendar size={13} />, label: 'Agendamentos', flag: 'agendas', minPlan: 'Pro' },
+            { id: 'schedule', icon: <Calendar size={14} />, label: 'Agendamentos', flag: 'agendas', minPlan: 'Pro' },
           ]
         }
       ]
@@ -311,11 +355,11 @@ export default function Layout({
       items: [
         {
           id: 'financeiro_menu',
-          icon: <Wallet size={16} />,
+          icon: <Wallet size={18} />,
           label: 'Financeiro',
           subItems: [
-            { id: 'finance', icon: <Wallet size={13} />, label: 'Meu Plano' },
-            { id: 'reports', icon: <BarChart3 size={13} />, label: 'Relatórios', minPlan: 'Pro' },
+            { id: 'finance', icon: <Wallet size={14} />, label: 'Meu Plano' },
+            { id: 'reports', icon: <BarChart3 size={14} />, label: 'Relatórios', minPlan: 'Pro' },
           ]
         }
       ]
@@ -325,7 +369,7 @@ export default function Layout({
       items: [
         {
           id: 'ia_menu',
-          icon: <Bot size={16} />,
+          icon: <Bot size={18} />,
           label: 'Automação',
           subItems: [
             // Agentes de IA e Atalhos mudaram para Configurações → o menu
@@ -333,12 +377,12 @@ export default function Layout({
             // CONFIGURA uma vez mora junto em Configurações.
             {
               id: 'leo',
-              icon: <Zap size={13} className="text-amber-500" />,
+              icon: <Zap size={14} />,
               label: 'Leo',
               flag: 'leo_ai',
               minPlan: 'Starter'
             },
-            { id: 'campaigns', icon: <Send size={13} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
+            { id: 'campaigns', icon: <Send size={14} />, label: 'Campanhas', flag: 'campaigns', minPlan: 'Elite' },
           ]
         }
       ]
@@ -352,7 +396,7 @@ export default function Layout({
       items: [
         {
           id: 'settings',
-          icon: <Settings size={16} />,
+          icon: <Settings size={18} />,
           label: 'Configurações',
         }
       ]
@@ -401,6 +445,12 @@ export default function Layout({
 
   const handleTabClick = (id: string, hasSubmenu?: boolean) => {
     if (hasSubmenu) {
+      // Com o menu recolhido não há onde mostrar o submenu: expande e abre.
+      if (collapsed) {
+        setCollapsed(false);
+        setOpenMenus(prev => ({ ...prev, [id]: true }));
+        return;
+      }
       setOpenMenus(prev => ({ ...prev, [id]: !prev[id] }));
       return;
     }
@@ -416,39 +466,59 @@ export default function Layout({
     return false;
   };
 
+  /** Lista de subitens (usada no menu desktop expandido e no mobile). */
+  const renderSubItems = (subItems: NonNullable<MenuItem['subItems']>) => (
+    <div className="ml-[22px] mt-1 mb-1.5 space-y-0.5 border-l border-white/10 pl-3">
+      {subItems.map((sub) => (
+        <button
+          type="button"
+          key={sub.id}
+          onClick={() => handleTabClick(sub.id)}
+          className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors
+            ${activeTab === sub.id
+              ? 'bg-primary-600 text-white font-semibold'
+              : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'
+            }`}
+        >
+          <span className="shrink-0 opacity-80">{sub.icon}</span>
+          <span className="truncate">{sub.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="flex h-[100dvh] bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden">
+    <div className="flex h-[100dvh] bg-app-bg font-sans text-slate-900 overflow-hidden">
       {/* Sidebar Desktop */}
       <motion.aside 
         initial={false}
-        animate={{ width: collapsed ? '80px' : '260px' }}
-        className="hidden md:flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-in-out relative z-30"
+        animate={{ width: collapsed ? 64 : 248 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="hidden md:flex flex-col bg-sidebar relative z-30 shrink-0"
       >
-        <div className="p-6 flex items-center justify-between">
+        {/* Marca */}
+        <div className={`h-16 flex items-center shrink-0 ${collapsed ? 'justify-center' : 'px-4 gap-2.5'}`}>
+          <button
+            type="button"
+            onClick={() => handleTabClick('dashboard')}
+            className="w-9 h-9 rounded-lg overflow-hidden ring-1 ring-white/10 shrink-0 bg-slate-800"
+            aria-label="Ir para o Dashboard"
+          >
+            <img src="/sofiamini.png" alt="Zyreo Sofia" className="w-full h-full object-cover" />
+          </button>
           {!collapsed && (
-            <div className="flex items-center gap-2 font-bold text-xl text-primary cursor-pointer" onClick={() => handleTabClick('dashboard')}>
-              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30 overflow-hidden border border-white/10">
-                <img src="/sofiamini.png" alt="Zyreo Sofia" className="w-full h-full object-cover" />
-              </div>
-              <span className="tracking-tighter font-black">Zyreo <span className="text-primary">Sofia</span></span>
-            </div>
-          )}
-          {collapsed && (
-            <div 
-              className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white mx-auto cursor-pointer shadow-lg shadow-primary/30 overflow-hidden"
-              onClick={() => handleTabClick('dashboard')}
-            >
-              <img src="/sofiamini.png" alt="Zyreo Sofia" className="w-full h-full object-cover" />
+            <div className="min-w-0 leading-tight">
+              <p className="text-[14px] font-bold text-white tracking-tight truncate">Zyreo Sofia</p>
+              <p className="text-[11px] text-slate-500 truncate">Atendimento com IA</p>
             </div>
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto custom-scrollbar">
-
-          {filteredSections.map((section) => (
+        <nav className={`flex-1 px-3 pt-2 space-y-1 ${collapsed ? 'overflow-visible' : 'overflow-y-auto no-scrollbar'}`}>
+          {filteredSections.map((section, idx) => (
             <div key={section.id} className="space-y-1">
-              {collapsed && (
-                <div className="h-px bg-slate-100 my-2 first:hidden" />
+              {idx > 0 && section.id === 'sec_configuracoes' && (
+                <div className="h-px bg-white/[0.06] my-2" />
               )}
               {section.items.map((item) => (
                 <div key={item.id}>
@@ -462,53 +532,45 @@ export default function Layout({
                     isSubmenuOpen={openMenus[item.id] || false}
                   />
                   
-                  {item.subItems && !collapsed && openMenus[item.id] && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="ml-9 mt-1 space-y-1"
-                    >
-                      {item.subItems.map((sub) => (
-                        <div
-                          key={sub.id}
-                          onClick={() => handleTabClick(sub.id)}
-                          className={`flex items-center p-1.5 cursor-pointer text-xs transition-all
-                            ${activeTab === sub.id
-                              ? 'text-primary-600 font-semibold bg-primary-50 border-l-2 border-primary-500 rounded-r-lg rounded-l-sm'
-                              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-l-2 border-transparent rounded-lg'
-                            }`}
-                        >
-                          <span className="mr-2 opacity-70">{sub.icon}</span>
-                          {sub.label}
-                        </div>
-                      ))}
-                    </motion.div>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {item.subItems && !collapsed && openMenus[item.id] && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="overflow-hidden"
+                      >
+                        {renderSubItems(item.subItems)}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ))}
             </div>
           ))}
         </nav>
 
-        {role === 'admin' && !collapsed && (
-          <div className="px-4 py-4 mt-auto">
-            <SystemHealthStatus />
+        {role === 'admin' && (
+          <div className={`mt-auto ${collapsed ? 'px-0 py-3 flex justify-center' : 'px-3 py-3'}`}>
+            <SystemHealthStatus compact={collapsed} />
           </div>
         )}
 
-        <div className="p-4 border-t border-gray-100">
+        <div className={`p-3 border-t border-white/[0.06] ${role === 'admin' ? '' : 'mt-auto'}`}>
           <button 
+            type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="w-full flex items-center justify-center p-2.5 rounded-xl text-gray-400 hover:bg-slate-50 hover:text-slate-900 transition-all border border-transparent hover:border-slate-100 group"
+            className={`w-full h-9 flex items-center rounded-lg text-slate-500 hover:bg-sidebar-hover hover:text-white transition-colors ${collapsed ? 'justify-center' : 'gap-2 px-3'}`}
             title={collapsed ? "Expandir menu" : "Recolher menu"}
           >
             {collapsed ? (
-              <ChevronRight size={20} />
+              <ChevronRight size={16} />
             ) : (
-              <div className="flex items-center gap-2 w-full px-2">
-                <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> 
-                <span className="text-xs font-medium text-slate-500">Recolher menu</span>
-              </div>
+              <>
+                <ChevronLeft size={16} />
+                <span className="text-[12px] font-medium">Recolher menu</span>
+              </>
             )}
           </button>
         </div>
@@ -523,32 +585,34 @@ export default function Layout({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden"
             />
             <motion.aside 
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 left-0 w-64 bg-white z-50 md:hidden flex flex-col shadow-2xl"
+              className="fixed inset-y-0 left-0 w-72 bg-sidebar z-50 md:hidden flex flex-col shadow-2xl"
             >
-              <div className="p-6 flex items-center justify-between border-bottom border-gray-100">
-                <div className="flex items-center gap-2 font-bold text-xl text-sofia-purple">
-                  <div className="w-8 h-8 bg-sofia-purple rounded-lg flex items-center justify-center text-white overflow-hidden">
-                    <img src="/sofiamini.png" alt="Sofia" className="w-full h-full object-cover" />
+              <div className="h-16 px-4 flex items-center justify-between border-b border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg overflow-hidden ring-1 ring-white/10">
+                    <img src="/sofiamini.png" alt="Zyreo Sofia" className="w-full h-full object-cover" />
                   </div>
-                  <span>Sofia</span>
+                  <span className="text-[14px] font-bold text-white">Zyreo Sofia</span>
                 </div>
-                <button onClick={() => setMobileMenuOpen(false)} className="hidden">
-                  <X size={24} />
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-lg text-slate-400 hover:bg-sidebar-hover hover:text-white"
+                  aria-label="Fechar menu"
+                >
+                  <X size={18} />
                 </button>
               </div>
-              <nav className="flex-1 px-4 space-y-4 mt-4 overflow-y-auto">
+              <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
                 {filteredSections.map((section) => (
-                  <div key={section.title} className="space-y-1">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5 mt-3 first:mt-0 select-none">
-                      {section.title}
-                    </div>
+                  <div key={section.id} className="space-y-1">
                     {section.items.map((item) => (
                       <div key={item.id}>
                         <SidebarItem 
@@ -556,36 +620,25 @@ export default function Layout({
                           label={item.label} 
                           active={isTabActive(item.id, item.subItems)} 
                           collapsed={false}
-                          onClick={() => handleTabClick(item.id, !!item.subItems)}
+                          onClick={() => {
+                            if (item.subItems) {
+                              setOpenMenus(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                            } else {
+                              handleTabClick(item.id);
+                            }
+                          }}
                           hasSubmenu={!!item.subItems}
                           isSubmenuOpen={openMenus[item.id] || false}
                         />
-                        {item.subItems && openMenus[item.id] && (
-                          <div className="ml-9 mt-1 space-y-1">
-                            {item.subItems.map((sub) => (
-                              <div
-                                key={sub.id}
-                                onClick={() => handleTabClick(sub.id)}
-                                className={`flex items-center p-2 rounded-lg cursor-pointer text-sm transition-all
-                                  ${activeTab === sub.id 
-                                    ? 'text-primary-600 font-semibold' 
-                                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                                  }`}
-                              >
-                                <span className="mr-2 opacity-70">{sub.icon}</span>
-                                {sub.label}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {item.subItems && openMenus[item.id] && renderSubItems(item.subItems)}
                       </div>
                     ))}
                   </div>
                 ))}
               </nav>
 
-              <div className="p-6 border-t border-gray-100 flex flex-col items-center gap-2">
-                <p className="text-[10px] text-gray-300 font-medium text-center">Sofia System v1.0.5</p>
+              <div className="p-4 border-t border-white/[0.06]">
+                <p className="text-[11px] text-slate-500 font-medium text-center">Sofia System v1.0.5</p>
               </div>
             </motion.aside>
           </>
@@ -595,95 +648,116 @@ export default function Layout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-20 bg-white/95 md:bg-white/80 md:backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 md:px-10 fixed md:sticky top-0 left-0 right-0 z-30 transform-gpu">
-          <div className="flex items-center gap-4 flex-1">
+        <header className="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between gap-4 px-4 md:px-6 fixed md:sticky top-0 left-0 right-0 z-30">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             <button 
+              type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+              className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+              aria-label="Abrir menu"
             >
               <Menu size={20} />
             </button>
             
-            <div className="relative max-w-sm w-full hidden sm:block">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Search size={16} />
-              </div>
+            <div className="relative max-w-md w-full hidden sm:block">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input 
+                ref={searchInputRef}
+                id="global-search"
                 type="text" 
-                placeholder="Pesquisar..." 
-                className="block w-full pl-10 pr-4 py-2.5 border border-slate-100 rounded-xl bg-slate-50 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary transition-all"
+                placeholder="Buscar conversas, leads, clientes..." 
+                className="block w-full h-9 pl-9 pr-16 rounded-lg border border-slate-200 bg-slate-50/70 text-[13px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition"
               />
+              <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden md:inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                Ctrl+K
+              </kbd>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-6">
+          <div className="flex items-center gap-2 md:gap-4">
+            {role === 'admin' && <HeaderHealthPill />}
+
             <NotificationBell user={user} onTabChange={onTabChange} />
             
-            <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
+            <div className="h-8 w-px bg-slate-200 hidden md:block" />
             
             <div className="relative" ref={headerProfileRef}>
-              <div 
+              <button 
+                type="button"
+                id="header-profile-button"
                 onClick={() => setIsHeaderProfileOpen(!isHeaderProfileOpen)}
-                className="w-10 h-10 rounded-full bg-primary-light flex items-center justify-center text-primary border-2 border-transparent hover:border-primary-light transition-all overflow-hidden cursor-pointer shadow-sm active:scale-95"
+                className="flex items-center gap-2.5 rounded-lg p-1 pr-2 hover:bg-slate-50 transition-colors"
               >
-                {user?.user_metadata?.avatar_url ? (
-                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <UserIcon size={20} />
-                )}
-              </div>
+                <div className="w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center text-[12px] font-bold overflow-hidden shrink-0">
+                  {user?.user_metadata?.avatar_url ? (
+                    <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    getInitials(displayName)
+                  )}
+                </div>
+                <div className="hidden md:block text-left leading-tight max-w-[180px]">
+                  <p className="text-[13px] font-semibold text-slate-900 truncate">{displayName}</p>
+                  <p className="text-[11px] text-slate-500 truncate">{roleLabel}</p>
+                </div>
+                <ChevronDown size={14} className={`hidden md:block text-slate-400 transition-transform ${isHeaderProfileOpen ? 'rotate-180' : ''}`} />
+              </button>
 
               <AnimatePresence>
                 {isHeaderProfileOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100]"
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200/80 overflow-hidden z-[100]"
                   >
-                    <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">
-                        {getInitials(user?.user_metadata?.full_name || user?.email)}
+                    <div className="p-4 border-b border-slate-100 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                        {getInitials(displayName)}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">
-                          {user?.user_metadata?.full_name || 'Usuário'}
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                          {displayName}
                         </p>
-                        <p className="text-[11px] text-gray-400 truncate">
+                        <p className="text-[11px] text-slate-500 truncate">
                           {user?.email}
                         </p>
                       </div>
                     </div>
-                    <div className="p-2">
+                    <div className="p-1.5">
                       <button 
+                        type="button"
                         onClick={() => { onTabChange('settings', 'subscription'); setIsHeaderProfileOpen(false); }}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-slate-700 hover:bg-slate-50 transition-colors"
                       >
-                        <Sparkles size={18} className="text-gray-400" />
-                        Upgrade to Pro
+                        <Sparkles size={16} className="text-primary-600" />
+                        Fazer upgrade
                       </button>
-                      <div className="h-px bg-gray-50 my-1 mx-2" />
+                      <div className="h-px bg-slate-100 my-1 mx-2" />
                       <button 
+                        type="button"
                         onClick={() => { onTabChange('settings', 'account'); setIsHeaderProfileOpen(false); }}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-slate-700 hover:bg-slate-50 transition-colors"
                       >
-                        <UserIcon size={18} className="text-gray-400" />
+                        <UserIcon size={16} className="text-slate-400" />
                         Minha Conta
                       </button>
                       <button 
+                        type="button"
                         onClick={() => { onTabChange('settings', 'subscription'); setIsHeaderProfileOpen(false); }}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-slate-700 hover:bg-slate-50 transition-colors"
                       >
-                        <CreditCard size={18} className="text-gray-400" />
+                        <CreditCard size={16} className="text-slate-400" />
                         Assinatura
                       </button>
-                      <div className="h-px bg-gray-50 my-1 mx-2" />
+                      <div className="h-px bg-slate-100 my-1 mx-2" />
                       <button 
+                        type="button"
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl text-sm text-red-600 hover:bg-red-50 transition-all font-bold"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-red-600 hover:bg-red-50 transition-colors font-semibold"
                       >
-                        <LogOut size={18} />
-                        Sair do sistema (Logout)
+                        <LogOut size={16} />
+                        Sair do sistema
                       </button>
                     </div>
                   </motion.div>
@@ -697,8 +771,8 @@ export default function Layout({
         <main
           className={`flex-1 flex flex-col min-h-0 overscroll-none ${
             activeTab === 'inbox'
-              ? 'overflow-hidden pt-20 md:pt-0'
-              : 'overflow-y-auto p-4 md:p-6 pt-24 md:pt-6'
+              ? 'overflow-hidden pt-16 md:pt-0'
+              : 'overflow-y-auto p-4 md:p-6 pt-20 md:pt-6'
           }`}
           style={{ overscrollBehaviorY: 'none' }}
         >
@@ -772,7 +846,12 @@ export default function Layout({
     </div>
   );
 }
-const SystemHealthStatus = () => {
+
+/**
+ * Lê a tabela sys_health e acompanha mudanças em tempo real.
+ * Cada uso cria seu próprio canal para não haver conflito de nomes.
+ */
+const useSystemHealth = (channelPrefix: string) => {
   const [health, setHealth] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -785,40 +864,72 @@ const SystemHealthStatus = () => {
     fetchHealth();
 
     const channel = supabase
-      .channel('sidebar_health')
+      .channel(`${channelPrefix}_${Math.random().toString(36).slice(2, 8)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sys_health' }, () => {
         fetchHealth();
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [channelPrefix]);
 
-  const isDegraded = health.some(h => h.status === 'error');
+  return { isDegraded: health.some(h => h.status === 'error'), loading };
+};
+
+/** Selo de status no cabeçalho (ex.: "Sistema operacional"). */
+const HeaderHealthPill = () => {
+  const { isDegraded, loading } = useSystemHealth('header_health');
+  if (loading) return null;
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className={`rounded-2xl p-4 border transition-colors ${isDegraded ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}
+    <span
+      className={`hidden lg:inline-flex items-center gap-2 h-8 px-3 rounded-full border text-[12px] font-medium
+        ${isDegraded ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-700'}`}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status do Sistema</span>
+      <span className={`w-2 h-2 rounded-full ${isDegraded ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+      {isDegraded ? 'Instabilidade detectada' : 'Sistema operacional'}
+    </span>
+  );
+};
+
+const SystemHealthStatus = ({ compact = false }: { compact?: boolean }) => {
+  const { isDegraded } = useSystemHealth('sidebar_health');
+
+  const dot = (
+    <span className="relative flex h-2 w-2">
+      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDegraded ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+      <span className={`relative inline-flex rounded-full h-2 w-2 ${isDegraded ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+    </span>
+  );
+
+  // Menu recolhido: só o ponto de status, com o texto no balão
+  if (compact) {
+    return (
+      <div className="group relative flex h-8 w-8 items-center justify-center" aria-label="Status do sistema">
+        {dot}
+        <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity group-hover:opacity-100">
+          {isDegraded ? 'Sistema com instabilidade' : 'Sistema operacional'}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg p-3 bg-white/[0.04] border border-white/[0.06]">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.06em]">Status do Sistema</span>
         <div className="flex items-center gap-1.5">
-          <span className="relative flex h-2 w-2">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDegraded ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${isDegraded ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-          </span>
-          <span className={`text-[10px] font-black uppercase ${isDegraded ? 'text-amber-600' : 'text-emerald-600'}`}>
+          {dot}
+          <span className={`text-[11px] font-semibold ${isDegraded ? 'text-amber-400' : 'text-emerald-400'}`}>
             {isDegraded ? 'Degradado' : 'Operacional'}
           </span>
         </div>
       </div>
-      <p className="text-[10px] text-slate-500 font-medium leading-tight">
+      <p className="text-[11px] text-slate-400 leading-snug">
         {isDegraded 
-          ? 'Alguns serviços estão apresentando instabilidade. Verifique a Visão Geral.' 
-          : 'Todos os serviços (IA, Redis, Supabase) estão respondendo normalmente.'}
+          ? 'Alguns serviços estão com instabilidade. Verifique a Visão Geral.' 
+          : 'IA, Redis e Supabase respondendo normalmente.'}
       </p>
-    </motion.div>
+    </div>
   );
 };

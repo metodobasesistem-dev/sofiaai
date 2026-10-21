@@ -173,12 +173,12 @@ export default function Health() {
               <Activity size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">IA & Mensageria</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">IA e Mensageria</p>
               <h3 className="text-lg font-black text-slate-900 capitalize">{wppStatus === 'connected' ? 'Ativo' : wppStatus}</h3>
             </div>
           </div>
           <div className={`flex items-center gap-2 text-xs font-bold mb-4 ${wppStatus === 'connected' ? 'text-teal-600' : 'text-red-500'}`}>
-            <CheckCircle2 size={14} /> {wppStatus === 'connected' ? 'OpenAI & WhatsApp Prontos' : 'Aguardando conexão'}
+            <CheckCircle2 size={14} /> {wppStatus === 'connected' ? 'OpenAI e WhatsApp Prontos' : 'Aguardando conexão'}
           </div>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div className={`h-full transition-all duration-1000 ${wppStatus === 'connected' ? 'bg-teal-500 w-[100%]' : 'bg-red-400 w-[30%]'}`} />

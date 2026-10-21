@@ -339,7 +339,7 @@ export default function Login() {
                           alt="Zyreo Sofia AI"
                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                           onError={(e) => {
-                            (e.target as HTMLElement).src = '/sofiamini.png';
+                            (e.target as HTMLImageElement).src = '/sofiamini.png';
                           }}
                         />
                       </div>
@@ -642,7 +642,7 @@ export default function Login() {
 
                     <div className="mt-8 flex items-center justify-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                       <ShieldCheck size={14} className="text-emerald-500" />
-                      Conexão Criptografada & Segura
+                      Conexão Criptografada e Segura
                     </div>
                   </motion.div>
                 )}

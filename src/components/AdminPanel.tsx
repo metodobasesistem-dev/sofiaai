@@ -1494,7 +1494,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                     />
                                   </th>
                                   <th className="px-4 py-4">Estabelecimento</th>
-                                  <th className="px-4 py-4">Contato & Rating</th>
+                                  <th className="px-4 py-4">Contato e Classificação</th>
                                   <th className="px-4 py-4 text-center">Score</th>
                                   <th className="px-4 py-4 text-center">Ações de Contato</th>
                                   <th className="px-4 py-4">Status</th>
@@ -2471,7 +2471,7 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
             <div className="space-y-8">
               <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
                  <h3 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-3">
-                   <Shield size={20} className="text-emerald-500" /> Segurança & Acesso
+                   <Shield size={20} className="text-emerald-500" /> Segurança e Acesso
                  </h3>
                  
                  <div className="space-y-4">
@@ -2625,8 +2625,8 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
           { id: 'reports', label: 'Relatórios de Uso', icon: <BarChart3 size={24} />, desc: 'Analytics e performance da rede', color: 'bg-primary-600', tab: 'reports', type: 'external' },
           { id: 'config', label: 'Configurações Globais', icon: <Settings size={24} />, desc: 'API Keys, Modelos e Prompts', color: 'bg-amber-500', tab: 'config', type: 'internal' },
           { id: 'clients', label: 'Carteira Master', icon: <Star size={24} />, desc: 'Visão CRM de toda a base', color: 'bg-pink-500', tab: 'clients', type: 'external' },
-          { id: 'flags_hub', label: 'Funcionalidades', icon: <ToggleLeft size={24} />, desc: 'Feature Flags & Releases', color: 'bg-teal-500', tab: 'flags', type: 'internal' },
-          { id: 'billing', label: 'Consumo & Billing', icon: <CreditCard size={24} />, desc: 'Tokens, custos e faturamento', color: 'bg-slate-900', tab: 'billing', type: 'internal' },
+          { id: 'flags_hub', label: 'Funcionalidades', icon: <ToggleLeft size={24} />, desc: 'Feature Flags e Lançamentos', color: 'bg-teal-500', tab: 'flags', type: 'internal' },
+          { id: 'billing', label: 'Consumo e Faturamento', icon: <CreditCard size={24} />, desc: 'Tokens, custos e faturamento', color: 'bg-slate-900', tab: 'billing', type: 'internal' },
         ].map((item) => (
           <motion.div
             key={item.id}

@@ -1322,7 +1322,7 @@ export default function DiagnosticsManager() {
 
                       {/* Pilar de Conexão */}
                       <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/20 shadow-sm space-y-1.5">
-                        <span className="font-bold text-slate-900 text-sm block">Pilar de Conexão (Bastidores & Confiança)</span>
+                        <span className="font-bold text-slate-900 text-sm block">Pilar de Conexão (Bastidores e Confiança)</span>
                         {isEditing ? (
                           <textarea
                             value={editExecutionGuide.content_strategy?.connection || ''}
