@@ -769,15 +769,15 @@ export default function Layout({
 
         {/* Content */}
         <main
-          className={`flex-1 flex flex-col min-h-0 overscroll-none p-3 sm:p-4 md:p-5 ${
+          className={`flex-1 flex flex-col min-h-0 overscroll-none px-3 sm:px-4 md:px-5 py-3 md:py-4 ${
             activeTab === 'inbox'
-              ? 'overflow-hidden pt-16 md:pt-4 pb-20 md:pb-4'
-              : 'overflow-y-auto pt-16 md:pt-4 pb-20 md:pb-6'
+              ? 'overflow-hidden pt-16 md:pt-3 pb-20 md:pb-3'
+              : 'overflow-y-auto pt-16 md:pt-3 pb-20 md:pb-5'
           }`}
           style={{ overscrollBehaviorY: 'none' }}
         >
           {activeTab === 'inbox' ? (
-            <div className="w-full max-w-screen-2xl mx-auto flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="w-full max-w-[1780px] mx-auto flex-1 min-h-0 flex flex-col overflow-hidden">
               <div className="shrink-0 mb-3">
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Atendimento</h1>
                 <p className="text-sm text-slate-500 mt-0.5">Gerencie suas conversas e atendimentos em tempo real.</p>
@@ -787,7 +787,7 @@ export default function Layout({
               </div>
             </div>
           ) : (
-            <div className="w-full max-w-screen-2xl mx-auto">{children}</div>
+            <div className="w-full max-w-[1780px] mx-auto">{children}</div>
           )}
         </main>
       </div>

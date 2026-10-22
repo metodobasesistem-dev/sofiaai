@@ -283,7 +283,15 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
 
         // 1. Profile (Greetings)
         getUserProfile(userId).then(p => {
-          setProfile(p || null);
+          if (p && (p.nome_completo || p.name)) {
+            setProfile(p);
+          } else {
+            supabase.from('profiles').select('*').eq('id', userId).single().then(({ data }) => {
+              if (data) {
+                setProfile(prev => ({ ...(prev || {}), ...(data as any), nome_completo: data.nome_completo || data.name || (data as any).full_name || prev?.nome_completo }));
+              }
+            });
+          }
         });
 
         // AI Performance stats (non-blocking)
@@ -442,8 +450,27 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
     }
   };
 
+  const getUserDisplayName = () => {
+    const raw =
+      profile?.nome_completo ||
+      profile?.name ||
+      (profile as any)?.full_name ||
+      user?.user_metadata?.nome_completo ||
+      user?.user_metadata?.full_name ||
+      user?.user_metadata?.name ||
+      user?.user_metadata?.nome ||
+      (user?.email ? user.email.split('@')[0] : '') ||
+      '';
+    const clean = raw.trim();
+    if (!clean) return 'Usuário';
+    const first = clean.split(' ')[0];
+    return first.charAt(0).toUpperCase() + first.slice(1);
+  };
+
+  const isTrialOrNoPlan = (!plano || plano.toLowerCase() === 'trial') || (!profile?.plano || profile?.plano?.toLowerCase() === 'trial');
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 1. Cabeçalho da página */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -459,7 +486,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             {role === 'admin'
               ? 'Visão Geral e Performance'
-              : `Olá, ${(profile?.nome_completo?.split(' ')[0] || profile?.name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0]) || 'Usuário'}`}
+              : `Olá, ${getUserDisplayName()}`}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             {role === 'admin' ? 'Acompanhamento consolidado de todos os clientes e métricas da plataforma.' : 'Aqui está o resumo do seu atendimento hoje.'}
@@ -504,68 +531,54 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         </div>
       </div>
 
-      {/* 2. Banner de Conexão (Topo) - Só aparece se não estiver conectado e NÃO estiver expirado */}
-      <AnimatePresence>
-        {(whatsappStatus?.status !== 'connected' && !isExpired) && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
-            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-green-50 border border-green-200 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-5">
-                <div className={`w-14 h-14 ${whatsappStatus?.status === 'connecting' ? 'bg-primary-500' : 'bg-green-500'} rounded-full flex items-center justify-center text-white shadow-lg ${whatsappStatus?.status === 'connecting' ? 'shadow-primary-200' : 'shadow-green-200'} transition-colors`}>
-                  {whatsappStatus?.status === 'connecting' ? <Loader2 size={32} className="animate-spin" /> : <MessageCircle size={32} fill="currentColor" />}
-                </div>
-                <div className="space-y-1">
-                  <h2 className={`text-xl font-black ${whatsappStatus?.status === 'connecting' ? 'text-primary-900' : 'text-green-900'}`}>
-                    {whatsappStatus?.status === 'connecting' ? 'Restaurando conexão...' : 'Ative sua assistente no WhatsApp'}
-                  </h2>
-                  <p className={`text-sm ${whatsappStatus?.status === 'connecting' ? 'text-primary-700' : 'text-green-700'} opacity-80`}>
-                    {whatsappStatus?.status === 'connecting' 
-                      ? 'Estamos acordando sua IA para retomar o atendimento. Isso leva alguns segundos.' 
-                      : 'Conecte seu WhatsApp e deixe a IA cuidar do atendimento e dos agendamentos.'}
-                  </p>
-                  <div className="flex gap-2 mt-2">
-                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-primary-200' : 'border-green-200'} flex items-center gap-1`}>
-                      <Zap size={10} /> {whatsappStatus?.status === 'connecting' ? 'Recuperação automática' : 'Ativação instantânea'}
-                    </span>
-                    <span className={`px-2 py-0.5 ${whatsappStatus?.status === 'connecting' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'} text-[10px] font-bold uppercase rounded border ${whatsappStatus?.status === 'connecting' ? 'border-primary-200' : 'border-green-200'} flex items-center gap-1`}>
-                      <Clock size={10} /> Atendimento 24h
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button 
-                  onClick={handleConnect}
-                  disabled={isConnecting || whatsappStatus?.status === 'connecting'}
-                  className={`whitespace-nowrap px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 
-                    ${whatsappStatus?.status === 'connecting' 
-                      ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-200 cursor-not-allowed' 
-                      : 'bg-green-600 hover:bg-green-700 text-white shadow-green-200'}`}
-                >
-                  { (isConnecting || whatsappStatus?.status === 'connecting') ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
-                  {whatsappStatus?.status === 'connecting' ? 'Aguarde...' : 'Conectar WhatsApp'}
-                </button>
-
-                {whatsappStatus?.status === 'connecting' && (
-                  <button 
-                    onClick={handleReset}
-                    className="whitespace-nowrap px-6 py-3 bg-white border border-primary-200 text-primary-600 hover:bg-primary-50 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
-                  >
-                    <RefreshCw size={18} />
-                    Resetar
-                  </button>
-                )}
-              </div>
+      {/* 2. Banner de Plano / Upsell Compacto (Topo) - Apenas para Trial ou Sem Plano */}
+      {(isTrialOrNoPlan && role !== 'admin') && (
+        <div className={`${isExpired ? 'bg-red-50 border-red-200' : 'bg-[#f0f9f9] border-[#d1eeee]'} border rounded-xl p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-5 transition-colors shadow-sm`}>
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className={`w-12 h-12 md:w-14 md:h-14 ${isExpired ? 'bg-red-500 text-white shadow-red-200' : 'bg-[#2d7a7a] text-white shadow-[#2d7a7a]/20'} rounded-xl flex items-center justify-center shrink-0 shadow-md`}>
+              <Sparkles size={28} />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`px-2 py-0.5 ${isExpired ? 'bg-red-600' : 'bg-[#2d7a7a]'} text-white text-[10px] font-bold uppercase rounded flex items-center gap-1`}>
+                  <Zap size={10} fill="currentColor" /> {isExpired ? 'Acesso Expirado' : 'Teste Grátis'}
+                </span>
+                <span className={`px-2 py-0.5 ${isExpired ? 'bg-red-100 text-red-700 border-red-200' : 'bg-[#e2f4f4] text-[#2d7a7a] border-[#bfe3e3]'} text-[10px] font-bold uppercase rounded border flex items-center gap-1`}>
+                  <Clock size={10} /> {isExpired ? 'Encerrado' : `Restam ${timeLeft.days}d ${timeLeft.hours}h ${timeLeft.mins}m`}
+                </span>
+              </div>
+              <h2 className={`text-lg md:text-xl font-bold ${isExpired ? 'text-red-900' : 'text-[#1a4d4d]'}`}>
+                {isExpired ? 'Seu período de teste chegou ao fim' : 'Escolha o melhor plano para você'}
+              </h2>
+              <p className={`text-xs md:text-sm ${isExpired ? 'text-red-700' : 'text-[#2d7a7a]'} opacity-85`}>
+                {isExpired ? 'Assine um de nossos planos para continuar utilizando a plataforma e a IA.' : 'Escolha um plano e comece a transformar seu atendimento com nossa IA hoje mesmo.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto shrink-0">
+            <button
+              onClick={() => onTabChange?.('settings', 'subscription')}
+              className={`whitespace-nowrap px-5 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm ${
+                isExpired
+                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-200'
+                  : 'bg-[#2d7a7a] hover:bg-[#235e5e] text-white shadow-[#2d7a7a]/25'
+              }`}
+            >
+              <LayoutGrid size={16} />
+              Escolher Plano
+            </button>
+            <button
+              onClick={() => window.open('https://wa.me/5532984963439?text=Olá! Vim pelo sistema e gostaria de falar com um consultor.', '_blank')}
+              className="whitespace-nowrap px-4 py-2.5 bg-white border border-[#2d7a7a]/30 text-[#2d7a7a] hover:bg-white/80 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all text-sm"
+            >
+              <MessageCircle size={16} />
+              Chamar consultor
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* 2. Grid de Navegação Rápida */}
+      {/* 3. Grid de Navegação Rápida */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {(() => {
           return (
@@ -575,20 +588,10 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
                   title="Agentes" subtitle="Configure seu agente"
                   onClick={() => onTabChange?.('agents')} />
               )}
-              {(role === 'admin' || flags['chat'] !== false) && (
-                <QuickNavCard icon={MessageSquare} accent="blue"
-                  title="Chats" subtitle="Acompanhe suas conversas"
-                  onClick={() => onTabChange?.('inbox')} />
-              )}
               {checkPlan('Pro') && (role === 'admin' || flags['agendas'] !== false) && (
                 <QuickNavCard icon={Calendar} accent="emerald"
                   title="Agendamentos" subtitle="Veja seus agendamentos"
                   onClick={() => onTabChange?.('schedule')} />
-              )}
-              {(role === 'admin' || flags['crm'] !== false) && (
-                <QuickNavCard icon={Users} accent="indigo"
-                  title="Contatos" subtitle="Gerencie seus contatos"
-                  onClick={() => onTabChange?.('contacts')} />
               )}
               {checkPlan('Pro') && (role === 'admin' || flags['agendas'] !== false) && (
                 <QuickNavCard icon={Clock} accent="amber"
@@ -629,80 +632,6 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           );
         })()}
       </div>
-
-      {/* 3. Banner de Plano / Upsell - Apenas para Trial ou Sem Plano */}
-      {profile && (!profile?.plano || profile?.plano?.toLowerCase() === 'trial') && (
-        <div className={`${isExpired ? 'bg-red-50 border-red-100' : 'bg-[#f0f9f9] border-[#d1eeee]'} border rounded-xl p-8 relative overflow-hidden mb-8 transition-colors`}>
-          <div className={`absolute top-0 right-0 p-8 ${isExpired ? 'text-red-900' : 'text-[#2d7a7a]'} opacity-10`}>
-            <Sparkles size={120} />
-          </div>
-          
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`px-2 py-0.5 ${isExpired ? 'bg-red-600' : 'bg-[#2d7a7a]'} text-white text-[10px] font-bold uppercase rounded flex items-center gap-1`}>
-                <Zap size={10} fill="currentColor" /> {isExpired ? 'Acesso Expirado' : 'Teste Grátis'}
-              </span>
-            </div>
-            <h2 className={`text-2xl font-black ${isExpired ? 'text-red-900' : 'text-[#1a4d4d]'} mb-1`}>
-              {isExpired ? 'Seu período de teste chegou ao fim' : 'Escolha o melhor plano para você'}
-            </h2>
-            <p className={`text-sm ${isExpired ? 'text-red-700' : 'text-[#2d7a7a]'} opacity-80 mb-8`}>
-              {isExpired ? 'Conecte seu WhatsApp e reative a Sofia assinando um de nossos planos.' : 'Escolha um plano e comece a transformar seu atendimento com nossa IA hoje mesmo'}
-            </p>
-  
-            <div className="flex flex-col items-center justify-center mb-8">
-              <p className={`text-[10px] font-bold ${isExpired ? 'text-red-700' : 'text-[#2d7a7a]'} uppercase tracking-widest mb-4 flex items-center gap-2`}>
-                <Clock size={12} /> {isExpired ? 'O teste encerrou há:' : 'Tempo restante do teste grátis:'}
-              </p>
-              <div className="flex gap-4">
-                {[
-                  { val: String(timeLeft.days), label: 'dias' },
-                  { val: String(timeLeft.hours).padStart(2, '0'), label: 'horas' },
-                  { val: String(timeLeft.mins).padStart(2, '0'), label: 'min' },
-                  { val: String(timeLeft.secs).padStart(2, '0'), label: 'seg' }
-                ].map((t, i) => (
-                  <div key={i} className="flex flex-col items-center">
-                    <div className={`w-14 h-14 bg-white rounded-lg border ${isExpired ? 'border-red-100' : 'border-[#d1eeee]'} flex items-center justify-center text-xl font-black ${isExpired ? 'text-red-900' : 'text-[#1a4d4d]'} shadow-sm`}>
-                      {t.val}
-                    </div>
-                    <span className={`text-[10px] font-bold ${isExpired ? 'text-red-400' : 'text-[#2d7a7a]'} mt-1 uppercase`}>{t.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-  
-            <div className="space-y-2 mb-8 max-w-md">
-              {[
-                "Agenda automatizada com IA",
-                "Agente personalizado para seu negócio",
-                "Integração com WhatsApp"
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-[#1a4d4d] font-medium">
-                  <CheckCircle2 size={16} className="text-green-500" />
-                  {item}
-                </div>
-              ))}
-            </div>
-  
-            <div className="space-y-3">
-              <button 
-                onClick={() => onTabChange?.('settings', 'subscription')}
-                className="w-full py-3 bg-[#2d7a7a] hover:bg-[#235e5e] text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-[#2d7a7a]/20"
-              >
-                <LayoutGrid size={18} />
-                Escolher Plano
-              </button>
-              <button 
-                onClick={() => window.open('https://wa.me/5532984963439?text=Olá! Vim pelo sistema e gostaria de falar com um consultor.', '_blank')}
-                className="w-full py-3 bg-white border border-[#2d7a7a] text-[#2d7a7a] hover:bg-[#f0f9f9] rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
-              >
-                <MessageCircle size={18} />
-                Chamar consultor
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 4. Indicadores principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
