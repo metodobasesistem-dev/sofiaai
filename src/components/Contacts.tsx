@@ -20,7 +20,8 @@ import {
   Clock,
   MessageSquare,
   Info,
-  Globe
+  Globe,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
