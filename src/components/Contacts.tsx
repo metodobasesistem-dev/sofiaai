@@ -522,19 +522,14 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
           className="grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { label: 'Total de Leads', value: stats.total, unit: 'contatos', icon: Users, color: '#2563eb', tint: 'bg-blue-50 text-blue-600', status: 'Todos', foot: 'cadastrados na base' },
-            { label: 'Novos Leads', value: stats.leads, unit: 'em aberto', icon: Sparkles, color: '#7c3aed', tint: 'bg-violet-50 text-violet-600', status: 'Lead', foot: 'aguardando triagem' },
-            { label: 'Agendados', value: stats.agendados, unit: 'reuniões', icon: Calendar, color: '#f97316', tint: 'bg-orange-50 text-orange-600', status: 'Agendado', foot: 'com horário marcado' },
-            { label: 'Resolvidos', value: stats.resolvidos, unit: 'concluídos', icon: CheckCircle2, color: '#10b981', tint: 'bg-emerald-50 text-emerald-600', status: 'Resolvido', foot: 'atendidos com sucesso' },
+            { label: 'Total de Leads', value: stats.total, unit: 'contatos', icon: Users, color: '#2563eb', tint: 'bg-blue-50 text-blue-600', foot: 'cadastrados na base' },
+            { label: 'Novos Leads', value: stats.leads, unit: 'em aberto', icon: Sparkles, color: '#7c3aed', tint: 'bg-violet-50 text-violet-600', foot: 'aguardando triagem' },
+            { label: 'Agendados', value: stats.agendados, unit: 'reuniões', icon: Calendar, color: '#f97316', tint: 'bg-orange-50 text-orange-600', foot: 'com horário marcado' },
+            { label: 'Resolvidos', value: stats.resolvidos, unit: 'concluídos', icon: CheckCircle2, color: '#10b981', tint: 'bg-emerald-50 text-emerald-600', foot: 'atendidos com sucesso' },
           ].map((s, i) => (
-            <button
+            <div
               key={i}
-              onClick={() => setFilterStatus(s.status as any)}
-              className={`kpi-card text-left cursor-pointer transition-all ${
-                filterStatus === s.status
-                  ? 'ring-2 ring-primary-500 shadow-md border-primary-200 bg-primary-50/15'
-                  : 'hover:border-slate-300 hover:shadow-md'
-              }`}
+              className="kpi-card text-left"
               style={{ ['--kpi-color' as any]: s.color }}
             >
               <div className="flex items-start justify-between">
@@ -550,12 +545,9 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
               </div>
 
               <div className="mt-4 flex items-center justify-between">
-                <span className={`pill ${filterStatus === s.status ? 'bg-primary-100 text-primary-700 font-bold' : 'bg-slate-100 text-slate-600'}`}>
-                  {filterStatus === s.status ? 'Filtro Ativo' : 'Ver todos'}
-                </span>
-                <span className="text-[11px] text-slate-500">{s.foot}</span>
+                <span className="text-[11px] text-slate-500 font-medium">{s.foot}</span>
               </div>
-            </button>
+            </div>
           ))}
         </motion.div>
       )}

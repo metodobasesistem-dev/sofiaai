@@ -4858,7 +4858,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 <img src="/sofiamini.png" alt="Sofia" className="w-16 h-16 object-cover relative z-10 drop-shadow-sm" />
               </div>
               
-              <h3 className="text-[28px] font-black text-slate-800 mb-4 tracking-tight">Atendimento em tempo real</h3>
+              <h3 className="text-[28px] font-black text-slate-800 mb-4 tracking-tight">Chat em tempo real</h3>
               <p className="text-[15px] text-slate-500 leading-relaxed mb-12 max-w-lg mx-auto">
                 Selecione uma conversa ao lado para visualizar as mensagens, gerenciar o contato e acionar a IA.
               </p>

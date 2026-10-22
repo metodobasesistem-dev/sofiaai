@@ -320,7 +320,7 @@ export default function Layout({
         {
           id: 'suporte_menu',
           icon: <MessageSquare size={18} />,
-          label: 'Suporte',
+          label: 'Atendimento',
           subItems: [
             {
               id: 'inbox',
@@ -334,7 +334,7 @@ export default function Layout({
                   )}
                 </div>
               ),
-              label: 'Atendimento'
+              label: 'Chat'
             },
             { id: 'kanban', icon: <Layers size={14} />, label: 'Kanban', minPlan: 'Pro' },
             { id: 'contacts', icon: <Users size={14} />, label: 'Leads' },
@@ -777,7 +777,7 @@ export default function Layout({
           {activeTab === 'inbox' ? (
             <div className="w-full max-w-[1780px] mx-auto flex-1 min-h-0 flex flex-col overflow-hidden">
               <div className="shrink-0 mb-3">
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Atendimento</h1>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Chat</h1>
                 <p className="text-sm text-slate-500 mt-0.5">Gerencie suas conversas e atendimentos em tempo real.</p>
               </div>
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
