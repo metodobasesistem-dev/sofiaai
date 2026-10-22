@@ -75,10 +75,11 @@ export const listenToWhatsAppSession = (userId: string, callback: (data: WhatsAp
  * Get the current WhatsApp connection status via API.
  */
 export const getWhatsAppStatus = async (): Promise<WhatsAppStatusResponse> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error('User not authenticated');
 
-  const response = await standardFetch(`${API_BASE_URL}/status/${user.id}`);
+  const response = await standardFetch(`${API_BASE_URL}/status/${userId}`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch WhatsApp status');

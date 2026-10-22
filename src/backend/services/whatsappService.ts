@@ -172,18 +172,19 @@ class WhatsAppService {
       }
     }, 5000);
 
-    // Snapshot periodico da fila — SEMPRE loga (mesmo zerado) para detectar
-    // worker travado em estado interno (BRPOPLPUSH preso, pool morto, etc.)
+    // Snapshot periódico da fila — loga se houver jobs em andamento ou a cada 60s
     setInterval(async () => {
       try {
         const c: any = await this.messageQueue.getJobCounts(
           'waiting', 'active', 'delayed', 'failed', 'completed', 'paused', 'prioritized', 'waiting-children'
         );
-        console.log(`[BullMQ] 📊 periodic: waiting=${c.waiting} active=${c.active} delayed=${c.delayed} failed=${c.failed} completed=${c.completed} paused=${c.paused} prio=${c.prioritized}`);
+        if (c.waiting > 0 || c.active > 0 || c.failed > 0) {
+          console.log(`[BullMQ] 📊 periodic: waiting=${c.waiting} active=${c.active} delayed=${c.delayed} failed=${c.failed} completed=${c.completed}`);
+        }
       } catch (e: any) {
         console.warn(`[BullMQ] 📊 periodic failed: ${e?.message || e}`);
       }
-    }, 15000);
+    }, 60000);
   }
 
   private setupFollowUpWorker(connection: any) {
@@ -464,7 +465,7 @@ class WhatsAppService {
 
   async getSessionStatus(userId: string): Promise<WhatsAppStatusResponse> {
     try {
-      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+      const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id, whatsapp_status').eq('id', userId).maybeSingle();
       const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
       const provider = await WhatsAppProviderFactory.getProvider(userId);
 
@@ -480,9 +481,11 @@ class WhatsAppService {
 
       const status = await provider.getStatus(instanceName);
       
-      // Caso 1: Conectado — atualiza banco e retorna
+      // Caso 1: Conectado — atualiza banco apenas se houve alteração real de estado
       if (status.status === 'connected') {
-        await this.updateProfileStatus(userId, { status: 'connected' });
+        if (prof?.whatsapp_status !== 'connected') {
+          await this.updateProfileStatus(userId, { status: 'connected' });
+        }
         return { status: 'connected', webhookOk: true };
       }
 
@@ -493,11 +496,11 @@ class WhatsAppService {
       }
 
       // Caso 3: Evolution diz "connecting" mas SEM QR Code = QR expirou.
-      // NÃO retornamos o QR do banco pois ele também está expirado.
-      // Limpamos o QR do banco e retornamos 'disconnected' para o frontend
-      // mostrar o botão "Gerar QR Code" e o usuário pedir um novo.
-      console.log(`[WhatsAppService] Instance ${instanceName} is connecting without QR — clearing stale QR from DB.`);
-      await supabase.from('profiles').update({ whatsapp_qr: null }).eq('id', userId);
+      // Se estava connecting antes, limpa o QR do banco
+      if (prof?.whatsapp_status === 'connecting') {
+        console.log(`[WhatsAppService] Instance ${instanceName} is connecting without QR — clearing stale QR from DB.`);
+        await supabase.from('profiles').update({ whatsapp_qr: null, whatsapp_status: 'disconnected' }).eq('id', userId);
+      }
       return { status: 'disconnected', webhookOk: true };
 
     } catch (error) {

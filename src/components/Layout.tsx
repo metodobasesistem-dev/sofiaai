@@ -853,39 +853,47 @@ export default function Layout({
   );
 }
 
-/**
- * Lê a tabela sys_health e acompanha mudanças em tempo real.
- * Cada uso cria seu próprio canal para não haver conflito de nomes.
- */
-const useSystemHealth = (channelPrefix: string) => {
-  const [health, setHealth] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+// Cache compartilhado para status de saúde do sistema (evita canais duplicados no Supabase)
+let sharedHealthState = { isDegraded: false, lastCheck: 0, loading: false };
+const healthSubscribers = new Set<(isDegraded: boolean) => void>();
+
+const checkSystemHealthOnce = async () => {
+  if (Date.now() - sharedHealthState.lastCheck < 60000) {
+    return sharedHealthState.isDegraded;
+  }
+  sharedHealthState.lastCheck = Date.now();
+  try {
+    const { data, error } = await supabase.from('sys_health').select('status');
+    if (!error && Array.isArray(data)) {
+      const isDegraded = data.some(h => h.status === 'error');
+      sharedHealthState.isDegraded = isDegraded;
+      healthSubscribers.forEach(cb => cb(isDegraded));
+      return isDegraded;
+    }
+  } catch {
+    // Supressão caso tabela ainda não exista no Supabase
+  }
+  return false;
+};
+
+const useSystemHealth = () => {
+  const [isDegraded, setIsDegraded] = useState(sharedHealthState.isDegraded);
 
   useEffect(() => {
-    const fetchHealth = async () => {
-      const { data } = await supabase.from('sys_health').select('status');
-      setHealth(data || []);
-      setLoading(false);
+    healthSubscribers.add(setIsDegraded);
+    checkSystemHealthOnce();
+
+    return () => {
+      healthSubscribers.delete(setIsDegraded);
     };
-    fetchHealth();
+  }, []);
 
-    const channel = supabase
-      .channel(`${channelPrefix}_${Math.random().toString(36).slice(2, 8)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sys_health' }, () => {
-        fetchHealth();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [channelPrefix]);
-
-  return { isDegraded: health.some(h => h.status === 'error'), loading };
+  return { isDegraded, loading: false };
 };
 
 /** Selo de status no cabeçalho (ex.: "Sistema operacional"). */
 const HeaderHealthPill = () => {
-  const { isDegraded, loading } = useSystemHealth('header_health');
-  if (loading) return null;
+  const { isDegraded } = useSystemHealth();
 
   return (
     <span
@@ -899,7 +907,7 @@ const HeaderHealthPill = () => {
 };
 
 const SystemHealthStatus = ({ compact = false }: { compact?: boolean }) => {
-  const { isDegraded } = useSystemHealth('sidebar_health');
+  const { isDegraded } = useSystemHealth();
 
   const dot = (
     <span className="relative flex h-2 w-2">

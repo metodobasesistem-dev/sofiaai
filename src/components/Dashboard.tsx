@@ -272,6 +272,8 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
 
     setupListener();
 
+    let statusPollInterval: ReturnType<typeof setInterval> | null = null;
+
     const fetchStats = async () => {
       try {
         setLoading(true);
@@ -286,7 +288,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
           if (p && (p.nome_completo || p.name)) {
             setProfile(p);
           } else {
-            supabase.from('profiles').select('*').eq('id', userId).single().then(({ data }) => {
+            supabase.from('profiles').select('*').eq('id', userId).maybeSingle().then(({ data }) => {
               if (data) {
                 setProfile(prev => ({ ...(prev || {}), ...(data as any), nome_completo: data.nome_completo || data.name || (data as any).full_name || prev?.nome_completo }));
               }
@@ -302,7 +304,6 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         const fetchWhatsAppStatus = async () => {
           try {
             const statusData = await getWhatsAppStatus();
-            console.log(`[Dashboard] 📱 WhatsApp status sync: ${statusData.status}`, statusData);
             setWhatsappStatus(statusData as any);
           } catch (err) {
             console.warn('[Dashboard] Could not fetch WhatsApp status:', err);
@@ -312,8 +313,8 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
         // Initial fetch
         fetchWhatsAppStatus();
 
-        // SEGURANÇA: Polling a cada 5 segundos para garantir que o front acompanhe o backend
-        const statusPollInterval = setInterval(fetchWhatsAppStatus, 5000);
+        // Polling de 30s como fallback (o Realtime já cuida de eventos instantâneos)
+        statusPollInterval = setInterval(fetchWhatsAppStatus, 30000);
 
         // 2. Stats + Activities + Appointments em paralelo (aguarda todos juntos)
         const statsPromise = isAdmin ? getGlobalDashboardStats() : getDashboardStats(userId);
@@ -346,8 +347,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
 
     return () => {
       if (unsubscribe) unsubscribe();
-      // @ts-ignore
-      if (typeof statusPollInterval !== 'undefined') clearInterval(statusPollInterval);
+      if (statusPollInterval) clearInterval(statusPollInterval);
     };
   }, [user?.id, role]);
 

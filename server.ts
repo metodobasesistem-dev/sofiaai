@@ -238,23 +238,26 @@ async function startServer() {
   app.get('/api/v2/public-settings', async (req, res) => {
     try {
       const { data, error } = await supabase.from('global_settings')
-        .select('allow_signups, support_whatsapp')
+        .select('*')
         .limit(1)
         .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        return res.json({ 
+          success: true, 
+          data: { allow_signups: true } 
+        });
+      }
+
       res.json({ 
         success: true, 
-        data: data || { allow_signups: true } 
+        data: {
+          allow_signups: (data as any)?.allow_signups ?? true,
+          support_whatsapp: (data as any)?.support_whatsapp ?? null,
+          maintenance_mode: (data as any)?.maintenance_mode ?? false
+        } 
       });
-    } catch (err: any) {
-      // Suprimir log para o erro esperado de coluna ausente (migration pendente).
-      // A coluna allow_signups precisa ser adicionada via: 
-      //   ALTER TABLE global_settings ADD COLUMN IF NOT EXISTS allow_signups BOOLEAN NOT NULL DEFAULT true;
-      const isMissingColumn = err.code === '42703' || err.message?.includes('allow_signups');
-      if (!isMissingColumn) {
-        console.warn('[Server] Public settings fetch failed (using defaults):', err.message);
-      }
+    } catch {
       res.json({ 
         success: true, 
         data: { allow_signups: true } 
@@ -282,7 +285,7 @@ async function startServer() {
     };
 
     try {
-      const { data, error } = await supabase.from('profiles').select('count').limit(1).single();
+      const { data, error } = await supabase.from('profiles').select('id').limit(1).maybeSingle();
       (diag as any).db_connection = error ? `Error: ${error.message}` : 'OK';
     } catch (e: any) {
       (diag as any).db_connection = `Exception: ${e.message}`;

@@ -28,7 +28,11 @@ export class MonitoringService {
         });
       
       if (upsertError) {
-        console.error(`[Monitoring] Error saving heartbeat for ${serviceId}:`, upsertError);
+        if ((upsertError as any).code === '42P01') {
+          // Table doesn't exist yet in Supabase - suppress to avoid log flooding
+          return;
+        }
+        console.error(`[Monitoring] Error saving heartbeat for ${serviceId}:`, upsertError.message || upsertError);
         return;
       }
 
@@ -163,7 +167,7 @@ export class MonitoringService {
 
       // 2. Check Database Latency
       const start = Date.now();
-      await supabase.from('sys_health').select('count').limit(1);
+      await supabase.from('profiles').select('id').limit(1);
       const latency = Date.now() - start;
 
       await this.recordHeartbeat('database', 'healthy', {
