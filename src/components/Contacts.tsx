@@ -189,7 +189,7 @@ const SidePanel = ({
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Info size={12} /> Detalhes do Perfil
           </h4>
-          <div className="bg-slate-50/50 rounded-[24px] p-6 space-y-4 border border-slate-100/50">
+          <div className="bg-slate-50/50 rounded-xl p-5 space-y-3.5 border border-slate-100">
             {[
               { label: 'Telefone', value: formatPhone(contact.telefone), icon: <Phone size={14} /> },
               { label: 'Origem', value: classifyLeadOrigin(contact.source, contact.ad_tracking, { originLocked: contact.origin_locked }).label, icon: <Globe size={14} /> },
@@ -197,7 +197,7 @@ const SidePanel = ({
               { label: 'Visto por último', value: formatRelative(contact.ultimaInteracao), icon: <Clock size={14} /> },
             ].map((item, i) => (
               <div key={i} className="flex items-start justify-between gap-4">
-                <span className="text-xs font-black text-slate-400 whitespace-nowrap flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 whitespace-nowrap flex items-center gap-2">
                    {item.icon} {item.label}
                 </span>
                 <span className="text-xs font-bold text-slate-900 text-right">{item.value}</span>
@@ -208,7 +208,7 @@ const SidePanel = ({
           {/* A linha "Origem" acima só mostra. Corrigir é aqui — e a mesma
               escolha vale na conversa, pelo mesmo componente. */}
           {contact.id && (
-            <div className="bg-slate-50/50 rounded-[24px] p-6 border border-slate-100/50">
+            <div className="bg-slate-50/50 rounded-xl p-5 border border-slate-100">
               <OrigemDoLead
                 contactId={contact.id}
                 source={contact.source}
@@ -239,7 +239,7 @@ const SidePanel = ({
               <p className="text-[10px] font-bold uppercase tracking-widest">Carregando agendamentos...</p>
             </div>
           ) : appointments.length === 0 ? (
-            <div className="bg-slate-50/30 border-2 border-dashed border-slate-100 rounded-[24px] p-8 text-center">
+            <div className="bg-slate-50/30 border-2 border-dashed border-slate-100 rounded-xl p-6 text-center">
               <p className="text-xs font-bold text-slate-400 italic">Nenhum agendamento encontrado.</p>
             </div>
           ) : (
@@ -459,7 +459,7 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
               }
             }}
             title="Sincronizar"
-            className="p-2 md:px-4 md:py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm flex items-center gap-2"
+            className="p-2 md:px-3.5 md:py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm flex items-center gap-2"
           >
             <RefreshCw size={14} /> <span className="hidden md:inline">Sincronizar</span>
           </button>
@@ -499,43 +499,60 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
                 toast.error('Erro ao exportar contatos');
               }
             }}
-            className="p-2 md:px-4 md:py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
+            className="p-2 md:px-3.5 md:py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2"
             title="Exportar CSV"
           >
-            <Download size={14} className="text-gray-400" /> <span className="hidden md:inline">Exportar</span>
+            <Download size={14} className="text-slate-400" /> <span className="hidden md:inline">Exportar</span>
           </button>
 
           <button
             onClick={() => { setEditingContactId(null); setFormData({ nome: '', telefone: '' }); setIsModalOpen(true); }}
-            className="flex items-center justify-center gap-1.5 px-3 md:px-6 py-2.5 bg-primary-600 text-white rounded-xl text-xs font-black shadow-lg shadow-primary-500/30 hover:bg-primary-700 transition-all active:scale-95"
+            className="flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 bg-primary-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-primary-700 transition-all active:scale-95"
           >
-            <Plus size={16} /> <span>Novo</span>
+            <Plus size={15} /> <span>Novo</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Padrão Dashboard */}
       {!isLoading && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6"
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { label: 'Total',     value: stats.total,      color: 'text-slate-800',   dot: 'bg-slate-400',   status: 'Todos'    },
-            { label: 'Leads',     value: stats.leads,      color: 'text-primary-700', dot: 'bg-primary-500', status: 'Lead'     },
-            { label: 'Agendados', value: stats.agendados,  color: 'text-indigo-600',  dot: 'bg-indigo-500',  status: 'Agendado' },
-            { label: 'Resolvidos',value: stats.resolvidos, color: 'text-emerald-600', dot: 'bg-emerald-500', status: 'Resolvido'},
+            { label: 'Total de Leads', value: stats.total, unit: 'contatos', icon: Users, color: '#2563eb', tint: 'bg-blue-50 text-blue-600', status: 'Todos', foot: 'cadastrados na base' },
+            { label: 'Novos Leads', value: stats.leads, unit: 'em aberto', icon: Sparkles, color: '#7c3aed', tint: 'bg-violet-50 text-violet-600', status: 'Lead', foot: 'aguardando triagem' },
+            { label: 'Agendados', value: stats.agendados, unit: 'reuniões', icon: Calendar, color: '#f97316', tint: 'bg-orange-50 text-orange-600', status: 'Agendado', foot: 'com horário marcado' },
+            { label: 'Resolvidos', value: stats.resolvidos, unit: 'concluídos', icon: CheckCircle2, color: '#10b981', tint: 'bg-emerald-50 text-emerald-600', status: 'Resolvido', foot: 'atendidos com sucesso' },
           ].map((s, i) => (
             <button
               key={i}
               onClick={() => setFilterStatus(s.status as any)}
-              className={`w-full bg-white border rounded-2xl md:rounded-[32px] p-4 md:p-6 text-left transition-all hover:shadow-md relative overflow-hidden ${filterStatus === s.status ? 'ring-2 ring-primary-500 shadow-md border-slate-100' : 'border-slate-100 shadow-sm'}`}
+              className={`kpi-card text-left cursor-pointer transition-all ${
+                filterStatus === s.status
+                  ? 'ring-2 ring-primary-500 shadow-md border-primary-200 bg-primary-50/15'
+                  : 'hover:border-slate-300 hover:shadow-md'
+              }`}
+              style={{ ['--kpi-color' as any]: s.color }}
             >
-              <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-2xl md:rounded-t-[32px] ${s.dot}`} />
-              <p className={`text-2xl md:text-3xl font-black ${s.color} mt-1`}>{s.value}</p>
-              <div className="flex items-center gap-1.5 mt-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+              <div className="flex items-start justify-between">
+                <p className="label-caps">{s.label}</p>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${s.tint}`}>
+                  <s.icon size={16} />
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-baseline gap-1.5 min-h-[34px]">
+                <span className="text-[28px] leading-none font-bold text-slate-900 tracking-tight tabular-nums">{s.value}</span>
+                <span className="text-[13px] font-medium text-slate-500">{s.unit}</span>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between">
+                <span className={`pill ${filterStatus === s.status ? 'bg-primary-100 text-primary-700 font-bold' : 'bg-slate-100 text-slate-600'}`}>
+                  {filterStatus === s.status ? 'Filtro Ativo' : 'Ver todos'}
+                </span>
+                <span className="text-[11px] text-slate-500">{s.foot}</span>
               </div>
             </button>
           ))}
@@ -544,18 +561,18 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
 
       {/* Main Content Area */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl md:rounded-[40px] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden"
+        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden"
       >
         {/* Search & Filter Bar */}
-        <div className="px-4 md:px-8 py-4 md:py-6 border-b border-slate-50 space-y-3 bg-slate-50/30">
+        <div className="px-4 md:px-6 py-3.5 border-b border-slate-100 space-y-3 bg-slate-50/40">
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
                 type="text"
-                placeholder="Pesquisar..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
+                placeholder="Pesquisar por nome ou WhatsApp..."
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50 transition-all outline-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -565,21 +582,25 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value as any)}
-                className="pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:border-primary-500 outline-none transition-all appearance-none cursor-pointer"
+                className="pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 focus:border-primary-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="all">Todo o período</option>
                 <option value="today">Hoje</option>
-                <option value="week">7 dias</option>
-                <option value="month">30 dias</option>
+                <option value="week">Últimos 7 dias</option>
+                <option value="month">Últimos 30 dias</option>
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {(['Todos', 'Lead', 'Qualificado', 'Agendado', 'Resolvido'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterStatus(f as any)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${filterStatus === f ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterStatus === f
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
               >
                 {f}
               </button>
@@ -763,23 +784,23 @@ export default function Contacts({ user, role, onTabChange }: { user?: any; role
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden relative z-10 border border-slate-100"
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 border border-slate-200/80"
             >
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-primary-600 text-white flex items-center justify-center shadow-lg shadow-primary-500/30">
-                    {editingContactId ? <Edit2 size={24} /> : <UserPlus size={24} />}
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center shadow-md shadow-primary-500/20">
+                    {editingContactId ? <Edit2 size={18} /> : <UserPlus size={18} />}
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{editingContactId ? 'Editar Contato' : 'Novo Contato'}</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Preencha os dados abaixo</p>
+                    <h3 className="text-lg font-bold text-slate-900 tracking-tight">{editingContactId ? 'Editar Contato' : 'Novo Contato'}</h3>
+                    <p className="text-[11px] font-medium text-slate-500">Preencha os dados abaixo</p>
                   </div>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-                  <X size={24} />
+                <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+                  <X size={18} />
                 </button>
               </div>
 

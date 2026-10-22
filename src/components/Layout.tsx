@@ -251,24 +251,21 @@ export default function Layout({
     }
   }, [user, role]);
 
-  // Auto-expandir os submenus se a aba correspondente estiver ativa
+  // Auto-expandir apenas o submenu ativo (fechando os demais)
   useEffect(() => {
     if (['admin', 'sofia_config', 'overview', 'meta_templates', 'diagnostics'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, admin_menu: true }));
-    }
-    if (['lead_radar'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, prospeccao_menu: true }));
-    }
-    if (['inbox', 'kanban', 'contacts', 'clients', 'schedule'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, suporte_menu: true }));
-    }
-    if (['finance', 'reports'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, financeiro_menu: true }));
-    }
-    // 'agents' e 'quick_replies' saíram daqui: viraram seções de
-    // Configurações, e a URL deles resolve para 'settings'.
-    if (['leo', 'campaigns'].includes(activeTab)) {
-      setOpenMenus(prev => ({ ...prev, ia_menu: true }));
+      setOpenMenus({ admin_menu: true });
+    } else if (['lead_radar'].includes(activeTab)) {
+      setOpenMenus({ prospeccao_menu: true });
+    } else if (['inbox', 'kanban', 'contacts', 'clients', 'schedule'].includes(activeTab)) {
+      setOpenMenus({ suporte_menu: true });
+    } else if (['finance', 'reports'].includes(activeTab)) {
+      setOpenMenus({ financeiro_menu: true });
+    } else if (['leo', 'campaigns'].includes(activeTab)) {
+      setOpenMenus({ ia_menu: true });
+    } else {
+      // Telas raiz (como dashboard e settings) mantêm os submenus recolhidos
+      setOpenMenus({});
     }
   }, [activeTab]);
 
@@ -448,10 +445,11 @@ export default function Layout({
       // Com o menu recolhido não há onde mostrar o submenu: expande e abre.
       if (collapsed) {
         setCollapsed(false);
-        setOpenMenus(prev => ({ ...prev, [id]: true }));
+        setOpenMenus({ [id]: true });
         return;
       }
-      setOpenMenus(prev => ({ ...prev, [id]: !prev[id] }));
+      // Fecha todas as outras abas e alterna apenas a clicada
+      setOpenMenus(prev => (prev[id] ? {} : { [id]: true }));
       return;
     }
     onTabChange(id);

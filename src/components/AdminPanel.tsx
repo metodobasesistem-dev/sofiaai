@@ -1128,10 +1128,10 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                 <div className="lg:col-span-1 space-y-4">
 
                   {/* Lista de Campanhas */}
-                  <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between">
-                      <h3 className="text-sm font-black text-slate-900">Campanhas</h3>
-                      <span className="px-2 py-0.5 bg-primary-50 text-primary-600 rounded-lg text-[9px] font-black">{campaigns.length}</span>
+                  <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
+                      <h3 className="text-sm font-bold text-slate-900">Campanhas</h3>
+                      <span className="px-2 py-0.5 bg-primary-50 text-primary-600 rounded-md text-[10px] font-bold">{campaigns.length}</span>
                     </div>
                     <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
                       {campaigns.length === 0 && (
@@ -1177,28 +1177,28 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                   </div>
 
                   {/* Nova Busca (colapsável) */}
-                  <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+                  <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                     <button
                       onClick={() => setRadarSearchOpen(v => !v)}
-                      className="w-full px-6 py-5 flex items-center justify-between text-left"
+                      className="w-full px-5 py-4 flex items-center justify-between text-left bg-slate-50/40"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center"><Search size={15} /></div>
-                        <h3 className="text-sm font-black text-slate-900">Nova Busca</h3>
+                        <div className="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center"><Search size={15} /></div>
+                        <h3 className="text-sm font-bold text-slate-900">Nova Busca</h3>
                       </div>
                       <ChevronRight size={16} className={`text-slate-400 transition-transform ${radarSearchOpen ? 'rotate-90' : ''}`} />
                     </button>
 
-                    {radarSearchOpen && <div className="px-6 pb-6 space-y-4 border-t border-slate-50 pt-4">
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Origem da Busca</label>
-                            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                    {radarSearchOpen && <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">Origem da Busca</label>
+                            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-50 border border-slate-200 rounded-lg">
                               <button
                                 type="button"
                                 onClick={() => setRadarSource('google')}
-                                className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                                className={`py-1.5 px-3 text-xs font-semibold rounded-md transition-all flex items-center justify-center gap-1.5 ${
                                   radarSource === 'google'
-                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
                                     : 'text-slate-500 hover:text-slate-800'
                                 }`}
                               >
@@ -1207,9 +1207,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                               <button
                                 type="button"
                                 onClick={() => setRadarSource('instagram')}
-                                className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                                className={`py-1.5 px-3 text-xs font-semibold rounded-md transition-all flex items-center justify-center gap-1.5 ${
                                   radarSource === 'instagram'
-                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-100'
+                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
                                     : 'text-slate-500 hover:text-slate-800'
                                 }`}
                               >
@@ -1217,33 +1217,33 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                               </button>
                             </div>
                          </div>
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nicho / Categoria</label>
+                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">Nicho / Categoria</label>
                             <input
                               type="text"
                               autoComplete="off"
                               placeholder="Ex: Restaurantes, Advogados, Academias..."
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary-500 focus:bg-white transition-all"
                               value={radarNiche}
                               onChange={(e) => setRadarNiche(e.target.value)}
                             />
                          </div>
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cidade / Região</label>
+                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">Cidade / Região</label>
                             <input
                               type="text"
                               autoComplete="off"
                               placeholder="Ex: Rio de Janeiro"
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
+                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary-500 focus:bg-white transition-all"
                               value={radarCity}
                               onChange={(e) => setRadarCity(e.target.value)}
                             />
                          </div>
 
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Limite de Resultados</label>
+                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">Limite de Resultados</label>
                             <select
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all appearance-none"
+                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary-500 focus:bg-white transition-all appearance-none cursor-pointer"
                               value={radarLimit}
                               onChange={(e) => setRadarLimit(Number(e.target.value))}
                             >
@@ -1254,39 +1254,38 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                             </select>
                          </div>
                           {role === 'admin' && (
-  <div className="space-y-2">
-                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Apify API Token</label>
-                             <input
-                               type="password"
-                               autoComplete="new-password"
-                               placeholder="apify_api_..."
-                               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all"
-                               value={globalSettings.apify_api_token || ''}
-                               onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
-                               onBlur={handleSaveSettings}
-                             />
-                           </div>
+   <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">Apify API Token</label>
+                              <input
+                                type="password"
+                                autoComplete="new-password"
+                                placeholder="apify_api_..."
+                                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary-500 focus:bg-white transition-all"
+                                value={globalSettings.apify_api_token || ''}
+                                onChange={(e) => setGlobalSettings({...globalSettings, apify_api_token: e.target.value})}
+                                onBlur={handleSaveSettings}
+                              />
+                            </div>
                           )}
 
-
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Contexto da Abordagem</label>
+                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">Contexto da Abordagem</label>
                             <textarea
                               autoComplete="off"
                               placeholder="Ex: Focar na dor de quem atende muito convênio..."
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-primary-500 transition-all resize-none h-20"
+                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary-500 focus:bg-white transition-all resize-none h-20"
                               value={radarContext}
                               onChange={(e) => setRadarContext(e.target.value)}
                             />
                          </div>
 
-                         <div className="space-y-2">
+                         <div className="space-y-2 pt-1">
                            <button
                              onClick={startScan}
                              disabled={isScanning || isAutopilotRunning}
-                             className="w-full py-3.5 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
+                             className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-bold text-xs hover:bg-primary-700 transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                            >
-                              {isScanning ? <RefreshCw size={15} className="animate-spin" /> : <Zap size={15} />}
+                              {isScanning ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
                               {isScanning ? 'Varrendo...' : 'Iniciar Radar'}
                            </button>
 
@@ -1299,9 +1298,9 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                                setIsAutopilotModalOpen(true);
                              }}
                              disabled={isScanning || isAutopilotRunning}
-                             className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                             className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                            >
-                              {isAutopilotRunning ? <RefreshCw size={15} className="animate-spin text-green-400" /> : <Rocket size={15} className="text-green-400" />}
+                              {isAutopilotRunning ? <RefreshCw size={14} className="animate-spin text-green-400" /> : <Rocket size={14} className="text-green-400" />}
                               {isAutopilotRunning ? `Enviando... ${autopilotProgress?.sent ?? 0}/${autopilotProgress?.total ?? '?'}` : 'Piloto Automático'}
                            </button>
                          </div>
@@ -1376,23 +1375,23 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
 
                 {/* ── COLUNA DIREITA: Leads da Campanha Selecionada ── */}
                 <div className="lg:col-span-3 space-y-4">
-                   <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden min-h-[600px]">
+                   <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden min-h-[600px]">
                       {/* Header */}
-                      <div className="p-6 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4">
+                      <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4 bg-slate-50/40">
                          <div>
                             <div className="flex items-center gap-3">
                               {selectedCampaignId
-                                ? <h2 className="text-xl font-black text-slate-900">{campaigns.find(c => c.id === selectedCampaignId)?.name || 'Campanha'}</h2>
-                                : <h2 className="text-xl font-black text-slate-900">Todos os Leads</h2>
+                                ? <h2 className="text-lg font-bold text-slate-900">{campaigns.find(c => c.id === selectedCampaignId)?.name || 'Campanha'}</h2>
+                                : <h2 className="text-lg font-bold text-slate-900">Todos os Leads</h2>
                               }
                               {isScanning && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px] font-bold uppercase tracking-wider animate-pulse">
                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                                   {radarSource === 'instagram' ? 'Varrendo Instagram' : 'Varrendo Google Maps'}
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-slate-400 font-medium mt-0.5">
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
                               {isScanning 
                                 ? 'Os leads estão sendo adicionados ao vivo. Aguarde a finalização da busca.' 
                                 : selectedCampaignId ? 'Leads desta campanha' : 'Selecione uma campanha ou inicie uma busca'
@@ -1400,22 +1399,22 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                             </p>
                          </div>
                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 bg-primary-50 text-primary-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                            <span className="px-2.5 py-1 bg-primary-50 text-primary-700 rounded-md text-[11px] font-bold">
                                {radarLeads.length} Total
                             </span>
                             {radarLeads.length > 0 && (
                               <button
                                 onClick={exportLeadsCSV}
-                                className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center gap-1.5"
+                                className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition-all flex items-center gap-1.5 shadow-sm"
                               >
-                                <FileText size={12} /> Exportar CSV
+                                <FileText size={13} /> Exportar CSV
                               </button>
                             )}
                          </div>
                       </div>
 
                       {/* Filtros por status */}
-                      <div className="px-8 py-4 border-b border-slate-50 flex items-center gap-2 flex-wrap">
+                      <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-1.5 flex-wrap bg-white">
                         {(['todos', 'novo', 'qualificado', 'contatado', 'descartado'] as const).map(s => {
                           const counts: Record<string, number> = { todos: radarLeads.length, novo: 0, qualificado: 0, contatado: 0, descartado: 0 };
                           radarLeads.forEach(l => { if (counts[l.status] !== undefined) counts[l.status]++; });
@@ -1424,14 +1423,14 @@ export default function AdminPanel({ initialView = 'standard', initialTab, onTab
                             <button
                               key={s}
                               onClick={() => setRadarStatusFilter(s)}
-                              className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 radarStatusFilter === s
                                   ? 'bg-primary-600 text-white shadow-sm'
-                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                               }`}
                             >
                               {labels[s]}
-                              <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${radarStatusFilter === s ? 'bg-white/20' : 'bg-slate-200 text-slate-400'}`}>
+                              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${radarStatusFilter === s ? 'bg-primary-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
                                 {counts[s]}
                               </span>
                             </button>
