@@ -1566,6 +1566,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [showProgramarModal, setShowProgramarModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [deleteModalMsgId, setDeleteModalMsgId] = useState<string | null>(null);
+  const [isDeletingMessage, setIsDeletingMessage] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -3573,24 +3575,36 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     }
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
-    if (!window.confirm('Deseja apagar esta mensagem? No WhatsApp ela será apagada para todos.')) return;
-    
-    try {
-      const userId = user?.id;
-      if (!userId) return;
+  const handleDeleteMessage = (messageId: string) => {
+    setDeleteModalMsgId(messageId);
+  };
 
+  const confirmDeleteMessage = async (messageId: string, deleteForEveryone: boolean) => {
+    setIsDeletingMessage(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/messages/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, messageId })
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+        },
+        body: JSON.stringify({ messageId, deleteForEveryone })
       });
 
-      if (!response.ok) throw new Error('Falha ao apagar mensagem');
-      toast.success('Mensagem apagada');
-    } catch (err) {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Falha ao apagar mensagem');
+      }
+
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      toast.success(deleteForEveryone ? 'Mensagem apagada para todos' : 'Mensagem apagada para você');
+      setDeleteModalMsgId(null);
+    } catch (err: any) {
       console.error('Error deleting message:', err);
-      toast.error('Erro ao apagar mensagem');
+      toast.error(err.message || 'Erro ao apagar mensagem');
+    } finally {
+      setIsDeletingMessage(false);
     }
   };
   
@@ -3601,9 +3615,13 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       const userId = user?.id;
       if (!userId) return;
 
+      const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/messages/react', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify({ 
           userId, 
           messageId, 
@@ -4263,19 +4281,6 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 >
                   <Search size={18} />
                 </button>
-                <button
-                  onClick={() => {
-                    if (window.innerWidth < 1024) {
-                      setIsMobileDetailsOpen(true);
-                    } else {
-                      setShowDetails(!showDetails);
-                    }
-                  }}
-                  className={`p-2 rounded-lg transition-all ${showDetails ? 'text-primary-600 bg-primary-50 border border-primary-100' : 'text-slate-400 hover:bg-slate-50 border border-transparent'}`}
-                  title={showDetails ? "Esconder Detalhes" : "Mostrar Detalhes"}
-                >
-                  <Info size={18} />
-                </button>
 
                 <div className="relative">
                   <button 
@@ -4358,6 +4363,32 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                     )}
                   </AnimatePresence>
                 </div>
+
+                {/* Botão de Fechar/Abrir Detalhes com Animação (Setinha) */}
+                <button
+                  onClick={() => {
+                    if (window.innerWidth < 1024) {
+                      setIsMobileDetailsOpen(prev => !prev);
+                    } else {
+                      setShowDetails(prev => !prev);
+                    }
+                  }}
+                  className={`p-2 rounded-xl transition-all duration-200 flex items-center justify-center ${
+                    showDetails 
+                      ? 'text-primary-600 bg-primary-50 hover:bg-primary-100 border border-primary-200 shadow-xs' 
+                      : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-transparent'
+                  }`}
+                  title={showDetails ? "Fechar painel lateral" : "Abrir painel lateral"}
+                  aria-label={showDetails ? "Fechar painel lateral" : "Abrir painel lateral"}
+                >
+                  <motion.div
+                    animate={{ rotate: showDetails ? 0 : 180 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="flex items-center justify-center"
+                  >
+                    <ChevronRight size={20} />
+                  </motion.div>
+                </button>
               </div>
             </div>
 
@@ -4785,7 +4816,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                       } 
                     }} 
                     placeholder="Mensagem"
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] py-3 px-2 resize-none max-h-48 min-h-[48px] placeholder:text-slate-400" 
+                    className="flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none focus-visible:ring-0 shadow-none text-[15px] py-3 px-2 resize-none max-h-48 min-h-[48px] placeholder:text-slate-400" 
+                    style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
                   />
 
                   {/* Right Icons inside Capsule */}
@@ -4905,15 +4937,22 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       </div>
 
       {/* Right Column: Lead Details Sidebar */}
-      {selectedThreadId && activeThread && showDetails && (
-        <motion.div 
-          initial={{ opacity: 0, width: 0 }}
-          animate={{ opacity: 1, width: '22%' }}
-          className="hidden lg:flex border-l border-gray-100 flex-col bg-white overflow-hidden"
-        >
-          {renderContactDetails()}
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {selectedThreadId && activeThread && showDetails && (
+          <motion.div 
+            key="lead-details-sidebar"
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: '22%' }}
+            exit={{ opacity: 0, width: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="hidden lg:flex border-l border-gray-100 flex-col bg-white overflow-hidden shrink-0"
+          >
+            <div className="w-[300px] xl:w-full h-full flex flex-col">
+              {renderContactDetails()}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal de Encaminhar Mensagem */}
       <AnimatePresence>
@@ -4985,7 +5024,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           {/* Header Mobile Info */}
           <div className="px-4 h-16 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
              <button 
-               onClick={() => window.history.back()}
+               onClick={() => setIsMobileDetailsOpen(false)}
                className="p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all flex items-center gap-2"
              >
                <ArrowLeft size={24} />
@@ -5272,6 +5311,57 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 : t));
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação para Apagar Mensagem */}
+      <AnimatePresence>
+        {deleteModalMsgId && (
+          <div 
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+            onClick={() => !isDeletingMessage && setDeleteModalMsgId(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 8 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="bg-white w-full max-w-[340px] rounded-[32px] p-8 shadow-2xl flex flex-col items-center border border-slate-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-[22px] font-semibold text-slate-900 text-center leading-snug mb-6">
+                Deseja apagar a mensagem?
+              </h3>
+
+              <div className="w-full flex flex-col gap-3">
+                <button
+                  disabled={isDeletingMessage}
+                  onClick={() => confirmDeleteMessage(deleteModalMsgId, true)}
+                  className="w-full py-3.5 px-6 rounded-full border border-slate-200/90 text-[#a31535] hover:bg-rose-50/60 font-medium text-[15px] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeletingMessage ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Apagar para todos
+                </button>
+
+                <button
+                  disabled={isDeletingMessage}
+                  onClick={() => confirmDeleteMessage(deleteModalMsgId, false)}
+                  className="w-full py-3.5 px-6 rounded-full border border-slate-200/90 text-[#147a4f] hover:bg-emerald-50/60 font-medium text-[15px] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeletingMessage ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Apagar para mim
+                </button>
+
+                <button
+                  disabled={isDeletingMessage}
+                  onClick={() => setDeleteModalMsgId(null)}
+                  className="w-full py-2.5 text-[#147a4f] font-medium text-[15px] hover:text-[#0d5939] transition-colors mt-1"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

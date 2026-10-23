@@ -1084,7 +1084,7 @@ class WhatsAppService {
     }
   }
 
-  async deleteMessage(userId: string, messageId: string) {
+  async deleteMessage(userId: string, messageId: string, deleteForEveryone: boolean = true) {
     try {
       // 1. Localizar a mensagem para saber a direção e o remoteJid
       const { data: msg } = await supabase
@@ -1096,8 +1096,8 @@ class WhatsAppService {
 
       if (!msg) return { success: false, error: 'Mensagem não encontrada' };
 
-      // 2. Se for outbound, tenta apagar no WhatsApp via Provider (para todos)
-      if (msg.direction === 'outbound') {
+      // 2. Se deleteForEveryone for true e for outbound, tenta apagar no WhatsApp via Provider (para todos)
+      if (deleteForEveryone && msg.direction === 'outbound') {
          const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
          const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
          const provider = await WhatsAppProviderFactory.getProvider(userId);

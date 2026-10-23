@@ -107,7 +107,9 @@ BEGIN
     agent_name,
     updated_at,
     profile_picture_url,
-    profile_picture_updated_at
+    profile_picture_updated_at,
+    last_inbound_at,
+    first_inbound_at
   )
   VALUES (
     p_thread->>'id',
@@ -123,7 +125,12 @@ BEGIN
     p_thread->>'agent_name',
     COALESCE((p_thread->>'updated_at')::timestamptz, NOW()),
     p_thread->>'profile_picture_url',
-    (p_thread->>'profile_picture_updated_at')::timestamptz
+    (p_thread->>'profile_picture_updated_at')::timestamptz,
+    (p_thread->>'last_inbound_at')::timestamptz,
+    COALESCE(
+      (p_thread->>'first_inbound_at')::timestamptz,
+      (p_thread->>'last_inbound_at')::timestamptz
+    )
   )
   ON CONFLICT (id) DO UPDATE SET
     last_message               = EXCLUDED.last_message,
@@ -132,6 +139,13 @@ BEGIN
     ticket_status              = EXCLUDED.ticket_status,
     agent_name                 = COALESCE(EXCLUDED.agent_name, threads.agent_name),
     updated_at                 = EXCLUDED.updated_at,
+    last_inbound_at            = CASE
+      WHEN EXCLUDED.last_inbound_at IS NOT NULL
+        AND (threads.last_inbound_at IS NULL OR EXCLUDED.last_inbound_at > threads.last_inbound_at)
+      THEN EXCLUDED.last_inbound_at
+      ELSE threads.last_inbound_at
+    END,
+    first_inbound_at           = COALESCE(threads.first_inbound_at, EXCLUDED.first_inbound_at),
     contact_name               = CASE
       WHEN EXCLUDED.contact_name IS NOT NULL
         AND LENGTH(TRIM(EXCLUDED.contact_name)) > 0

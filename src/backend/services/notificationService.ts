@@ -123,6 +123,10 @@ export class NotificationService {
       .limit(50);
 
     if (error) {
+      if ((error as any)?.code === 'PGRST205') {
+        // Tabela scheduled_messages ainda não criada no banco Supabase
+        return;
+      }
       console.error('[NotificationService] Erro ao buscar mensagens programadas:', error);
       return;
     }

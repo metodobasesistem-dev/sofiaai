@@ -715,6 +715,35 @@ export class AgentService {
       reopen_ticket:   reopenTicket
     };
 
+    // ── HOTFIX RESILIÊNCIA DE CHAVE ESTRANGEIRA (threads_id_fkey) ──
+    // Se a thread ainda não existe no banco, pré-garante sua linha antes de chamar a RPC.
+    // Isso neutraliza o erro 23503 caso o banco esteja executando uma versão legada da RPC
+    // que insere 'messages' antes de 'threads'.
+    if (!existingThread) {
+      try {
+        await supabase.from('threads').upsert({
+          id:                         threadPayload.id,
+          user_id:                    threadPayload.user_id,
+          remote_jid:                 threadPayload.remote_jid,
+          display_phone:              threadPayload.display_phone,
+          contact_name:               threadPayload.contact_name,
+          last_message:               threadPayload.last_message,
+          last_message_time:          threadPayload.last_message_time,
+          status:                     threadPayload.status,
+          unread_count:               threadPayload.unread_count,
+          ticket_status:              threadPayload.ticket_status,
+          agent_name:                 threadPayload.agent_name,
+          updated_at:                 threadPayload.updated_at,
+          profile_picture_url:        threadPayload.profile_picture_url,
+          profile_picture_updated_at: threadPayload.profile_picture_updated_at,
+          ...((threadPayload as any).last_inbound_at ? { last_inbound_at: (threadPayload as any).last_inbound_at } : {}),
+          ...((threadPayload as any).first_inbound_at ? { first_inbound_at: (threadPayload as any).first_inbound_at } : {})
+        }, { onConflict: 'id', ignoreDuplicates: true });
+      } catch (preErr: any) {
+        console.warn(`[AgentService] ⚠️ Pre-thread upsert warning for ${threadId}:`, preErr?.message || preErr);
+      }
+    }
+
     // ── FASE 4: Escrita atômica via RPC (tudo ou nada) ──
     try {
       await withRetry(async () => {
@@ -732,7 +761,7 @@ export class AgentService {
             new Error(`[RPC] upsert_inbound_message: ${result.error}`),
             { code: result.code }
           );
-          throw sqlErr; // constraint 23505 → withRetry não retenta
+          throw sqlErr; // constraint 23505/23503 → withRetry não retenta
         }
       });
 
@@ -747,6 +776,29 @@ export class AgentService {
       if (err?.code === '23505' || /duplicate key value/i.test(err?.message || '')) {
         console.log(`[AgentService] 🛡️ Mensagem ${messageId} já persistida (entrega duplicada). Ignorando.`);
         return;
+      }
+
+      // Auto-recuperação caso a RPC retorne violação de FK (23503 / messages_thread_id_fkey):
+      if (err?.code === '23503' || /messages_thread_id_fkey/i.test(err?.message || '')) {
+        console.warn(
+          `[AgentService] ⚠️ FK violation (messages_thread_id_fkey). Executando auto-recuperação direta: ${threadId}`
+        );
+        try {
+          await supabase.from('contacts').upsert(contactPayload, { onConflict: 'id' });
+          await supabase.from('threads').upsert(threadPayload, { onConflict: 'id' });
+          const { error: directMsgErr } = await supabase.from('messages').insert(messagePayload);
+          if (!directMsgErr) {
+            console.log(`[AgentService] ✅ Mensagem ${messageId} recuperada com sucesso via fallback direto!`);
+            return;
+          }
+          if (directMsgErr.code === '23505' || /duplicate key/i.test(directMsgErr.message)) {
+            console.log(`[AgentService] 🛡️ Mensagem ${messageId} já persistida no fallback direto.`);
+            return;
+          }
+          console.error(`[AgentService] ❌ Erro ao gravar mensagem no fallback direto:`, directMsgErr);
+        } catch (recErr: any) {
+          console.error(`[AgentService] ❌ Falha na rotina de auto-recuperação:`, recErr?.message || recErr);
+        }
       }
 
       console.error(

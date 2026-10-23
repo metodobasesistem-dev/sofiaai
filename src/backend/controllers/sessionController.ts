@@ -116,13 +116,13 @@ class SessionController {
 
   async deleteMessage(req: AuthenticatedRequest, res: Response) {
     const userId = req.userId!;
-    const { messageId } = req.body;
+    const { messageId, deleteForEveryone = true } = req.body;
     if (!messageId) {
       return res.status(400).json({ error: 'Missing messageId' });
     }
 
     try {
-      const result = await whatsappService.deleteMessage(userId, messageId);
+      const result = await whatsappService.deleteMessage(userId, messageId, Boolean(deleteForEveryone));
       res.json(result);
     } catch (error: any) {
       console.error('Error in controller deleteMessage:', error);
