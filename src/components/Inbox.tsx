@@ -3286,7 +3286,6 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       </div>
     );
   };
-  };
 
   const toggleThreadStatus = async () => {
     if (!selectedThreadId || !activeThread) return;
