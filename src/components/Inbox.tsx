@@ -55,7 +55,10 @@ import {
   Image as ImageIcon,
   MessageSquarePlus,
   Activity,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  Plus,
+  ZoomIn
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -1629,6 +1632,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [enlargedPhoto, setEnlargedPhoto] = useState<{ url: string; name: string; phone?: string } | null>(null);
   const [showProgramarModal, setShowProgramarModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [deleteModalMsgId, setDeleteModalMsgId] = useState<string | null>(null);
@@ -2655,256 +2659,337 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     
     // Check if we have tracking data from the contact or thread
     const trackingData = selectedContact?.ad_tracking || activeThread.ad_tracking;
+    const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white relative">
-        {/* Perfil Header */}
-        <div className="p-5 border-b border-slate-100 text-center bg-slate-50/30 relative overflow-hidden">
-          {/* Background decoration */}
-          <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[140%] opacity-[0.03] pointer-events-none" 
-               style={{ backgroundImage: `url(${activeThread.profilePictureUrl || ''})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(40px)' }}></div>
-          
-          <div className="relative z-10">
-            <div className="w-20 h-20 rounded-[1.5rem] bg-white text-slate-400 flex items-center justify-center mx-auto mb-4 border border-slate-200/50 shadow-xl overflow-hidden group">
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/40 relative flex flex-col">
+        {/* Header fixo da sidebar com botão de fechar */}
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 sticky top-0 z-20">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Dados do Contato</span>
+          </div>
+          <button 
+            onClick={() => setShowDetails(false)}
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
+            title="Fechar detalhes"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Perfil Hero Header */}
+        <div className="p-5 border-b border-slate-100 bg-white text-center relative overflow-hidden">
+          {/* Avatar com hover e clique para ampliar */}
+          <div className="relative inline-block mx-auto mb-3">
+            <div 
+              onClick={() => activeThread.profilePictureUrl && setEnlargedPhoto({ 
+                url: activeThread.profilePictureUrl, 
+                name: activeThread.name, 
+                phone: cleanPhone 
+              })}
+              className={`w-24 h-24 rounded-full p-1 bg-white border border-slate-200/90 shadow-md flex items-center justify-center mx-auto overflow-hidden group/avatar relative transition-all duration-300 ${
+                activeThread.profilePictureUrl ? 'cursor-pointer hover:shadow-lg hover:border-primary-400' : ''
+              }`}
+              title={activeThread.profilePictureUrl ? "Clique para ver a foto ampliada" : undefined}
+            >
               {activeThread.profilePictureUrl ? (
-                <img src={activeThread.profilePictureUrl} alt={activeThread.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                <>
+                  <img 
+                    src={activeThread.profilePictureUrl} 
+                    alt={activeThread.name} 
+                    loading="lazy" 
+                    decoding="async" 
+                    className="w-full h-full object-cover rounded-full group-hover/avatar:scale-105 transition-transform duration-300" 
+                  />
+                  <div className="absolute inset-0 bg-slate-950/40 rounded-full flex flex-col items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity backdrop-blur-[1px]">
+                    <ZoomIn size={22} className="text-white drop-shadow mb-0.5" />
+                    <span className="text-[10px] text-white font-bold tracking-tight">Ver foto</span>
+                  </div>
+                </>
               ) : (
-                <User size={48} className="text-slate-200" />
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-primary-50 to-primary-100 text-primary-600 flex items-center justify-center font-bold text-2xl">
+                  {activeThread.name ? activeThread.name.slice(0, 2).toUpperCase() : <User size={36} />}
+                </div>
               )}
             </div>
-            {isEditingName ? (
-              <div className="flex flex-col gap-2 px-4">
-                <input 
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter') {
-                      const cleanPhone = activeThread.remoteJid.split('@')[0].replace(/\D/g, '');
-                      const contactId = `${user?.id}_${cleanPhone}`;
-                      try {
-                        await updateContact(contactId, { nome: newName });
-                        setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, name: newName } : t));
-                        setIsEditingName(false);
-                        toast.success('Nome atualizado!');
-                      } catch (err) {
-                        toast.error('Erro ao atualizar nome');
-                      }
-                    } else if (e.key === 'Escape') {
-                      setIsEditingName(false);
-                    }
-                  }}
-                  className="w-full bg-white border-2 border-primary-500 rounded-xl px-4 py-2 text-center text-sm font-bold focus:outline-none shadow-lg"
-                  autoFocus
-                />
-                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Pressione Enter para salvar</p>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center gap-2 px-4 group/name">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight truncate max-w-[200px]">{activeThread.name}</h3>
-                <button 
-                  onClick={() => {
-                    setNewName(activeThread.name);
-                    setIsEditingName(true);
-                  }}
-                  className="p-1.5 text-slate-300 hover:text-primary-500 hover:bg-primary-50 rounded-lg transition-all opacity-0 group-hover/name:opacity-100"
-                  title="Editar nome"
-                >
-                  <Edit2 size={14} />
-                </button>
+            {activeThread.is_client && (
+              <div className="absolute bottom-0 right-0 bg-amber-400 text-white rounded-full p-1.5 shadow-md border-2 border-white" title="Cliente Fidelizado">
+                <Star size={12} className="fill-white" />
               </div>
             )}
-            <div className="mt-4 flex items-center justify-center gap-2">
-              <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
-                ${etapaPorId(activeThread.funilStatus).bg} ${etapaPorId(activeThread.funilStatus).text} ${etapaPorId(activeThread.funilStatus).border}`}>
-                {etapaPorId(activeThread.funilStatus).label}
+          </div>
+
+          {/* Nome com Edição Inline */}
+          {isEditingName ? (
+            <div className="flex flex-col gap-1.5 px-3 mb-2">
+              <input 
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    const contactId = `${user?.id}_${cleanPhone}`;
+                    try {
+                      await updateContact(contactId, { nome: newName });
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, name: newName } : t));
+                      setIsEditingName(false);
+                      toast.success('Nome atualizado!');
+                    } catch (err) {
+                      toast.error('Erro ao atualizar nome');
+                    }
+                  } else if (e.key === 'Escape') {
+                    setIsEditingName(false);
+                  }
+                }}
+                className="w-full bg-white border-2 border-primary-500 rounded-xl px-3 py-1.5 text-center text-sm font-bold focus:outline-none shadow-sm"
+                autoFocus
+              />
+              <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Enter para salvar • Esc para cancelar</p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-1.5 px-2 group/name mb-1.5">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight truncate max-w-[220px]" title={activeThread.name}>
+                {activeThread.name}
+              </h3>
+              <button 
+                onClick={() => {
+                  setNewName(activeThread.name);
+                  setIsEditingName(true);
+                }}
+                className="p-1 text-slate-300 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-all opacity-0 group-hover/name:opacity-100"
+                title="Editar nome"
+              >
+                <Edit2 size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Badges de Status */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 mb-3">
+            <span className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border shadow-xs
+              ${etapaPorId(activeThread.funilStatus).bg} ${etapaPorId(activeThread.funilStatus).text} ${etapaPorId(activeThread.funilStatus).border}`}>
+              {etapaPorId(activeThread.funilStatus).label}
+            </span>
+            {activeThread.is_client && (
+              <span className="bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider shadow-xs flex items-center gap-1">
+                <Star size={10} className="fill-amber-500 text-amber-500" /> Cliente
               </span>
-              {activeThread.is_client && (
-                <span className="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
-                  <Star size={10} className="fill-amber-500" /> Cliente
-                </span>
-              )}
-              {currentProvider === 'meta_official' && (
-                <span
-                  className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm"
-                  title="Este número usa a API Oficial da Meta. Mensagens livres só funcionam dentro da janela de 24h após a última mensagem do cliente."
-                >
-                  Meta Oficial
-                </span>
-              )}
-            </div>
-            <div className="mt-4 flex items-center justify-center gap-2 text-slate-400">
-               <Phone size={12} />
-               <span className="text-xs font-bold font-mono tracking-wider">
-                 {activeThread.remoteJid.split('@')[0]}
-               </span>
-            </div>
-            <div className="mt-4 px-4">
-               <button 
+            )}
+            {currentProvider === 'meta_official' && (
+              <span
+                className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider shadow-xs"
+                title="API Oficial da Meta"
+              >
+                Meta Oficial
+              </span>
+            )}
+          </div>
+
+          {/* Telefone e Ações Rápidas */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-slate-700 text-xs font-mono font-medium shadow-xs">
+            <Phone size={12} className="text-slate-400 shrink-0" />
+            <span className="tracking-wide">{formatPhone(cleanPhone)}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(cleanPhone);
+                toast.success('Número copiado!');
+              }}
+              className="text-slate-400 hover:text-primary-600 transition-colors p-0.5 ml-0.5"
+              title="Copiar telefone"
+            >
+              <Copy size={12} />
+            </button>
+            <a
+              href={`https://wa.me/${cleanPhone}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-500 hover:text-emerald-600 transition-colors p-0.5"
+              title="Abrir no WhatsApp Web"
+            >
+              <ExternalLink size={12} />
+            </a>
+          </div>
+
+          {/* Tracking info */}
+          <div className="mt-3">
+            {trackingData ? (
+              <button 
                 onClick={() => setShowTrackingModal(true)}
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[11px] transition-all
-                  ${trackingData 
-                    ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-200 hover:bg-primary-700' 
-                    : 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed'}`}
-                disabled={!trackingData}
-               >
-                 <Globe size={16} />
-                 {trackingData ? 'Ver Tracking de Origem' : 'Sem Dados de Origem'}
-               </button>
-            </div>
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200/80 rounded-xl text-xs font-semibold transition-all shadow-xs"
+              >
+                <Globe size={14} className="text-primary-600" />
+                <span>Ver Rastreamento de Origem</span>
+              </button>
+            ) : (
+              <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-50 text-slate-400 rounded-xl text-[11px] font-medium border border-slate-100">
+                <Globe size={13} className="opacity-50" />
+                <span>Sem campanha vinculada</span>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="p-5 space-y-8">
-          {/* De onde veio esse lead? — a correção manual.
-              Fica aqui, logo acima do contexto do ticket, porque é na conversa
-              que o paciente conta de onde veio. */}
+        <div className="p-4 space-y-3.5 bg-slate-50/50">
+          {/* De onde veio esse lead? */}
           {selectedContact?.id && (
-            <OrigemDoLead
-              contactId={selectedContact.id}
-              source={selectedContact.source}
-              adTracking={selectedContact.ad_tracking}
-              originLocked={selectedContact.origin_locked}
-              onMudou={patch => setSelectedContact((prev: any) => ({ ...prev, ...patch }))}
-            />
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
+              <OrigemDoLead
+                contactId={selectedContact.id}
+                source={selectedContact.source}
+                adTracking={selectedContact.ad_tracking}
+                originLocked={selectedContact.origin_locked}
+                onMudou={patch => setSelectedContact((prev: any) => ({ ...prev, ...patch }))}
+              />
+            </div>
           )}
 
-          {/* Contexto da Conversa: Status, Prioridade e Atribuição */}
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
-              <Bookmark size={14} className="text-primary-500" /> Contexto do Ticket
-            </h4>
+          {/* Atendimento & CRM */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <Bookmark size={15} className="text-primary-600" />
+                <span>Atendimento & CRM</span>
+              </h4>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                Ticket
+              </span>
+            </div>
+
             {showMeta24hWindow && (
-              <div className="mb-3">
-                <WindowCountdown
-                  lastInboundAt={activeThreadLastInbound}
-                  variant="panel"
-                  onTemplatesClick={() => {
-                    setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
-                    setTemplatesModalOpen(true);
-                  }}
-                />
-              </div>
+              <WindowCountdown
+                lastInboundAt={activeThreadLastInbound}
+                variant="panel"
+                onTemplatesClick={() => {
+                  setTemplatesModalTo((activeThread.remoteJid || '').split('@')[0]);
+                  setTemplatesModalOpen(true);
+                }}
+              />
             )}
-            <div className="space-y-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Etapa no Kanban</label>
-                {(() => {
-                  const etapaCliente = ETAPAS_FUNIL.find(e => e.valorBanco === null);
-                  const idAtual = activeThread.is_client
-                    ? etapaCliente?.id || ''
-                    : idDaEtapa(activeThread.funilStatus);
-                  const etapaAtual = ETAPAS_FUNIL.find(e => e.id === idAtual);
 
-                  return (
-                    <div className="relative">
-                      {/* A cor da etapa fica num ponto ao lado do campo: um
-                          <select> nativo não permite colorir cada <option> de
-                          forma confiável entre navegadores. Assim a pista de
-                          cor continua, no valor que está escolhido. */}
-                      <span
-                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full pointer-events-none ${etapaAtual?.dot || 'bg-slate-300'}`}
-                        aria-hidden
-                      />
-                      <select
-                        value={idAtual}
-                        onChange={async (e) => {
-                          const etapa = ETAPAS_FUNIL.find(x => x.id === e.target.value);
-                          if (!etapa || etapa.id === idAtual) return;
+            {/* Etapa no Funil */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Etapa no Funil</label>
+              {(() => {
+                const etapaCliente = ETAPAS_FUNIL.find(e => e.valorBanco === null);
+                const idAtual = activeThread.is_client
+                  ? etapaCliente?.id || ''
+                  : idDaEtapa(activeThread.funilStatus);
+                const etapaAtual = ETAPAS_FUNIL.find(e => e.id === idAtual);
 
-                          const ehClienteEtapa = etapa.valorBanco === null;
-                          const contactId = activeThread.contactId;
-                          try {
-                            if (ehClienteEtapa) {
-                              if (!contactId) throw new Error('Contato ainda não sincronizado');
-                              await promoteToClient(contactId);
-                              setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: true } : t));
-                              toast.success('Promovido a Cliente ⭐', { description: 'A ficha está em Clientes.' });
-                              return;
-                            }
+                return (
+                  <div className="relative">
+                    <span
+                      className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full pointer-events-none shadow-xs ${etapaAtual?.dot || 'bg-slate-300'}`}
+                      aria-hidden
+                    />
+                    <select
+                      value={idAtual}
+                      onChange={async (e) => {
+                        const etapa = ETAPAS_FUNIL.find(x => x.id === e.target.value);
+                        if (!etapa || etapa.id === idAtual) return;
 
-                            // Saindo de Cliente de volta para uma etapa do funil
-                            if (activeThread.is_client && contactId) {
-                              await demoteClient(contactId);
-                            }
-
-                            // Perdido não é só uma etapa: exige o motivo, que
-                            // é a informação que explica o funil depois.
-                            if (etapa.id === 'perdido') {
-                              if (!contactId) throw new Error('Contato ainda não sincronizado');
-                              setPerdaPendente({ contactId, nome: activeThread.name });
-                              return;
-                            }
-
-                            const valor = valorBancoDaEtapa(etapa.id);
-                            const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                            const query = supabase.from('contacts').update({ status_funil: valor });
-                            // Antes gravava o id da coluna ('novo_lead'), que o CHECK
-                            // recusa, e o erro não era conferido: a etapa parecia
-                            // mudar na tela e voltava no reload.
-                            const { error } = contactId
-                              ? await query.eq('id', contactId)
-                              : await query.ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                            if (error) throw error;
-
-                            setThreads(prev => prev.map(t => t.id === activeThread.id
-                              ? { ...t, funilStatus: etapa.id, is_client: false }
-                              : t));
-                            toast.success(`Etapa: ${etapa.label}`);
-                          } catch (err: any) {
-                            toast.error('Erro ao mudar etapa: ' + err.message);
+                        const ehClienteEtapa = etapa.valorBanco === null;
+                        const contactId = activeThread.contactId;
+                        try {
+                          if (ehClienteEtapa) {
+                            if (!contactId) throw new Error('Contato ainda não sincronizado');
+                            await promoteToClient(contactId);
+                            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: true } : t));
+                            toast.success('Promovido a Cliente ⭐', { description: 'A ficha está em Clientes.' });
+                            return;
                           }
-                        }}
-                        className="w-full appearance-none bg-white border border-slate-200 rounded-lg text-[13px] pl-8 pr-9 py-2.5 font-semibold text-slate-700 focus:ring-2 focus:ring-primary-100 focus:border-primary-500 outline-none transition-all"
-                      >
-                        {ETAPAS_FUNIL.map(etapa => (
-                          <option key={etapa.id} value={etapa.id}>{etapa.label}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-                    </div>
-                  );
-                })()}
+
+                          if (activeThread.is_client && contactId) {
+                            await demoteClient(contactId);
+                          }
+
+                          if (etapa.id === 'perdido') {
+                            if (!contactId) throw new Error('Contato ainda não sincronizado');
+                            setPerdaPendente({ contactId, nome: activeThread.name });
+                            return;
+                          }
+
+                          const valor = valorBancoDaEtapa(etapa.id);
+                          const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
+                          const query = supabase.from('contacts').update({ status_funil: valor });
+                          const { error } = contactId
+                            ? await query.eq('id', contactId)
+                            : await query.ilike('telefone', `%${cleanPhone.slice(-8)}%`);
+                          if (error) throw error;
+
+                          setThreads(prev => prev.map(t => t.id === activeThread.id
+                            ? { ...t, funilStatus: etapa.id, is_client: false }
+                            : t));
+                          toast.success(`Etapa: ${etapa.label}`);
+                        } catch (err: any) {
+                          toast.error('Erro ao mudar etapa: ' + err.message);
+                        }
+                      }}
+                      className="w-full appearance-none bg-slate-50/80 hover:bg-slate-50 border border-slate-200/90 rounded-xl text-xs pl-8 pr-8 py-2.5 font-semibold text-slate-800 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all cursor-pointer"
+                    >
+                      {ETAPAS_FUNIL.map(etapa => (
+                        <option key={etapa.id} value={etapa.id}>{etapa.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Prioridade & Atribuído a */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prioridade</label>
+                <div className="relative">
+                  <select 
+                    value={activeThread.priority || 'normal'}
+                    onChange={async (e) => {
+                      const val = e.target.value as any;
+                      await supabase.from('threads').update({ priority: val }).eq('id', activeThread.id);
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, priority: val } : t));
+                    }}
+                    className="w-full appearance-none bg-slate-50/80 hover:bg-slate-50 border border-slate-200/90 rounded-xl text-xs px-3 py-2.5 font-semibold text-slate-800 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="low">🟢 Baixa</option>
+                    <option value="normal">⚪ Normal</option>
+                    <option value="high">🔴 Alta</option>
+                    <option value="urgent">🔥 Urgente</option>
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Prioridade</label>
-                <select 
-                  value={activeThread.priority || 'normal'}
-                  onChange={async (e) => {
-                    const val = e.target.value as any;
-                    await supabase.from('threads').update({ priority: val }).eq('id', activeThread.id);
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, priority: val } : t));
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
-                >
-                  <option value="low">Baixa 🟢</option>
-                  <option value="normal">Normal ⚪</option>
-                  <option value="high">Alta 🔴</option>
-                  <option value="urgent">Urgente 🔥</option>
-                </select>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Responsável</label>
+                <div className="relative">
+                  <select 
+                    value={activeThread.assignedTo || ''}
+                    onChange={async (e) => {
+                      const val = e.target.value || null;
+                      await supabase.from('threads').update({ assigned_to: val }).eq('id', activeThread.id);
+                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, assignedTo: val } : t));
+                      toast.success(val ? 'Conversa atribuída!' : 'Atribuição removida.');
+                    }}
+                    className="w-full appearance-none bg-slate-50/80 hover:bg-slate-50 border border-slate-200/90 rounded-xl text-xs px-3 py-2.5 font-semibold text-slate-800 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all cursor-pointer truncate"
+                  >
+                    <option value="">Não atribuído</option>
+                    <option value={user?.id || 'me'}>Você</option>
+                    {professionals.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Atribuído a</label>
-                <select 
-                  value={activeThread.assignedTo || ''}
-                  onChange={async (e) => {
-                    const val = e.target.value || null;
-                    await supabase.from('threads').update({ assigned_to: val }).eq('id', activeThread.id);
-                    setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, assignedTo: val } : t));
-                    toast.success(val ? 'Conversa atribuída!' : 'Atribuição removida.');
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
-                >
-                  <option value="">Não atribuído</option>
-                  <option value={user?.id || 'me'}>Você ({user?.email?.split('@')[0]})</option>
-                  {professionals.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (Equipe)</option>
-                  ))}
-                </select>
-              </div>
-              {agents.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase">Agente IA</label>
+            </div>
+
+            {/* Agente IA */}
+            {agents.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Agente IA</label>
+                <div className="relative">
                   <select
                     value={activeThread.agentId || ''}
                     onChange={async (e) => {
@@ -2922,92 +3007,102 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                         toast.success(val ? `Agente "${agent?.nome || agent?.company_name}" selecionado!` : 'Usando agente padrão.');
                       } catch { toast.error('Erro de conexão.'); }
                     }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[13px] px-4 py-3 font-semibold text-slate-700 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all"
+                    className="w-full appearance-none bg-slate-50/80 hover:bg-slate-50 border border-slate-200/90 rounded-xl text-xs px-3 py-2.5 font-semibold text-slate-800 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all cursor-pointer"
                   >
                     <option value="">🤖 Agente padrão</option>
                     {agents.map(a => (
                       <option key={a.id} value={a.id}>{a.nome || a.company_name || 'Agente sem nome'}</option>
                     ))}
                   </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
                 </div>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Etiqueta Especial</label>
-                <button
-                  onClick={async () => {
-                    const newVal = !activeThread.is_client;
-                    // Passa pela API da carteira em vez de escrever direto em
-                    // contacts: promover precisa abrir a ficha comercial junto,
-                    // senão nasce cliente sem ficha na tela de Clientes.
-                    const contactId = activeThread.contactId;
-                    if (!contactId) {
-                      toast.error('Contato ainda não sincronizado. Tente novamente em instantes.');
-                      return;
-                    }
-                    try {
-                      if (newVal) await promoteToClient(contactId);
-                      else await demoteClient(contactId);
-                      setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
-                      toast.success(newVal ? 'Promovido a Cliente! ⭐' : 'Devolvido para os leads.');
-                    } catch (err: any) {
-                      toast.error('Erro: ' + err.message);
-                    }
-                  }}
-                  className={`w-full flex items-center justify-center gap-2 px-3 py-3 rounded-2xl border text-[12px] font-black uppercase tracking-widest transition-all
-                    ${activeThread.is_client 
-                      ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-lg shadow-amber-500/5' 
-                      : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-500'}`}
-                >
-                  <Star size={16} className={activeThread.is_client ? 'fill-amber-500' : ''} />
-                  {activeThread.is_client ? 'É Cliente' : 'Marcar como Cliente'}
-                </button>
               </div>
-            </div>
+            )}
+
+            {/* Botão de Marcar como Cliente */}
+            <button
+              onClick={async () => {
+                const newVal = !activeThread.is_client;
+                const contactId = activeThread.contactId;
+                if (!contactId) {
+                  toast.error('Contato ainda não sincronizado. Tente novamente em instantes.');
+                  return;
+                }
+                try {
+                  if (newVal) await promoteToClient(contactId);
+                  else await demoteClient(contactId);
+                  setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, is_client: newVal } : t));
+                  toast.success(newVal ? 'Promovido a Cliente! ⭐' : 'Devolvido para os leads.');
+                } catch (err: any) {
+                  toast.error('Erro: ' + err.message);
+                }
+              }}
+              className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all shadow-xs ${
+                activeThread.is_client 
+                  ? 'bg-amber-50/80 border-amber-300 text-amber-700 hover:bg-amber-100' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50/30'
+              }`}
+            >
+              <Star size={15} className={activeThread.is_client ? 'fill-amber-500 text-amber-500' : 'text-slate-400'} />
+              <span>{activeThread.is_client ? 'Cliente Cadastrado' : 'Marcar como Cliente'}</span>
+            </button>
           </div>
 
-          {/* Etiquetas (Labels) */}
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Tag size={14} className="text-primary-500" /> Etiquetas
-            </h4>
-            <div className="flex flex-wrap gap-2 mb-3">
+          {/* Etiquetas / Tags */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <Tag size={15} className="text-primary-600" />
+                <span>Etiquetas</span>
+              </h4>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                {activeThread.labels?.length || 0}
+              </span>
+            </div>
+
+            {/* Tags ativas */}
+            <div className="flex flex-wrap gap-1.5">
               {activeThread.labels && activeThread.labels.length > 0 ? (
                 activeThread.labels.map((label, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 border border-primary-100 rounded-xl text-[11px] font-bold text-primary-700 group shadow-sm">
-                    {label}
+                  <span 
+                    key={idx} 
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-700 border border-primary-200/60 rounded-lg text-xs font-semibold group transition-all"
+                  >
+                    <span>{label}</span>
                     <button 
                       onClick={async () => {
                         const newLabels = activeThread.labels!.filter(l => l !== label);
                         await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
                         setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
                       }}
-                      className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                      className="text-primary-400 hover:text-red-500 transition-colors p-0.5"
+                      title="Remover etiqueta"
                     >
                       <X size={12} />
                     </button>
-                  </div>
+                  </span>
                 ))
               ) : (
-                <p className="text-[11px] text-slate-400 font-medium">Nenhuma etiqueta</p>
+                <p className="text-xs text-slate-400 py-1">Nenhuma etiqueta atribuída</p>
               )}
             </div>
-            <div className="flex flex-col gap-3">
+
+            {/* Input para criar nova etiqueta */}
+            <div className="pt-1">
               <input 
                 type="text" 
-                placeholder="Criar nova etiqueta..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[12px] px-4 py-2.5 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all"
+                placeholder="Digitar etiqueta e apertar Enter..."
+                className="w-full bg-slate-50/80 border border-slate-200 rounded-xl text-xs px-3 py-2 text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter') {
                     const val = e.currentTarget.value.trim();
                     if (val) {
-                      // Se não existe na lista global, adiciona
                       if (!predefinedLabels.includes(val)) {
                         const newGlobal = [...predefinedLabels, val];
                         await supabase.from('profiles').update({ predefined_labels: newGlobal }).eq('id', user?.id);
                         setPredefinedLabels(newGlobal);
                       }
                       
-                      // Adiciona ao contato atual
                       if (!activeThread.labels || !activeThread.labels.includes(val)) {
                         const newLabels = [...(activeThread.labels || []), val];
                         await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
@@ -3018,225 +3113,179 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   }
                 }}
               />
-              
-              {predefinedLabels.length > 0 && (
-                <div className="pt-2 border-t border-slate-100">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Suas Etiquetas</p>
-                  <div className="flex flex-wrap gap-2">
-                    {predefinedLabels.map((lbl, idx) => {
-                      const isActive = activeThread.labels && activeThread.labels.includes(lbl);
-                      return (
-                        <div key={idx} className="relative group/lbl flex items-center">
-                          <button
-                            onClick={async () => {
-                              let newLabels = [...(activeThread.labels || [])];
-                              if (isActive) {
-                                newLabels = newLabels.filter(l => l !== lbl);
-                              } else {
-                                newLabels.push(lbl);
-                              }
+            </div>
+
+            {/* Sugestões Rápidas */}
+            {predefinedLabels.length > 0 && (
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sugestões Rápidas</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {predefinedLabels.map((lbl, idx) => {
+                    const isActive = activeThread.labels && activeThread.labels.includes(lbl);
+                    return (
+                      <div key={idx} className="relative group/lbl inline-flex items-center">
+                        <button
+                          onClick={async () => {
+                            let newLabels = [...(activeThread.labels || [])];
+                            if (isActive) {
+                              newLabels = newLabels.filter(l => l !== lbl);
+                            } else {
+                              newLabels.push(lbl);
+                            }
+                            await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
+                            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
+                          }}
+                          className={`pl-2.5 pr-5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                            isActive
+                              ? 'bg-primary-600 text-white border-primary-600 shadow-xs'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-primary-300 hover:text-primary-700'
+                          }`}
+                        >
+                          {lbl}
+                        </button>
+                        <button
+                          title="Excluir da lista"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const newGlobal = predefinedLabels.filter(l => l !== lbl);
+                            await supabase.from('profiles').update({ predefined_labels: newGlobal }).eq('id', user?.id);
+                            setPredefinedLabels(newGlobal);
+                            if (isActive) {
+                              const newLabels = (activeThread.labels || []).filter(l => l !== lbl);
                               await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
                               setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
-                            }}
-                            className={`pl-3 pr-6 py-1.5 rounded-xl text-[11px] font-bold transition-all border ${
-                              isActive
-                                ? 'bg-primary-500 text-white border-primary-500 shadow-md shadow-primary-500/20'
-                                : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300 hover:text-primary-600'
-                            }`}
-                          >
-                            {lbl}
-                          </button>
-                          <button
-                            title="Excluir etiqueta"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              const newGlobal = predefinedLabels.filter(l => l !== lbl);
-                              await supabase.from('profiles').update({ predefined_labels: newGlobal }).eq('id', user?.id);
-                              setPredefinedLabels(newGlobal);
-                              if (isActive) {
-                                const newLabels = (activeThread.labels || []).filter(l => l !== lbl);
-                                await supabase.from('threads').update({ labels: newLabels }).eq('id', activeThread.id);
-                                setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, labels: newLabels } : t));
-                              }
-                              toast.success(`Etiqueta "${lbl}" excluída.`);
-                            }}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/lbl:opacity-100 transition-opacity rounded-full p-0.5 hover:bg-red-100 hover:text-red-500 text-slate-400"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Dados do Contato */}
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-              <Info size={14} className="text-primary-500" /> Informações
-            </h4>
-            <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary-50 flex items-center justify-center text-primary-600 shrink-0 border border-primary-100 shadow-sm">
-                  <Phone size={18} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">WhatsApp</p>
-                  <p className="text-sm font-black text-gray-800">{(activeThread.remoteJid || '').split('@')[0]}</p>
+                            }
+                            toast.success(`Etiqueta "${lbl}" removida das sugestões.`);
+                          }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/lbl:opacity-100 transition-opacity p-0.5 hover:text-red-500 text-slate-400"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600 shrink-0 border border-primary-100 shadow-sm">
-                  <Clock size={18} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</p>
-                  <p className="text-sm font-black text-gray-800">
-                    {selectedContact?.created_at ? new Date(selectedContact.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Agendamentos */}
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-2"><Calendar size={14} className="text-primary-500" /> Agendamentos</span>
-              <span className="bg-primary-600 text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg shadow-primary-500/20">{appointments.length}</span>
-            </h4>
-            <div className="space-y-4">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <Calendar size={15} className="text-primary-600" />
+                <span>Agendamentos</span>
+              </h4>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                {appointments.length}
+              </span>
+            </div>
+
+            <div className="space-y-2">
               {appointments.length > 0 ? (
                 appointments.map((app, idx) => (
-                  <div key={idx} className="p-5 bg-slate-50/50 rounded-[2rem] border border-slate-100 hover:border-primary-200 transition-all group relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-2">
-                       <Calendar size={48} className="text-primary-500/5 -mr-4 -mt-4 rotate-12" />
-                    </div>
-                    <div className="flex justify-between items-start mb-3 relative z-10">
-                      <p className="text-[14px] font-black text-slate-900 truncate flex-1">{app.service || 'Agendamento'}</p>
-                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ml-2 border shadow-sm
-                        ${app.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                  <div key={idx} className="p-3 bg-slate-50/80 hover:bg-slate-50 rounded-xl border border-slate-200/70 transition-all">
+                    <div className="flex justify-between items-start gap-2 mb-1.5">
+                      <p className="text-xs font-bold text-slate-800 truncate flex-1">{app.service || 'Agendamento'}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        app.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
                         {app.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold relative z-10 bg-white/50 w-fit px-3 py-1 rounded-full border border-slate-100/50">
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
                       <Clock size={12} className="text-primary-500" />
-                      {app.data ? new Date(app.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'} • {app.time || '—'}
+                      <span>{app.data ? new Date(app.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'} às {app.time || '—'}</span>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-12 bg-slate-50/30 rounded-[2.5rem] border border-dashed border-slate-200">
-                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
-                    <Calendar size={24} className="text-slate-300" />
-                  </div>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-4">Nenhum agendamento futuro</p>
+                <div className="text-center py-6 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                  <Calendar size={20} className="text-slate-300 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-slate-400">Nenhum agendamento futuro</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Gestão do Funil */}
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-              <CreditCard size={14} className="text-primary-500" /> Gestão de Funil
-            </h4>
-            <div className="flex flex-col gap-2">
-              {([
-                { id: 'novo_lead',      label: 'Novo Lead',        dot: 'bg-slate-400' },
-                { id: 'primeiro_atend', label: 'Primeiro Atend.',  dot: 'bg-blue-400' },
-                { id: 'sem_resposta',   label: 'Sem Resposta',     dot: 'bg-amber-400' },
-                { id: 'qualificado',    label: 'Qualificado',      dot: 'bg-violet-500' },
-                { id: 'agendamento',    label: 'Agendamento',      dot: 'bg-indigo-400' },
-                { id: 'cliente',        label: 'Cliente',          dot: 'bg-emerald-500' },
-              ] as const).map(({ id: status, label, dot }) => {
-                const isActive = activeThread.funilStatus === status;
-                return (
-                  <button
-                    key={status}
-                    onClick={async () => {
-                      const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
-                      const { error } = await supabase
-                        .from('contacts')
-                        .update({ status_funil: status })
-                        .ilike('telefone', `%${cleanPhone.slice(-8)}%`);
-                      if (!error) {
-                        toast.success(`Etapa alterada para ${label}`);
-                        setThreads(prev => prev.map(t =>
-                          t.id === selectedThreadId ? { ...t, funilStatus: status } : t
-                        ));
-                      } else {
-                        toast.error('Erro ao atualizar status');
-                      }
-                    }}
-                    className={`group w-full flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all
-                      ${isActive
-                        ? 'bg-primary-50 border-primary-500 shadow-xl shadow-primary-500/10 scale-[1.02]'
-                        : 'bg-white border-slate-100 hover:border-primary-200'}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full shadow-sm ${dot}`} />
-                      <span className={`text-[14px] font-bold ${isActive ? 'text-primary-700' : 'text-slate-600'}`}>{label}</span>
-                    </div>
-                    {isActive && <Check size={18} className="text-primary-600" strokeWidth={3} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Mensagens Favoritas */}
-          <div className="pt-4 border-t border-slate-100">
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-2"><Star size={14} className="text-amber-500 fill-amber-500" /> Favoritas</span>
-              <span className="bg-amber-500 text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg shadow-amber-500/20">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <Star size={15} className="text-amber-500 fill-amber-500" />
+                <span>Mensagens Favoritas</span>
+              </h4>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200/60">
                 {messages.filter(m => m.is_starred).length}
               </span>
-            </h4>
-            <div className="space-y-3">
+            </div>
+
+            <div className="space-y-2">
               {messages.filter(m => m.is_starred).length > 0 ? (
                 messages.filter(m => m.is_starred).map((msg, idx) => (
-                  <div key={idx} className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 hover:border-amber-300 transition-all group cursor-pointer"
-                       onClick={() => {
-                         const el = document.getElementById(`msg-${msg.id}`);
-                         if (el) {
-                           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                           el.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2', 'rounded-2xl');
-                           setTimeout(() => el.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2', 'rounded-2xl'), 2000);
-                         }
-                       }}>
-                    <p className="text-[13px] text-slate-700 line-clamp-3 leading-relaxed">
+                  <div 
+                    key={idx} 
+                    className="p-3 bg-amber-50/40 hover:bg-amber-50/70 rounded-xl border border-amber-200/70 transition-all cursor-pointer group"
+                    onClick={() => {
+                      const el = document.getElementById(`msg-${msg.id}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2', 'rounded-2xl');
+                        setTimeout(() => el.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2', 'rounded-2xl'), 2000);
+                      }
+                    }}
+                  >
+                    <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
                       {msg.text || (msg.message_type === 'image' ? '📸 Imagem' : msg.message_type === 'audio' ? '🎤 Áudio' : '📎 Arquivo')}
                     </p>
-                    <div className="mt-2 flex items-center justify-between text-[10px] text-amber-600 font-bold uppercase">
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-amber-700/80 font-semibold">
                       <span>{msg.time}</span>
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
                           handleToggleStar(msg.id, true); 
                         }}
-                        className="hover:underline"
+                        className="hover:text-red-600 hover:underline"
                       >
-                         Remover
+                        Remover
                       </button>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-10 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200">
-                  <Star size={20} className="text-slate-200 mx-auto mb-2" />
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Nenhuma favoritada</p>
+                <div className="text-center py-6 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                  <Star size={20} className="text-slate-300 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-slate-400">Nenhuma favoritada</p>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Registro do Contato */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-2.5">
+            <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Info size={15} className="text-primary-600" />
+              <span>Registro do Contato</span>
+            </h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-100">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Criado em</span>
+                <span className="font-semibold text-slate-700">
+                  {selectedContact?.created_at ? new Date(selectedContact.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
+                </span>
+              </div>
+              <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-100">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Telefone</span>
+                <span className="font-semibold text-slate-700 truncate block">
+                  {formatPhone(cleanPhone)}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     );
+  };
   };
 
   const toggleThreadStatus = async () => {
@@ -4311,7 +4360,28 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   <ArrowLeft size={20} />
                 </button>
 
-                <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" threadId={activeThread.id} />
+                <div 
+                  onClick={() => {
+                    if (activeThread.profilePictureUrl) {
+                      setEnlargedPhoto({ 
+                        url: activeThread.profilePictureUrl, 
+                        name: activeThread.name, 
+                        phone: (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '') 
+                      });
+                    } else {
+                      setShowDetails(true);
+                    }
+                  }}
+                  className={`relative group/headerAvatar select-none ${activeThread.profilePictureUrl ? 'cursor-pointer' : 'cursor-default'}`}
+                  title={activeThread.profilePictureUrl ? "Clique para ver foto ampliada" : undefined}
+                >
+                  <ContactAvatar url={activeThread.profilePictureUrl} name={activeThread.name} size="md" threadId={activeThread.id} />
+                  {activeThread.profilePictureUrl && (
+                    <div className="absolute inset-0 rounded-full bg-slate-950/20 opacity-0 group-hover/headerAvatar:opacity-100 transition-opacity flex items-center justify-center">
+                      <ZoomIn size={14} className="text-white drop-shadow" />
+                    </div>
+                  )}
+                </div>
                 <div className="min-w-0">
                   <h3 className="text-[15px] font-black text-slate-900 leading-tight truncate flex items-center gap-2">
                     {/^\d+$/.test(activeThread.name) ? formatPhone(activeThread.name) : activeThread.name}
@@ -5011,12 +5081,12 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           <motion.div 
             key="lead-details-sidebar"
             initial={{ opacity: 0, width: 0 }}
-            animate={{ opacity: 1, width: '22%' }}
+            animate={{ opacity: 1, width: 350 }}
             exit={{ opacity: 0, width: 0 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="hidden lg:flex border-l border-gray-100 flex-col bg-white overflow-hidden shrink-0"
+            className="hidden lg:flex border-l border-slate-200/80 flex-col bg-white overflow-hidden shrink-0 shadow-xs"
           >
-            <div className="w-[300px] xl:w-full h-full flex flex-col">
+            <div className="w-[350px] h-full flex flex-col">
               {renderContactDetails()}
             </div>
           </motion.div>
@@ -5431,6 +5501,80 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Lightbox de Foto Ampliada do Cliente */}
+      <AnimatePresence>
+        {enlargedPhoto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[400] flex items-center justify-center p-4 md:p-8 bg-slate-950/80 backdrop-blur-md"
+            onClick={() => setEnlargedPhoto(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 12 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+              className="relative max-w-lg w-full bg-slate-900 border border-slate-700/60 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header do modal */}
+              <div className="px-5 py-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/95">
+                <div className="min-w-0 pr-3">
+                  <h4 className="text-base font-bold text-white truncate">{enlargedPhoto.name}</h4>
+                  {enlargedPhoto.phone && (
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">{formatPhone(enlargedPhoto.phone)}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <a
+                    href={enlargedPhoto.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+                    title="Abrir imagem original em nova aba"
+                  >
+                    <ExternalLink size={18} />
+                  </a>
+                  <button
+                    onClick={() => setEnlargedPhoto(null)}
+                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+                    title="Fechar (Esc)"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Área da foto ampliada */}
+              <div className="relative p-6 flex items-center justify-center bg-slate-950/60 max-h-[70vh] overflow-hidden select-none">
+                <img
+                  src={enlargedPhoto.url}
+                  alt={enlargedPhoto.name}
+                  className="max-h-[60vh] max-w-full object-contain rounded-2xl shadow-2xl ring-1 ring-white/10"
+                />
+              </div>
+
+              {/* Rodapé do modal */}
+              <div className="px-5 py-3 bg-slate-900/95 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
+                  Foto de perfil do WhatsApp
+                </span>
+                <button
+                  onClick={() => setEnlargedPhoto(null)}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
