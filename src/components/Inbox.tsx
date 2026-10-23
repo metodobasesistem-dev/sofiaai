@@ -1225,7 +1225,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
       >
         {renderMobileActions()}
 
-        <div className={`flex items-end gap-1.5 max-w-[85%] md:max-w-[75%] ${!isLead ? 'flex-row' : 'flex-row-reverse'}`}>
+        <div className={`flex items-end gap-1.5 min-w-0 max-w-[85%] md:max-w-[75%] ${!isLead ? 'flex-row' : 'flex-row-reverse'}`}>
           {renderActionButtons()}
 
           <div className="relative flex flex-col items-end">
@@ -1261,19 +1261,19 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
     >
       {renderMobileActions()}
 
-      <div className={`flex items-center gap-1.5 max-w-[85%] md:max-w-[70%] ${!isLead ? 'flex-row' : 'flex-row-reverse'}`}>
+      <div className={`flex items-end gap-1.5 min-w-0 max-w-[88%] md:max-w-[75%] ${!isLead ? 'flex-row' : 'flex-row-reverse'}`}>
         {renderActionButtons()}
 
         {/* Bolha estilo WhatsApp Web */}
         <motion.div
-          className={`px-2.5 py-1.5 text-[14.2px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative break-words z-10 cursor-text select-text
+          className={`px-2.5 py-1.5 text-[14.2px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative break-words [overflow-wrap:anywhere] min-w-0 max-w-full z-10 cursor-text select-text
           ${isRevoked
             ? 'bg-slate-50 text-slate-400 border border-slate-100 italic rounded-lg'
             : isPrivate 
               ? 'bg-amber-100 text-amber-900 border border-amber-200 rounded-lg' 
               : !isLead 
                 ? `bg-[#d9fdd3] text-[#111b21] rounded-lg ${isFirstInGroup ? 'rounded-tr-none' : ''}` 
-                : `bg-white text-[#111b21] rounded-lg ${isFirstInGroup ? 'rounded-tl-none' : ''}`}`}
+                : `bg-white text-[#111b21] rounded-lg border border-slate-200/60 ${isFirstInGroup ? 'rounded-tl-none' : ''}`}`}
         >
           {message.quoted_text && (
             <div className={`mb-1 p-1.5 rounded-md border-l-4 text-xs truncate max-w-full
@@ -1295,9 +1295,9 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
           )}
           
           {isTextMessage ? (
-            /* Mensagem de texto com timestamp na mesma linha quando há espaço (WhatsApp Web float-right) */
-            <div className="inline-block max-w-full">
-              <span className={`whitespace-pre-wrap break-words leading-[19px] ${isRevoked ? 'italic opacity-60' : ''}`}>
+            /* Mensagem de texto com quebra de linha segura e timestamp no canto */
+            <div className="min-w-0 max-w-full">
+              <div className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-[19px] ${isRevoked ? 'italic opacity-60' : ''}`}>
                 {isRevoked ? (
                   <span className="inline-flex items-center gap-1.5">
                     <Ban size={13} className="shrink-0" />
@@ -1306,12 +1306,12 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                 ) : (
                   renderMediaContent()
                 )}
-              </span>
-              <span className="inline-flex items-center gap-0.5 align-bottom ml-2 float-right mt-1 text-[11px] leading-none text-[#667781] select-none shrink-0">
+              </div>
+              <div className="flex items-center gap-1 justify-end mt-1 text-[11px] leading-none text-[#667781] select-none shrink-0">
                 {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
                 <span>{message.time}</span>
                 {statusIcons}
-              </span>
+              </div>
             </div>
           ) : (
             /* Mensagens de mídia (áudio, imagem, vídeo, documento, etc.) */
@@ -2662,9 +2662,9 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     const cleanPhone = (activeThread.remoteJid || '').split('@')[0].replace(/\D/g, '');
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/40 relative flex flex-col">
-        {/* Header fixo da sidebar com botão de fechar */}
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 sticky top-0 z-20">
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/40 relative">
+        {/* Header da sidebar com botão de fechar */}
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse" />
             <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Dados do Contato</span>
@@ -2679,7 +2679,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         </div>
 
         {/* Perfil Hero Header */}
-        <div className="p-5 border-b border-slate-100 bg-white text-center relative overflow-hidden">
+        <div className="p-5 border-b border-slate-100 bg-white text-center relative">
           {/* Avatar com hover e clique para ampliar */}
           <div className="relative inline-block mx-auto mb-3">
             <div 
