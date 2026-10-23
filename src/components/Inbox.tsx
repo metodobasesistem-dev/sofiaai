@@ -809,8 +809,8 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 }
 
 const TypingIndicator: React.FC = () => (
-  <div className="flex items-start mb-1.5">
-    <div className="max-w-[85%] px-4 py-3 rounded-2xl bg-white border border-slate-200/50 shadow-sm rounded-tl-none flex items-center gap-1.5">
+  <div className="flex items-start mt-1.5">
+    <div className="px-3 py-2 rounded-lg bg-white shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] rounded-tl-none flex items-center gap-1.5">
       {[0, 1, 2].map(i => (
         <span
           key={i}
@@ -836,13 +836,32 @@ type ChatBubbleProps = {
   onSelect?: (id: string) => void;
   onForward?: (msg: Message) => void;
   highlightQuery?: string;
+  isFirstInGroup?: boolean;
+  isSameSenderAsPrev?: boolean;
 };
 
-const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDelete, onReact, onReply, onStar, onOpenContact, onImageLoad, isSelected, isSelectionMode, onSelect, onForward, highlightQuery }) => {
+const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
+  message,
+  onPreview,
+  onDelete,
+  onReact,
+  onReply,
+  onStar,
+  onOpenContact,
+  onImageLoad,
+  isSelected,
+  isSelectionMode,
+  onSelect,
+  onForward,
+  highlightQuery,
+  isFirstInGroup = true,
+  isSameSenderAsPrev = false,
+}) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
   const isExternal = message.is_external;
   const isRevoked = message.message_type === 'revoked';
+  const isSticker = message.message_type === 'sticker';
 
   const [showMobileActions, setShowMobileActions] = useState(false);
   // Posição do seletor de reação em coordenadas de tela
@@ -888,7 +907,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
   const renderMediaContent = () => {
     if (isRevoked) {
       return (
-        <div className="flex items-center gap-2 italic opacity-50 py-1">
+        <div className="flex items-center gap-2 italic opacity-50 py-0.5">
           <Ban size={14} />
           <span className="text-[13px]">Esta mensagem foi apagada</span>
         </div>
@@ -910,7 +929,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
       
       case 'image':
         return (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity min-w-[120px]"
                  onClick={() => message.media_url && onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
               {message.media_url ? (
@@ -936,10 +955,9 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
           </div>
         );
 
-
       case 'video':
         return (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group/video"
                  onClick={() => onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
               <video className="max-w-full max-h-[300px]" preload="none" playsInline>
@@ -958,7 +976,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
       case 'document':
         return (
           <div onClick={() => onPreview({ url: message.media_url, type: 'document', name: message.media_filename })}
-             className="flex items-center gap-3 p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-colors cursor-pointer">
+             className="flex items-center gap-3 p-2.5 bg-black/5 rounded-xl hover:bg-black/10 transition-colors cursor-pointer">
             <div className="w-10 h-10 rounded-lg bg-primary-500 flex items-center justify-center text-white shrink-0">
               <FileText size={20} />
             </div>
@@ -970,13 +988,6 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
                 {message.media_mime_type?.split('/')[1] || 'Documento'}
               </p>
             </div>
-          </div>
-        );
-
-      case 'sticker':
-        return (
-          <div className="w-32 h-32">
-            <img src={message.media_url} alt="Sticker" loading="lazy" decoding="async" className="w-full h-full object-contain" />
           </div>
         );
 
@@ -1005,7 +1016,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
 
       case 'location':
         return (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
              <div className="flex items-center gap-2 text-primary-600 font-bold">
                <MapPin size={16} /> Localização enviada
              </div>
@@ -1018,254 +1029,306 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({ message, onPreview, onDele
 
       default:
         return (
-          <p className="whitespace-pre-wrap break-words leading-relaxed">
+          <span className="whitespace-pre-wrap break-words leading-[19px]">
             {renderFormattedText(
               message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''),
               highlightQuery
             )}
-          </p>
+          </span>
         );
     }
   };
-  
-  return (
-    <div
-      className={`flex flex-col mb-1.5 group ${!isLead ? 'items-end' : 'items-start'} relative overflow-hidden transition-colors ${isSelected ? 'bg-primary-50/60 rounded-2xl' : ''}`}
-      onTouchStart={isSelectionMode ? undefined : handleTouchStart}
-      onTouchEnd={isSelectionMode ? undefined : handleTouchEnd}
-      onTouchMove={isSelectionMode ? undefined : handleTouchEnd}
-      onClick={isSelectionMode ? () => onSelect?.(message.id) : undefined}
-    >
-      {/* Long press mobile action sheet */}
-      <AnimatePresence>
-        {showMobileActions && !isRevoked && (
+
+  const renderMobileActions = () => (
+    <AnimatePresence>
+      {showMobileActions && !isRevoked && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[210] flex flex-col justify-end"
+        >
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileActions(false)} />
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[210] flex flex-col justify-end"
+            initial={{ y: 80 }}
+            animate={{ y: 0 }}
+            exit={{ y: 80 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+            className="relative bg-white rounded-t-3xl px-4 pt-4 pb-8 shadow-2xl"
           >
-            <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileActions(false)} />
-            <motion.div
-              initial={{ y: 80 }}
-              animate={{ y: 0 }}
-              exit={{ y: 80 }}
-              transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-              className="relative bg-white rounded-t-3xl px-4 pt-4 pb-8 shadow-2xl"
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+            {/* Emoji rápido */}
+            <div className="flex justify-around mb-4 px-2">
+              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => { onReact(message.id, emoji); setShowMobileActions(false); }}
+                  className="text-3xl active:scale-110 transition-transform p-1"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="h-px bg-slate-100 mb-2" />
+            {/* Ações */}
+            <button
+              onClick={() => { onReply(message); setShowMobileActions(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
             >
-              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
-              {/* Emoji rápido */}
-              <div className="flex justify-around mb-4 px-2">
-                {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+              <ChevronLeft size={20} className="rotate-180 text-primary-600 shrink-0" />
+              <span className="text-[15px] font-semibold text-slate-800">Responder</span>
+            </button>
+            <button
+              onClick={() => { onStar(message.id, !!message.is_starred); setShowMobileActions(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+            >
+              <Star size={20} className={message.is_starred ? 'fill-amber-500 text-amber-500 shrink-0' : 'text-slate-400 shrink-0'} />
+              <span className="text-[15px] font-semibold text-slate-800">
+                {message.is_starred ? 'Remover dos favoritos' : 'Favoritar'}
+              </span>
+            </button>
+            {onForward && (
+              <button
+                onClick={() => { onForward(message); setShowMobileActions(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+              >
+                <ChevronRight size={20} className="text-primary-600 shrink-0" />
+                <span className="text-[15px] font-semibold text-slate-800">Encaminhar</span>
+              </button>
+            )}
+            {onSelect && (
+              <button
+                onClick={() => { onSelect(message.id); setShowMobileActions(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
+              >
+                <CheckCircle2 size={20} className="text-slate-400 shrink-0" />
+                <span className="text-[15px] font-semibold text-slate-800">Selecionar</span>
+              </button>
+            )}
+            <button
+              onClick={() => { onDelete(message.id); setShowMobileActions(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 active:bg-red-100 rounded-2xl transition-all text-left"
+            >
+              <Trash size={20} className="text-red-500 shrink-0" />
+              <span className="text-[15px] font-semibold text-red-500">Apagar</span>
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderActionButtons = () => (
+    !isRevoked ? (
+      <div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity shrink-0">
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (emojiPos) { setEmojiPos(null); return; }
+              const r = e.currentTarget.getBoundingClientRect();
+              const ALTURA = 150;
+              const LARGURA = 236;
+              const cabeAcima = r.top - ALTURA - 8 > 8;
+              setEmojiPos({
+                top: cabeAcima ? r.top - ALTURA - 8 : r.bottom + 8,
+                left: Math.min(Math.max(8, r.left - LARGURA / 2), window.innerWidth - LARGURA - 8),
+              });
+            }}
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-black/5 rounded-full transition-all"
+            title="Reagir"
+          >
+            <Smile size={16} />
+          </button>
+
+          {emojiPos && (
+            <>
+              <div className="fixed inset-0 z-[99]" onClick={(e) => { e.stopPropagation(); setEmojiPos(null); }} />
+              <div
+                style={{ position: 'fixed', top: emojiPos.top, left: emojiPos.left, width: 236 }}
+                className="bg-white border border-slate-200 rounded-2xl shadow-xl p-2 grid grid-cols-6 gap-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
+              >
+                {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '💡', '✅', '❌', '🚀', '👀', '🤔', '💯', '⭐', '🤝'].map(emoji => (
                   <button
                     key={emoji}
-                    onClick={() => { onReact(message.id, emoji); setShowMobileActions(false); }}
-                    className="text-3xl active:scale-110 transition-transform p-1"
+                    onClick={(e) => { e.stopPropagation(); onReact(message.id, emoji); setEmojiPos(null); }}
+                    className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[18px] hover:scale-125"
                   >
                     {emoji}
                   </button>
                 ))}
               </div>
-              <div className="h-px bg-slate-100 mb-2" />
-              {/* Ações */}
-              <button
-                onClick={() => { onReply(message); setShowMobileActions(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
-              >
-                <ChevronLeft size={20} className="rotate-180 text-primary-600 shrink-0" />
-                <span className="text-[15px] font-semibold text-slate-800">Responder</span>
-              </button>
-              <button
-                onClick={() => { onStar(message.id, !!message.is_starred); setShowMobileActions(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
-              >
-                <Star size={20} className={message.is_starred ? 'fill-amber-500 text-amber-500 shrink-0' : 'text-slate-400 shrink-0'} />
-                <span className="text-[15px] font-semibold text-slate-800">
-                  {message.is_starred ? 'Remover dos favoritos' : 'Favoritar'}
-                </span>
-              </button>
-              {onForward && (
-                <button
-                  onClick={() => { onForward(message); setShowMobileActions(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
-                >
-                  <ChevronRight size={20} className="text-primary-600 shrink-0" />
-                  <span className="text-[15px] font-semibold text-slate-800">Encaminhar</span>
-                </button>
-              )}
-              {onSelect && (
-                <button
-                  onClick={() => { onSelect(message.id); setShowMobileActions(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 rounded-2xl transition-all text-left"
-                >
-                  <CheckCircle2 size={20} className="text-slate-400 shrink-0" />
-                  <span className="text-[15px] font-semibold text-slate-800">Selecionar</span>
-                </button>
-              )}
-              <button
-                onClick={() => { onDelete(message.id); setShowMobileActions(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 active:bg-red-100 rounded-2xl transition-all text-left"
-              >
-                <Trash size={20} className="text-red-500 shrink-0" />
-                <span className="text-[15px] font-semibold text-red-500">Apagar</span>
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* A bolha não arrasta nem responde ao duplo clique: as duas coisas
-          roubavam a seleção do texto e impediam simplesmente copiar a
-          mensagem. Responder é a seta da barra de ações, ao lado. */}
-      <motion.div
-        className={`max-w-[85%] px-3 py-2 rounded-2xl text-[14.5px] leading-relaxed shadow-sm relative break-words z-10 cursor-text select-text
-        ${isRevoked
-          ? 'bg-slate-50 text-slate-400 border border-slate-100 italic'
-          : isPrivate 
-            ? 'bg-amber-100 text-amber-900 border border-amber-200' 
-            : !isLead 
-              ? 'bg-[#dcf8c6] text-slate-800 rounded-tr-none' 
-              : 'bg-white text-slate-800 rounded-tl-none border border-slate-200/50'}`}>
-        
-        {message.quoted_text && (
-          <div className={`mb-2 p-2 rounded-lg border-l-4 text-xs truncate max-w-full
-            ${!isLead ? 'bg-black/5 border-primary-500 text-slate-600' : 'bg-slate-50 border-primary-500 text-slate-500'}`}>
-            {message.quoted_text}
-          </div>
-        )}
-
-        {isPrivate && (
-          <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase" title="Esta é uma nota interna visível apenas para você">
-            <Lock size={9} /> Nota Privada
-          </div>
-        )}
-
-        {message.is_starred && (
-          <div className={`absolute top-1.5 ${isLead ? '-right-1' : '-left-1'} bg-white rounded-full p-0.5 shadow-sm border border-slate-100 z-10`}>
-            <Star size={10} className="fill-amber-500 text-amber-500" />
-          </div>
-        )}
-        
-        {renderMediaContent()}
-
-        {!isRevoked && (
-          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-all z-10 hidden md:block">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(message.id);
-              }}
-              className="p-1 bg-white/80 backdrop-blur-sm shadow-sm border border-slate-100 rounded-lg text-slate-400 hover:text-red-500 hover:bg-white transition-all"
-              title="Apagar mensagem"
-            >
-              <Trash size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* Falha de envio precisa saltar aos olhos: opacity do pai afeta toda a
-            subárvore, então não pode ficar em 50% quando a mensagem não saiu. */}
-        <div className={`flex items-center gap-1 mt-1 text-[10px] justify-end ${String((message as any).status || '').startsWith('failed') ? 'opacity-100' : 'opacity-50'} ${!isLead && !isRevoked ? 'text-[#075e54]' : 'text-slate-400'}`}>
-          {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
-          {message.time}
-          {!isLead && !isPrivate && !isRevoked && (
-            <>
-              {(message as any).status === 'read' ? (
-                <CheckCheck size={14} className="ml-1 text-[#34b7f1]" />
-              ) : (message as any).status === 'delivered' ? (
-                <CheckCheck size={14} className="ml-1 text-slate-400" />
-              ) : (message as any).status === 'sent' ? (
-                <Check size={14} className="ml-1 text-slate-400" />
-              ) : String((message as any).status || '').startsWith('failed') ? (
-                <span className="ml-1 inline-flex items-center gap-0.5 text-red-500" title={FAILURE_LABELS[(message as any).status] || 'Falha no envio — o contato não recebeu'}>
-                  <AlertCircle size={12} />
-                  <span className="text-[10px] font-medium">não enviada</span>
-                </span>
-              ) : (
-                <Clock size={10} className="ml-1 text-slate-400" />
-              )}
             </>
           )}
         </div>
+        
+        <button 
+          onClick={(e) => { e.stopPropagation(); onStar(message.id, !!message.is_starred); }}
+          className={`p-1 rounded-full transition-all ${message.is_starred ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-black/5'}`}
+          title={message.is_starred ? "Remover dos favoritos" : "Favoritar"}
+        >
+          <Star size={16} className={message.is_starred ? "fill-amber-500" : ""} />
+        </button>
+        
+        <button 
+          onClick={(e) => { e.stopPropagation(); onReply(message); }}
+          className="p-1 text-slate-400 hover:text-primary-600 hover:bg-black/5 rounded-full transition-all"
+          title="Responder"
+        >
+          <ChevronLeft size={16} className="rotate-180" />
+        </button>
+        
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(message.id); }}
+          className="p-1 text-slate-400 hover:text-red-500 hover:bg-black/5 rounded-full transition-all"
+          title="Apagar"
+        >
+          <Trash size={16} />
+        </button>
+      </div>
+    ) : null
+  );
 
-        {message.reaction && (
-          <div className={`absolute -bottom-2 ${isLead ? 'right-0' : 'left-0'} bg-white border border-slate-100 rounded-full px-1 py-0.5 shadow-sm text-[12px] z-20 animate-in zoom-in-50 duration-200`}>
-            {message.reaction}
-          </div>
+  const statusIcons = (
+    !isLead && !isPrivate && !isRevoked ? (
+      <>
+        {(message as any).status === 'read' ? (
+          <CheckCheck size={14} className="ml-0.5 text-[#53bdeb]" />
+        ) : (message as any).status === 'delivered' ? (
+          <CheckCheck size={14} className="ml-0.5 text-[#8696a0]" />
+        ) : (message as any).status === 'sent' ? (
+          <Check size={14} className="ml-0.5 text-[#8696a0]" />
+        ) : String((message as any).status || '').startsWith('failed') ? (
+          <span className="ml-1 inline-flex items-center gap-0.5 text-red-500" title={FAILURE_LABELS[(message as any).status] || 'Falha no envio — o contato não recebeu'}>
+            <AlertCircle size={12} />
+            <span className="text-[10px] font-medium">não enviada</span>
+          </span>
+        ) : (
+          <Clock size={10} className="ml-0.5 text-[#8696a0]" />
         )}
-      </motion.div>
+      </>
+    ) : null
+  );
 
-      {!isRevoked && (
-        <div className={`hidden md:flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all px-2 ${!isLead ? 'flex-row-reverse' : 'flex-row'}`}>
-          <div className="relative">
-            <button
-              onClick={(e) => {
-                if (emojiPos) { setEmojiPos(null); return; }
-                // O popover era absolute dentro da lista de mensagens, que
-                // rola: perto do topo ele saía da área visível e aparecia
-                // cortado. Posicionado por coordenadas de tela, nenhum
-                // container consegue recortá-lo.
-                const r = e.currentTarget.getBoundingClientRect();
-                const ALTURA = 150;  // 3 linhas de emoji + padding
-                const LARGURA = 236;
-                const cabeAcima = r.top - ALTURA - 8 > 8;
-                setEmojiPos({
-                  top: cabeAcima ? r.top - ALTURA - 8 : r.bottom + 8,
-                  left: Math.min(Math.max(8, r.left - LARGURA / 2), window.innerWidth - LARGURA - 8),
-                });
-              }}
-              className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
-              title="Reagir"
-            >
-              <Smile size={14} />
-            </button>
+  // Tratamento especial para figurinhas (WhatsApp Web: sem card/fundo branco, apenas a imagem com hora flutuando)
+  if (isSticker) {
+    return (
+      <div
+        className={`flex ${!isLead ? 'justify-end' : 'justify-start'} ${isSameSenderAsPrev ? 'mt-[2px]' : 'mt-2.5'} group/msg relative transition-colors ${isSelected ? 'bg-primary-50/60 rounded-xl' : ''}`}
+        onTouchStart={isSelectionMode ? undefined : handleTouchStart}
+        onTouchEnd={isSelectionMode ? undefined : handleTouchEnd}
+        onTouchMove={isSelectionMode ? undefined : handleTouchEnd}
+        onClick={isSelectionMode ? () => onSelect?.(message.id) : undefined}
+      >
+        {renderMobileActions()}
 
-            {emojiPos && (
-              <>
-                <div className="fixed inset-0 z-[99]" onClick={() => setEmojiPos(null)} />
-                <div
-                  style={{ position: 'fixed', top: emojiPos.top, left: emojiPos.left, width: 236 }}
-                  className="bg-white border border-slate-200 rounded-2xl shadow-xl p-2 grid grid-cols-6 gap-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
-                >
-                  {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏', '🎉', '💡', '✅', '❌', '🚀', '👀', '🤔', '💯', '⭐', '🤝'].map(emoji => (
-                    <button
-                      key={emoji}
-                      onClick={() => { onReact(message.id, emoji); setEmojiPos(null); }}
-                      className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all text-[18px] hover:scale-125"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+        <div className={`flex items-end gap-1.5 max-w-[85%] md:max-w-[75%] ${!isLead ? 'flex-row' : 'flex-row-reverse'}`}>
+          {renderActionButtons()}
+
+          <div className="relative flex flex-col items-end">
+            <div className="w-32 h-32 md:w-36 md:h-36 cursor-pointer select-none">
+              <img
+                src={message.media_url}
+                alt="Sticker"
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-contain"
+                onLoad={() => { if (onImageLoad) onImageLoad(); }}
+              />
+            </div>
+            <div className="flex items-center gap-1 text-[11px] leading-none text-slate-600 bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-xs mt-0.5 select-none">
+              {message.time}
+              {statusIcons}
+            </div>
           </div>
-          
-          <button 
-            onClick={() => onStar(message.id, !!message.is_starred)}
-            className={`p-1.5 rounded-lg transition-all ${message.is_starred ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'}`}
-            title={message.is_starred ? "Remover dos favoritos" : "Favoritar"}
-          >
-            <Star size={14} className={message.is_starred ? "fill-amber-500" : ""} />
-          </button>
-          
-          <button 
-            onClick={() => onReply(message)}
-            className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
-            title="Responder"
-          >
-            <ChevronLeft size={14} className="rotate-180" />
-          </button>
-          
-          <button 
-            onClick={() => onDelete(message.id)}
-            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-            title="Apagar"
-          >
-            <Trash size={14} />
-          </button>
         </div>
-      )}
+      </div>
+    );
+  }
+  
+  const isTextMessage = !message.message_type || message.message_type === 'text' || message.message_type === 'unknown' || isRevoked;
+
+  return (
+    <div
+      className={`flex ${!isLead ? 'justify-end' : 'justify-start'} ${isSameSenderAsPrev ? 'mt-[2px]' : 'mt-2.5'} ${message.reaction ? 'mb-2' : ''} group/msg relative transition-colors ${isSelected ? 'bg-primary-50/60 rounded-xl' : ''}`}
+      onTouchStart={isSelectionMode ? undefined : handleTouchStart}
+      onTouchEnd={isSelectionMode ? undefined : handleTouchEnd}
+      onTouchMove={isSelectionMode ? undefined : handleTouchEnd}
+      onClick={isSelectionMode ? () => onSelect?.(message.id) : undefined}
+    >
+      {renderMobileActions()}
+
+      <div className={`flex items-center gap-1.5 max-w-[85%] md:max-w-[70%] ${!isLead ? 'flex-row' : 'flex-row-reverse'}`}>
+        {renderActionButtons()}
+
+        {/* Bolha estilo WhatsApp Web */}
+        <motion.div
+          className={`px-2.5 py-1.5 text-[14.2px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative break-words z-10 cursor-text select-text
+          ${isRevoked
+            ? 'bg-slate-50 text-slate-400 border border-slate-100 italic rounded-lg'
+            : isPrivate 
+              ? 'bg-amber-100 text-amber-900 border border-amber-200 rounded-lg' 
+              : !isLead 
+                ? `bg-[#d9fdd3] text-[#111b21] rounded-lg ${isFirstInGroup ? 'rounded-tr-none' : ''}` 
+                : `bg-white text-[#111b21] rounded-lg ${isFirstInGroup ? 'rounded-tl-none' : ''}`}`}
+        >
+          {message.quoted_text && (
+            <div className={`mb-1 p-1.5 rounded-md border-l-4 text-xs truncate max-w-full
+              ${!isLead ? 'bg-black/5 border-[#00a884] text-slate-600' : 'bg-slate-50 border-[#00a884] text-slate-500'}`}>
+              {message.quoted_text}
+            </div>
+          )}
+
+          {isPrivate && (
+            <div className="flex items-center gap-1.5 mb-1 text-amber-600 font-bold text-[9px] uppercase" title="Esta é uma nota interna visível apenas para você">
+              <Lock size={9} /> Nota Privada
+            </div>
+          )}
+
+          {message.is_starred && (
+            <div className={`absolute top-1 ${isLead ? '-right-1' : '-left-1'} bg-white rounded-full p-0.5 shadow-sm border border-slate-100 z-10`}>
+              <Star size={10} className="fill-amber-500 text-amber-500" />
+            </div>
+          )}
+          
+          {isTextMessage ? (
+            /* Mensagem de texto com timestamp na mesma linha quando há espaço (WhatsApp Web float-right) */
+            <div className="inline-block max-w-full">
+              <span className={`whitespace-pre-wrap break-words leading-[19px] ${isRevoked ? 'italic opacity-60' : ''}`}>
+                {isRevoked ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Ban size={13} className="shrink-0" />
+                    <span>Esta mensagem foi apagada</span>
+                  </span>
+                ) : (
+                  renderMediaContent()
+                )}
+              </span>
+              <span className="inline-flex items-center gap-0.5 align-bottom ml-2 float-right mt-1 text-[11px] leading-none text-[#667781] select-none shrink-0">
+                {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
+                <span>{message.time}</span>
+                {statusIcons}
+              </span>
+            </div>
+          ) : (
+            /* Mensagens de mídia (áudio, imagem, vídeo, documento, etc.) */
+            <>
+              {renderMediaContent()}
+              <div className={`flex items-center gap-1 mt-1 text-[11px] justify-end ${String((message as any).status || '').startsWith('failed') ? 'opacity-100' : 'text-[#667781]'} select-none`}>
+                {isExternal && !isLead && !isRevoked && <Smartphone size={10} className="mr-0.5" />}
+                <span>{message.time}</span>
+                {statusIcons}
+              </div>
+            </>
+          )}
+
+          {message.reaction && (
+            <div className={`absolute -bottom-2 ${isLead ? 'right-1' : 'left-1'} bg-white border border-slate-100 rounded-full px-1 py-0.5 shadow-sm text-[12px] z-20 animate-in zoom-in-50 duration-200`}>
+              {message.reaction}
+            </div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 };
@@ -1284,7 +1347,9 @@ const ChatBubble = React.memo(ChatBubbleInner, (prev, next) => {
     pm.quoted_text === nm.quoted_text &&
     prev.isSelected === next.isSelected &&
     prev.isSelectionMode === next.isSelectionMode &&
-    prev.highlightQuery === next.highlightQuery
+    prev.highlightQuery === next.highlightQuery &&
+    prev.isFirstInGroup === next.isFirstInGroup &&
+    prev.isSameSenderAsPrev === next.isSameSenderAsPrev
   );
 });
 
@@ -4496,7 +4561,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               ref={scrollContainerRef}
               onScroll={handleScroll}
               onDragOver={handleDragOver}
-              className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 relative no-scrollbar"
+              className="flex-1 overflow-y-auto px-4 md:px-8 py-2 relative no-scrollbar"
               style={{
                 backgroundColor: '#e5ddd5',
                 backgroundImage: 'url(/chat-bg.png)',
@@ -4521,9 +4586,9 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 </div>
               )}
 
-              <div className="relative z-10 space-y-4">
+              <div className="relative z-10">
               {loadingMessages ? (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
                   <Skeleton variant="rect" width="40%" height={40} className="rounded-2xl rounded-tr-none bg-primary-100 self-end" />
                 </div>
@@ -4531,8 +4596,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 <>
                   {/* Indicador de carregamento de mensagens antigas */}
                   {loadingOlder && (
-                    <div className="flex justify-center py-3">
-                      <div className="flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full shadow-sm text-xs text-slate-500 font-medium">
+                    <div className="flex justify-center py-2">
+                      <div className="flex items-center gap-2 px-4 py-1.5 bg-white/80 rounded-full shadow-sm text-xs text-slate-500 font-medium">
                         <Loader2 size={12} className="animate-spin text-primary-500" />
                         Carregando mensagens anteriores...
                       </div>
@@ -4540,7 +4605,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   )}
                   {/* Botão para carregar mais quando não está carregando */}
                   {!loadingOlder && hasMoreMessages && messages.length > 0 && (
-                    <div className="flex justify-center py-2">
+                    <div className="flex justify-center py-1.5">
                       <button
                         onClick={loadOlderMessages}
                         className="px-4 py-1.5 bg-white/80 rounded-full shadow-sm text-xs text-slate-500 font-medium hover:bg-white transition-colors"
@@ -4553,20 +4618,22 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                     const prevMsg = idx > 0 ? arr[idx - 1] : null;
                     const showDateHeader = !prevMsg ||
                       new Date(msg.timestamp).toDateString() !== new Date(prevMsg.timestamp).toDateString();
+                    const isSameSenderAsPrev = !showDateHeader && prevMsg !== null && prevMsg.sender === msg.sender;
+                    const isFirstInGroup = !isSameSenderAsPrev;
                     const isCurrentSearchHit = msg.id === currentSearchHitId;
 
                     return (
                       <React.Fragment key={msg.id}>
                         {showDateHeader && (
-                          <div className="flex justify-center my-8 sticky top-2 z-[30]">
-                            <span className="px-5 py-1.5 bg-white/70 backdrop-blur-md text-slate-500 text-[12.5px] font-semibold rounded-2xl shadow-sm border border-white/50">
+                          <div className="flex justify-center my-3 sticky top-2 z-[30]">
+                            <span className="px-3 py-1 bg-white/90 backdrop-blur-md text-slate-600 text-[11.5px] font-medium rounded-lg shadow-sm border border-slate-200/50 uppercase tracking-wide">
                               {formatDateHeader(msg.timestamp)}
                             </span>
                           </div>
                         )}
                         <div
                           id={`msg-${msg.id}`}
-                          className="transition-all duration-500"
+                          className="transition-all duration-300"
                           ref={isCurrentSearchHit ? (el) => { if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } : undefined}
                         >
                           <ChatBubble
@@ -4583,6 +4650,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                             onSelect={onMessageSelect}
                             onForward={setForwardingMessage}
                             highlightQuery={messageSearchDebounced || undefined}
+                            isFirstInGroup={isFirstInGroup}
+                            isSameSenderAsPrev={isSameSenderAsPrev}
                           />
                         </div>
                       </React.Fragment>
