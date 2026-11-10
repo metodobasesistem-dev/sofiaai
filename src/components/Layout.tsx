@@ -30,7 +30,8 @@ import {
   Plug,
   Wallet,
   FileText,
-  Rocket
+  Rocket,
+  Headphones
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 
@@ -149,6 +150,8 @@ export default function Layout({
     }
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSofiaChatOpen, setIsSofiaChatOpen] = useState(false);
+  const [isSofiaChatActive, setIsSofiaChatActive] = useState(false);
   // Ler a URL pelo router (e não por window.location) faz a barra inferior
   // reagir quando a navegação acontece sem recarregar a página.
   const location = useLocation();
@@ -555,7 +558,21 @@ export default function Layout({
           </div>
         )}
 
-        <div className={`p-3 border-t border-white/[0.06] ${role === 'admin' ? '' : 'mt-auto'}`}>
+        {/* Aba Suporte abaixo de Status do Sistema */}
+        <div className={`px-3 py-1.5 ${role === 'admin' ? '' : 'mt-auto'}`}>
+          <SidebarItem
+            icon={<Headphones size={20} className={isSofiaChatActive && isSofiaChatOpen ? 'text-primary-400' : 'text-slate-400 group-hover:text-white'} />}
+            label="Suporte"
+            active={isSofiaChatActive && isSofiaChatOpen}
+            collapsed={collapsed}
+            onClick={() => {
+              setIsSofiaChatActive(true);
+              setIsSofiaChatOpen(prev => !prev);
+            }}
+          />
+        </div>
+
+        <div className="p-3 border-t border-white/[0.06]">
           <button 
             type="button"
             onClick={() => setCollapsed(!collapsed)}
@@ -634,6 +651,20 @@ export default function Layout({
                   </div>
                 ))}
               </nav>
+
+              <div className="px-3 py-2 border-t border-white/[0.06]">
+                <SidebarItem
+                  icon={<Headphones size={20} className="text-violet-400" />}
+                  label="Suporte"
+                  active={isSofiaChatActive && isSofiaChatOpen}
+                  collapsed={false}
+                  onClick={() => {
+                    setIsSofiaChatActive(true);
+                    setIsSofiaChatOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                />
+              </div>
 
               <div className="p-4 border-t border-white/[0.06]">
                 <p className="text-[11px] text-slate-500 font-medium text-center">Sofia System v1.0.5</p>
@@ -843,8 +874,13 @@ export default function Layout({
         )}
       </div>
       
-      {/* Sofia Assistant Chat - Somente Elite ou Admin */}
-      {(plano === 'Elite' || plano === 'Enterprise' || role === 'admin') && <SofiaChat />}
+      {/* Sofia Assistant Chat - Suporte */}
+      <SofiaChat 
+        isOpen={isSofiaChatOpen}
+        onOpenChange={setIsSofiaChatOpen}
+        isActive={isSofiaChatActive}
+        onActiveChange={setIsSofiaChatActive}
+      />
     </div>
   );
 }

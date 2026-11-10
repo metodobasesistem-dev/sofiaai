@@ -49,6 +49,7 @@ import {
   Download,
   MessageSquare,
   ChevronDown,
+  ChevronUp,
   Wallet,
   TrendingUp,
   TrendingDown,
@@ -866,6 +867,7 @@ type ChatBubbleProps = {
   highlightQuery?: string;
   isFirstInGroup?: boolean;
   isSameSenderAsPrev?: boolean;
+  collapseAllTranscripts?: boolean;
 };
 
 const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
@@ -887,6 +889,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
   highlightQuery,
   isFirstInGroup = true,
   isSameSenderAsPrev = false,
+  collapseAllTranscripts = false,
 }) => {
   const isLead = message.sender === 'lead';
   const isPrivate = message.sender === 'private';
@@ -896,6 +899,13 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
 
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [isTranscriptCollapsed, setIsTranscriptCollapsed] = useState(collapseAllTranscripts || false);
+
+  useEffect(() => {
+    if (typeof collapseAllTranscripts === 'boolean') {
+      setIsTranscriptCollapsed(collapseAllTranscripts);
+    }
+  }, [collapseAllTranscripts]);
   // Posição do seletor de reação em coordenadas de tela
   const [emojiPos, setEmojiPos] = useState<{ top: number; left: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -947,17 +957,43 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
     }
 
     switch (message.message_type) {
-      case 'audio':
+      case 'audio': {
+        const rawText = message.text || '';
+        const cleanText = rawText.replace(/^\[Áudio\]:?\s*/i, '').trim();
+        const hasTranscription = Boolean(cleanText && cleanText !== '[Áudio]');
         return (
           <div className="space-y-1">
             <AudioPlayer url={message.media_url || message.audio_url || ''} isOutbound={!isLead} />
-            {message.text && message.text !== '[Áudio]' && (
-              <p className="text-[12px] italic opacity-80 mt-1">
-                "{message.text.replace('[Áudio]: ', '')}"
-              </p>
+            {hasTranscription && (
+              <div className="mt-1 pt-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsTranscriptCollapsed(prev => !prev);
+                    }}
+                    className={`inline-flex items-center gap-1 text-[10.5px] font-semibold tracking-tight px-1.5 py-0.5 rounded transition-all select-none ${
+                      isLead 
+                        ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5' 
+                        : 'text-primary-800/80 hover:text-primary-950 hover:bg-white/20'
+                    }`}
+                    title={isTranscriptCollapsed ? 'Expandir transcrição' : 'Recolher transcrição'}
+                  >
+                    {isTranscriptCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                    <span>{isTranscriptCollapsed ? 'Ver transcrição' : 'Recolher transcrição'}</span>
+                  </button>
+                </div>
+                {!isTranscriptCollapsed && (
+                  <p className="text-[12px] italic opacity-85 mt-1 leading-relaxed break-words animate-in fade-in duration-150">
+                    "{cleanText}"
+                  </p>
+                )}
+              </div>
             )}
           </div>
         );
+      }
       
       case 'image':
         const isSendingImage = (message as any).status === 'sending';
@@ -1526,6 +1562,7 @@ const ChatBubble = React.memo(ChatBubbleInner, (prev, next) => {
     prev.highlightQuery === next.highlightQuery &&
     prev.isFirstInGroup === next.isFirstInGroup &&
     prev.isSameSenderAsPrev === next.isSameSenderAsPrev &&
+    prev.collapseAllTranscripts === next.collapseAllTranscripts &&
     prev.loadingMediaIds?.has(pm.id) === next.loadingMediaIds?.has(nm.id)
   );
 });
@@ -1921,6 +1958,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const [isPrivateNoteMode, setIsPrivateNoteMode] = useState(false);
+  const [collapseAllTranscripts, setCollapseAllTranscripts] = useState(false);
   const [activeTab, setActiveTab] = useState<'conversations' | 'contacts' | 'kanban' | 'reports' | 'integrations' | 'quick_replies' | 'finance'>(initialTab || 'conversations');
 
   // /inbox e /kanban renderizam ESTE mesmo componente na mesma posição da
@@ -4905,6 +4943,19 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   <Search size={18} />
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => setCollapseAllTranscripts(v => !v)}
+                  className={`p-2 rounded-lg transition-all ${
+                    collapseAllTranscripts 
+                      ? 'text-primary-600 bg-primary-50 border border-primary-100' 
+                      : 'text-slate-400 hover:bg-slate-50 border border-transparent'
+                  }`}
+                  title={collapseAllTranscripts ? "Expandir transcrições de áudio" : "Recolher transcrições de áudio"}
+                >
+                  <FileText size={18} />
+                </button>
+
                 <div className="relative">
                   <button 
                     onClick={() => setShowMoreMenu(!showMoreMenu)}
@@ -4967,6 +5018,17 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                             ) : (
                               <><Bot size={16} className="text-emerald-500" /> Ativar Robô IA</>
                             )}
+                          </button>
+
+                          <button 
+                            className="w-full flex items-center justify-start text-left gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              setCollapseAllTranscripts(v => !v);
+                            }}
+                          >
+                            <FileText size={16} className={collapseAllTranscripts ? "text-primary-600" : "text-slate-400"} />
+                            {collapseAllTranscripts ? 'Expandir Transcrições' : 'Recolher Transcrições'}
                           </button>
                           
                           <div className="h-px bg-slate-50 my-1" />
@@ -5215,6 +5277,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                             highlightQuery={messageSearchDebounced || undefined}
                             isFirstInGroup={isFirstInGroup}
                             isSameSenderAsPrev={isSameSenderAsPrev}
+                            collapseAllTranscripts={collapseAllTranscripts}
                           />
                         </div>
                       </React.Fragment>

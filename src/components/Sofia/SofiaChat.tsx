@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, X, Send, Sparkles, Brain, Bot, User, Mic, Square, Loader2 } from 'lucide-react';
+import { MessageSquare, X, Minus, Send, Sparkles, Brain, Bot, User, Mic, Square, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { transcribeAudio } from '../../services/supabaseService';
 import { toast } from 'sonner';
@@ -11,17 +11,44 @@ interface Message {
   created_at?: string;
 }
 
-export default function SofiaChat() {
-  const [isOpen, setIsOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('sofia_chat_open') === 'true';
-    }
-    return false;
-  });
+interface SofiaChatProps {
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  isActive?: boolean;
+  onActiveChange?: (active: boolean) => void;
+}
+
+export default function SofiaChat({
+  isOpen: propIsOpen,
+  onOpenChange,
+  isActive: propIsActive,
+  onActiveChange,
+}: SofiaChatProps = {}) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const [internalIsActive, setInternalIsActive] = useState(false);
+
+  const isOpen = propIsOpen !== undefined ? propIsOpen : internalIsOpen;
+  const setIsOpen = (val: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof val === 'function' ? val(isOpen) : val;
+    if (onOpenChange) onOpenChange(next);
+    else setInternalIsOpen(next);
+  };
+
+  const isActive = propIsActive !== undefined ? propIsActive : internalIsActive;
+  const setIsActive = (val: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof val === 'function' ? val(isActive) : val;
+    if (onActiveChange) onActiveChange(next);
+    else setInternalIsActive(next);
+  };
 
   useEffect(() => {
-    localStorage.setItem('sofia_chat_open', isOpen.toString());
-  }, [isOpen]);
+    const handleOpen = () => {
+      setIsActive(true);
+      setIsOpen(true);
+    };
+    window.addEventListener('open-sofia-chat', handleOpen);
+    return () => window.removeEventListener('open-sofia-chat', handleOpen);
+  }, []);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -199,6 +226,8 @@ export default function SofiaChat() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  if (!isActive) return null;
+
   return (
     <div className={`fixed z-[100] transition-all duration-500 ${
       isOpen 
@@ -230,12 +259,25 @@ export default function SofiaChat() {
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl transition-all active:scale-90"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl transition-all active:scale-90"
+                  title="Minimizar"
+                >
+                  <Minus size={18} />
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsActive(false);
+                  }}
+                  className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-red-500/80 rounded-2xl transition-all active:scale-90"
+                  title="Fechar suporte"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -340,21 +382,35 @@ export default function SofiaChat() {
       </AnimatePresence>
 
       {/* Toggle Button */}
-      {isVisible && !isOpen && (
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-14 h-14 md:w-16 md:h-16 rounded-3xl flex items-center justify-center text-white shadow-2xl transition-all duration-500 overflow-hidden border-2
-            ${isOpen ? 'bg-slate-800 rotate-90 border-slate-700' : 'bg-white border-primary-100 p-1.5'}`}
-        >
-          {isOpen ? <X size={28} className="text-white" /> : (
+      {isVisible && isActive && !isOpen && (
+        <div className="relative group/sofia-toggle">
+          {/* Botão X para fechar e remover da tela */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsActive(false);
+              setIsOpen(false);
+            }}
+            className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-slate-900/95 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white transition-all z-30 hover:scale-110 active:scale-95"
+            title="Fechar suporte"
+          >
+            <X size={12} strokeWidth={3} />
+          </button>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsOpen(true)}
+            className="w-14 h-14 md:w-16 md:h-16 rounded-3xl flex items-center justify-center text-white shadow-2xl transition-all duration-500 overflow-hidden border-2 bg-white border-primary-100 p-1.5 cursor-pointer"
+            title="Abrir Suporte Sofia"
+          >
             <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-inner">
               <img src="/sofia-face.png" alt="Sofia" className="w-full h-full object-cover" />
               <span className="absolute bottom-1 right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full"></span>
             </div>
-          )}
-        </motion.button>
+          </motion.button>
+        </div>
       )}
     </div>
   );
