@@ -143,10 +143,18 @@ export class EvolutionProvider implements IWhatsAppProvider {
   async sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type: 'image' | 'video' | 'document' | 'audio' = 'image', mimetype?: string, filename?: string): Promise<{ messageId: string }> {
     const cleanNumber = to.replace(/\D/g, '');
     
+    // Se a mídia vier com prefixo data URL (ex: "data:video/mp4;base64,AAAA..."),
+    // remove o prefixo para que a Evolution API receba a string Base64 pura,
+    // evitando o erro "Owned media must be a url or base64 - Bad Request"
+    let cleanMedia = mediaUrl;
+    if (cleanMedia && cleanMedia.includes(';base64,')) {
+      cleanMedia = cleanMedia.split(';base64,')[1];
+    }
+
     let endpoint = `/message/sendMedia/${instanceId}`;
     let payload: any = {
       number: cleanNumber,
-      media: mediaUrl,
+      media: cleanMedia,
       mediatype: type === 'audio' ? 'audio' : type,
       caption: caption,
       options: { delay: 1200 }
@@ -163,7 +171,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
       endpoint = `/message/sendWhatsAppAudio/${instanceId}`;
       payload = {
         number: cleanNumber,
-        audio: mediaUrl,
+        audio: cleanMedia,
         options: { delay: 1200, presence: 'recording', encoding: true }
       };
     }

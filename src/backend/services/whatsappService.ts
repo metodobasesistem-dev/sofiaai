@@ -374,20 +374,34 @@ class WhatsAppService {
         contentType = 'application/pdf';
       }
 
-      const { data, error } = await supabase.storage
+      let uploadResult = await supabase.storage
         .from('chat-audios') // Bucket legado, mas usaremos para todas as mídias do chat por enquanto
         .upload(path, buffer, {
           contentType,
           upsert: true
         });
 
-      if (error) {
-        console.warn(`[WhatsAppService] Storage upload failed for ${path}:`, error.message);
-        throw error;
+      let targetBucket = 'chat-audios';
+
+      if (uploadResult.error) {
+        console.warn(`[WhatsAppService] Storage upload to chat-audios failed (${uploadResult.error.message}), trying chat-media...`);
+        const fallbackResult = await supabase.storage
+          .from('chat-media')
+          .upload(path, buffer, {
+            contentType,
+            upsert: true
+          });
+        
+        if (!fallbackResult.error) {
+          targetBucket = 'chat-media';
+          uploadResult = fallbackResult;
+        } else {
+          throw uploadResult.error;
+        }
       }
 
       const { data: { publicUrl } } = supabase.storage
-        .from('chat-audios')
+        .from(targetBucket)
         .getPublicUrl(path);
 
       return publicUrl;
@@ -1241,9 +1255,9 @@ class WhatsAppService {
     const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
     
     // Fallback: se o storage falhar (ex: limite de tamanho ou restrição de MIME do bucket),
-    // usa data URL Base64 para envio direto via Evolution API
+    // usa string Base64 PURA (sem prefixo data:) para envio direto via Evolution API
     const base64Data = buffer.toString('base64');
-    const mediaPayload = mediaUrl || `data:${mimetype};base64,${base64Data}`;
+    const mediaPayload = (mediaUrl && mediaUrl.startsWith('http')) ? mediaUrl : base64Data;
 
     try {
       const result = await provider.sendMedia(instanceName, to, mediaPayload, caption || filename, type, mimetype, filename);

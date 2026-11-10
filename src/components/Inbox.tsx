@@ -3407,15 +3407,11 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
 
   const handleDropFile = (file: File) => {
     if (!selectedThreadId || !activeThread) return;
-    if (file.type.startsWith('image/')) {
-      setPastedFile(file);
-      const url = URL.createObjectURL(file);
-      setPastedImageUrl(url);
-      setShowPasteModal(true);
-      setPasteCaption('');
-    } else {
-      uploadFileDirectly(file);
-    }
+    setPastedFile(file);
+    const url = URL.createObjectURL(file);
+    setPastedImageUrl(url);
+    setShowPasteModal(true);
+    setPasteCaption('');
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -3868,11 +3864,39 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     if (!userId) return;
 
     setIsUploadingPaste(true);
+    const toastId = toast.loading(`Enviando ${pastedFile.name}...`);
+    const isVideo = pastedFile.type.startsWith('video/');
+    const isAudio = pastedFile.type.startsWith('audio/');
+    const mediaType = isVideo ? 'video' : isAudio ? 'audio' : pastedFile.type.startsWith('image/') ? 'image' : 'document';
+    const label = isVideo ? 'Vídeo' : isAudio ? 'Áudio' : mediaType === 'image' ? 'Imagem' : 'Arquivo';
+    const tempId = `sending-${Date.now()}`;
+    const tempUrl = pastedImageUrl;
+    const captionToSend = pasteCaption.trim();
+
+    // Mensagem otimista no chat
+    setMessages(prev => [...prev, {
+      id: tempId,
+      text: captionToSend || `[${label}]: ${pastedFile.name}`,
+      caption: captionToSend || undefined,
+      sender: 'outbound',
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString(),
+      status: 'sending',
+      message_type: mediaType,
+      media_url: tempUrl,
+      media_mime_type: pastedFile.type,
+      media_filename: pastedFile.name,
+      is_starred: false,
+    } as any]);
+
+    // Fecha o modal imediatamente
+    setShowPasteModal(false);
+
     try {
       const formData = new FormData();
       formData.append('media', pastedFile);
       formData.append('remoteJid', activeThread.remoteJid);
-      if (pasteCaption.trim()) formData.append('caption', pasteCaption.trim());
+      if (captionToSend) formData.append('caption', captionToSend);
 
       const session = (await supabase.auth.getSession()).data.session;
       const response = await fetch('/api/whatsapp/send-media', {
@@ -3883,28 +3907,26 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Falha ao enviar imagem');
+        throw new Error(errJson.error || `Falha ao enviar ${label.toLowerCase()}`);
       }
       
-      toast.success('Imagem enviada!');
-      
-      // Cleanup
-      if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
-      setShowPasteModal(false);
-      setPastedFile(null);
-      setPastedImageUrl(null);
-      setPasteCaption('');
+      toast.success(`${label} enviado com sucesso!`, { id: toastId });
       
       await supabase
         .from('threads')
         .update({ status: 'human', updated_at: new Date().toISOString() })
         .eq('id', selectedThreadId);
 
-    } catch (err) {
-      console.error('Error sending pasted image:', err);
-      toast.error('Erro ao enviar imagem colada');
+    } catch (err: any) {
+      console.error('Error sending media:', err);
+      // Remove mensagem otimista em caso de erro
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      toast.error(err?.message || `Erro ao enviar ${label.toLowerCase()}`, { id: toastId });
     } finally {
       setIsUploadingPaste(false);
+      setPastedFile(null);
+      setPastedImageUrl(null);
+      setPasteCaption('');
     }
   };
 
@@ -5260,86 +5282,111 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           </button>
         </div>
       )}
-      {/* Modal para Colar Imagem (Ctrl+V) */}
+      {/* WhatsApp Web Style Media Preview Modal */}
       {showPasteModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <Paperclip size={18} className="text-primary-500" />
-                Enviar Imagem Colada
-              </h3>
+        <div className="fixed inset-0 z-[200] flex flex-col bg-[#0b141a] text-white animate-in fade-in duration-200">
+          {/* Header */}
+          <div className="h-16 px-6 flex items-center justify-between border-b border-white/5 bg-[#111b21]">
+            <div className="flex items-center gap-4">
               <button 
                 onClick={() => {
                   if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
                   setShowPasteModal(false);
                   setPastedFile(null);
                   setPastedImageUrl(null);
+                  setPasteCaption('');
                 }}
-                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                title="Fechar"
               >
-                <X size={20} />
+                <X size={24} />
               </button>
+              <div className="flex flex-col">
+                <span className="font-semibold text-sm text-slate-100 leading-tight">
+                  {activeThread?.contact_name || activeThread?.display_phone || 'Destinatário'}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {pastedFile?.name} {pastedFile?.size ? `(${(pastedFile.size / (1024 * 1024)).toFixed(1)} MB)` : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Media Preview Area */}
+          <div className="flex-1 overflow-hidden flex items-center justify-center p-4 md:p-8 relative bg-[#0b141a]">
+            {pastedFile?.type.startsWith('video/') ? (
+              <div className="max-h-[62vh] max-w-full flex items-center justify-center">
+                <video
+                  src={pastedImageUrl || undefined}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-h-[62vh] max-w-full rounded-2xl shadow-2xl object-contain bg-black"
+                />
+              </div>
+            ) : pastedFile?.type.startsWith('image/') ? (
+              <div className="max-h-[62vh] max-w-full flex items-center justify-center">
+                <img
+                  src={pastedImageUrl || undefined}
+                  alt="Preview"
+                  className="max-h-[62vh] max-w-full rounded-2xl shadow-2xl object-contain"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 bg-[#111b21] rounded-3xl border border-white/10 shadow-2xl">
+                <div className="w-20 h-20 rounded-2xl bg-primary-500/20 text-primary-400 flex items-center justify-center mb-4">
+                  <FileText size={40} />
+                </div>
+                <p className="text-white font-bold text-base max-w-xs truncate">{pastedFile?.name}</p>
+                <p className="text-slate-400 text-xs mt-1">
+                  {pastedFile?.size ? `${(pastedFile.size / 1024 / 1024).toFixed(2)} MB` : ''}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Caption and Send Bar (WhatsApp Web Style) */}
+          <div className="p-4 pb-6 bg-[#111b21] border-t border-white/5 flex flex-col items-center gap-3">
+            {/* Thumbnail */}
+            <div className="w-12 h-12 rounded-lg border-2 border-emerald-500 overflow-hidden bg-black shadow-md shrink-0">
+              {pastedFile?.type.startsWith('video/') ? (
+                <video src={pastedImageUrl || undefined} className="w-full h-full object-cover" />
+              ) : pastedFile?.type.startsWith('image/') ? (
+                <img src={pastedImageUrl || undefined} className="w-full h-full object-cover" alt="thumb" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-primary-400"><FileText size={18} /></div>
+              )}
             </div>
 
-            {/* Preview */}
-            <div className="p-6 flex-1 overflow-y-auto bg-slate-50/30">
-              <div className="relative group rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-white">
-                {pastedImageUrl && (
-                  <img
-                    src={pastedImageUrl}
-                    alt="Pasted"
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full max-h-[350px] object-contain mx-auto"
-                  />
-                )}
-              </div>
-              
-              <div className="mt-6 space-y-2">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">
-                  Legenda (Opcional)
-                </label>
-                <textarea
-                  placeholder="Escreva uma legenda para a imagem..."
+            {/* Input Row */}
+            <div className="w-full max-w-2xl flex items-center gap-3">
+              <div className="flex-1 flex items-center bg-[#202c33] rounded-2xl px-4 py-2.5 border border-white/5 focus-within:border-emerald-500/50 transition-colors">
+                <input
+                  type="text"
+                  placeholder="Digite uma mensagem"
                   value={pasteCaption}
                   onChange={(e) => setPasteCaption(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:border-primary-400 focus:ring-4 focus:ring-primary-50 outline-none transition-all resize-none"
-                  rows={2}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendPastedImage();
+                    }
+                  }}
+                  className="w-full bg-transparent text-white text-sm outline-none placeholder-slate-400"
                   autoFocus
                 />
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
-                  setShowPasteModal(false);
-                  setPastedFile(null);
-                  setPastedImageUrl(null);
-                }}
-                className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
-              >
-                Cancelar
-              </button>
               <button
                 onClick={handleSendPastedImage}
                 disabled={isUploadingPaste}
-                className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-primary-500/20 hover:bg-primary-700 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                className="w-12 h-12 rounded-full bg-[#00a884] hover:bg-[#009575] text-white flex items-center justify-center shadow-lg shadow-emerald-900/30 transition-all active:scale-95 disabled:opacity-50 shrink-0"
+                title="Enviar"
               >
                 {isUploadingPaste ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Enviando...
-                  </>
+                  <Loader2 size={20} className="animate-spin" />
                 ) : (
-                  <>
-                    <Send size={18} />
-                    Enviar Imagem
-                  </>
+                  <Send size={20} className="ml-0.5" />
                 )}
               </button>
             </div>

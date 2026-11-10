@@ -358,6 +358,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     
     // Upload to Storage
     const mediaUrl = await (whatsappService as any).uploadToStorage(userId, buffer, storagePath);
+    const resolvedMediaUrl = mediaUrl || (buffer.length < 3 * 1024 * 1024 ? `data:${mimeType};base64,${base64}` : undefined);
     
     let processedText = body;
     let transcription = undefined;
@@ -373,7 +374,7 @@ async function handleMediaMessage(userId: string, instanceName: string, threadId
     // Persist enriched message
     await agentService.persistMessage(
       threadId, userId, processedText, direction, messageId, contactName, from, cleanPhone, 
-      isExternal ? 'Atendente' : undefined, undefined, mediaUrl, type, mediaUrl, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid
+      isExternal ? 'Atendente' : undefined, undefined, resolvedMediaUrl, type, resolvedMediaUrl, mimeType, fileName, caption, isExternal, quotedId, quotedText, contactJid
     );
 
     // Trigger AI only if inbound
