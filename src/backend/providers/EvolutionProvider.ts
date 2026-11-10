@@ -248,6 +248,57 @@ export class EvolutionProvider implements IWhatsAppProvider {
     }
   }
 
+  async fetchMediaForMessage(instanceId: string, whatsappId: string): Promise<string | null> {
+    try {
+      let messageKey: any = { id: whatsappId };
+      let messageContent: any = null;
+
+      try {
+        const findRes = await this.api.post(`/chat/findMessages/${instanceId}`, {
+          where: {
+            id: whatsappId
+          }
+        });
+        const records = Array.isArray(findRes.data) ? findRes.data : (findRes.data?.records || [findRes.data]);
+        const msgObj = records.find((m: any) => m?.key?.id === whatsappId || m?.id === whatsappId) || records[0];
+        if (msgObj) {
+          if (msgObj.key) messageKey = msgObj.key;
+          if (msgObj.message) messageContent = msgObj.message;
+        }
+      } catch (findErr: any) {
+        console.warn(`[EvolutionProvider] findMessages fallback para ${whatsappId}:`, findErr?.message);
+      }
+
+      const payload: any = {
+        message: {
+          key: messageKey
+        },
+        convertToMp4: false
+      };
+      if (messageContent) {
+        payload.message.message = messageContent;
+      }
+
+      const { data } = await this.api.post(`/chat/getBase64FromMediaMessage/${instanceId}`, payload);
+
+      let base64: string | null = null;
+      if (typeof data === 'string' && data.length > 0) {
+        base64 = data;
+      } else if (data && typeof data.base64 === 'string' && data.base64.length > 0) {
+        base64 = data.base64;
+      }
+
+      if (base64 && base64.includes(';base64,')) {
+        base64 = base64.split(';base64,')[1];
+      }
+
+      return base64 || null;
+    } catch (error: any) {
+      console.error(`[EvolutionProvider] fetchMediaForMessage falhou para ${whatsappId}:`, error.response?.status, error.message);
+      return null;
+    }
+  }
+
   async requestPairingCode(instanceId: string, phoneNumber: string): Promise<string> {
     const cleanPhone = phoneNumber.replace(/\D/g, '');
     const { data } = await this.api.get(`/instance/connect/pairing-code/${instanceId}?number=${cleanPhone}`);

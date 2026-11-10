@@ -21,6 +21,7 @@ import {
   Mic,
   Play,
   Pause,
+  Maximize2,
   X,
   ArrowLeft,
   Calendar,
@@ -422,7 +423,7 @@ const formatMsgRow = (d: any): Message => ({
   timestamp: d.created_at,
   audio_url: d.audio_url,
   message_type: d.message_type || 'text',
-  media_url: d.media_url,
+  media_url: d.media_url || d.audio_url,
   media_mime_type: d.media_mime_type,
   media_filename: d.media_filename,
   caption: d.caption,
@@ -845,6 +846,8 @@ type ChatBubbleProps = {
   isSelectionMode?: boolean;
   onSelect?: (id: string) => void;
   onForward?: (msg: Message) => void;
+  onLoadMedia?: (msg: Message) => void;
+  loadingMediaIds?: Set<string>;
   highlightQuery?: string;
   isFirstInGroup?: boolean;
   isSameSenderAsPrev?: boolean;
@@ -863,6 +866,8 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
   isSelectionMode,
   onSelect,
   onForward,
+  onLoadMedia,
+  loadingMediaIds,
   highlightQuery,
   isFirstInGroup = true,
   isSameSenderAsPrev = false,
@@ -940,26 +945,59 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
       case 'image':
         return (
           <div className="space-y-1.5">
-            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity min-w-[120px]"
-                 onClick={() => message.media_url && onPreview({ url: message.media_url, type: 'image', name: message.media_filename })}>
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/img min-w-[120px]">
               {message.media_url ? (
-                <img
-                  src={message.media_url}
-                  alt="Imagem"
-                  loading="lazy"
-                  decoding="async"
-                  className="max-w-full max-h-[300px] object-contain"
-                  onLoad={() => { if (onImageLoad) onImageLoad(); }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                <div 
+                  className="cursor-pointer hover:opacity-95 transition-opacity relative"
+                  onClick={() => onPreview({ url: message.media_url!, type: 'image', name: message.media_filename })}
+                >
+                  <img
+                    src={message.media_url}
+                    alt="Imagem"
+                    loading="lazy"
+                    decoding="async"
+                    className="max-w-full max-h-[300px] object-contain"
+                    onLoad={() => { if (onImageLoad) onImageLoad(); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPreview({ url: message.media_url!, type: 'image', name: message.media_filename });
+                    }}
+                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
+                    title="Ampliar imagem"
+                  >
+                    <Maximize2 size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onLoadMedia) onLoadMedia(message);
                   }}
-                />
-              ) : null}
-              <div className={`flex flex-col items-center justify-center gap-2 p-6 text-slate-400 ${message.media_url ? 'hidden' : ''}`}>
-                <ImageIcon size={32} className="opacity-40" />
-                <span className="text-[11px]">Imagem indisponível</span>
-              </div>
+                  disabled={loadingMediaIds?.has(message.id)}
+                  className="flex items-center gap-3 p-3 bg-black/5 hover:bg-black/10 active:bg-black/15 rounded-lg text-slate-700 transition-all text-left w-full cursor-pointer group/imgBtn"
+                >
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0 group-hover/imgBtn:scale-105 transition-transform shadow-xs">
+                    {loadingMediaIds?.has(message.id) ? (
+                      <Loader2 size={20} className="animate-spin text-emerald-600" />
+                    ) : (
+                      <ImageIcon size={20} className="text-emerald-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 leading-tight">
+                      {loadingMediaIds?.has(message.id) ? 'Baixando imagem...' : 'Imagem (Clique para abrir)'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {loadingMediaIds?.has(message.id) ? 'Aguarde o download...' : 'Toque para carregar a imagem'}
+                    </p>
+                  </div>
+                </button>
+              )}
             </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
           </div>
@@ -968,29 +1006,54 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
       case 'video':
         return (
           <div className="space-y-1.5">
-            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group/video min-w-[140px]"
-                 onClick={() => message.media_url && onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/video min-w-[160px]">
               {message.media_url ? (
-                <>
-                  <video src={message.media_url} className="max-w-full max-h-[300px]" preload="metadata" playsInline controls>
-                    <source src={message.media_url} type={message.media_mime_type || 'video/mp4'} />
-                  </video>
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity pointer-events-none">
-                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
-                      <Play size={24} className="fill-white ml-1" />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center gap-3 p-3 bg-black/5 rounded-lg text-slate-600">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Play size={20} className="fill-emerald-600 ml-0.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-800">Vídeo enviado</p>
-                    <p className="text-[10px] text-slate-500">Mídia do WhatsApp</p>
-                  </div>
+                <div className="relative">
+                  <video 
+                    src={message.media_url} 
+                    className="max-w-full max-h-[300px] rounded-lg block" 
+                    preload="metadata" 
+                    playsInline 
+                    controls
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPreview({ url: message.media_url!, type: 'video', name: message.media_filename });
+                    }}
+                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/video:opacity-100 transition-opacity z-10"
+                    title="Assistir em tela cheia"
+                  >
+                    <Maximize2 size={16} />
+                  </button>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onLoadMedia) onLoadMedia(message);
+                  }}
+                  disabled={loadingMediaIds?.has(message.id)}
+                  className="flex items-center gap-3 p-3 bg-black/5 hover:bg-black/10 active:bg-black/15 rounded-lg text-slate-700 transition-all text-left w-full cursor-pointer group/videoBtn"
+                >
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0 group-hover/videoBtn:scale-105 transition-transform shadow-xs">
+                    {loadingMediaIds?.has(message.id) ? (
+                      <Loader2 size={20} className="animate-spin text-emerald-600" />
+                    ) : (
+                      <Play size={20} className="fill-emerald-600 ml-0.5" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 leading-tight">
+                      {loadingMediaIds?.has(message.id) ? 'Baixando vídeo...' : 'Vídeo (Clique para abrir)'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {loadingMediaIds?.has(message.id) ? 'Aguarde o download do WhatsApp...' : 'Toque para assistir o vídeo'}
+                    </p>
+                  </div>
+                </button>
               )}
             </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
@@ -1373,7 +1436,8 @@ const ChatBubble = React.memo(ChatBubbleInner, (prev, next) => {
     prev.isSelectionMode === next.isSelectionMode &&
     prev.highlightQuery === next.highlightQuery &&
     prev.isFirstInGroup === next.isFirstInGroup &&
-    prev.isSameSenderAsPrev === next.isSameSenderAsPrev
+    prev.isSameSenderAsPrev === next.isSameSenderAsPrev &&
+    prev.loadingMediaIds?.has(pm.id) === next.loadingMediaIds?.has(nm.id)
   );
 });
 
@@ -3951,6 +4015,55 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     }
   };
 
+  const [loadingMediaIds, setLoadingMediaIds] = useState<Set<string>>(new Set());
+
+  const handleLoadMedia = async (msg: Message) => {
+    if (!msg.id || loadingMediaIds.has(msg.id)) return;
+
+    setLoadingMediaIds(prev => new Set(prev).add(msg.id));
+    const toastId = toast.loading('Carregando mídia do WhatsApp...');
+
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const res = await fetch('/api/whatsapp/load-media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+        },
+        body: JSON.stringify({ messageId: msg.id })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.mediaUrl) {
+        throw new Error(data.error || 'Não foi possível carregar a mídia do WhatsApp.');
+      }
+
+      toast.success('Mídia carregada com sucesso!', { id: toastId });
+
+      setMessages(prev => prev.map(m => m.id === msg.id ? {
+        ...m,
+        media_url: data.mediaUrl,
+        audio_url: data.mediaUrl
+      } : m));
+
+      setPreviewMedia({
+        url: data.mediaUrl,
+        type: msg.message_type || 'video',
+        name: msg.media_filename || msg.caption || 'Mídia'
+      });
+    } catch (err: any) {
+      console.error('Erro ao carregar mídia:', err);
+      toast.error(err.message || 'Erro ao carregar mídia do WhatsApp', { id: toastId });
+    } finally {
+      setLoadingMediaIds(prev => {
+        const next = new Set(prev);
+        next.delete(msg.id);
+        return next;
+      });
+    }
+  };
+
   useEffect(() => {
     (window as any).handleDeleteThread = handleDeleteThread;
   }, [threads, selectedThreadId]);
@@ -4909,6 +5022,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                             onStar={handleToggleStar}
                             onOpenContact={handleOpenContactChat}
                             onImageLoad={onImageLoadStable}
+                            onLoadMedia={handleLoadMedia}
+                            loadingMediaIds={loadingMediaIds}
                             isSelected={selectedMsgIds.has(msg.id)}
                             isSelectionMode={isSelectionMode}
                             onSelect={onMessageSelect}
@@ -5479,7 +5594,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               )}
               
               {previewMedia.type === 'video' && (
-                <video key={previewMedia.url} controls autoPlay className="max-w-full max-h-[85vh] rounded-xl shadow-2xl animate-in zoom-in duration-300">
+                <video key={previewMedia.url} src={previewMedia.url} controls autoPlay playsInline className="max-w-full max-h-[85vh] rounded-xl shadow-2xl animate-in zoom-in duration-300">
                   <source src={previewMedia.url} />
                   Seu navegador não suporta vídeos.
                 </video>

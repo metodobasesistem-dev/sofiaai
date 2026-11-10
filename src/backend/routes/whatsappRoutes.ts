@@ -3,6 +3,7 @@ import multer from 'multer';
 import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/authMiddleware.js';
+import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -165,6 +166,72 @@ router.post('/threads/backfill-photos', async (req, res) => {
   } catch (err: any) {
     console.error('[PhotoBackfill] Erro:', err);
     res.status(500).json({ error: 'Erro ao enfileirar sincronização de fotos' });
+  }
+});
+
+router.post('/load-media', async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId!;
+  const { messageId } = req.body;
+
+  if (!userId || !messageId) {
+    return res.status(400).json({ error: 'Faltam parâmetros: messageId é obrigatório.' });
+  }
+
+  try {
+    const { data: msg } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!msg) {
+      return res.status(404).json({ error: 'Mensagem não encontrada.' });
+    }
+
+    // Se já tiver uma URL de mídia válida
+    if (msg.media_url || msg.audio_url) {
+      return res.json({ success: true, mediaUrl: msg.media_url || msg.audio_url });
+    }
+
+    if (!msg.whatsapp_id) {
+      return res.status(400).json({ error: 'Mensagem sem identificador do WhatsApp.' });
+    }
+
+    const { data: prof } = await supabase.from('profiles').select('whatsapp_instance_id').eq('id', userId).single();
+    const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+    const provider = await WhatsAppProviderFactory.getProvider(userId);
+
+    // Tenta obter a mídia da Evolution API
+    let base64: string | null = null;
+    if (typeof (provider as any).fetchMediaForMessage === 'function') {
+      base64 = await (provider as any).fetchMediaForMessage(instanceName, msg.whatsapp_id);
+    } else if (typeof (provider as any).getMediaBase64 === 'function') {
+      base64 = await (provider as any).getMediaBase64(instanceName, { id: msg.whatsapp_id }, null);
+    }
+
+    if (!base64) {
+      return res.status(404).json({ error: 'Não foi possível baixar a mídia dos servidores do WhatsApp. Ela pode ter expirado.' });
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+    const ext = msg.media_mime_type?.split('/')[1]?.split(';')[0] || (msg.message_type === 'video' ? 'mp4' : 'bin');
+    const filename = msg.media_filename || `media_${Date.now()}.${ext}`;
+
+    const mediaUrl = await whatsappService.uploadToStorage(userId, buffer, filename);
+    const resolvedUrl = mediaUrl || `data:${msg.media_mime_type || (msg.message_type === 'video' ? 'video/mp4' : 'image/jpeg')};base64,${base64}`;
+
+    // Atualiza a mensagem no banco de dados para que os próximos acessos já tenham a mídia salva
+    await supabase
+      .from('messages')
+      .update({ media_url: resolvedUrl, audio_url: msg.message_type === 'audio' ? resolvedUrl : msg.audio_url })
+      .eq('id', messageId)
+      .eq('user_id', userId);
+
+    res.json({ success: true, mediaUrl: resolvedUrl });
+  } catch (err: any) {
+    console.error('[WhatsappRoutes] Erro ao carregar mídia:', err);
+    res.status(500).json({ error: err.message || 'Erro ao carregar mídia.' });
   }
 });
 

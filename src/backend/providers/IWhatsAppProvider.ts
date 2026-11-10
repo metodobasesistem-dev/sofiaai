@@ -87,6 +87,11 @@ export interface IWhatsAppProvider {
   getMediaBase64(instanceId: string, messageKey: any, messageContent: any): Promise<string | null>;
 
   /**
+   * Fetches media base64 for a message by its WhatsApp message id
+   */
+  fetchMediaForMessage?(instanceId: string, whatsappId: string): Promise<string | null>;
+
+  /**
    * Requests a pairing code for phone-number based connection
    */
   requestPairingCode(instanceId: string, phoneNumber: string): Promise<string>;
