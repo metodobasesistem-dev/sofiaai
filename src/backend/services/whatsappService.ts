@@ -424,7 +424,10 @@ class WhatsAppService {
       const localFilePath = path.join(uploadsDir, localFileName);
       fs.writeFileSync(localFilePath, buffer);
 
-      const baseUrl = process.env.APP_URL || process.env.BACKEND_URL || 'https://sofia.zyreo.com.br';
+      let baseUrl = process.env.APP_URL || process.env.BACKEND_URL || 'https://sofia.zyreo.com.br';
+      if (!baseUrl.startsWith('http') || baseUrl.includes('localhost') || baseUrl.includes('MY_APP_URL')) {
+        baseUrl = 'https://sofia.zyreo.com.br';
+      }
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
       const localUrl = `${cleanBaseUrl}/uploads/${localFileName}`;
       console.log(`[WhatsAppService] 💾 File saved to local disk fallback: ${localUrl}`);

@@ -452,6 +452,15 @@ const cleanLastMessageText = (msg?: string) => {
     .replace(/^\[Imagem\]:\s*.*\.(jpg|jpeg|png|webp|gif)/i, '[Imagem]');
 };
 
+const normalizeMediaUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  if (url.includes('/uploads/')) {
+    return '/uploads/' + url.split('/uploads/').pop();
+  }
+  return url;
+};
+
 interface Message {
   id: string;
   text: string;
@@ -848,6 +857,7 @@ type ChatBubbleProps = {
   onForward?: (msg: Message) => void;
   onLoadMedia?: (msg: Message) => void;
   loadingMediaIds?: Set<string>;
+  sessionBlobUrls?: React.MutableRefObject<Map<string, string>>;
   highlightQuery?: string;
   isFirstInGroup?: boolean;
   isSameSenderAsPrev?: boolean;
@@ -868,6 +878,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
   onForward,
   onLoadMedia,
   loadingMediaIds,
+  sessionBlobUrls,
   highlightQuery,
   isFirstInGroup = true,
   isSameSenderAsPrev = false,
@@ -944,16 +955,18 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
       
       case 'image':
         const isSendingImage = (message as any).status === 'sending';
+        const rawImageUrl = message.media_url || sessionBlobUrls?.current?.get(message.media_filename || '') || sessionBlobUrls?.current?.get(message.id);
+        const imageSrc = normalizeMediaUrl(rawImageUrl);
         return (
           <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/img min-w-[120px]">
-              {message.media_url ? (
+              {imageSrc ? (
                 <div 
                   className={`relative ${isSendingImage ? 'pointer-events-none' : 'cursor-pointer hover:opacity-95 transition-opacity'}`}
-                  onClick={() => !isSendingImage && onPreview({ url: message.media_url!, type: 'image', name: message.media_filename })}
+                  onClick={() => !isSendingImage && onPreview({ url: imageSrc, type: 'image', name: message.media_filename })}
                 >
                   <img
-                    src={message.media_url}
+                    src={imageSrc}
                     alt="Imagem"
                     loading="lazy"
                     decoding="async"
@@ -988,7 +1001,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPreview({ url: message.media_url!, type: 'image', name: message.media_filename });
+                        onPreview({ url: imageSrc, type: 'image', name: message.media_filename });
                       }}
                       className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
                       title="Ampliar imagem"
@@ -1031,15 +1044,18 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
 
       case 'video':
         const isSendingVideo = (message as any).status === 'sending';
+        const rawVideoUrl = message.media_url || sessionBlobUrls?.current?.get(message.media_filename || '') || sessionBlobUrls?.current?.get(message.id);
+        const videoSrc = normalizeMediaUrl(rawVideoUrl);
         return (
           <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/video min-w-[160px]">
-              {message.media_url ? (
+              {videoSrc ? (
                 <div className="relative">
                   <video 
-                    src={message.media_url} 
+                    key={videoSrc}
+                    src={videoSrc} 
                     className={`max-w-full max-h-[300px] rounded-lg block ${isSendingVideo ? 'brightness-75' : ''}`} 
-                    preload="metadata" 
+                    preload="auto" 
                     playsInline 
                     controls={!isSendingVideo}
                   />
@@ -1071,7 +1087,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPreview({ url: message.media_url!, type: 'video', name: message.media_filename });
+                        onPreview({ url: videoSrc, type: 'video', name: message.media_filename });
                       }}
                       className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/video:opacity-100 transition-opacity z-10"
                       title="Assistir em tela cheia"
@@ -1766,6 +1782,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [pasteCaption, setPasteCaption] = useState('');
   const [isUploadingPaste, setIsUploadingPaste] = useState(false);
   const [pastedImageUrl, setPastedImageUrl] = useState<string | null>(null);
+  const sessionBlobUrls = useRef<Map<string, string>>(new Map());
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
@@ -4004,6 +4021,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     const tempUrl = pastedImageUrl;
     const captionToSend = pasteCaption.trim();
 
+    // Salva o blob URL na sessão para visualização e reprodução instantânea
+    if (tempUrl) {
+      sessionBlobUrls.current.set(tempId, tempUrl);
+      if (pastedFile?.name) {
+        sessionBlobUrls.current.set(pastedFile.name, tempUrl);
+      }
+    }
+
     // Mensagem otimista no chat (NUNCA envia nome de arquivo como legenda!)
     setMessages(prev => [...prev, {
       id: tempId,
@@ -4042,6 +4067,11 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       }
       
       const resData = await response.json().catch(() => ({}));
+
+      if (tempUrl) {
+        if (resData?.messageId) sessionBlobUrls.current.set(resData.messageId, tempUrl);
+        if (resData?.mediaUrl) sessionBlobUrls.current.set(resData.mediaUrl, tempUrl);
+      }
       
       // Atualiza mensagem otimista com status sent e mediaUrl do servidor
       setMessages(prev => prev.map(m => m.id === tempId ? {
@@ -5068,6 +5098,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                         >
                           <ChatBubble
                             message={msg}
+                            sessionBlobUrls={sessionBlobUrls}
                             onPreview={setPreviewMedia}
                             onDelete={handleDeleteMessage}
                             onReact={handleReactToMessage}
@@ -5643,12 +5674,25 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
 
             <div className="max-w-7xl max-h-screen w-full h-full flex flex-col items-center justify-center relative">
               {previewMedia.type === 'image' && (
-                <img key={previewMedia.url} src={previewMedia.url} alt={previewMedia.name || 'Preview'} className="max-w-full max-h-[85vh] object-contain shadow-2xl animate-in zoom-in duration-300" />
+                <img 
+                  key={normalizeMediaUrl(previewMedia.url)} 
+                  src={normalizeMediaUrl(previewMedia.url)} 
+                  alt={previewMedia.name || 'Preview'} 
+                  className="max-w-full max-h-[85vh] object-contain shadow-2xl animate-in zoom-in duration-300" 
+                />
               )}
               
               {previewMedia.type === 'video' && (
-                <video key={previewMedia.url} src={previewMedia.url} controls autoPlay playsInline className="max-w-full max-h-[85vh] rounded-xl shadow-2xl animate-in zoom-in duration-300">
-                  <source src={previewMedia.url} />
+                <video 
+                  key={normalizeMediaUrl(previewMedia.url)} 
+                  src={normalizeMediaUrl(previewMedia.url)} 
+                  controls 
+                  autoPlay 
+                  playsInline 
+                  preload="auto"
+                  className="max-w-full max-h-[85vh] rounded-xl shadow-2xl animate-in zoom-in duration-300"
+                >
+                  <source src={normalizeMediaUrl(previewMedia.url)} />
                   Seu navegador não suporta vídeos.
                 </video>
               )}
@@ -5663,7 +5707,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                       <p className="text-slate-500 mt-2 text-sm">Este arquivo está pronto para download.</p>
                     </div>
                     <a 
-                      href={previewMedia.url} 
+                      href={normalizeMediaUrl(previewMedia.url)} 
                       target="_blank" 
                       download={previewMedia.name}
                       className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold transition-all shadow-lg"
