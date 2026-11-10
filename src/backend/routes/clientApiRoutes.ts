@@ -766,4 +766,47 @@ router.patch('/:contactId', async (req: AuthenticatedRequest, res: Response) => 
   }
 });
 
+// ─── DELETE /api/v2/clients/:contactId ────────────────────────────────────
+// Exclui o cliente definitivamente da base (ficha, vigências e contato).
+router.delete('/:contactId', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId!;
+  const { contactId } = req.params;
+
+  try {
+    // 1. Limpa logs de campanha se houver
+    await supabase
+      .from('campaign_logs')
+      .delete()
+      .eq('contact_id', contactId);
+
+    // 2. Limpa períodos de contrato e ficha do cliente
+    await supabase
+      .from('client_contract_periods')
+      .delete()
+      .eq('contact_id', contactId)
+      .eq('user_id', userId);
+
+    await supabase
+      .from('client_profiles')
+      .delete()
+      .eq('contact_id', contactId)
+      .eq('user_id', userId);
+
+    // 3. Remove o contato da base
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', contactId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    await invalidateCache(cacheKey.contacts(userId)).catch(() => {});
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[ClientAPI] DELETE error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

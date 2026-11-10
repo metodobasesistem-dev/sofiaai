@@ -2379,6 +2379,16 @@ export const demoteClient = async (contactId: string) => {
   if (!result.success) throw new Error(result.error || 'Falha ao remover da carteira');
 };
 
+/** Exclui o cliente definitivamente da base (ficha, vigências e contato). */
+export const deleteClient = async (contactId: string) => {
+  const res = await standardFetch(`/api/v2/clients/${encodeURIComponent(contactId)}`, {
+    method: 'DELETE',
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.error || 'Falha ao excluir cliente');
+  return result;
+};
+
 // ─── Campos personalizados da ficha do cliente ────────────────────────────
 // Cada inquilino define os campos do próprio ramo; os valores ficam no
 // custom_fields da ficha.

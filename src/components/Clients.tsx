@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  listClients, getClient, updateClient, demoteClient, createClient,
+  listClients, getClient, updateClient, demoteClient, deleteClient, createClient,
   listClientFields, createClientField, deleteClientField,
   applyRateChange, deleteContractPeriod, type VigenciaContrato,
   type CampoCliente, type TipoCampoCliente,
@@ -458,6 +458,18 @@ function FichaCliente({
     }
   };
 
+  const excluirCliente = async () => {
+    if (!window.confirm(`Tem certeza que deseja excluir permanentemente o cliente "${cliente?.nome || ''}"? Esta ação removerá a ficha e o contato da base e não pode ser desfeita.`)) return;
+    try {
+      await deleteClient(contactId);
+      toast.success('Cliente excluído com sucesso');
+      onChanged();
+      onClose();
+    } catch (e: any) {
+      toast.error('Erro ao excluir cliente: ' + e.message);
+    }
+  };
+
   const campo = (label: string, chave: string, icone: React.ReactNode, tipo = 'text', placeholder = '') => (
     <div>
       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-1.5">
@@ -619,12 +631,23 @@ function FichaCliente({
               </div>
             )}
 
-            <button
-              onClick={removerDaCarteira}
-              className="w-full py-3 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200"
-            >
-              <UserMinus size={14} /> Devolver para leads
-            </button>
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={removerDaCarteira}
+                className="w-full py-3 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-200"
+              >
+                <UserMinus size={14} /> Devolver para leads
+              </button>
+
+              <button
+                type="button"
+                onClick={excluirCliente}
+                className="w-full py-3 text-[11px] font-black uppercase tracking-widest text-red-600 hover:text-white hover:bg-red-600 bg-red-50/50 rounded-xl transition-all flex items-center justify-center gap-2 border border-red-200"
+              >
+                <Trash2 size={14} /> Excluir cliente
+              </button>
+            </div>
           </div>
 
           <div className="p-6 border-t border-slate-100 shrink-0">
@@ -838,6 +861,18 @@ export default function Clients() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExcluirCliente = async (e: React.MouseEvent, c: ClientRecord) => {
+    e.stopPropagation();
+    if (!window.confirm(`Tem certeza que deseja excluir permanentemente o cliente "${c.nome}"? Esta ação removerá a ficha e o contato da base e não pode ser desfeita.`)) return;
+    try {
+      await deleteClient(c.id);
+      toast.success('Cliente excluído com sucesso');
+      carregar();
+    } catch (err: any) {
+      toast.error('Erro ao excluir cliente: ' + err.message);
+    }
+  };
+
   const cards = [
     { label: 'Clientes', valor: String(resumo.total), icone: <Users size={16} />, cor: 'text-primary-600', dica: 'Total na carteira' },
     { label: 'Ativos', valor: String(resumo.ativos), icone: <TrendingUp size={16} />, cor: 'text-emerald-600', dica: 'Com contrato ativo' },
@@ -941,6 +976,7 @@ export default function Clients() {
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Mensalidade</th>
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest hidden lg:table-cell">LTV</th>
                   <th className="px-6 py-3.5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Situação</th>
+                  <th className="px-6 py-3.5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -994,6 +1030,16 @@ export default function Clients() {
                         <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${status.cor}`}>
                           {status.label}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleExcluirCliente(e, c)}
+                          title="Excluir cliente"
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all inline-flex items-center justify-center"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   );
