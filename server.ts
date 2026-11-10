@@ -107,6 +107,13 @@ async function startServer() {
     verify: (req: any, _res, buf) => { req.rawBody = buf; },
   }));
 
+  // Servir arquivos de mídia locais (fallback para uploads grandes)
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
+
   // WEBHOOK CRÍTICO: registrado ANTES do globalLimiter para garantir entrega
   // (Evolution API, Meta Cloud API e Leo Instagram dependem disso para receber mensagens)
   app.use('/api/whatsapp/evolution', webhookLimiter, whatsappWebhookRoutes);

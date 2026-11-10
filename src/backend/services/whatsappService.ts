@@ -357,56 +357,80 @@ class WhatsAppService {
   }
 
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
-    try {
-      const cleanFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `${userId}/${Date.now()}_${cleanFilename}`;
-      const ext = cleanFilename.split('.').pop()?.toLowerCase() || 'bin';
-      
-      // Mapear extensão para Content-Type
-      let contentType = 'application/octet-stream';
-      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
-        contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      } else if (['mp4', 'avi', 'mov', 'mpeg', 'webm', '3gp'].includes(ext)) {
-        contentType = `video/${ext === 'mov' ? 'quicktime' : (ext === 'mpeg' ? 'mpeg' : ext === 'webm' ? 'webm' : 'mp4')}`;
-      } else if (['ogg', 'mp3', 'wav', 'aac', 'm4a'].includes(ext)) {
-        contentType = `audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : ext === 'm4a' ? 'mp4' : 'ogg')}`;
-      } else if (ext === 'pdf') {
-        contentType = 'application/pdf';
-      }
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const ext = cleanFilename.split('.').pop()?.toLowerCase() || 'bin';
+    
+    // Mapear extensão para Content-Type
+    let contentType = 'application/octet-stream';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+      contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    } else if (['mp4', 'avi', 'mov', 'mpeg', 'webm', '3gp'].includes(ext)) {
+      contentType = `video/${ext === 'mov' ? 'quicktime' : (ext === 'mpeg' ? 'mpeg' : ext === 'webm' ? 'webm' : 'mp4')}`;
+    } else if (['ogg', 'mp3', 'wav', 'aac', 'm4a'].includes(ext)) {
+      contentType = `audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : ext === 'm4a' ? 'mp4' : 'ogg')}`;
+    } else if (ext === 'pdf') {
+      contentType = 'application/pdf';
+    }
 
-      let uploadResult = await supabase.storage
-        .from('chat-audios') // Bucket legado, mas usaremos para todas as mídias do chat por enquanto
-        .upload(path, buffer, {
-          contentType,
-          upsert: true
-        });
+    // Para arquivos grandes (> 45MB), Supabase costuma recusar devido a limite de plano/bucket
+    const isVeryLarge = buffer.length > 45 * 1024 * 1024;
 
-      let targetBucket = 'chat-audios';
-
-      if (uploadResult.error) {
-        console.warn(`[WhatsAppService] Storage upload to chat-audios failed (${uploadResult.error.message}), trying chat-media...`);
-        const fallbackResult = await supabase.storage
-          .from('chat-media')
+    if (!isVeryLarge) {
+      try {
+        const path = `${userId}/${Date.now()}_${cleanFilename}`;
+        let uploadResult = await supabase.storage
+          .from('chat-audios') // Bucket legado, mas usaremos para todas as mídias do chat por enquanto
           .upload(path, buffer, {
             contentType,
             upsert: true
           });
-        
-        if (!fallbackResult.error) {
-          targetBucket = 'chat-media';
-          uploadResult = fallbackResult;
-        } else {
-          throw uploadResult.error;
+
+        let targetBucket = 'chat-audios';
+
+        if (uploadResult.error) {
+          console.warn(`[WhatsAppService] Storage upload to chat-audios failed (${uploadResult.error.message}), trying chat-media...`);
+          const fallbackResult = await supabase.storage
+            .from('chat-media')
+            .upload(path, buffer, {
+              contentType,
+              upsert: true
+            });
+          
+          if (!fallbackResult.error) {
+            targetBucket = 'chat-media';
+            uploadResult = fallbackResult;
+          } else {
+            throw uploadResult.error;
+          }
         }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from(targetBucket)
+          .getPublicUrl(path);
+
+        return publicUrl;
+      } catch (err: any) {
+        console.warn('[WhatsAppService] Storage upload failed, trying local disk fallback:', err?.message || err);
       }
+    }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from(targetBucket)
-        .getPublicUrl(path);
+    // Fallback para disco local (para arquivos grandes >45MB ou quando o Supabase falha)
+    try {
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const localFileName = `${userId}_${Date.now()}_${cleanFilename}`;
+      const localFilePath = path.join(uploadsDir, localFileName);
+      fs.writeFileSync(localFilePath, buffer);
 
-      return publicUrl;
-    } catch (err: any) {
-      console.error('[WhatsAppService] Error uploading to storage:', err?.message || err);
+      const baseUrl = process.env.APP_URL || process.env.BACKEND_URL || 'https://sofia.zyreo.com.br';
+      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      const localUrl = `${cleanBaseUrl}/uploads/${localFileName}`;
+      console.log(`[WhatsAppService] 💾 File saved to local disk fallback: ${localUrl}`);
+      return localUrl;
+    } catch (diskErr: any) {
+      console.error('[WhatsAppService] Local uploads disk fallback failed:', diskErr);
       return null;
     }
   }
@@ -1259,15 +1283,18 @@ class WhatsAppService {
     const base64Data = buffer.toString('base64');
     const mediaPayload = (mediaUrl && mediaUrl.startsWith('http')) ? mediaUrl : base64Data;
 
+    // Caption: se o usuário não digitou legenda, NÃO envia o nome do arquivo como legenda!
+    const cleanCaption = (caption && caption.trim()) ? caption.trim() : undefined;
+
     try {
-      const result = await provider.sendMedia(instanceName, to, mediaPayload, caption || filename, type, mimetype, filename);
+      const result = await provider.sendMedia(instanceName, to, mediaPayload, cleanCaption, type, mimetype, filename);
       const cleanTo = normalizePhone(to);
       const threadId = `${userId}_${cleanTo}`;
 
       await agentService.persistMessage(
         threadId,
         userId,
-        caption || `[${type === 'image' ? 'Imagem' : type === 'video' ? 'Vídeo' : 'Arquivo'}]: ${filename}`,
+        cleanCaption || (type === 'image' ? '[Imagem]' : type === 'video' ? '[Vídeo]' : type === 'audio' ? '[Áudio]' : `[Arquivo]: ${filename}`),
         'outbound',
         result.messageId || `med-${Date.now()}`,
         undefined,
@@ -1280,9 +1307,9 @@ class WhatsAppService {
         mediaUrl || undefined,
         mimetype,
         filename,
-        caption
+        cleanCaption
       );
-      return { success: true, messageId: result.messageId };
+      return { success: true, messageId: result.messageId, mediaUrl: mediaUrl || undefined };
     } catch (err: any) {
       const info = parseProviderError(err);
       console.error(`[WhatsAppService] ❌ sendMedia failed (${info.provider}): ${info.message}`);

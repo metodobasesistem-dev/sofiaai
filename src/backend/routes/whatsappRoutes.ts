@@ -44,7 +44,7 @@ router.post('/send-media', upload.single('media'), async (req, res) => {
     if (!result?.success) {
       throw new Error(result?.error || 'Falha ao processar envio de mídia.');
     }
-    res.json({ success: true, message: 'Mídia enviada com sucesso!', messageId: result.messageId });
+    res.json({ success: true, message: 'Mídia enviada com sucesso!', messageId: result.messageId, mediaUrl: result.mediaUrl });
   } catch (err: any) {
     console.error('[WhatsappRoutes] Erro ao enviar mídia:', err);
     res.status(500).json({ error: err.message || 'Erro interno ao enviar mídia.' });

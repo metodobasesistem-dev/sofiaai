@@ -156,9 +156,12 @@ export class EvolutionProvider implements IWhatsAppProvider {
       number: cleanNumber,
       media: cleanMedia,
       mediatype: type === 'audio' ? 'audio' : type,
-      caption: caption,
       options: { delay: 1200 }
     };
+
+    if (caption && caption.trim()) {
+      payload.caption = caption.trim();
+    }
 
     if (mimetype) {
       payload.mimetype = mimetype;

@@ -444,6 +444,13 @@ const formatPhone = (phone: string) => {
   return phone;
 };
 
+const cleanLastMessageText = (msg?: string) => {
+  if (!msg) return '';
+  return msg
+    .replace(/^\[Vídeo\]:\s*.*\.(mp4|mov|avi|webm|3gp)/i, '[Vídeo]')
+    .replace(/^\[Imagem\]:\s*.*\.(jpg|jpeg|png|webp|gif)/i, '[Imagem]');
+};
+
 interface Message {
   id: string;
   text: string;
@@ -767,7 +774,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
       <div className="flex items-center justify-between gap-2 mt-0.5">
         <p className={`text-[12.5px] truncate leading-relaxed flex-1 min-w-0
           ${(thread.unreadCount ?? 0) > 0 ? 'font-medium text-slate-700' : 'font-normal text-slate-400'}`}>
-          {thread.lastMessage || 'Inicie uma conversa'}
+          {cleanLastMessageText(thread.lastMessage) || 'Inicie uma conversa'}
         </p>
         {(thread as any).isTyping ? (
           <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
@@ -965,7 +972,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                  onClick={() => message.media_url && onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
               {message.media_url ? (
                 <>
-                  <video className="max-w-full max-h-[300px]" preload="metadata" playsInline controls>
+                  <video src={message.media_url} className="max-w-full max-h-[300px]" preload="metadata" playsInline controls>
                     <source src={message.media_url} type={message.media_mime_type || 'video/mp4'} />
                   </video>
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity pointer-events-none">
@@ -975,9 +982,14 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center gap-2 p-6 text-slate-400">
-                  <Play size={32} className="opacity-40" />
-                  <span className="text-[11px]">Vídeo indisponível</span>
+                <div className="flex items-center gap-3 p-3 bg-black/5 rounded-lg text-slate-600">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                    <Play size={20} className="fill-emerald-600 ml-0.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-800">Vídeo enviado</p>
+                    <p className="text-[10px] text-slate-500">Mídia do WhatsApp</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -3864,19 +3876,19 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     if (!userId) return;
 
     setIsUploadingPaste(true);
-    const toastId = toast.loading(`Enviando ${pastedFile.name}...`);
     const isVideo = pastedFile.type.startsWith('video/');
     const isAudio = pastedFile.type.startsWith('audio/');
     const mediaType = isVideo ? 'video' : isAudio ? 'audio' : pastedFile.type.startsWith('image/') ? 'image' : 'document';
     const label = isVideo ? 'Vídeo' : isAudio ? 'Áudio' : mediaType === 'image' ? 'Imagem' : 'Arquivo';
+    const toastId = toast.loading(`Enviando ${label.toLowerCase()}...`);
     const tempId = `sending-${Date.now()}`;
     const tempUrl = pastedImageUrl;
     const captionToSend = pasteCaption.trim();
 
-    // Mensagem otimista no chat
+    // Mensagem otimista no chat (NUNCA envia nome de arquivo como legenda!)
     setMessages(prev => [...prev, {
       id: tempId,
-      text: captionToSend || `[${label}]: ${pastedFile.name}`,
+      text: captionToSend || `[${label}]`,
       caption: captionToSend || undefined,
       sender: 'outbound',
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -3910,6 +3922,15 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         throw new Error(errJson.error || `Falha ao enviar ${label.toLowerCase()}`);
       }
       
+      const resData = await response.json().catch(() => ({}));
+      
+      // Atualiza mensagem otimista com status sent e mediaUrl do servidor
+      setMessages(prev => prev.map(m => m.id === tempId ? {
+        ...m,
+        status: 'sent',
+        media_url: resData?.mediaUrl || m.media_url || tempUrl,
+      } : m));
+
       toast.success(`${label} enviado com sucesso!`, { id: toastId });
       
       await supabase
@@ -4405,9 +4426,120 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
 
       {/* Right Column: Chat Area */}
       <div
-        className={`${selectedThreadId ? 'flex fixed inset-0 z-[60] md:relative md:inset-auto md:z-0' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden`}
+        className={`${selectedThreadId ? 'flex fixed inset-0 z-[60] md:relative md:inset-auto md:z-0' : 'hidden md:flex'} flex-1 flex-col bg-white overflow-hidden relative`}
         style={viewportHeight && selectedThreadId && viewportHeight < window.innerHeight ? { height: viewportHeight } : undefined}
       >
+        {/* WhatsApp Web Style Media Preview Modal (restrito a esta coluna da conversa ativa) */}
+        {showPasteModal && (
+          <div className="absolute inset-0 z-[70] flex flex-col bg-[#0b141a] text-white animate-in fade-in duration-200">
+            {/* Header */}
+            <div className="h-16 px-6 flex items-center justify-between border-b border-white/5 bg-[#111b21] shrink-0">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => {
+                    if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
+                    setShowPasteModal(false);
+                    setPastedFile(null);
+                    setPastedImageUrl(null);
+                    setPasteCaption('');
+                  }}
+                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                  title="Fechar"
+                >
+                  <X size={24} />
+                </button>
+                <div className="flex flex-col">
+                  <span className="font-semibold text-sm text-slate-100 leading-tight">
+                    {activeThread?.name || activeThread?.contact_name || activeThread?.display_phone || 'Destinatário'}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {pastedFile?.size ? `${(pastedFile.size / (1024 * 1024)).toFixed(1)} MB` : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Media Preview Area */}
+            <div className="flex-1 overflow-hidden flex items-center justify-center p-4 md:p-8 relative bg-[#0b141a]">
+              {pastedFile?.type.startsWith('video/') ? (
+                <div className="max-h-[62vh] max-w-full flex items-center justify-center">
+                  <video
+                    src={pastedImageUrl || undefined}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-h-[62vh] max-w-full rounded-2xl shadow-2xl object-contain bg-black"
+                  />
+                </div>
+              ) : pastedFile?.type.startsWith('image/') ? (
+                <div className="max-h-[62vh] max-w-full flex items-center justify-center">
+                  <img
+                    src={pastedImageUrl || undefined}
+                    alt="Preview"
+                    className="max-h-[62vh] max-w-full rounded-2xl shadow-2xl object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 bg-[#111b21] rounded-3xl border border-white/10 shadow-2xl">
+                  <div className="w-20 h-20 rounded-2xl bg-primary-500/20 text-primary-400 flex items-center justify-center mb-4">
+                    <FileText size={40} />
+                  </div>
+                  <p className="text-white font-bold text-base max-w-xs truncate">{pastedFile?.name}</p>
+                  <p className="text-slate-400 text-xs mt-1">
+                    {pastedFile?.size ? `${(pastedFile.size / 1024 / 1024).toFixed(2)} MB` : ''}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Caption and Send Bar (WhatsApp Web Style) */}
+            <div className="p-4 pb-6 bg-[#111b21] border-t border-white/5 flex flex-col items-center gap-3 shrink-0">
+              {/* Thumbnail */}
+              <div className="w-12 h-12 rounded-lg border-2 border-emerald-500 overflow-hidden bg-black shadow-md shrink-0">
+                {pastedFile?.type.startsWith('video/') ? (
+                  <video src={pastedImageUrl || undefined} className="w-full h-full object-cover" />
+                ) : pastedFile?.type.startsWith('image/') ? (
+                  <img src={pastedImageUrl || undefined} className="w-full h-full object-cover" alt="thumb" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-primary-400"><FileText size={18} /></div>
+                )}
+              </div>
+
+              {/* Input Row */}
+              <div className="w-full max-w-2xl flex items-center gap-3">
+                <div className="flex-1 flex items-center bg-[#202c33] rounded-2xl px-4 py-2.5 border border-white/5 focus-within:border-emerald-500/50 transition-colors">
+                  <input
+                    type="text"
+                    placeholder="Digite uma mensagem"
+                    value={pasteCaption}
+                    onChange={(e) => setPasteCaption(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendPastedImage();
+                      }
+                    }}
+                    className="w-full bg-transparent text-white text-sm outline-none placeholder-slate-400"
+                    autoFocus
+                  />
+                </div>
+
+                <button
+                  onClick={handleSendPastedImage}
+                  disabled={isUploadingPaste}
+                  className="w-12 h-12 rounded-full bg-[#00a884] hover:bg-[#009575] text-white flex items-center justify-center shadow-lg shadow-emerald-900/30 transition-all active:scale-95 disabled:opacity-50 shrink-0"
+                  title="Enviar"
+                >
+                  {isUploadingPaste ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                    <Send size={20} className="ml-0.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {selectedThreadId && activeThread ? (
           <>
             {/* Chat Header */}
@@ -5280,117 +5412,6 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             <BarChart3 size={24} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Analytics</span>
           </button>
-        </div>
-      )}
-      {/* WhatsApp Web Style Media Preview Modal */}
-      {showPasteModal && (
-        <div className="fixed inset-0 z-[200] flex flex-col bg-[#0b141a] text-white animate-in fade-in duration-200">
-          {/* Header */}
-          <div className="h-16 px-6 flex items-center justify-between border-b border-white/5 bg-[#111b21]">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => {
-                  if (pastedImageUrl) URL.revokeObjectURL(pastedImageUrl);
-                  setShowPasteModal(false);
-                  setPastedFile(null);
-                  setPastedImageUrl(null);
-                  setPasteCaption('');
-                }}
-                className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-all"
-                title="Fechar"
-              >
-                <X size={24} />
-              </button>
-              <div className="flex flex-col">
-                <span className="font-semibold text-sm text-slate-100 leading-tight">
-                  {activeThread?.contact_name || activeThread?.display_phone || 'Destinatário'}
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  {pastedFile?.name} {pastedFile?.size ? `(${(pastedFile.size / (1024 * 1024)).toFixed(1)} MB)` : ''}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Media Preview Area */}
-          <div className="flex-1 overflow-hidden flex items-center justify-center p-4 md:p-8 relative bg-[#0b141a]">
-            {pastedFile?.type.startsWith('video/') ? (
-              <div className="max-h-[62vh] max-w-full flex items-center justify-center">
-                <video
-                  src={pastedImageUrl || undefined}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="max-h-[62vh] max-w-full rounded-2xl shadow-2xl object-contain bg-black"
-                />
-              </div>
-            ) : pastedFile?.type.startsWith('image/') ? (
-              <div className="max-h-[62vh] max-w-full flex items-center justify-center">
-                <img
-                  src={pastedImageUrl || undefined}
-                  alt="Preview"
-                  className="max-h-[62vh] max-w-full rounded-2xl shadow-2xl object-contain"
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center p-8 bg-[#111b21] rounded-3xl border border-white/10 shadow-2xl">
-                <div className="w-20 h-20 rounded-2xl bg-primary-500/20 text-primary-400 flex items-center justify-center mb-4">
-                  <FileText size={40} />
-                </div>
-                <p className="text-white font-bold text-base max-w-xs truncate">{pastedFile?.name}</p>
-                <p className="text-slate-400 text-xs mt-1">
-                  {pastedFile?.size ? `${(pastedFile.size / 1024 / 1024).toFixed(2)} MB` : ''}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Bottom Caption and Send Bar (WhatsApp Web Style) */}
-          <div className="p-4 pb-6 bg-[#111b21] border-t border-white/5 flex flex-col items-center gap-3">
-            {/* Thumbnail */}
-            <div className="w-12 h-12 rounded-lg border-2 border-emerald-500 overflow-hidden bg-black shadow-md shrink-0">
-              {pastedFile?.type.startsWith('video/') ? (
-                <video src={pastedImageUrl || undefined} className="w-full h-full object-cover" />
-              ) : pastedFile?.type.startsWith('image/') ? (
-                <img src={pastedImageUrl || undefined} className="w-full h-full object-cover" alt="thumb" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-primary-400"><FileText size={18} /></div>
-              )}
-            </div>
-
-            {/* Input Row */}
-            <div className="w-full max-w-2xl flex items-center gap-3">
-              <div className="flex-1 flex items-center bg-[#202c33] rounded-2xl px-4 py-2.5 border border-white/5 focus-within:border-emerald-500/50 transition-colors">
-                <input
-                  type="text"
-                  placeholder="Digite uma mensagem"
-                  value={pasteCaption}
-                  onChange={(e) => setPasteCaption(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendPastedImage();
-                    }
-                  }}
-                  className="w-full bg-transparent text-white text-sm outline-none placeholder-slate-400"
-                  autoFocus
-                />
-              </div>
-
-              <button
-                onClick={handleSendPastedImage}
-                disabled={isUploadingPaste}
-                className="w-12 h-12 rounded-full bg-[#00a884] hover:bg-[#009575] text-white flex items-center justify-center shadow-lg shadow-emerald-900/30 transition-all active:scale-95 disabled:opacity-50 shrink-0"
-                title="Enviar"
-              >
-                {isUploadingPaste ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <Send size={20} className="ml-0.5" />
-                )}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
