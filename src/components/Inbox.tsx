@@ -122,6 +122,7 @@ interface Thread {
   agentId?: string | null;
   labels?: string[];
   lastInboundAt?: number;
+  lastMessageDirection?: 'inbound' | 'outbound';
 }
 
 
@@ -723,95 +724,97 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
   );
 };
 
-const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, now: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, now, onClick, onDelete }) => (
-  <div
-    onClick={onClick}
-    /* Sem divisória e sem barra lateral: a seleção é um fundo suave, e a
-       separação entre itens vem do espaço. Era a borda inferior em cada linha
-       que dava o aspecto de planilha. */
-    className={`px-3 py-2.5 flex items-start gap-3 cursor-pointer transition-colors relative group
-      ${active ? 'bg-primary-50/70' : 'hover:bg-slate-50'}`}
-  >
-    {/* O ponto de não lida fica fora do avatar, na margem — é o que o olho
-        encontra primeiro ao varrer a lista de cima a baixo. */}
-    <span
-      className={`mt-4 w-1.5 h-1.5 rounded-full shrink-0 ${(thread.unreadCount ?? 0) > 0 ? 'bg-red-500' : 'bg-transparent'}`}
-      aria-hidden
-    />
+const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, now: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, now, onClick, onDelete }) => {
+  const isOutbound = (thread.unreadCount ?? 0) === 0 && (
+    thread.lastMessageDirection === 'outbound' ||
+    Boolean(thread.lastMessageTime && (!thread.lastInboundAt || ((thread.lastMessageTime - (thread.lastInboundAt || 0)) > 2000)))
+  );
 
-    <div className="relative shrink-0">
-      <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="md" threadId={thread.id} />
-      {thread.status === 'ia' && (
-        <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-500 border-2 border-white rounded-full z-10" />
-      )}
-    </div>
-
-    <div className="flex-1 min-w-0 py-0.5">
-      <div className="flex items-start justify-between gap-2">
-        <h4 className={`text-[13.5px] leading-snug truncate flex items-center gap-1.5 min-w-0
-          ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
-          <span className="truncate">
-            {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
-          </span>
-          {thread.is_client && <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />}
-          {thread.priority === 'urgent' && <span className="text-[11px] shrink-0" title="Urgente">🔥</span>}
-          {thread.priority === 'high' && <span className="text-[11px] shrink-0" title="Alta">🔴</span>}
-          {showWindow && <WindowCountdown lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt} variant="badge" />}
-        </h4>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(e);
-            }}
-            className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
-            title="Excluir conversa"
-          >
-            <Trash size={11} />
-          </button>
-          <PendingReplyPill
-            lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt}
-            now={now}
-            show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && (thread.unreadCount ?? 0) > 0}
-          />
-          <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap">
-            {thread.time}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 mt-0.5">
-        <p className={`text-[12.5px] truncate leading-relaxed flex-1 min-w-0
-          ${(thread.unreadCount ?? 0) > 0 ? 'font-medium text-slate-700' : 'font-normal text-slate-400'}`}>
-          {cleanLastMessageText(thread.lastMessage) || 'Inicie uma conversa'}
-        </p>
-        {(thread as any).isTyping ? (
-          <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
-            Digitando...
-          </span>
-        ) : (thread.unreadCount ?? 0) > 0 && (
-          <span className="bg-emerald-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-            {thread.unreadCount}
-          </span>
+  return (
+    <div
+      onClick={onClick}
+      className={`px-3 py-2.5 flex items-start gap-3 cursor-pointer transition-colors relative group
+        ${active ? 'bg-primary-50/70' : 'hover:bg-slate-50'}`}
+    >
+      <div className="relative shrink-0">
+        <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="md" threadId={thread.id} />
+        {(thread.unreadCount ?? 0) > 0 && (
+          <div className="absolute bottom-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full z-10 animate-in zoom-in-75 duration-150" />
         )}
       </div>
 
-      {thread.labels && thread.labels.length > 0 && (
-        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-          {thread.labels.slice(0, 2).map((lbl, i) => (
-            <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-primary-50 text-primary-600 shrink-0 leading-none">
-              {lbl}
+      <div className="flex-1 min-w-0 py-0.5">
+        <div className="flex items-start justify-between gap-2">
+          <h4 className={`text-[13.5px] leading-snug truncate flex items-center gap-1.5 min-w-0
+            ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+            <span className="truncate">
+              {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
             </span>
-          ))}
-          {thread.labels.length > 2 && (
-            <span className="text-[9px] font-medium text-slate-300 shrink-0">+{thread.labels.length - 2}</span>
+            {thread.is_client && <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />}
+            {thread.priority === 'urgent' && <span className="text-[11px] shrink-0" title="Urgente">🔥</span>}
+            {thread.priority === 'high' && <span className="text-[11px] shrink-0" title="Alta">🔴</span>}
+            {showWindow && <WindowCountdown lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt} variant="badge" />}
+          </h4>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(e);
+              }}
+              className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
+              title="Excluir conversa"
+            >
+              <Trash size={11} />
+            </button>
+            <PendingReplyPill
+              lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt}
+              now={now}
+              show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && (thread.unreadCount ?? 0) > 0}
+            />
+            <span className={`text-[11px] whitespace-nowrap ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-emerald-600' : 'font-medium text-slate-400'}`}>
+              {thread.time}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <p className={`text-[12.5px] truncate leading-relaxed flex-1 min-w-0 flex items-center
+            ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
+            {isOutbound && (
+              <CheckCheck size={15} className="text-slate-400 shrink-0 mr-1 inline" />
+            )}
+            <span className="truncate">
+              {cleanLastMessageText(thread.lastMessage) || 'Inicie uma conversa'}
+            </span>
+          </p>
+          {(thread as any).isTyping ? (
+            <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
+              Digitando...
+            </span>
+          ) : (thread.unreadCount ?? 0) > 0 && (
+            <span className="bg-emerald-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+              {thread.unreadCount}
+            </span>
           )}
         </div>
-      )}
+
+        {thread.labels && thread.labels.length > 0 && (
+          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+            {thread.labels.slice(0, 2).map((lbl, i) => (
+              <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-primary-50 text-primary-600 shrink-0 leading-none">
+                {lbl}
+              </span>
+            ))}
+            {thread.labels.length > 2 && (
+              <span className="text-[9px] font-medium text-slate-300 shrink-0">+{thread.labels.length - 2}</span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query.trim()) return <>{text}</>;
@@ -2343,7 +2346,10 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               pending_followup: d.pending_followup,
               assignedTo: d.assigned_to || null,
               agentId: d.agent_id || null,
-              lastInboundAt: d.last_inbound_at ? new Date(d.last_inbound_at).getTime() : 0
+              lastInboundAt: d.last_inbound_at ? new Date(d.last_inbound_at).getTime() : 0,
+              lastMessageDirection: (d.unread_count || 0) === 0 && Boolean(
+                d.last_message_time && (!d.last_inbound_at || (new Date(d.last_message_time).getTime() - new Date(d.last_inbound_at).getTime() > 2000))
+              ) ? 'outbound' : 'inbound'
             };
           });
           setThreads(formatted);
@@ -2417,7 +2423,10 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   funilStatus: resolved.funilStatus,
                   profilePictureUrl: payload.new.profile_picture_url,
                   pending_followup: payload.new.pending_followup,
-                  lastInboundAt: payload.new.last_inbound_at ? new Date(payload.new.last_inbound_at).getTime() : 0
+                  lastInboundAt: payload.new.last_inbound_at ? new Date(payload.new.last_inbound_at).getTime() : 0,
+                  lastMessageDirection: (payload.new.unread_count || 0) === 0 && Boolean(
+                    payload.new.last_message_time && (!payload.new.last_inbound_at || (new Date(payload.new.last_message_time).getTime() - new Date(payload.new.last_inbound_at).getTime() > 2000))
+                  ) ? 'outbound' : 'inbound'
                 };
 
                 const filtered = prev.filter(t => t.id !== payload.new.id);
@@ -2472,7 +2481,10 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   pending_followup: payload.new.pending_followup ?? baseThread?.pending_followup,
                   lastInboundAt: payload.new.last_inbound_at
                     ? new Date(payload.new.last_inbound_at).getTime()
-                    : (baseThread?.lastInboundAt || 0)
+                    : (baseThread?.lastInboundAt || 0),
+                  lastMessageDirection: (payload.new.unread_count || 0) === 0 && Boolean(
+                    payload.new.last_message_time && (!payload.new.last_inbound_at || (new Date(payload.new.last_message_time).getTime() - new Date(payload.new.last_inbound_at).getTime() > 2000))
+                  ) ? 'outbound' : 'inbound'
                 };
 
                 // Só move para o topo se a última mensagem mudou
@@ -3494,6 +3506,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       
       toast.success('Mensagem de voz enviada!');
       
+      setThreads(prev => prev.map(t => t.id === selectedThreadId ? {
+        ...t,
+        lastMessage: '[Áudio]',
+        lastMessageTime: Date.now(),
+        lastMessageDirection: 'outbound',
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      } : t));
+
       await supabase
         .from('threads')
         .update({ status: 'human', updated_at: new Date().toISOString() })
@@ -3712,6 +3732,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         quoted_text: currentQuotedText,
         is_starred: false,
       } as any]);
+
+      setThreads(prev => prev.map(t => t.id === selectedThreadId ? {
+        ...t,
+        lastMessage: finalMessageText,
+        lastMessageTime: Date.now(),
+        lastMessageDirection: 'outbound',
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      } : t));
 
       await sendMessage(activeThread.remoteJid, finalMessageText, currentQuotedId);
       playSound('send');
@@ -4060,6 +4088,14 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       media_filename: pastedFile.name,
       is_starred: false,
     } as any]);
+
+    setThreads(prev => prev.map(t => t.id === selectedThreadId ? {
+      ...t,
+      lastMessage: captionToSend || `[${label}]`,
+      lastMessageTime: Date.now(),
+      lastMessageDirection: 'outbound',
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    } : t));
 
     // Fecha o modal imediatamente
     setShowPasteModal(false);
@@ -4628,7 +4664,12 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 // (mesmo que o painel direito usa). Evita badge "24H ⚠" obsoleta.
                 lastInboundAtOverride={selectedThreadId === thread.id ? activeThreadLastInbound : undefined}
                 now={now}
-                onClick={() => setSelectedThreadId(thread.id)}
+                onClick={() => {
+                  if ((thread.unreadCount ?? 0) > 0) {
+                    setThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unreadCount: 0 } : t));
+                  }
+                  setSelectedThreadId(thread.id);
+                }}
                 onDelete={() => handleDeleteThread(thread)}
               />
             ))
