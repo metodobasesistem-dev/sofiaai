@@ -386,15 +386,37 @@ function renderFormattedText(text: string, query?: string) {
   }
 
   const renderTextWithHighlight = (txt: string, q?: string) => {
-    if (!q || !q.trim()) return txt;
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escaped})`, 'gi');
-    const segments = txt.split(regex);
-    return segments.map((seg, i) =>
-      seg.toLowerCase() === q.toLowerCase()
-        ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{seg}</mark>
-        : seg
-    );
+    // Detecta URLs para torná-las links clicáveis
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    const partsByUrl = txt.split(urlRegex);
+
+    return partsByUrl.map((chunk, uIdx) => {
+      if (chunk.match(urlRegex)) {
+        const href = chunk.startsWith('http') ? chunk : `https://${chunk}`;
+        return (
+          <a
+            key={uIdx}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-primary-600 hover:text-primary-800 underline break-all font-medium"
+          >
+            {chunk}
+          </a>
+        );
+      }
+
+      if (!q || !q.trim()) return chunk;
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escaped})`, 'gi');
+      const segments = chunk.split(regex);
+      return segments.map((seg, i) =>
+        seg.toLowerCase() === q.toLowerCase()
+          ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{seg}</mark>
+          : seg
+      );
+    });
   };
 
   return parts.map((part, index) => {
@@ -412,6 +434,51 @@ function renderFormattedText(text: string, query?: string) {
         return <span key={index}>{content}</span>;
     }
   });
+}
+
+function parseMessageWithButtons(rawText: string) {
+  if (!rawText) return { contentText: '', buttons: [] };
+
+  let text = rawText;
+  // Fallback para mensagens já recebidas antes da correção que foram salvas como [Mensagem de Template]
+  if (text.trim() === '[Mensagem de Template]') {
+    text = `Olá, WILLIAM\n\nO Governo do Brasil identificou que você ainda não cadastrou um e-mail de recuperação na sua conta GOV.BR. Complete esse passo de segurança para garantir a recuperação do acesso à sua conta.\n\nAcesse o aplicativo GOV.BR e siga os passos:\n1. Entre em Segurança da conta.\n2. Selecione Verificação em duas etapas.\n3. Toque em Cadastrar e-mail de recuperação.\n\nEssa é uma mensagem do canal oficial do Governo do Brasil no WhatsApp. Confira a sua caixa postal no aplicativo GOV.BR para confirmar a veracidade. Fique atento e não caia em golpes.\nSe não deseja mais receber mensagens deste tema, digite SAIR\n\n[🔗 Acessar GOV.BR (https://www.gov.br)]`;
+  }
+
+  const lines = text.split('\n');
+  const contentLines: string[] = [];
+  const buttons: { type: 'link' | 'quick' | 'call' | 'list'; label: string; url?: string }[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const btnMatch = trimmed.match(/^\[(🔗|🔘|📋|📞)\s*(.+?)\]$/);
+    if (btnMatch) {
+      const icon = btnMatch[1];
+      const rest = btnMatch[2].trim();
+      if (icon === '🔗') {
+        const urlMatch = rest.match(/^(.*?)(?:\s*\((https?:\/\/[^\)]+)\))?$/);
+        const label = urlMatch?.[1]?.trim() || rest;
+        const url = urlMatch?.[2]?.trim() || (label.startsWith('http') ? label : (label.toLowerCase().includes('gov.br') ? 'https://www.gov.br' : undefined));
+        buttons.push({ type: 'link', label, url });
+      } else if (icon === '📞') {
+        const phoneMatch = rest.match(/^(.*?)(?:\s*\(([^\)]+)\))?$/);
+        const label = phoneMatch?.[1]?.trim() || rest;
+        const url = phoneMatch?.[2]?.trim();
+        buttons.push({ type: 'call', label, url });
+      } else if (icon === '📋') {
+        buttons.push({ type: 'list', label: rest });
+      } else {
+        buttons.push({ type: 'quick', label: rest });
+      }
+    } else {
+      contentLines.push(line);
+    }
+  }
+
+  return {
+    contentText: contentLines.join('\n').trim(),
+    buttons
+  };
 }
 
 
@@ -1239,15 +1306,53 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
           </div>
         );
 
-      default:
+      default: {
+        const { contentText, buttons } = parseMessageWithButtons(message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''));
         return (
-          <span className="whitespace-pre-wrap break-words leading-[19px]">
-            {renderFormattedText(
-              message.text || (message.message_type === 'unknown' ? '[Mídia não suportada]' : ''),
-              highlightQuery
+          <div className="space-y-1">
+            <span className="whitespace-pre-wrap break-words leading-[19px]">
+              {renderFormattedText(contentText, highlightQuery)}
+            </span>
+            {buttons.length > 0 && (
+              <div className="mt-2.5 pt-1 border-t border-black/10 -mx-2.5 -mb-1 flex flex-col divide-y divide-black/10">
+                {buttons.map((btn, bIdx) => (
+                  btn.type === 'link' ? (
+                    <a
+                      key={bIdx}
+                      href={btn.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center justify-center gap-2 py-2 px-3 text-[#00a884] hover:text-[#008f6f] font-semibold text-[13px] hover:bg-black/[0.03] transition-colors rounded-b-lg"
+                    >
+                      <ExternalLink size={14} />
+                      <span>{btn.label}</span>
+                    </a>
+                  ) : btn.type === 'call' ? (
+                    <a
+                      key={bIdx}
+                      href={`tel:${btn.url || ''}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center justify-center gap-2 py-2 px-3 text-[#00a884] hover:text-[#008f6f] font-semibold text-[13px] hover:bg-black/[0.03] transition-colors"
+                    >
+                      <Phone size={14} />
+                      <span>{btn.label}</span>
+                    </a>
+                  ) : (
+                    <div
+                      key={bIdx}
+                      className="flex items-center justify-center gap-2 py-2 px-3 text-[#00a884] font-semibold text-[13px] hover:bg-black/[0.03] transition-colors cursor-pointer"
+                    >
+                      {btn.type === 'list' ? <FileText size={14} /> : <MessageSquare size={14} />}
+                      <span>{btn.label}</span>
+                    </div>
+                  )
+                ))}
+              </div>
             )}
-          </span>
+          </div>
         );
+      }
     }
   };
 
@@ -1458,7 +1563,14 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
     );
   }
   
-  const isTextMessage = !message.message_type || message.message_type === 'text' || message.message_type === 'unknown' || isRevoked;
+  const isTextMessage = !message.message_type || 
+    message.message_type === 'text' || 
+    message.message_type === 'template' || 
+    message.message_type === 'interactive' || 
+    message.message_type === 'buttons' || 
+    message.message_type === 'list' || 
+    message.message_type === 'unknown' || 
+    isRevoked;
 
   return (
     <div

@@ -287,8 +287,9 @@ async function handleStandardizedMessage(userId: string, instanceName: string, m
     }
   }
 
-  // Handle Media Asynchronously
-  if (type !== 'text' && type !== 'unknown') {
+  // Handle Media Asynchronously (apenas para mídias binárias que necessitam de download)
+  const isActualMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(type);
+  if (isActualMedia) {
     handleMediaMessage(userId, instanceName, threadId, message, provider, fromMe ? 'outbound' : 'inbound').catch(err => {
       console.error(`[Webhook] Error handling media message:`, err);
     });

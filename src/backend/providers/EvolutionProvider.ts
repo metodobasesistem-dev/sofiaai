@@ -330,6 +330,28 @@ export class EvolutionProvider implements IWhatsAppProvider {
     // Suporte para estrutura aninhada ou direta
     let messageContent = messageData.message || messageData;
     
+    // Desembrulha containers comuns do Baileys/WhatsApp Webhook
+    let unwrapped = true;
+    while (unwrapped && messageContent) {
+      unwrapped = false;
+      if (messageContent.ephemeralMessage?.message) {
+        messageContent = messageContent.ephemeralMessage.message;
+        unwrapped = true;
+      } else if (messageContent.viewOnceMessage?.message) {
+        messageContent = messageContent.viewOnceMessage.message;
+        unwrapped = true;
+      } else if (messageContent.viewOnceMessageV2?.message) {
+        messageContent = messageContent.viewOnceMessageV2.message;
+        unwrapped = true;
+      } else if (messageContent.viewOnceMessageV2Extension?.message) {
+        messageContent = messageContent.viewOnceMessageV2Extension.message;
+        unwrapped = true;
+      } else if (messageContent.documentWithCaptionMessage?.message) {
+        messageContent = messageContent.documentWithCaptionMessage.message;
+        unwrapped = true;
+      }
+    }
+
     // Se for um wrapper com messageContextInfo, tenta pegar o conteúdo real
     if (messageContent.messageContextInfo && Object.keys(messageContent).length > 1) {
         // O conteúdo real está junto com o messageContextInfo
@@ -421,17 +443,201 @@ export class EvolutionProvider implements IWhatsAppProvider {
       body = `[Localização]: ${messageContent.locationMessage.degreesLatitude}, ${messageContent.locationMessage.degreesLongitude}`;
       type = 'location';
     } else if (messageContent.templateMessage) {
-      body = '[Mensagem de Template]';
       type = 'template';
+      const tm = messageContent.templateMessage;
+      const hydrated = tm.hydratedTemplate || tm.hydratedFourRowTemplate;
+      const fourRow = tm.fourRowTemplate;
+      const interactive = tm.interactiveMessageTemplate;
+
+      const parts: string[] = [];
+      const buttonsList: string[] = [];
+
+      if (hydrated) {
+        const titleText = hydrated.hydratedTitleText || hydrated.title?.contentText;
+        if (titleText && typeof titleText === 'string') parts.push(`*${titleText.trim()}*`);
+
+        if (hydrated.imageMessage) {
+          mediaUrl = hydrated.imageMessage.url;
+          mimeType = hydrated.imageMessage.mimetype || 'image/jpeg';
+          mediaBase64 = hydrated.imageMessage.base64 || undefined;
+          if (hydrated.imageMessage.caption) parts.push(hydrated.imageMessage.caption.trim());
+        } else if (hydrated.documentMessage) {
+          fileName = hydrated.documentMessage.fileName;
+          mimeType = hydrated.documentMessage.mimetype;
+          mediaUrl = hydrated.documentMessage.url;
+          mediaBase64 = hydrated.documentMessage.base64 || undefined;
+        } else if (hydrated.videoMessage) {
+          mediaUrl = hydrated.videoMessage.url;
+          mimeType = hydrated.videoMessage.mimetype || 'video/mp4';
+          mediaBase64 = hydrated.videoMessage.base64 || undefined;
+          if (hydrated.videoMessage.caption) parts.push(hydrated.videoMessage.caption.trim());
+        }
+
+        if (hydrated.hydratedContentText) {
+          parts.push(hydrated.hydratedContentText.trim());
+        }
+
+        if (hydrated.hydratedFooterText) {
+          parts.push(hydrated.hydratedFooterText.trim());
+        }
+
+        if (Array.isArray(hydrated.hydratedButtons)) {
+          for (const btn of hydrated.hydratedButtons) {
+            if (btn.urlButton?.displayText) {
+              const url = btn.urlButton.url ? ` (${btn.urlButton.url})` : '';
+              buttonsList.push(`[🔗 ${btn.urlButton.displayText}${url}]`);
+            } else if (btn.quickReplyButton?.displayText) {
+              buttonsList.push(`[🔘 ${btn.quickReplyButton.displayText}]`);
+            } else if (btn.callButton?.displayText) {
+              const phone = btn.callButton.phoneNumber ? ` (${btn.callButton.phoneNumber})` : '';
+              buttonsList.push(`[📞 ${btn.callButton.displayText}${phone}]`);
+            }
+          }
+        }
+      } else if (fourRow) {
+        const title = fourRow.title?.contentText || fourRow.title;
+        if (typeof title === 'string' && title.trim()) parts.push(`*${title.trim()}*`);
+
+        const content = fourRow.content?.contentText || fourRow.contentText;
+        if (typeof content === 'string' && content.trim()) parts.push(content.trim());
+
+        const footer = fourRow.footer?.contentText || fourRow.footerText;
+        if (typeof footer === 'string' && footer.trim()) parts.push(footer.trim());
+
+        if (Array.isArray(fourRow.buttons)) {
+          for (const btn of fourRow.buttons) {
+            const txt = btn.buttonText?.displayText || btn.displayText || btn.buttonId;
+            if (txt) buttonsList.push(`[🔘 ${txt}]`);
+          }
+        }
+      } else if (interactive) {
+        const headerText = interactive.header?.title || interactive.header?.text || interactive.header?.subtitle;
+        if (headerText && typeof headerText === 'string') parts.push(`*${headerText.trim()}*`);
+
+        if (interactive.header?.imageMessage) {
+          mediaUrl = interactive.header.imageMessage.url;
+          mimeType = interactive.header.imageMessage.mimetype || 'image/jpeg';
+          mediaBase64 = interactive.header.imageMessage.base64 || undefined;
+        }
+
+        if (interactive.body?.text) parts.push(interactive.body.text.trim());
+        if (interactive.footer?.text) parts.push(interactive.footer.text.trim());
+
+        if (Array.isArray(interactive.nativeFlowMessage?.buttons)) {
+          for (const btn of interactive.nativeFlowMessage.buttons) {
+            let label = btn.name || 'Opção';
+            try {
+              const params = typeof btn.buttonParamsJson === 'string' ? JSON.parse(btn.buttonParamsJson) : btn.buttonParamsJson;
+              if (params?.display_text) {
+                label = params.url ? `🔗 ${params.display_text} (${params.url})` : `🔘 ${params.display_text}`;
+              }
+            } catch {}
+            buttonsList.push(`[${label}]`);
+          }
+        }
+      }
+
+      if (buttonsList.length > 0) {
+        parts.push(buttonsList.join('\n'));
+      }
+
+      body = parts.filter(Boolean).join('\n\n') || '[Mensagem de Template]';
     } else if (messageContent.interactiveMessage) {
-      body = '[Mensagem Interativa/Botão]';
       type = 'interactive';
+      const im = messageContent.interactiveMessage;
+      const parts: string[] = [];
+      const buttonsList: string[] = [];
+
+      const headerText = im.header?.title || im.header?.text || im.header?.subtitle;
+      if (headerText && typeof headerText === 'string') parts.push(`*${headerText.trim()}*`);
+
+      if (im.header?.imageMessage) {
+        mediaUrl = im.header.imageMessage.url;
+        mimeType = im.header.imageMessage.mimetype || 'image/jpeg';
+        mediaBase64 = im.header.imageMessage.base64 || undefined;
+      }
+
+      if (im.body?.text) parts.push(im.body.text.trim());
+      if (im.footer?.text) parts.push(im.footer.text.trim());
+
+      if (Array.isArray(im.nativeFlowMessage?.buttons)) {
+        for (const btn of im.nativeFlowMessage.buttons) {
+          let label = btn.name || 'Opção';
+          try {
+            const params = typeof btn.buttonParamsJson === 'string' ? JSON.parse(btn.buttonParamsJson) : btn.buttonParamsJson;
+            if (params?.display_text) {
+              label = params.url ? `🔗 ${params.display_text} (${params.url})` : `🔘 ${params.display_text}`;
+            }
+          } catch {}
+          buttonsList.push(`[${label}]`);
+        }
+      }
+
+      if (buttonsList.length > 0) {
+        parts.push(buttonsList.join('\n'));
+      }
+
+      body = parts.filter(Boolean).join('\n\n') || '[Mensagem Interativa]';
     } else if (messageContent.buttonsMessage) {
-      body = '[Mensagem com Botões]';
       type = 'buttons';
+      const bm = messageContent.buttonsMessage;
+      const parts: string[] = [];
+      const buttonsList: string[] = [];
+
+      const header = bm.headerText || (typeof bm.header === 'string' ? bm.header : '');
+      if (header) parts.push(`*${header.trim()}*`);
+      if (bm.contentText) parts.push(bm.contentText.trim());
+      if (bm.footerText) parts.push(bm.footerText.trim());
+
+      if (Array.isArray(bm.buttons)) {
+        for (const btn of bm.buttons) {
+          const txt = btn.buttonText?.displayText || btn.buttonId;
+          if (txt) buttonsList.push(`[🔘 ${txt}]`);
+        }
+      }
+
+      if (buttonsList.length > 0) {
+        parts.push(buttonsList.join('\n'));
+      }
+
+      body = parts.filter(Boolean).join('\n\n') || '[Mensagem com Botões]';
     } else if (messageContent.listMessage) {
-      body = '[Lista de Opções]';
       type = 'list';
+      const lm = messageContent.listMessage;
+      const parts: string[] = [];
+
+      if (lm.title) parts.push(`*${lm.title.trim()}*`);
+      if (lm.description) parts.push(lm.description.trim());
+      if (lm.footerText) parts.push(lm.footerText.trim());
+
+      if (Array.isArray(lm.sections)) {
+        for (const sec of lm.sections) {
+          if (sec.title) parts.push(`*${sec.title}*`);
+          if (Array.isArray(sec.rows)) {
+            for (const row of sec.rows) {
+              const rowDesc = row.description ? ` - ${row.description}` : '';
+              parts.push(`• ${row.title || ''}${rowDesc}`);
+            }
+          }
+        }
+      }
+
+      if (lm.buttonText) parts.push(`[📋 ${lm.buttonText}]`);
+
+      body = parts.filter(Boolean).join('\n\n') || '[Lista de Opções]';
+    } else if (messageContent.templateButtonReplyMessage) {
+      body = messageContent.templateButtonReplyMessage.selectedDisplayText || messageContent.templateButtonReplyMessage.selectedId || '[Resposta a botão]';
+      type = 'text';
+    } else if (messageContent.buttonsResponseMessage) {
+      body = messageContent.buttonsResponseMessage.selectedDisplayText || messageContent.buttonsResponseMessage.selectedButtonId || '[Resposta a botão]';
+      type = 'text';
+    } else if (messageContent.listResponseMessage) {
+      body = messageContent.listResponseMessage.title || messageContent.listResponseMessage.description || messageContent.listResponseMessage.singleSelectReply?.selectedRowId || '[Opção selecionada]';
+      type = 'text';
+    } else if (messageContent.interactiveResponseMessage) {
+      const irm = messageContent.interactiveResponseMessage;
+      body = irm.body?.text || irm.nativeFlowResponseMessage?.name || '[Resposta interativa]';
+      type = 'text';
     } else if (messageContent.pollCreationMessage) {
       body = `[Enquete]: ${messageContent.pollCreationMessage.name || ''}`;
       type = 'poll';
