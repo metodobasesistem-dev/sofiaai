@@ -67,7 +67,7 @@ export interface IWhatsAppProvider {
   /**
    * Sends media (image, video, document)
    */
-  sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type?: 'image' | 'video' | 'document' | 'audio'): Promise<{ messageId: string }>;
+  sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type?: 'image' | 'video' | 'document' | 'audio', mimetype?: string, filename?: string): Promise<{ messageId: string }>;
 
   /**
    * Mostra "digitando…"/"gravando…" no aparelho do contato enquanto o

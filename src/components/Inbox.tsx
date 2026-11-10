@@ -961,16 +961,25 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
       case 'video':
         return (
           <div className="space-y-1.5">
-            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group/video"
-                 onClick={() => onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
-              <video className="max-w-full max-h-[300px]" preload="none" playsInline>
-                <source src={message.media_url} type={message.media_mime_type} />
-              </video>
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
-                  <Play size={24} className="fill-white ml-1" />
+            <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 cursor-pointer hover:opacity-95 transition-opacity relative group/video min-w-[140px]"
+                 onClick={() => message.media_url && onPreview({ url: message.media_url, type: 'video', name: message.media_filename })}>
+              {message.media_url ? (
+                <>
+                  <video className="max-w-full max-h-[300px]" preload="metadata" playsInline controls>
+                    <source src={message.media_url} type={message.media_mime_type || 'video/mp4'} />
+                  </video>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity pointer-events-none">
+                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                      <Play size={24} className="fill-white ml-1" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 p-6 text-slate-400">
+                  <Play size={32} className="opacity-40" />
+                  <span className="text-[11px]">Vídeo indisponível</span>
                 </div>
-              </div>
+              )}
             </div>
             {message.caption && <p className="whitespace-pre-wrap">{message.caption}</p>}
           </div>
@@ -3342,6 +3351,28 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     const userId = user?.id;
     if (!userId) return;
 
+    const toastId = toast.loading(`Enviando ${file.name}...`);
+    const tempUrl = URL.createObjectURL(file);
+    const isVideo = file.type.startsWith('video/');
+    const isAudio = file.type.startsWith('audio/');
+    const type = isVideo ? 'video' : isAudio ? 'audio' : 'document';
+    const tempId = `sending-${Date.now()}`;
+
+    // Mensagem otimista no chat para dar feedback visual imediato
+    setMessages(prev => [...prev, {
+      id: tempId,
+      text: `[${isVideo ? 'Vídeo' : isAudio ? 'Áudio' : 'Arquivo'}]: ${file.name}`,
+      sender: 'outbound',
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString(),
+      status: 'sending',
+      message_type: type,
+      media_url: tempUrl,
+      media_mime_type: file.type,
+      media_filename: file.name,
+      is_starred: false,
+    } as any]);
+
     try {
       const formData = new FormData();
       formData.append('media', file);
@@ -3354,18 +3385,23 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         body: formData
       });
 
-      if (!response.ok) throw new Error('Falha ao enviar arquivo');
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Falha ao enviar arquivo');
+      }
       
-      toast.success('Arquivo enviado com sucesso!');
+      toast.success('Arquivo enviado com sucesso!', { id: toastId });
       
       await supabase
         .from('threads')
         .update({ status: 'human', updated_at: new Date().toISOString() })
         .eq('id', selectedThreadId);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending file:', err);
-      toast.error('Erro ao enviar arquivo');
+      // Remove a mensagem otimista em caso de erro
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      toast.error(err?.message || 'Erro ao enviar arquivo', { id: toastId });
     }
   };
 
@@ -3845,7 +3881,10 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         body: formData
       });
 
-      if (!response.ok) throw new Error('Falha ao enviar imagem colada');
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Falha ao enviar imagem');
+      }
       
       toast.success('Imagem enviada!');
       
@@ -4626,28 +4665,17 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             </AnimatePresence>
 
             {/* Messages Area */}
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
+            <div 
+              className="flex-1 relative overflow-hidden flex flex-col"
               onDragOver={handleDragOver}
-              className="flex-1 overflow-y-auto px-4 md:px-8 py-2 relative no-scrollbar"
-              style={{
-                backgroundColor: '#e5ddd5',
-                backgroundImage: 'url(/chat-bg.png)',
-                backgroundSize: '400px',
-                backgroundRepeat: 'repeat'
-              }}>
-              {/* Overlay suave para integrar melhor com o tema claro */}
-              <div className="absolute inset-0 bg-white/40 pointer-events-none" />
-
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {isDraggingOver && (
                 <div 
-                  className="absolute inset-0 bg-primary-500/20 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-dashed border-primary-500 transition-all m-2 rounded-2xl"
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
+                  className="absolute inset-0 bg-primary-500/20 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-dashed border-primary-500 transition-all m-2 rounded-2xl pointer-events-none"
                 >
-                  <div className="bg-white p-6 rounded-3xl shadow-xl flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200 pointer-events-none">
+                  <div className="bg-white p-6 rounded-3xl shadow-xl flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200">
                     <Paperclip size={40} className="text-primary-500 animate-bounce" />
                     <p className="font-black text-slate-800 text-sm">Arraste seu arquivo aqui</p>
                     <p className="text-xs text-slate-400">Solte para anexar à conversa</p>
@@ -4655,7 +4683,20 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 </div>
               )}
 
-              <div className="relative z-10">
+              <div
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto px-4 md:px-8 py-2 relative no-scrollbar"
+                style={{
+                  backgroundColor: '#e5ddd5',
+                  backgroundImage: 'url(/chat-bg.png)',
+                  backgroundSize: '400px',
+                  backgroundRepeat: 'repeat'
+                }}>
+                {/* Overlay suave para integrar melhor com o tema claro */}
+                <div className="absolute inset-0 bg-white/40 pointer-events-none" />
+
+                <div className="relative z-10">
               {loadingMessages ? (
                 <div className="space-y-4">
                   <Skeleton variant="rect" width="60%" height={60} className="rounded-2xl rounded-tl-none" />
@@ -4761,6 +4802,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   </motion.button>
                 )}
               </AnimatePresence>
+            </div>
             </div>
 
             {/* Quick Replies chips */}

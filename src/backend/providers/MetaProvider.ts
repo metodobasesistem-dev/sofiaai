@@ -128,7 +128,7 @@ export class MetaProvider implements IWhatsAppProvider {
     return { messageId: data.messages?.[0]?.id || '' };
   }
 
-  async sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type: 'image' | 'video' | 'document' | 'audio' = 'image'): Promise<{ messageId: string }> {
+  async sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type: 'image' | 'video' | 'document' | 'audio' = 'image', _mimetype?: string, _filename?: string): Promise<{ messageId: string }> {
     const { api, creds } = await this.getClient(instanceId);
     const recipient = to.replace(/\D/g, '');
 

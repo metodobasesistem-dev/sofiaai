@@ -358,17 +358,18 @@ class WhatsAppService {
 
   async uploadToStorage(userId: string, buffer: Buffer, filename: string): Promise<string | null> {
     try {
-      const path = `${userId}/${Date.now()}_${filename}`;
-      const ext = filename.split('.').pop()?.toLowerCase() || 'bin';
+      const cleanFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${userId}/${Date.now()}_${cleanFilename}`;
+      const ext = cleanFilename.split('.').pop()?.toLowerCase() || 'bin';
       
       // Mapear extensão para Content-Type
       let contentType = 'application/octet-stream';
       if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
         contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      } else if (['mp4', 'avi', 'mov', 'mpeg'].includes(ext)) {
-        contentType = `video/${ext === 'mov' ? 'quicktime' : (ext === 'mpeg' ? 'mpeg' : 'mp4')}`;
-      } else if (['ogg', 'mp3', 'wav', 'aac'].includes(ext)) {
-        contentType = `audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : 'ogg')}`;
+      } else if (['mp4', 'avi', 'mov', 'mpeg', 'webm', '3gp'].includes(ext)) {
+        contentType = `video/${ext === 'mov' ? 'quicktime' : (ext === 'mpeg' ? 'mpeg' : ext === 'webm' ? 'webm' : 'mp4')}`;
+      } else if (['ogg', 'mp3', 'wav', 'aac', 'm4a'].includes(ext)) {
+        contentType = `audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : ext === 'm4a' ? 'mp4' : 'ogg')}`;
       } else if (ext === 'pdf') {
         contentType = 'application/pdf';
       }
@@ -380,15 +381,18 @@ class WhatsAppService {
           upsert: true
         });
 
-      if (error) throw error;
+      if (error) {
+        console.warn(`[WhatsAppService] Storage upload failed for ${path}:`, error.message);
+        throw error;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('chat-audios')
         .getPublicUrl(path);
 
       return publicUrl;
-    } catch (err) {
-      console.error('[WhatsAppService] Error uploading to storage:', err);
+    } catch (err: any) {
+      console.error('[WhatsAppService] Error uploading to storage:', err?.message || err);
       return null;
     }
   }
@@ -397,11 +401,12 @@ class WhatsAppService {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('trial_ends_at, plano')
+        .select('trial_ends_at, plano, role')
         .eq('id', userId)
         .maybeSingle();
 
       if (!profile) return false;
+      if (profile.role === 'admin') return false;
       if (profile.plano?.toLowerCase() !== 'trial') return false;
       if (!profile.trial_ends_at) return false;
 
@@ -1230,26 +1235,25 @@ class WhatsAppService {
   async sendMedia(userId: string, to: string, buffer: Buffer, mimetype: string, filename: string, caption?: string) {
     const instanceName = await this.getInstanceName(userId);
     const provider = await WhatsAppProviderFactory.getProvider(userId);
-    const type = mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : 'document';
+    const type = mimetype.startsWith('image') ? 'image' : mimetype.startsWith('video') ? 'video' : mimetype.startsWith('audio') ? 'audio' : 'document';
 
-    // Upload primeiro: Meta Cloud API exige URL pública (link). Evolution
-    // também aceita URL, então essa ordem é compatível com ambos os providers.
+    // 1. Tenta upload para o Storage para obter URL pública
     const mediaUrl = await this.uploadToStorage(userId, buffer, filename);
-    if (!mediaUrl) {
-      const errMsg = 'Failed to upload media to storage';
-      console.error(`[WhatsAppService] ❌ ${errMsg}`);
-      return { success: false, error: errMsg };
-    }
+    
+    // Fallback: se o storage falhar (ex: limite de tamanho ou restrição de MIME do bucket),
+    // usa data URL Base64 para envio direto via Evolution API
+    const base64Data = buffer.toString('base64');
+    const mediaPayload = mediaUrl || `data:${mimetype};base64,${base64Data}`;
 
     try {
-      const result = await provider.sendMedia(instanceName, to, mediaUrl, caption || filename, type);
+      const result = await provider.sendMedia(instanceName, to, mediaPayload, caption || filename, type, mimetype, filename);
       const cleanTo = normalizePhone(to);
       const threadId = `${userId}_${cleanTo}`;
 
       await agentService.persistMessage(
         threadId,
         userId,
-        caption || `[Mídia]: ${filename}`,
+        caption || `[${type === 'image' ? 'Imagem' : type === 'video' ? 'Vídeo' : 'Arquivo'}]: ${filename}`,
         'outbound',
         result.messageId || `med-${Date.now()}`,
         undefined,
@@ -1257,9 +1261,9 @@ class WhatsAppService {
         cleanTo,
         'Atendente',
         undefined,
-        undefined,
+        mediaUrl || undefined,
         type,
-        mediaUrl,
+        mediaUrl || undefined,
         mimetype,
         filename,
         caption

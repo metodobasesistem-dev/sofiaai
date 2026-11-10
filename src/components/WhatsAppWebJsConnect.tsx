@@ -343,7 +343,11 @@ export default function WhatsAppWebJsConnect({ user: propUser }: Props) {
     const checkExp = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: profile } = await supabase.from('profiles').select('trial_ends_at, plano').eq('id', user.id).maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('trial_ends_at, plano, role').eq('id', user.id).maybeSingle();
+      if (profile?.role === 'admin') {
+        setIsExpired(false);
+        return;
+      }
       if (profile?.trial_ends_at && profile?.plano?.toLowerCase() === 'trial') {
         setIsExpired(new Date(profile.trial_ends_at).getTime() < Date.now());
       } else {

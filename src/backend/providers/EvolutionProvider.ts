@@ -140,7 +140,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     return { messageId: data.key?.id || data.id || '' };
   }
 
-  async sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type: 'image' | 'video' | 'document' | 'audio' = 'image'): Promise<{ messageId: string }> {
+  async sendMedia(instanceId: string, to: string, mediaUrl: string, caption?: string, type: 'image' | 'video' | 'document' | 'audio' = 'image', mimetype?: string, filename?: string): Promise<{ messageId: string }> {
     const cleanNumber = to.replace(/\D/g, '');
     
     let endpoint = `/message/sendMedia/${instanceId}`;
@@ -151,6 +151,13 @@ export class EvolutionProvider implements IWhatsAppProvider {
       caption: caption,
       options: { delay: 1200 }
     };
+
+    if (mimetype) {
+      payload.mimetype = mimetype;
+    }
+    if (filename) {
+      payload.fileName = filename;
+    }
 
     if (type === 'audio') {
       endpoint = `/message/sendWhatsAppAudio/${instanceId}`;
@@ -173,7 +180,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
    * o chamador reenvia enquanto houver digitação e manda 'paused' ao parar.
    */
   async sendPresence(instanceId: string, to: string, presence: 'composing' | 'recording' | 'paused'): Promise<void> {
-    const cleanNumber = to.split('@')[0].replace(/D/g, '');
+    const cleanNumber = to.split('@')[0].replace(/\D/g, '');
     try {
       await this.api.post(`/chat/sendPresence/${instanceId}`, {
         number: cleanNumber,

@@ -354,7 +354,7 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
   // Force Disconnect if Expired
   useEffect(() => {
     const checkAndDisconnect = async () => {
-      if (isExpired && profile?.plano?.toLowerCase() === 'trial' && whatsappStatus?.status === 'connected' && !isConnecting) {
+      if (role !== 'admin' && isExpired && profile?.plano?.toLowerCase() === 'trial' && whatsappStatus?.status === 'connected' && !isConnecting) {
         console.log('[Dashboard] ⚠️ Trial expired. Forcing WhatsApp disconnection.');
         try {
           await handleDisconnect();
@@ -367,10 +367,10 @@ export default function Dashboard({ onTabChange, role, user, plano }: { onTabCha
       }
     };
     checkAndDisconnect();
-  }, [isExpired, whatsappStatus?.status, profile?.plano]);
+  }, [isExpired, whatsappStatus?.status, profile?.plano, role]);
 
   const handleConnect = async () => {
-    if (isExpired && profile?.plano?.toLowerCase() === 'trial') {
+    if (role !== 'admin' && isExpired && profile?.plano?.toLowerCase() === 'trial') {
       toast.error('Período de teste expirado!', {
         description: 'Escolha um plano para ativar seu WhatsApp.'
       });

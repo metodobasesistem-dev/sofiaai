@@ -40,8 +40,11 @@ router.post('/send-media', upload.single('media'), async (req, res) => {
 
   try {
     console.log(`[WhatsappRoutes] 📎 Recebido pedido de envio de mídia para ${remoteJid} (User: ${userId})`);
-    await whatsappService.sendMedia(userId, remoteJid, mediaFile.buffer, mediaFile.mimetype, mediaFile.originalname, caption);
-    res.json({ success: true, message: 'Mídia enviada com sucesso!' });
+    const result = await whatsappService.sendMedia(userId, remoteJid, mediaFile.buffer, mediaFile.mimetype, mediaFile.originalname, caption);
+    if (!result?.success) {
+      throw new Error(result?.error || 'Falha ao processar envio de mídia.');
+    }
+    res.json({ success: true, message: 'Mídia enviada com sucesso!', messageId: result.messageId });
   } catch (err: any) {
     console.error('[WhatsappRoutes] Erro ao enviar mídia:', err);
     res.status(500).json({ error: err.message || 'Erro interno ao enviar mídia.' });
