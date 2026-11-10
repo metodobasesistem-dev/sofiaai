@@ -4979,7 +4979,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   {isUploadingPaste ? (
                     <Loader2 size={20} className="animate-spin" />
                   ) : (
-                    <Send size={20} className="ml-0.5" />
+                    <Send size={20} className="shrink-0" />
                   )}
                 </button>
               </div>
@@ -5672,11 +5672,12 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                     <button
                       onClick={handleSendMessage}
                       disabled={isSending}
-                      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-12 h-12 md:w-[52px] md:h-[52px] bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/20 hover:bg-primary-700 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                      title="Enviar mensagem"
                     >
                       {isSending
                         ? <Loader2 size={20} className="animate-spin" />
-                        : <Send size={20} className="md:size-[22px] ml-1" />}
+                        : <Send size={21} className="md:size-[22px] shrink-0" />}
                     </button>
                   ) : (
                     <VoiceRecorder onStop={handleSendVoice} onRecordingChange={setIsRecording} />
