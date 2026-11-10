@@ -890,6 +890,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
   const isSticker = message.message_type === 'sticker';
 
   const [showMobileActions, setShowMobileActions] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   // Posição do seletor de reação em coordenadas de tela
   const [emojiPos, setEmojiPos] = useState<{ top: number; left: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1046,11 +1047,21 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
         const isSendingVideo = (message as any).status === 'sending';
         const rawVideoUrl = message.media_url || sessionBlobUrls?.current?.get(message.media_filename || '') || sessionBlobUrls?.current?.get(message.id);
         const videoSrc = normalizeMediaUrl(rawVideoUrl);
+        const shouldShowFallback = !videoSrc || videoError;
+
         return (
           <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/video min-w-[160px]">
-              {videoSrc ? (
-                <div className="relative">
+              {!shouldShowFallback ? (
+                <div 
+                  className="relative cursor-pointer group/videoPlayer"
+                  onClick={(e) => {
+                    // Clicar no container abre a visualização em tela cheia estilo WhatsApp Web
+                    if (!isSendingVideo) {
+                      onPreview({ url: videoSrc, type: 'video', name: message.media_filename });
+                    }
+                  }}
+                >
                   <video 
                     key={videoSrc}
                     src={videoSrc} 
@@ -1058,6 +1069,10 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                     preload="auto" 
                     playsInline 
                     controls={!isSendingVideo}
+                    onError={() => {
+                      console.warn('[Inbox] Erro de mídia ao reproduzir vídeo (404 ou codec não suportado):', videoSrc);
+                      setVideoError(true);
+                    }}
                   />
 
                   {/* Loading circular estilo WhatsApp Web durante o envio */}
@@ -1089,8 +1104,8 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                         e.stopPropagation();
                         onPreview({ url: videoSrc, type: 'video', name: message.media_filename });
                       }}
-                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/video:opacity-100 transition-opacity z-10"
-                      title="Assistir em tela cheia"
+                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/85 rounded-full text-white backdrop-blur-sm transition-opacity z-10 shadow-lg cursor-pointer"
+                      title="Abrir vídeo em tela cheia"
                     >
                       <Maximize2 size={16} />
                     </button>
@@ -1101,6 +1116,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setVideoError(false);
                     if (onLoadMedia) onLoadMedia(message);
                   }}
                   disabled={loadingMediaIds?.has(message.id)}
@@ -1110,15 +1126,15 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                     {loadingMediaIds?.has(message.id) ? (
                       <Loader2 size={20} className="animate-spin text-emerald-600" />
                     ) : (
-                      <Play size={20} className="fill-emerald-600 ml-0.5" />
+                      <Download size={20} className="text-emerald-600" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-slate-800 leading-tight">
-                      {loadingMediaIds?.has(message.id) ? 'Baixando vídeo...' : 'Vídeo (Clique para abrir)'}
+                      {loadingMediaIds?.has(message.id) ? 'Baixando do WhatsApp...' : 'Vídeo indisponível (Clique para baixar)'}
                     </p>
                     <p className="text-[10px] text-slate-500 mt-0.5">
-                      {loadingMediaIds?.has(message.id) ? 'Aguarde o download do WhatsApp...' : 'Toque para assistir o vídeo'}
+                      {loadingMediaIds?.has(message.id) ? 'Aguarde o download do WhatsApp...' : 'Toque para baixar o vídeo do WhatsApp'}
                     </p>
                   </div>
                 </button>
@@ -5683,18 +5699,28 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               )}
               
               {previewMedia.type === 'video' && (
-                <video 
-                  key={normalizeMediaUrl(previewMedia.url)} 
-                  src={normalizeMediaUrl(previewMedia.url)} 
-                  controls 
-                  autoPlay 
-                  playsInline 
-                  preload="auto"
-                  className="max-w-full max-h-[85vh] rounded-xl shadow-2xl animate-in zoom-in duration-300"
-                >
-                  <source src={normalizeMediaUrl(previewMedia.url)} />
-                  Seu navegador não suporta vídeos.
-                </video>
+                <div className="flex flex-col items-center justify-center max-w-full max-h-[85vh] gap-3">
+                  <video 
+                    key={normalizeMediaUrl(previewMedia.url)} 
+                    src={normalizeMediaUrl(previewMedia.url)} 
+                    controls 
+                    autoPlay 
+                    playsInline 
+                    preload="auto"
+                    className="max-w-full max-h-[75vh] rounded-xl shadow-2xl animate-in zoom-in duration-300"
+                  >
+                    <source src={normalizeMediaUrl(previewMedia.url)} />
+                    Seu navegador não suporta vídeos.
+                  </video>
+                  <a
+                    href={normalizeMediaUrl(previewMedia.url)}
+                    target="_blank"
+                    download={previewMedia.name || 'video.mp4'}
+                    className="px-5 py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold backdrop-blur-md flex items-center gap-2 transition-all shadow-lg border border-white/10"
+                  >
+                    <Download size={16} /> Baixar vídeo
+                  </a>
+                </div>
               )}
 
               {previewMedia.type === 'document' && (

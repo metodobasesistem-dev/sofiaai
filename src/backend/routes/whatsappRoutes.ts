@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/authMiddleware.js';
@@ -190,8 +192,19 @@ router.post('/load-media', async (req, res) => {
     }
 
     // Se já tiver uma URL de mídia válida
-    if (msg.media_url || msg.audio_url) {
-      return res.json({ success: true, mediaUrl: msg.media_url || msg.audio_url });
+    const existingUrl = msg.media_url || msg.audio_url;
+    if (existingUrl) {
+      if (existingUrl.includes('/uploads/')) {
+        const filename = path.basename(existingUrl);
+        const uploadsDir = path.join(process.cwd(), 'uploads');
+        const filePath = path.join(uploadsDir, filename);
+        if (fs.existsSync(filePath)) {
+          return res.json({ success: true, mediaUrl: existingUrl });
+        }
+        console.warn(`[WhatsappRoutes] ⚠️ Arquivo local ${filename} não existe no disco (perda pós-deploy). Buscando novamente da Evolution API...`);
+      } else {
+        return res.json({ success: true, mediaUrl: existingUrl });
+      }
     }
 
     if (!msg.whatsapp_id) {

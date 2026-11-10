@@ -372,49 +372,48 @@ class WhatsAppService {
       contentType = 'application/pdf';
     }
 
-    // Para arquivos grandes (> 45MB), Supabase costuma recusar devido a limite de plano/bucket
-    const isVeryLarge = buffer.length > 45 * 1024 * 1024;
+    // 1. Tenta upload prioritário no Supabase Storage (permanente, não se perde em deploys)
+    try {
+      const path = `${userId}/${Date.now()}_${cleanFilename}`;
+      let targetBucket = 'chat-media';
+      let uploadResult = await supabase.storage
+        .from('chat-media')
+        .upload(path, buffer, {
+          contentType,
+          upsert: true
+        });
 
-    if (!isVeryLarge) {
-      try {
-        const path = `${userId}/${Date.now()}_${cleanFilename}`;
-        let uploadResult = await supabase.storage
-          .from('chat-audios') // Bucket legado, mas usaremos para todas as mídias do chat por enquanto
+      // Se falhar no chat-media, tenta chat-audios
+      if (uploadResult.error) {
+        console.warn(`[WhatsAppService] Storage upload to chat-media failed (${uploadResult.error.message}), trying chat-audios...`);
+        const fallbackResult = await supabase.storage
+          .from('chat-audios')
           .upload(path, buffer, {
             contentType,
             upsert: true
           });
-
-        let targetBucket = 'chat-audios';
-
-        if (uploadResult.error) {
-          console.warn(`[WhatsAppService] Storage upload to chat-audios failed (${uploadResult.error.message}), trying chat-media...`);
-          const fallbackResult = await supabase.storage
-            .from('chat-media')
-            .upload(path, buffer, {
-              contentType,
-              upsert: true
-            });
-          
-          if (!fallbackResult.error) {
-            targetBucket = 'chat-media';
-            uploadResult = fallbackResult;
-          } else {
-            throw uploadResult.error;
-          }
+        
+        if (!fallbackResult.error) {
+          targetBucket = 'chat-audios';
+          uploadResult = fallbackResult;
+        } else {
+          throw uploadResult.error;
         }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from(targetBucket)
-          .getPublicUrl(path);
-
-        return publicUrl;
-      } catch (err: any) {
-        console.warn('[WhatsAppService] Storage upload failed, trying local disk fallback:', err?.message || err);
       }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(targetBucket)
+        .getPublicUrl(path);
+
+      if (publicUrl) {
+        console.log(`[WhatsAppService] ☁️ Uploaded to Supabase Storage (${targetBucket}): ${publicUrl}`);
+        return publicUrl;
+      }
+    } catch (err: any) {
+      console.warn('[WhatsAppService] Storage upload failed, trying local disk fallback:', err?.message || err);
     }
 
-    // Fallback para disco local (para arquivos grandes >45MB ou quando o Supabase falha)
+    // Fallback para disco local (caso o Supabase recuse o arquivo ou bucket esteja indisponível)
     try {
       const uploadsDir = path.join(process.cwd(), 'uploads');
       if (!fs.existsSync(uploadsDir)) {
