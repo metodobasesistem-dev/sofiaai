@@ -419,7 +419,7 @@ const PAGE_SIZE = 50;
 const formatMsgRow = (d: any): Message => ({
   id: d.id,
   text: d.text || '',
-  sender: d.id?.startsWith('private-') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
+  sender: (d.id?.startsWith('private-') || d.whatsapp_id?.startsWith('private-') || d.message_type === 'private') ? 'private' : (d.direction === 'inbound' || d.direction === 'received' ? 'lead' : (d.whatsapp_id?.startsWith('ai-') ? 'ia' : 'outbound')),
   time: d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
   timestamp: d.created_at,
   audio_url: d.audio_url,
@@ -725,7 +725,9 @@ const VoiceRecorder: React.FC<{ onStop: (blob: Blob) => void, onRecordingChange?
 };
 
 const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: boolean, lastInboundAtOverride?: number, now: number, onClick: () => void, onDelete: (e: React.MouseEvent) => void }> = ({ thread, active, showWindow, lastInboundAtOverride, now, onClick, onDelete }) => {
-  const isOutbound = (thread.unreadCount ?? 0) === 0 && (
+  // Se a conversa já estiver aberta/ativa no painel da direita, o usuário já a está visualizando
+  const effectiveUnread = active ? 0 : (thread.unreadCount ?? 0);
+  const isOutbound = effectiveUnread === 0 && (
     thread.lastMessageDirection === 'outbound' ||
     Boolean(thread.lastMessageTime && (!thread.lastInboundAt || ((thread.lastMessageTime - (thread.lastInboundAt || 0)) > 2000)))
   );
@@ -738,7 +740,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
     >
       <div className="relative shrink-0">
         <ContactAvatar url={thread.profilePictureUrl} name={thread.name} size="md" threadId={thread.id} />
-        {(thread.unreadCount ?? 0) > 0 && (
+        {effectiveUnread > 0 && (
           <div className="absolute bottom-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full z-10 animate-in zoom-in-75 duration-150" />
         )}
       </div>
@@ -746,7 +748,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
       <div className="flex-1 min-w-0 py-0.5">
         <div className="flex items-start justify-between gap-2">
           <h4 className={`text-[13.5px] leading-snug truncate flex items-center gap-1.5 min-w-0
-            ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+            ${effectiveUnread > 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
             <span className="truncate">
               {/^\d+$/.test(thread.name) ? formatPhone(thread.name) : thread.name}
             </span>
@@ -770,9 +772,9 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
             <PendingReplyPill
               lastInboundAt={lastInboundAtOverride ?? thread.lastInboundAt}
               now={now}
-              show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && (thread.unreadCount ?? 0) > 0}
+              show={thread.ticketStatus !== 'resolved' && thread.status === 'human' && effectiveUnread > 0}
             />
-            <span className={`text-[11px] whitespace-nowrap ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-emerald-600' : 'font-medium text-slate-400'}`}>
+            <span className={`text-[11px] whitespace-nowrap ${effectiveUnread > 0 ? 'font-bold text-emerald-600' : 'font-medium text-slate-400'}`}>
               {thread.time}
             </span>
           </div>
@@ -780,7 +782,7 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
 
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <p className={`text-[12.5px] truncate leading-relaxed flex-1 min-w-0 flex items-center
-            ${(thread.unreadCount ?? 0) > 0 ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
+            ${effectiveUnread > 0 ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
             {isOutbound && (
               <CheckCheck size={15} className="text-slate-400 shrink-0 mr-1 inline" />
             )}
@@ -792,9 +794,9 @@ const ContactItem: React.FC<{ thread: Thread, active: boolean, showWindow?: bool
             <span className="text-[10px] text-emerald-500 font-bold animate-pulse shrink-0">
               Digitando...
             </span>
-          ) : (thread.unreadCount ?? 0) > 0 && (
+          ) : effectiveUnread > 0 && (
             <span className="bg-emerald-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-              {thread.unreadCount}
+              {effectiveUnread}
             </span>
           )}
         </div>
@@ -1929,6 +1931,17 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   }, [initialTab]);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<{url: string, type: string, name?: string} | null>(null);
+
+  useEffect(() => {
+    if (!previewMedia) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewMedia(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewMedia]);
   const [isRecording, setIsRecording] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
@@ -2408,6 +2421,11 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 // Se já existe e NÃO é temporária, ignora. Se for temporária, substitui pela real.
                 if (prev.some(t => t.id === payload.new.id && !(t as any).isTemp)) return prev;
                 
+                const isCurrentlyActive = selectedThreadIdRef.current === payload.new.id;
+                if (isCurrentlyActive && (payload.new.unread_count || 0) > 0) {
+                  supabase.from('threads').update({ unread_count: 0 }).eq('id', payload.new.id).then(() => {});
+                }
+
                 const resolved = getResolvedContact(payload.new.remote_jid || '', payload.new.contact_name || 'Lead WhatsApp');
                 const newThread = {
                   id: payload.new.id,
@@ -2415,7 +2433,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                   lastMessage: payload.new.last_message || '',
                   time: payload.new.last_message_time ? new Date(payload.new.last_message_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
                   status: payload.new.status,
-                  unreadCount: payload.new.unread_count || 0,
+                  unreadCount: isCurrentlyActive ? 0 : (payload.new.unread_count || 0),
                   remoteJid: payload.new.remote_jid,
                   updatedAt: payload.new.updated_at,
                   lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : 0,
@@ -2461,13 +2479,18 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
                 const finalName = crmName || existingName || dbContactName || payload.new.contact_name || baseThread?.name || 'Lead WhatsApp';
 
 
+                const isCurrentlyActive = selectedThreadIdRef.current === payload.new.id;
+                if (isCurrentlyActive && (payload.new.unread_count || 0) > 0) {
+                  supabase.from('threads').update({ unread_count: 0 }).eq('id', payload.new.id).then(() => {});
+                }
+
                 const updatedThread = {
                   ...(baseThread || {}),
                   id: payload.new.id,
                   name: finalName,
                   lastMessage: payload.new.last_message || baseThread?.lastMessage || '',
                   status: payload.new.status || baseThread?.status || 'ia',
-                  unreadCount: payload.new.unread_count ?? baseThread?.unreadCount ?? 0,
+                  unreadCount: isCurrentlyActive ? 0 : (payload.new.unread_count ?? baseThread?.unreadCount ?? 0),
                   updatedAt: payload.new.updated_at || baseThread?.updatedAt || new Date().toISOString(),
                   lastMessageTime: payload.new.last_message_time ? new Date(payload.new.last_message_time).getTime() : (baseThread?.lastMessageTime || 0),
                   ticketStatus: payload.new.ticket_status || baseThread?.ticketStatus || 'open',
@@ -2650,7 +2673,12 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               }
 
               // Som de recebimento apenas para mensagens inbound (lead)
-              if (newMsg.sender === 'lead') playSound('receive');
+              if (newMsg.sender === 'lead') {
+                playSound('receive');
+                // Como a conversa já está aberta na tela, zera o contador de não lidas imediatamente
+                setThreads(tPrev => tPrev.map(t => t.id === selectedThreadId ? { ...t, unreadCount: 0 } : t));
+                supabase.from('threads').update({ unread_count: 0 }).eq('id', selectedThreadId).then(() => {});
+              }
 
               const isTemp = newMsg.id.toString().startsWith('sending-');
               const newTime = new Date(newMsg.timestamp).getTime();
@@ -3690,22 +3718,37 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     if (isPrivate) {
       try {
         const privateId = `private-${Date.now()}`;
+        const noteId = crypto.randomUUID();
         const { error } = await supabase.from('messages').insert({
-           id: privateId,
+           id: noteId,
            user_id: userId,
            thread_id: selectedThreadId,
            text: finalMessageText,
            direction: 'outbound',
+           message_type: 'private',
            timestamp: Date.now(),
            whatsapp_id: privateId // Resolve erro de NOT NULL e constraint UNIQUE
         });
         if (error) throw error;
         
         setIsPrivateNoteMode(false);
-        // O Realtime listener do messages vai capturar e atualizar a lista
-      } catch (err) {
+        setMessages(prev => [...prev, {
+          id: noteId,
+          text: finalMessageText,
+          sender: 'private',
+          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toISOString(),
+          status: 'sent',
+          message_type: 'private',
+          whatsapp_id: privateId,
+          is_starred: false,
+        } as any]);
+        toast.success('Nota privada adicionada!');
+      } catch (err: any) {
         console.error('Error adding private note:', err);
         toast.error('Erro ao adicionar nota privada');
+      } finally {
+        setIsSending(false);
       }
       return;
     }
@@ -5700,11 +5743,17 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         };
 
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-10 animate-in fade-in duration-200">
+          <div 
+            onClick={() => setPreviewMedia(null)}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-10 animate-in fade-in duration-200 cursor-pointer"
+          >
             <button 
-              onClick={() => setPreviewMedia(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewMedia(null);
+              }}
               className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all z-10"
-              title="Fechar"
+              title="Fechar (Esc)"
             >
               <X size={28} />
             </button>
@@ -5729,18 +5778,25 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               </button>
             )}
 
-            <div className="max-w-7xl max-h-screen w-full h-full flex flex-col items-center justify-center relative">
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-7xl max-h-screen w-full h-full flex flex-col items-center justify-center relative pointer-events-none"
+            >
               {previewMedia.type === 'image' && (
                 <img 
                   key={normalizeMediaUrl(previewMedia.url)} 
                   src={normalizeMediaUrl(previewMedia.url)} 
                   alt={previewMedia.name || 'Preview'} 
-                  className="max-w-full max-h-[85vh] object-contain shadow-2xl animate-in zoom-in duration-300" 
+                  onClick={(e) => e.stopPropagation()}
+                  className="max-w-full max-h-[85vh] object-contain shadow-2xl animate-in zoom-in duration-300 pointer-events-auto cursor-default" 
                 />
               )}
               
               {previewMedia.type === 'video' && (
-                <div className="flex flex-col items-center justify-center max-w-full max-h-[85vh] gap-3">
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex flex-col items-center justify-center max-w-full max-h-[85vh] gap-3 pointer-events-auto cursor-default"
+                >
                   <video 
                     key={normalizeMediaUrl(previewMedia.url)} 
                     src={normalizeMediaUrl(previewMedia.url)} 
@@ -5765,7 +5821,10 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               )}
 
               {previewMedia.type === 'document' && (
-                 <div className="bg-white rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in duration-300 max-w-sm w-full">
+                 <div 
+                   onClick={(e) => e.stopPropagation()}
+                   className="bg-white rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in duration-300 max-w-sm w-full pointer-events-auto cursor-default"
+                 >
                     <div className="w-24 h-24 rounded-2xl bg-primary-500 flex items-center justify-center text-white">
                       <FileText size={48} />
                     </div>
@@ -5785,8 +5844,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               )}
 
               {previewMedia.name && previewMedia.type !== 'document' && (
-                <div className="absolute bottom-0 left-0 right-0 text-center pb-6">
-                  <span className="px-4 py-2 bg-black/40 text-white text-[11px] font-bold rounded-full backdrop-blur-md border border-white/10">
+                <div className="absolute bottom-0 left-0 right-0 text-center pb-6 pointer-events-none">
+                  <span className="px-4 py-2 bg-black/40 text-white text-[11px] font-bold rounded-full backdrop-blur-md border border-white/10 pointer-events-auto">
                     {previewMedia.name}
                   </span>
                 </div>

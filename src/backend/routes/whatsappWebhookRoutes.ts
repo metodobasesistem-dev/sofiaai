@@ -434,10 +434,28 @@ async function handleMessageStatusUpdate(userId: string, data: any) {
         continue;
       }
 
-      // Só processa mensagens enviadas por nós (fromMe)
+      // Se a mensagem for de terceiros (inbound), checa se foi lida no celular
       const fromMe = update?.key?.fromMe === true || update?.key?.fromMe === 'true' || update?.fromMe === true || update?.fromMe === 'true';
       if (!fromMe) {
-        console.log(`[Webhook-Status] Ignored ${msgId}: fromMe is false/undefined`);
+        if (['READ', '4', 'PLAYED', '5'].includes(rawStatus)) {
+          // Mensagem inbound visualizada no aparelho celular (WhatsApp mobile)
+          const { data: readMsg } = await supabase
+            .from('messages')
+            .select('thread_id, id')
+            .eq('whatsapp_id', msgId)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (readMsg?.thread_id) {
+            console.log(`[Webhook-Status] 📱 Mensagem inbound ${msgId} lida no celular. Zerando unread_count da thread ${readMsg.thread_id}`);
+            await Promise.all([
+              supabase.from('threads').update({ unread_count: 0 }).eq('id', readMsg.thread_id).eq('user_id', userId),
+              supabase.from('messages').update({ status: 'read' }).eq('id', readMsg.id)
+            ]);
+          }
+        } else {
+          console.log(`[Webhook-Status] Ignored ${msgId}: fromMe is false/undefined`);
+        }
         continue;
       }
 
