@@ -943,33 +943,59 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
         );
       
       case 'image':
+        const isSendingImage = (message as any).status === 'sending';
         return (
           <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/img min-w-[120px]">
               {message.media_url ? (
                 <div 
-                  className="cursor-pointer hover:opacity-95 transition-opacity relative"
-                  onClick={() => onPreview({ url: message.media_url!, type: 'image', name: message.media_filename })}
+                  className={`relative ${isSendingImage ? 'pointer-events-none' : 'cursor-pointer hover:opacity-95 transition-opacity'}`}
+                  onClick={() => !isSendingImage && onPreview({ url: message.media_url!, type: 'image', name: message.media_filename })}
                 >
                   <img
                     src={message.media_url}
                     alt="Imagem"
                     loading="lazy"
                     decoding="async"
-                    className="max-w-full max-h-[300px] object-contain"
+                    className={`max-w-full max-h-[300px] object-contain ${isSendingImage ? 'brightness-75' : ''}`}
                     onLoad={() => { if (onImageLoad) onImageLoad(); }}
                   />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPreview({ url: message.media_url!, type: 'image', name: message.media_filename });
-                    }}
-                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
-                    title="Ampliar imagem"
-                  >
-                    <Maximize2 size={16} />
-                  </button>
+
+                  {/* Loading circular estilo WhatsApp Web durante o envio */}
+                  {isSendingImage ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px] pointer-events-none z-20">
+                      <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center shadow-2xl border border-white/10">
+                        <svg className="w-9 h-9 animate-spin text-[#00a884]" viewBox="0 0 36 36" fill="none">
+                          <circle
+                            className="opacity-20"
+                            cx="18"
+                            cy="18"
+                            r="14"
+                            stroke="currentColor"
+                            strokeWidth="3.5"
+                          />
+                          <path
+                            d="M18 4a14 14 0 0 1 14 14"
+                            stroke="currentColor"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPreview({ url: message.media_url!, type: 'image', name: message.media_filename });
+                      }}
+                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
+                      title="Ampliar imagem"
+                    >
+                      <Maximize2 size={16} />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button
@@ -1004,6 +1030,7 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
         );
 
       case 'video':
+        const isSendingVideo = (message as any).status === 'sending';
         return (
           <div className="space-y-1.5">
             <div className="rounded-lg overflow-hidden border border-black/5 bg-black/5 relative group/video min-w-[160px]">
@@ -1011,22 +1038,47 @@ const ChatBubbleInner: React.FC<ChatBubbleProps> = ({
                 <div className="relative">
                   <video 
                     src={message.media_url} 
-                    className="max-w-full max-h-[300px] rounded-lg block" 
+                    className={`max-w-full max-h-[300px] rounded-lg block ${isSendingVideo ? 'brightness-75' : ''}`} 
                     preload="metadata" 
                     playsInline 
-                    controls
+                    controls={!isSendingVideo}
                   />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPreview({ url: message.media_url!, type: 'video', name: message.media_filename });
-                    }}
-                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/video:opacity-100 transition-opacity z-10"
-                    title="Assistir em tela cheia"
-                  >
-                    <Maximize2 size={16} />
-                  </button>
+
+                  {/* Loading circular estilo WhatsApp Web durante o envio */}
+                  {isSendingVideo ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px] pointer-events-none z-20">
+                      <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center shadow-2xl border border-white/10">
+                        <svg className="w-9 h-9 animate-spin text-[#00a884]" viewBox="0 0 36 36" fill="none">
+                          <circle
+                            className="opacity-20"
+                            cx="18"
+                            cy="18"
+                            r="14"
+                            stroke="currentColor"
+                            strokeWidth="3.5"
+                          />
+                          <path
+                            d="M18 4a14 14 0 0 1 14 14"
+                            stroke="currentColor"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPreview({ url: message.media_url!, type: 'video', name: message.media_filename });
+                      }}
+                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm opacity-0 group-hover/video:opacity-100 transition-opacity z-10"
+                      title="Assistir em tela cheia"
+                    >
+                      <Maximize2 size={16} />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button
@@ -3427,7 +3479,6 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     const userId = user?.id;
     if (!userId) return;
 
-    const toastId = toast.loading(`Enviando ${file.name}...`);
     const tempUrl = URL.createObjectURL(file);
     const isVideo = file.type.startsWith('video/');
     const isAudio = file.type.startsWith('audio/');
@@ -3437,7 +3488,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     // Mensagem otimista no chat para dar feedback visual imediato
     setMessages(prev => [...prev, {
       id: tempId,
-      text: `[${isVideo ? 'Vídeo' : isAudio ? 'Áudio' : 'Arquivo'}]: ${file.name}`,
+      text: isVideo ? '[Vídeo]' : isAudio ? '[Áudio]' : `[Arquivo]: ${file.name}`,
       sender: 'outbound',
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       timestamp: new Date().toISOString(),
@@ -3465,8 +3516,13 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         const errJson = await response.json().catch(() => ({}));
         throw new Error(errJson.error || 'Falha ao enviar arquivo');
       }
-      
-      toast.success('Arquivo enviado com sucesso!', { id: toastId });
+
+      const resData = await response.json().catch(() => ({}));
+      setMessages(prev => prev.map(m => m.id === tempId ? {
+        ...m,
+        status: 'sent',
+        media_url: resData?.mediaUrl || m.media_url || tempUrl,
+      } : m));
       
       await supabase
         .from('threads')
@@ -3477,7 +3533,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       console.error('Error sending file:', err);
       // Remove a mensagem otimista em caso de erro
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      toast.error(err?.message || 'Erro ao enviar arquivo', { id: toastId });
+      toast.error(err?.message || 'Erro ao enviar arquivo');
     }
   };
 
@@ -3944,7 +4000,6 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     const isAudio = pastedFile.type.startsWith('audio/');
     const mediaType = isVideo ? 'video' : isAudio ? 'audio' : pastedFile.type.startsWith('image/') ? 'image' : 'document';
     const label = isVideo ? 'Vídeo' : isAudio ? 'Áudio' : mediaType === 'image' ? 'Imagem' : 'Arquivo';
-    const toastId = toast.loading(`Enviando ${label.toLowerCase()}...`);
     const tempId = `sending-${Date.now()}`;
     const tempUrl = pastedImageUrl;
     const captionToSend = pasteCaption.trim();
@@ -3994,8 +4049,6 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         status: 'sent',
         media_url: resData?.mediaUrl || m.media_url || tempUrl,
       } : m));
-
-      toast.success(`${label} enviado com sucesso!`, { id: toastId });
       
       await supabase
         .from('threads')
@@ -4006,7 +4059,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       console.error('Error sending media:', err);
       // Remove mensagem otimista em caso de erro
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      toast.error(err?.message || `Erro ao enviar ${label.toLowerCase()}`, { id: toastId });
+      toast.error(err?.message || `Erro ao enviar ${label.toLowerCase()}`);
     } finally {
       setIsUploadingPaste(false);
       setPastedFile(null);
