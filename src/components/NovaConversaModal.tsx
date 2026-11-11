@@ -347,3 +347,4 @@ export default function NovaConversaModal({ isOpen, onClose, onOpenChat }: NovaC
     </div>
   );
 }
+

@@ -1539,11 +1539,18 @@ export const listQuickReplies = async (): Promise<QuickReply[]> => {
   }
 };
 
-export const createQuickReply = async (replyData: { title: string, content: string }) => {
+export const createQuickReply = async (
+  replyDataOrTitle: { title: string; content: string } | string,
+  contentArg?: string
+) => {
   try {
+    const payload = typeof replyDataOrTitle === 'string'
+      ? { title: replyDataOrTitle, content: contentArg || '' }
+      : replyDataOrTitle;
+
     const res = await standardFetch('/api/v2/quick-replies', {
       method: 'POST',
-      body: JSON.stringify(replyData)
+      body: JSON.stringify(payload)
     });
 
     const result = await res.json();

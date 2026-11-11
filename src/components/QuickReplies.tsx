@@ -43,12 +43,12 @@ export default function QuickReplies() {
 
     setIsSaving(true);
     try {
-      await createQuickReply(newReply.title, newReply.content);
+      await createQuickReply({ title: newReply.title.trim(), content: newReply.content.trim() });
       toast.success('Resposta rápida criada!');
       setNewReply({ title: '', content: '' });
       fetchReplies();
-    } catch (err) {
-      toast.error('Erro ao criar resposta rápida');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao criar resposta rápida');
     } finally {
       setIsSaving(false);
     }
