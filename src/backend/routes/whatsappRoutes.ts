@@ -6,6 +6,8 @@ import { whatsappService } from '../services/whatsappService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { WhatsAppProviderFactory } from '../providers/WhatsAppProviderFactory.js';
+import { EvolutionApiService } from '../services/evolutionApiService.js';
+import { normalizePhone, variantesDoTelefone } from '../lib/phoneHelper.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -168,6 +170,114 @@ router.post('/threads/backfill-photos', async (req, res) => {
   } catch (err: any) {
     console.error('[PhotoBackfill] Erro:', err);
     res.status(500).json({ error: 'Erro ao enfileirar sincronização de fotos' });
+  }
+});
+
+/**
+ * POST /api/whatsapp/check-number
+ *
+ * Antes de abrir uma conversa nova a partir de um número digitado:
+ *   1. confere se o número tem WhatsApp (Evolution /chat/whatsappNumbers);
+ *   2. confere se já existe histórico com ele na nossa base (threads,
+ *      mensagens e disparos de campanha), considerando com e sem o 9º dígito.
+ * Evita mandar mensagem para número inexistente ou para quem já foi abordado.
+ */
+router.post('/check-number', async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId!;
+  const phone = normalizePhone(String(req.body?.phone || ''));
+
+  if (!phone || phone.length < 10 || phone.length > 15) {
+    return res.status(400).json({ success: false, error: 'Número inválido. Informe DDD + número (ex.: 32 99999-9999).' });
+  }
+
+  try {
+    const variantes = variantesDoTelefone(phone);
+
+    // ── 1. Existe no WhatsApp? ───────────────────────────────────────────
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('whatsapp_instance_id')
+      .eq('id', userId)
+      .maybeSingle();
+    const instanceName = prof?.whatsapp_instance_id || `wppai_${userId.substring(0, 8)}`;
+
+    let whatsappExists: boolean | null = null;
+    let jid: string | null = null;
+    try {
+      const results = await EvolutionApiService.checkWhatsappNumbersStrict(instanceName, variantes);
+      const found = results.find(r => r.exists);
+      whatsappExists = !!found;
+      jid = found?.jid || (found ? `${found.number}@s.whatsapp.net` : null);
+    } catch (err: any) {
+      console.warn('[CheckNumber] Falha ao consultar WhatsApp:', err?.response?.data || err?.message);
+      whatsappExists = null; // não foi possível verificar
+    }
+
+    // O número "oficial" é o que o WhatsApp devolveu (pode vir sem o 9).
+    const numeroFinal = jid ? normalizePhone(jid) : phone;
+    const todasVariantes = Array.from(new Set([...variantes, ...variantesDoTelefone(numeroFinal)]));
+    const threadIds = todasVariantes.map(v => `${userId}_${v}`);
+
+    // ── 2. Histórico na nossa base ───────────────────────────────────────
+    const [{ data: threads }, { data: contatos }] = await Promise.all([
+      supabase
+        .from('threads')
+        .select('id, contact_name, last_message, last_message_time, remote_jid')
+        .eq('user_id', userId)
+        .in('id', threadIds),
+      supabase
+        .from('contacts')
+        .select('id, nome, is_client')
+        .eq('user_id', userId)
+        .in('id', threadIds),
+    ]);
+
+    const thread = threads?.[0] || null;
+    let totalMensagens = 0;
+    let enviadas = 0;
+    if (threads?.length) {
+      const ids = threads.map(t => t.id);
+      const [{ count: total }, { count: out }] = await Promise.all([
+        supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId).in('thread_id', ids),
+        supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId).in('thread_id', ids).eq('direction', 'outbound'),
+      ]);
+      totalMensagens = total || 0;
+      enviadas = out || 0;
+    }
+
+    let disparosCampanha = 0;
+    if (contatos?.length) {
+      const { count } = await supabase
+        .from('campaign_logs')
+        .select('id', { count: 'exact', head: true })
+        .in('contact_id', contatos.map(c => c.id))
+        .in('status', ['sent', 'success']);
+      disparosCampanha = count || 0;
+    }
+
+    const contato = contatos?.[0] || null;
+    const jaContatado = totalMensagens > 0 || disparosCampanha > 0;
+
+    res.json({
+      success: true,
+      phone: numeroFinal,
+      jid: jid || `${numeroFinal}@s.whatsapp.net`,
+      whatsappExists,
+      history: {
+        hasHistory: jaContatado,
+        threadId: thread?.id || null,
+        contactName: contato?.nome || thread?.contact_name || null,
+        isClient: !!contato?.is_client,
+        totalMessages: totalMensagens,
+        sentMessages: enviadas,
+        campaignSends: disparosCampanha,
+        lastMessage: thread?.last_message || null,
+        lastMessageAt: thread?.last_message_time || null,
+      },
+    });
+  } catch (err: any) {
+    console.error('[CheckNumber] Erro:', err);
+    res.status(500).json({ success: false, error: err.message || 'Erro ao verificar número' });
   }
 });
 

@@ -70,6 +70,7 @@ import { classifyLeadOrigin } from '../lib/leadOrigin';
 import OrigemDoLead from './OrigemDoLead';
 import ProgramarMensagemModal from './ProgramarMensagemModal';
 import MotivoPerdaModal from './MotivoPerdaModal';
+import NovaConversaModal from './NovaConversaModal';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -1958,6 +1959,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [enlargedPhoto, setEnlargedPhoto] = useState<{ url: string; name: string; phone?: string } | null>(null);
   const [showProgramarModal, setShowProgramarModal] = useState(false);
+  const [showNovaConversaModal, setShowNovaConversaModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [deleteModalMsgId, setDeleteModalMsgId] = useState<string | null>(null);
   const [isDeletingMessage, setIsDeletingMessage] = useState(false);
@@ -3802,19 +3804,19 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleOpenContactChat = (jid: string) => {
+  const handleOpenContactChat = (jid: string, customName?: string) => {
     if (!jid || !user?.id) return;
 
     const cleanJid = jid.split('@')[0];
     const threadId = `${user.id}_${cleanJid}`;
     
-    // Se já estivermos com essa thread selecionada, não faz nada
-    if (selectedThreadId === threadId) return;
-
     // Busca nas threads existentes
     const existingThread = threads.find(t => t.id === threadId || (t.remoteJid || '').split('@')[0] === cleanJid);
     
     if (existingThread) {
+      if (customName && (!existingThread.name || existingThread.name === cleanJid)) {
+        existingThread.name = customName;
+      }
       setSelectedThreadId(existingThread.id);
       console.log(`[Inbox] 🔗 Contact JID selected: ${existingThread.id}`);
     } else {
@@ -3822,8 +3824,8 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       const tempThread: Thread & { isTemp?: boolean } = {
         id: threadId,
         remoteJid: `${cleanJid}@s.whatsapp.net`,
-        name: cleanJid,
-        lastMessage: 'Conversar com contato compartilhado...',
+        name: customName || cleanJid,
+        lastMessage: 'Conversar com novo contato...',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'human',
         updatedAt: new Date().toISOString(),
@@ -3833,7 +3835,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
       };
 
       const resolved = getResolvedContact(cleanJid, tempThread.name);
-      tempThread.name = resolved.name;
+      tempThread.name = customName || resolved.name;
       tempThread.funilStatus = resolved.funilStatus;
 
       setThreads(prev => {
@@ -4654,6 +4656,13 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
               {(filterStatus !== 'Ativos' || filterSub !== 'Todos' || filterBadge !== null) && (
                 <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5" />
               )}
+            </button>
+            <button
+              onClick={() => setShowNovaConversaModal(true)}
+              title="Iniciar nova conversa com número"
+              className="p-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-all flex items-center justify-center shrink-0 active:scale-95 shadow-sm"
+            >
+              <Plus size={16} />
             </button>
           </div>
 
@@ -6045,6 +6054,12 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
           onFechar={() => setShowProgramarModal(false)}
         />
       )}
+
+      <NovaConversaModal
+        isOpen={showNovaConversaModal}
+        onClose={() => setShowNovaConversaModal(false)}
+        onOpenChat={handleOpenContactChat}
+      />
 
       <TrackingModal
         isOpen={showTrackingModal}

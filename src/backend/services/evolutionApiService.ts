@@ -349,6 +349,26 @@ export class EvolutionApiService {
     }
   }
 
+  /**
+   * Igual a checkWhatsappNumbers, mas LANÇA quando a Evolution falha — para
+   * quem precisa distinguir "número não existe" de "não deu para verificar".
+   */
+  static async checkWhatsappNumbersStrict(instanceName: string, numbers: string[]): Promise<Array<{ number: string; exists: boolean; jid?: string }>> {
+    const api = getApi();
+    const cleanList = numbers.map(n => String(n).replace(/\D/g, '')).filter(Boolean);
+    if (cleanList.length === 0) return [];
+    const { data } = await api.post(`/chat/whatsappNumbers/${instanceName}`, { numbers: cleanList });
+    if (!Array.isArray(data)) throw new Error('Resposta inesperada da Evolution API');
+    return cleanList.map(num => {
+      const found = data.find((item: any) => {
+        const itemNum = item.number || (item.jid ? item.jid.split('@')[0] : '');
+        return itemNum === num || num.endsWith(itemNum) || itemNum.endsWith(num);
+      });
+      const exists = found ? (found.exists === true || found.exists === 'exists') : false;
+      return { number: num, exists, jid: found?.jid };
+    });
+  }
+
   static async whatsappExists(instanceName: string, number: string): Promise<boolean> {
     const cleanNumber = number.replace(/\D/g, '');
     if (!cleanNumber || cleanNumber.length < 8) return false;
