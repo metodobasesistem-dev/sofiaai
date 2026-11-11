@@ -71,6 +71,7 @@ import OrigemDoLead from './OrigemDoLead';
 import ProgramarMensagemModal from './ProgramarMensagemModal';
 import MotivoPerdaModal from './MotivoPerdaModal';
 import NovaConversaModal from './NovaConversaModal';
+import EnvioAvulsoModal from './EnvioAvulsoModal';
 import { supabase } from '../lib/supabase';
 import { Skeleton, ListSkeleton } from './common/SkeletonLoader';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -1960,6 +1961,7 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
   const [enlargedPhoto, setEnlargedPhoto] = useState<{ url: string; name: string; phone?: string } | null>(null);
   const [showProgramarModal, setShowProgramarModal] = useState(false);
   const [showNovaConversaModal, setShowNovaConversaModal] = useState(false);
+  const [showEnvioAvulsoModal, setShowEnvioAvulsoModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [deleteModalMsgId, setDeleteModalMsgId] = useState<string | null>(null);
   const [isDeletingMessage, setIsDeletingMessage] = useState(false);
@@ -4591,14 +4593,9 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
             </h2>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => {
-                  if (onTabChange) {
-                    localStorage.setItem('openNewCampaign', 'true');
-                    onTabChange('campaigns');
-                  }
-                }}
+                onClick={() => setShowEnvioAvulsoModal(true)}
                 className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                title="Nova Campanha"
+                title="Envio Avulso"
               >
                 <MessageSquarePlus size={14} />
               </button>
@@ -6059,6 +6056,11 @@ export default function Inbox({ user, role, isFullscreen, initialTab, onTabChang
         isOpen={showNovaConversaModal}
         onClose={() => setShowNovaConversaModal(false)}
         onOpenChat={handleOpenContactChat}
+      />
+
+      <EnvioAvulsoModal
+        isOpen={showEnvioAvulsoModal}
+        onClose={() => setShowEnvioAvulsoModal(false)}
       />
 
       <TrackingModal
